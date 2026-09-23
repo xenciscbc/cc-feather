@@ -1,0 +1,19 @@
+{
+  "name": "cc-feather",
+  "owner": {
+    "name": "xenciscbc"
+  },
+  "description": "Claude Code marketplace for the cc-feather handoff plugin.",
+  "plugins": [
+    {
+      "name": "cc-feather",
+      "source": "./",
+      "description": "Compatible Feather handoffs, scoped Claude delegation, Explore routing and setup/model configuration.",
+      "category": "engineering",
+      "keywords": [
+        "handoff",
+        "project-memory"
+      ]
+    }
+  ]
+}
