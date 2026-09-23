@@ -403,9 +403,16 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("delegation is already installed; use review to change its saved review mode")
     if args.component == "both" and args.command in {"update", "remove"} and not records:
         raise ConfigError(f"{args.scope} scope is not installed")
+    def operates(name: str) -> bool:
+        if name not in selected:
+            return False
+        if args.component != "both":
+            return True
+        return (name not in records) if args.command == "install" else (name in records)
+
     owned = _agent_paths(base, state) if delegation is not None else _agent_paths(base)
     agents = owned if args.command == "remove" else _agent_paths(base)
-    active_delegation = "delegation" in selected and (delegation is not None or args.command == "install")
+    active_delegation = operates("delegation") and (delegation is not None or args.command == "install")
     agent_paths = [*agents.values(), *owned.values()] if active_delegation else []
     paths = list(dict.fromkeys([*agent_paths, guidance, state_path]))
     before = _snapshot(paths)
@@ -430,9 +437,10 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
             raise ConfigError(f"{args.scope} {name} component is already installed; use update")
         if args.command in {"update", "remove"} and not installed and args.component != "both":
             raise ConfigError(f"{args.scope} {name} component is not installed")
-    # Validate only the selected component; independent handoff work is not
-    # blocked by unrelated agent names, role drift or delegation markers.
-    for name in selected:
+    # Validate only components this operation changes; skipped components may
+    # have drift or unowned markers that must remain untouched.
+    active_components = tuple(name for name in selected if operates(name))
+    for name in active_components:
         record = records.get(name)
         parts = _guidance_parts(text, name)
         if record:
@@ -465,10 +473,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     for choice in choices.values():
         _validate_choice(choice["model"], choice["effort"])
     review_mode = args.review_mode or (delegation["review_mode"] if delegation else "off")
-    for name in selected:
+    for name in active_components:
         record = records.get(name)
-        if args.component == "both" and ((args.command == "install" and record is not None) or (args.command in {"update", "remove"} and record is None)):
-            continue
         if args.command == "remove" and record is None:
             continue
         if name == "handoff":
@@ -525,9 +531,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 "snapshot": {key: None if value is None else digest(value) for key, value in before.items()},
                 "changes": [{"path": c["path"], "after_sha256": c["after_sha256"]} for c in changes],
                 "templates": {role: digest(_render(role, choices[role])) for role in ROLES}
-                             if "delegation" in selected and args.command in {"install", "update"} else {},
-                "policy": digest(_policy(review_mode).encode("utf-8")) if "delegation" in selected and args.command in {"install", "update"} else None,
-                "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in selected and args.command in {"install", "update"} else None}
+                             if "delegation" in active_components and args.command in {"install", "update"} else {},
+                "policy": digest(_policy(review_mode).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
+                "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
     result = {"status": "preview", "command": args.command, "component": args.component, "scope": args.scope,
               "plan_id": plan_id, "components": {name: {"installed": name in records} for name in ("handoff", "delegation")},

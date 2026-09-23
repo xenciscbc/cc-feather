@@ -48,6 +48,40 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(result["status"], "applied")
         return result
 
+    def test_both_update_remove_skip_absent_unowned_handoff(self):
+        self.apply("install", "project", "--component", "delegation")
+        guidance = self.project / "CLAUDE.md"
+        unowned = b"\n<!-- cc-feather:handoff:begin -->\nUser policy\n<!-- cc-feather:handoff:end -->\n"
+        guidance.write_bytes(guidance.read_bytes() + unowned)
+        self.apply("update", "project", "--component", "both")
+        self.assertTrue(guidance.read_bytes().endswith(unowned))
+        self.apply("remove", "project", "--component", "both")
+        self.assertEqual(guidance.read_bytes(), unowned)
+
+    def test_both_install_preserves_skipped_delegation_drift(self):
+        self.apply("install", "project", "--component", "delegation")
+        guidance = self.project / "CLAUDE.md"
+        changed = guidance.read_bytes().replace(b"Automatic plan review mode: off", b"Automatic plan review mode: auto")
+        guidance.write_bytes(changed)
+        role = self.project / ".claude" / "agents" / "analyst.md"
+        role.write_bytes(role.read_bytes() + b"\nUser changes\n")
+        role_before = role.read_bytes()
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        record = json.loads(state_path.read_bytes())["components"]["delegation"]
+        self.apply("install", "project", "--component", "both")
+        self.assertTrue(guidance.read_bytes().startswith(changed))
+        self.assertEqual(role.read_bytes(), role_before)
+        self.assertEqual(json.loads(state_path.read_bytes())["components"]["delegation"], record)
+        inspected = self.call("check")[1]
+        self.assertEqual(inspected["components"]["handoff"]["status"], "ok")
+        self.assertEqual(inspected["components"]["delegation"]["status"], "conflict")
+
+    def test_both_update_does_not_load_absent_delegation_templates(self):
+        self.apply("install", "project", "--component", "handoff")
+        with mock.patch.object(config, "_render", side_effect=AssertionError("unused role template")), \
+             mock.patch.object(config, "_policy", side_effect=AssertionError("unused policy template")):
+            self.apply("update", "project", "--component", "both")
+
     def test_project_install_exact_explore_and_remove_preserves_other_data(self):
         guidance = self.project / "CLAUDE.md"
         guidance.write_text("User guidance without final newline", encoding="utf-8")
