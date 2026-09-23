@@ -11,7 +11,7 @@ Used by cc-feather:auto-on (mode auto) and cc-feather:auto-off (mode off). These
 
 ## Persistent workflow
 
-Read [setup](../SKILL.md) for scope, ownership and tool rules. Resolve the bundled tool from the actual plugin root; from this reference it is `../../../scripts/feather_config.py`. Run show/check in the selected scope. If no owned installation exists, report that setup is needed; this toggle is not authorization to install roles.
+Read [setup](../SKILL.md) for scope, ownership and tool rules. Resolve the bundled tool from the actual plugin root; from this reference it is `../../../scripts/feather_config.py`. Run show/check in the selected scope and inspect its delegation status. Check that the delegation component is installed. A handoff-only installation is insufficient. If delegation is absent, report that delegation setup is needed; this toggle is not authorization to install roles.
 
 Preview `review --project <confirmed-root> --scope <project|user> --review-mode <auto|off>`. Summarize its concrete scope and changes, then apply with identical arguments plus `--apply --expected-plan <returned-plan-id>`. The explicit scoped command authorizes this setting change; do not add a routine confirmation. Preserve conflicts and report blockers instead of overwriting. Read show afterward and report the saved mode, owning path and any runtime limitations. Updates preserve it.
 

@@ -1,6 +1,6 @@
 {
   "name": "cc-feather",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Claude Feather handoffs, scoped delegation, Explore model routing, setup and role model configuration.",
   "author": {
     "name": "xenciscbc"

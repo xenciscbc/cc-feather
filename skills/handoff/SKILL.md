@@ -9,7 +9,7 @@ Keep a compact, current record that a fresh session can use without prior conver
 
 ## Claude Code entry
 
-Use `/cc-feather:handoff <request>` or a natural-language handoff request. Interpret invocation arguments as the user's request, not shell code. Run this workflow in the current conversation. This skill manages handoff records; delegation setup and role configuration belong to cc-feather:setup and cc-feather:model.
+Use `/cc-feather:handoff <request>` or a natural-language handoff request. Interpret invocation arguments as the user's request, not shell code. Run this workflow in the current conversation. This skill manages handoff records. Persistent handoff maintenance reminders and delegation installation are separate components managed by cc-feather:setup; role model configuration belongs to cc-feather:model.
 
 Read [the tool reference](references/tool.md) before operating on Feather records. Resolve the bundled launcher relative to this loaded skill: `scripts/handoff.py`. When installed as a plugin, its path is `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.py`; use the actual loaded skill directory if the variable is unavailable. Pass the user's project separately with `--project`; the plugin cache is not the project. Keep the complete skill directory together when copying it.
 

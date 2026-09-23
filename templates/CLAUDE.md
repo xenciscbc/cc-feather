@@ -37,9 +37,7 @@ Review every child's outcome against its brief. Inspect actual changes against t
 
 Classify a block as temporary failure, missing specification, role mismatch or out-of-scope dependency. Retry an identical failed operation at most once and only for a specific recoverable temporary cause; repetition of that cause returns ownership to main. Do not guess missing authorization or unknown requirements. Main reports the integrated result and distinguishes intended model/effort, saved configuration and observed execution.
 
-## Handoff and setup lifecycle
-
-When asked to save, list, read or resume handoff work, use the available cc-feather:handoff skill and preserve its records/history rules. Maintain an already active handoff at useful milestones with accepted findings, decisions, verification and remaining blockers. Delegation alone does not start a handoff or authorize editing other records.
+## Delegation setup lifecycle
 
 Use cc-feather:setup for installation checks, updates and removal, and cc-feather:model for persistent model/effort changes. Plugin updates do not refresh these external native roles automatically. Remove the managed installation before uninstalling the plugin if the user wants this policy and roles removed. Preserve handoff data. Do not change main-session model, concurrency, unrelated CLAUDE.md content, settings or permissions as part of these operations.
 <!-- cc-feather:end -->

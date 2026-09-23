@@ -26,7 +26,9 @@ MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?:\[[0-9]+m\])?$")
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 BEGIN = "<!-- cc-feather:begin -->"
 END = "<!-- cc-feather:end -->"
-VERSION = 2
+HANDOFF_BEGIN = "<!-- cc-feather:handoff:begin -->"
+HANDOFF_END = "<!-- cc-feather:handoff:end -->"
+VERSION = 3
 
 
 class ConfigError(Exception):
@@ -117,32 +119,58 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
         value = json.loads(data)
     except (ValueError, UnicodeDecodeError) as exc:
         raise ConfigError(f"invalid state file: {path}") from exc
-    if not isinstance(value, dict) or set(value) != {"version", "scope", "choices", "hashes", "block_hash", "added_before", "added_after", "review_mode"} or value["version"] not in (1, VERSION) or value["scope"] != scope:
+    if not isinstance(value, dict) or value.get("version") not in (1, 2, VERSION) or value.get("scope") != scope:
         raise ConfigError("state schema or scope mismatch")
-    if not isinstance(value["added_before"], bool) or not isinstance(value["added_after"], bool):
-        raise ConfigError("invalid guidance separator state")
-    if value["review_mode"] not in ("auto", "off"):
-        raise ConfigError("invalid saved review mode")
-    if not isinstance(value["choices"], dict) or set(value["choices"]) != set(ROLES) or not isinstance(value["hashes"], dict) or set(value["hashes"]) != set(ROLES):
-        raise ConfigError("state role schema mismatch")
-    for role in ROLES:
-        choice = value["choices"][role]
-        if not isinstance(choice, dict) or set(choice) != {"model", "effort"}:
-            raise ConfigError(f"invalid state choice for {role}")
-        _validate_choice(choice["model"], choice["effort"])
-        for h in (value["hashes"][role], value["block_hash"]):
-            if not isinstance(h, str) or not re.fullmatch(r"[0-9a-f]{64}", h):
-                raise ConfigError("invalid state hash")
+    if value["version"] == VERSION:
+        if set(value) != {"version", "scope", "components"} or not isinstance(value["components"], dict) or not set(value["components"]) <= {"handoff", "delegation"} or not value["components"]:
+            raise ConfigError("state component schema mismatch")
+        records = value["components"]
+    else:
+        if set(value) != {"version", "scope", "choices", "hashes", "block_hash", "added_before", "added_after", "review_mode"}:
+            raise ConfigError("legacy state schema mismatch")
+        records = {"delegation": value}
+    for name, record in records.items():
+        expected = {"block_hash", "added_before", "added_after"}
+        if name == "delegation":
+            expected |= {"choices", "hashes", "review_mode", "legacy_names"}
+        if not isinstance(record, dict) or (value["version"] == VERSION and set(record) != expected):
+            raise ConfigError(f"invalid {name} state schema")
+        if not isinstance(record["added_before"], bool) or not isinstance(record["added_after"], bool):
+            raise ConfigError("invalid guidance separator state")
+        if not isinstance(record["block_hash"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["block_hash"]):
+            raise ConfigError("invalid state hash")
+        if name == "delegation":
+            if value["version"] == VERSION and not isinstance(record["legacy_names"], bool):
+                raise ConfigError("invalid legacy role flag")
+            if record["review_mode"] not in ("auto", "off"):
+                raise ConfigError("invalid saved review mode")
+            if not isinstance(record["choices"], dict) or set(record["choices"]) != set(ROLES) or not isinstance(record["hashes"], dict) or set(record["hashes"]) != set(ROLES):
+                raise ConfigError("state role schema mismatch")
+            for role in ROLES:
+                choice = record["choices"][role]
+                if not isinstance(choice, dict) or set(choice) != {"model", "effort"}:
+                    raise ConfigError(f"invalid state choice for {role}")
+                _validate_choice(choice["model"], choice["effort"])
+                if not isinstance(record["hashes"][role], str) or not re.fullmatch(r"[0-9a-f]{64}", record["hashes"][role]):
+                    raise ConfigError("invalid state hash")
     return value
 
 
-def _block_parts(text: str) -> tuple[str, str, str] | None:
-    if BEGIN not in text and END not in text:
+def _components(state: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    if state is None:
+        return {}
+    return state["components"] if state["version"] == VERSION else {"delegation": {
+        key: item for key, item in state.items() if key not in {"version", "scope"}
+    }}
+
+
+def _block_parts(text: str, begin: str = BEGIN, end: str = END) -> tuple[str, str, str] | None:
+    if begin not in text and end not in text:
         return None
-    if text.count(BEGIN) != 1 or text.count(END) != 1 or text.index(BEGIN) > text.index(END):
+    if text.count(begin) != 1 or text.count(end) != 1 or text.index(begin) > text.index(end):
         raise ConfigError("CLAUDE.md has malformed or duplicate cc-feather markers")
-    start = text.index(BEGIN)
-    finish = text.index(END) + len(END)
+    start = text.index(begin)
+    finish = text.index(end) + len(end)
     return text[:start], text[start:finish], text[finish:]
 
 
@@ -154,6 +182,14 @@ def _policy(review_mode: str) -> str:
         raise ConfigError("policy template must contain one marked block and review mode token")
     return parts[1].replace("{{review_mode}}", review_mode)
 
+
+def _handoff_policy() -> str:
+    path = ROOT / "templates" / "handoff.md"
+    text = _decode(read(path), path)
+    parts = _block_parts(text, HANDOFF_BEGIN, HANDOFF_END)
+    if parts is None or parts[0].strip() or parts[2].strip() or "{{" in parts[1]:
+        raise ConfigError("handoff template must contain one marked block without placeholders")
+    return parts[1]
 
 def _overrides(items: list[str]) -> dict[str, dict[str, str]]:
     result: dict[str, dict[str, str]] = {}
@@ -276,107 +312,205 @@ def _snapshot(paths: list[Path]) -> dict[str, bytes | None]:
 
 
 def _agent_paths(base: Path, state: dict[str, Any] | None = None) -> dict[str, Path]:
-    legacy = state is not None and state["version"] == 1
+    legacy = state is not None and (state["version"] == 1 or (state["version"] == VERSION and "delegation" in state["components"] and state["components"]["delegation"]["legacy_names"]))
     return {role: base / "agents" / f"{'feather-' if legacy and role != 'Explore' else ''}{role}.md"
             for role in ROLES}
 
 
+def _selected(args: argparse.Namespace) -> tuple[str, ...]:
+    return ("handoff", "delegation") if args.component == "both" else (args.component,)
+
+
+def _guidance_parts(text: str, name: str) -> tuple[str, str, str] | None:
+    return _block_parts(text, HANDOFF_BEGIN, HANDOFF_END) if name == "handoff" else _block_parts(text)
+
+
+def _put_block(text: str, name: str, block: str, record: dict[str, Any] | None) -> tuple[str, bool, bool]:
+    parts = _guidance_parts(text, name)
+    if parts:
+        return parts[0] + block + parts[2], record["added_before"], record["added_after"]
+    before = bool(text and not text.endswith("\n"))
+    return text + ("\n" if before else "") + block + "\n", before, True
+
+
+def _drop_block(text: str, name: str, record: dict[str, Any]) -> str:
+    parts = _guidance_parts(text, name)
+    assert parts is not None
+    prefix, _, suffix = parts
+    if record["added_before"]:
+        if not prefix.endswith("\n"):
+            raise ConfigError("managed guidance separator changed")
+        prefix = prefix[:-2] if prefix.endswith("\r\n") else prefix[:-1]
+    if record["added_after"]:
+        if not suffix.startswith(("\n", "\r\n")):
+            raise ConfigError("managed guidance separator changed")
+        suffix = suffix[2:] if suffix.startswith("\r\n") else suffix[1:]
+    return prefix + suffix
+
+
+def _legacy_handoff(block: str) -> tuple[str, str] | None:
+    marker = "## Handoff and setup lifecycle"
+    if marker not in block:
+        return None
+    if block.count(marker) != 1:
+        raise ConfigError("legacy handoff reminder cannot be split confidently")
+    prefix, section = block.removesuffix(END).split(marker, 1)
+    normalized = section.replace("\r\n", "\n")
+    if not normalized.startswith("\n\n"):
+        raise ConfigError("legacy handoff reminder cannot be split confidently")
+    body = normalized[2:].rstrip("\n")
+    paragraphs = body.split("\n\n", 1)
+    reminder = paragraphs[0].strip()
+    if "handoff" not in reminder.lower() or "skill" not in reminder.lower():
+        raise ConfigError("legacy handoff reminder cannot be split confidently")
+    newline = "\r\n" if "\r\n" in block else "\n"
+    handoff = HANDOFF_BEGIN + newline + marker + newline * 2 + reminder.replace("\n", newline) + newline + HANDOFF_END
+    setup = paragraphs[1].strip() if len(paragraphs) > 1 else ""
+    if setup:
+        remaining = prefix + "## Setup lifecycle" + newline * 2 + setup.replace("\n", newline) + newline + END
+    else:
+        remaining = prefix.rstrip("\r\n") + newline + END
+    return handoff, remaining
+
+
 def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | None], dict[str, bytes | None]]:
-    defaults = _defaults()
-    base, guidance, state_path = _scope(args)
-    state = _load_state(state_path, args.scope, defaults)
-    owned = _agent_paths(base, state)
-    legacy = state is not None and state["version"] == 1
-    if legacy and args.command in {"model", "review"}:
-        raise ConfigError("legacy role names require setup update before changing settings")
-    agents = owned if args.command == "remove" else _agent_paths(base)
-    paths = list(dict.fromkeys([*agents.values(), *owned.values(), guidance, state_path]))
-    before = _snapshot(paths)
-    collisions = _collisions(base, agents)
-    if collisions:
-        raise ConfigError("; ".join(collisions))
-    if legacy and args.command == "update":
-        for role, path in agents.items():
-            if path != owned[role] and before[str(path)] is not None:
-                raise ConfigError(f"unowned role file already exists: {path}; user decision required")
-    if args.command in {"update", "model", "review", "remove"} and state is None:
-        raise ConfigError(f"{args.scope} scope is not installed")
-    if args.command == "install" and state is not None:
-        raise ConfigError(f"{args.scope} scope is already installed; use update or model")
+    selected = _selected(args)
+    if args.command in {"model", "review"} and selected != ("delegation",):
+        raise ConfigError("model and review belong to the delegation component")
     if args.command != "model" and args.set:
         raise ConfigError("--set is supported only by model")
     if args.command == "review" and args.review_mode is None:
         raise ConfigError("review requires --review-mode auto|off")
     if args.command not in {"install", "review"} and args.review_mode is not None:
         raise ConfigError("--review-mode is supported only by install or review")
-    review_mode = args.review_mode or (state["review_mode"] if state else "off")
-    choices = {r: dict(state["choices"][r]) if state else {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES}
+    if args.review_mode is not None and "delegation" not in selected:
+        raise ConfigError("--review-mode belongs to the delegation component")
+    defaults = _defaults() if "delegation" in selected else {}
+    base, guidance, state_path = _scope(args)
+    state = _load_state(state_path, args.scope, defaults)
+    records = {k: dict(v) for k, v in _components(state).items()}
+    legacy_schema = state is not None and state["version"] in (1, 2)
+    delegation = records.get("delegation")
+    legacy_names = delegation is not None and (state["version"] == 1 if legacy_schema else delegation["legacy_names"])
+    if legacy_schema and delegation is not None:
+        delegation["legacy_names"] = legacy_names
+    if legacy_names and args.command in {"model", "review"}:
+        raise ConfigError("legacy guidance requires setup update before changing settings")
+    if args.command in {"model", "review"} and delegation is None:
+        raise ConfigError(f"{args.scope} delegation component is not installed")
+    if (args.command == "install" and args.component == "both" and delegation is not None
+            and args.review_mode is not None and args.review_mode != delegation["review_mode"]):
+        raise ConfigError("delegation is already installed; use review to change its saved review mode")
+    if args.component == "both" and args.command in {"update", "remove"} and not records:
+        raise ConfigError(f"{args.scope} scope is not installed")
+    owned = _agent_paths(base, state) if delegation is not None else _agent_paths(base)
+    agents = owned if args.command == "remove" else _agent_paths(base)
+    active_delegation = "delegation" in selected and (delegation is not None or args.command == "install")
+    agent_paths = [*agents.values(), *owned.values()] if active_delegation else []
+    paths = list(dict.fromkeys([*agent_paths, guidance, state_path]))
+    before = _snapshot(paths)
+    text = _decode(before[str(guidance)], guidance)
+    if legacy_schema and delegation is not None:
+        old = _guidance_parts(text, "delegation")
+        if old is None or digest(old[1].encode("utf-8")) != delegation["block_hash"]:
+            raise ConfigError(f"managed delegation guidance block changed or missing: {guidance}")
+        split = _legacy_handoff(old[1])
+        if split is not None:
+            if _guidance_parts(text, "handoff") is not None:
+                raise ConfigError(f"unowned handoff guidance block already exists: {guidance}")
+            reminder, remaining = split
+            text = old[0] + remaining + old[2]
+            text, added_before, added_after = _put_block(text, "handoff", reminder, None)
+            records["handoff"] = {"block_hash": digest(reminder.encode("utf-8")),
+                                  "added_before": added_before, "added_after": added_after}
+            delegation["block_hash"] = digest(remaining.encode("utf-8"))
+    for name in selected:
+        installed = name in records
+        if args.command == "install" and installed and args.component != "both":
+            raise ConfigError(f"{args.scope} {name} component is already installed; use update")
+        if args.command in {"update", "remove"} and not installed and args.component != "both":
+            raise ConfigError(f"{args.scope} {name} component is not installed")
+    # Validate only the selected component; independent handoff work is not
+    # blocked by unrelated agent names, role drift or delegation markers.
+    for name in selected:
+        record = records.get(name)
+        parts = _guidance_parts(text, name)
+        if record:
+            if parts is None or digest(parts[1].encode("utf-8")) != record["block_hash"]:
+                raise ConfigError(f"managed {name} guidance block changed or missing: {guidance}")
+        elif parts is not None:
+            raise ConfigError(f"unowned {name} guidance block already exists: {guidance}")
+    if active_delegation:
+        collisions = _collisions(base, agents)
+        if collisions:
+            raise ConfigError("; ".join(collisions))
+        if delegation:
+            for role, path in owned.items():
+                data = before[str(path)]
+                if data is None or digest(data) != delegation["hashes"][role]:
+                    raise ConfigError(f"managed role changed or missing: {path}")
+            if legacy_names and args.command != "remove":
+                for role, path in agents.items():
+                    if path != owned[role] and before[str(path)] is not None:
+                        raise ConfigError(f"unowned role file already exists: {path}; user decision required")
+        else:
+            for path in agents.values():
+                if before[str(path)] is not None:
+                    raise ConfigError(f"unowned role file already exists: {path}")
+    after = dict(before)
+    choices = {r: dict(delegation["choices"][r]) if delegation else
+               {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES} if "delegation" in selected else {}
     for role, fields in _overrides(args.set).items():
         choices[role].update(fields)
     for choice in choices.values():
         _validate_choice(choice["model"], choice["effort"])
-    text = _decode(before[str(guidance)], guidance)
-    parts = _block_parts(text)
-    if state:
-        for role, path in owned.items():
-            data = before[str(path)]
-            if data is None or digest(data) != state["hashes"][role]:
-                raise ConfigError(f"managed role changed or missing: {path}")
-        if parts is None or digest(parts[1].encode("utf-8")) != state["block_hash"]:
-            raise ConfigError(f"managed guidance block changed or missing: {guidance}")
-    else:
-        for path in agents.values():
-            if before[str(path)] is not None:
-                raise ConfigError(f"unowned role file already exists: {path}")
-        if parts is not None:
-            raise ConfigError(f"unowned guidance block already exists: {guidance}")
-    after = dict(before)
-    if legacy and args.command == "update":
-        for role, path in owned.items():
-            if path != agents[role]:
+    review_mode = args.review_mode or (delegation["review_mode"] if delegation else "off")
+    for name in selected:
+        record = records.get(name)
+        if args.component == "both" and ((args.command == "install" and record is not None) or (args.command in {"update", "remove"} and record is None)):
+            continue
+        if args.command == "remove" and record is None:
+            continue
+        if name == "handoff":
+            if args.command == "remove":
+                text = _drop_block(text, name, record)
+                del records[name]
+            else:
+                block = _handoff_policy()
+                text, added_before, added_after = _put_block(text, name, block, record)
+                records[name] = {"block_hash": digest(block.encode("utf-8")),
+                                 "added_before": added_before, "added_after": added_after}
+            continue
+        if args.command == "remove":
+            for path in owned.values():
                 after[str(path)] = None
-    if args.command == "remove":
-        for path in agents.values():
-            after[str(path)] = None
-        assert parts is not None
-        prefix, _, suffix = parts
-        if state["added_before"]:
-            if not prefix.endswith("\n"):
-                raise ConfigError("managed guidance separator changed")
-            prefix = prefix[:-1]
-        if state["added_after"]:
-            if not suffix.startswith("\n"):
-                raise ConfigError("managed guidance separator changed")
-            suffix = suffix[1:]
-        after[str(guidance)] = (prefix + suffix).encode("utf-8")
-        after[str(state_path)] = None
-    else:
-        if args.command in {"model", "review"}:
-            assert state is not None and parts is not None
-            block = parts[1]
-        else:
-            block = _policy(review_mode)
+            text = _drop_block(text, name, record)
+            del records[name]
+            continue
+        if legacy_names and args.command == "update":
+            for role, path in owned.items():
+                if path != agents[role]:
+                    after[str(path)] = None
         for role, path in agents.items():
             if args.command == "model":
-                after[str(path)] = _edit_role_fields(before[str(path)], state["choices"][role], choices[role], path) if choices[role] != state["choices"][role] else before[str(path)]
+                after[str(path)] = _edit_role_fields(before[str(path)], record["choices"][role], choices[role], path) if choices[role] != record["choices"][role] else before[str(path)]
             elif args.command == "review":
                 after[str(path)] = before[str(path)]
             else:
                 after[str(path)] = _render(role, choices[role])
+        parts = _guidance_parts(text, name)
         if args.command == "review":
-            block = _edit_review_block(block, state["review_mode"], review_mode)
-        added_before = state["added_before"] if state else bool(text and not text.endswith("\n"))
-        added_after = state["added_after"] if state else True
-        if parts:
-            new_guidance = parts[0] + block + parts[2]
+            block = _edit_review_block(parts[1], record["review_mode"], review_mode)
+        elif args.command == "model":
+            block = parts[1]
         else:
-            new_guidance = text + ("\n" if added_before else "") + block + "\n"
-        after[str(guidance)] = new_guidance.encode("utf-8")
-        new_state = {"version": VERSION, "scope": args.scope, "choices": choices,
-                     "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
-                     "block_hash": digest(block.encode("utf-8")), "review_mode": review_mode,
-                     "added_before": added_before, "added_after": added_after}
-        after[str(state_path)] = canonical(new_state) + b"\n"
+            block = _policy(review_mode)
+        text, added_before, added_after = _put_block(text, name, block, record)
+        records[name] = {"choices": choices, "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
+                         "block_hash": digest(block.encode("utf-8")), "review_mode": review_mode,
+                         "added_before": added_before, "added_after": added_after, "legacy_names": False}
+    after[str(guidance)] = text.encode("utf-8")
+    after[str(state_path)] = canonical({"version": VERSION, "scope": args.scope, "components": records}) + b"\n" if records else None
     changes = []
     for path in paths:
         key = str(path)
@@ -386,18 +520,21 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                             "after": None if new is None else _decode(new, path),
                             "before_sha256": None if old is None else digest(old),
                             "after_sha256": None if new is None else digest(new)})
-    identity = {"command": args.command, "scope": args.scope, "project": str(Path(args.project)),
-                "claude_home": str(base), "choices": choices, "review_mode": review_mode,
+    identity = {"command": args.command, "component": args.component, "scope": args.scope,
+                "project": str(Path(args.project)), "claude_home": str(base),
                 "snapshot": {key: None if value is None else digest(value) for key, value in before.items()},
                 "changes": [{"path": c["path"], "after_sha256": c["after_sha256"]} for c in changes],
-                "templates": {role: digest(_render(role, choices[role])) for role in ROLES} if args.command in {"install", "update"} else {},
-                "policy": digest(_policy(review_mode).encode("utf-8")) if args.command in {"install", "update"} else None}
+                "templates": {role: digest(_render(role, choices[role])) for role in ROLES}
+                             if "delegation" in selected and args.command in {"install", "update"} else {},
+                "policy": digest(_policy(review_mode).encode("utf-8")) if "delegation" in selected and args.command in {"install", "update"} else None,
+                "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in selected and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
-    result = {"status": "preview", "command": args.command, "scope": args.scope, "plan_id": plan_id,
-              "choices": choices, "review_mode": review_mode, "requested_configuration_only": True,
-              "changes": changes, "warnings": _warnings(args)}
+    result = {"status": "preview", "command": args.command, "component": args.component, "scope": args.scope,
+              "plan_id": plan_id, "components": {name: {"installed": name in records} for name in ("handoff", "delegation")},
+              "choices": choices if choices else (delegation["choices"] if delegation else {}),
+              "review_mode": review_mode, "requested_configuration_only": True,
+              "changes": changes, "warnings": _warnings(args) if "delegation" in selected else []}
     return result, before, after
-
 
 def _warnings(args: argparse.Namespace) -> list[str]:
     # Observations only: Claude may have other configuration layers and runtime overrides.
@@ -414,8 +551,12 @@ def _warnings(args: argparse.Namespace) -> list[str]:
     home = Path(home_text) if home_text else Path.home() / ".claude"
     for path in (home / "settings.json", home / "settings.local.json",
                  project / ".claude" / "settings.json", project / ".claude" / "settings.local.json"):
-        _safe_path(path)
-        data = read(path)
+        try:
+            _safe_path(path)
+            data = read(path)
+        except (ConfigError, OSError):
+            warnings.append(f"Could not safely inspect settings file: {path}; runtime overrides are unknown.")
+            continue
         if data is None:
             continue
         try:
@@ -531,48 +672,71 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     defaults = _defaults()
     base, guidance, state_path = _scope(args)
     state = _load_state(state_path, args.scope, defaults)
+    records = _components(state)
     agents = _agent_paths(base, state)
-    issues = _collisions(base, agents)
-    if state:
-        for role in ROLES:
-            path = agents[role]
-            _safe_path(path)
-            data = read(path)
-            if data is None or digest(data) != state["hashes"][role]:
-                issues.append(f"managed role changed or missing: {path}")
-        _safe_path(guidance)
+    text = _decode(read(guidance), guidance)
+    component_info: dict[str, dict[str, Any]] = {}
+    for name in ("handoff", "delegation"):
+        record = records.get(name)
+        issues = []
         try:
-            parts = _block_parts(_decode(read(guidance), guidance))
-            if parts is None or digest(parts[1].encode("utf-8")) != state["block_hash"]:
-                issues.append(f"managed guidance block changed or missing: {guidance}")
+            parts = _guidance_parts(text, name)
+            if record:
+                if parts is None or digest(parts[1].encode("utf-8")) != record["block_hash"]:
+                    issues.append(f"managed {name} guidance block changed or missing: {guidance}")
+            elif parts is not None:
+                issues.append(f"unowned {name} guidance block already exists: {guidance}")
         except ConfigError as exc:
             issues.append(str(exc))
-    else:
-        for path in agents.values():
-            _safe_path(path)
-            if read(path) is not None:
-                issues.append(f"unowned role file already exists: {path}")
-        _safe_path(guidance)
+        if name == "delegation":
+            try:
+                issues.extend(_collisions(base, agents))
+                for role, path in agents.items():
+                    _safe_path(path)
+                    data = read(path)
+                    if record:
+                        if data is None or digest(data) != record["hashes"][role]:
+                            issues.append(f"managed role changed or missing: {path}")
+                    elif data is not None:
+                        issues.append(f"unowned role file already exists: {path}")
+            except (ConfigError, OSError) as exc:
+                issues.append(str(exc))
+        component_info[name] = {"installed": record is not None, "status": "ok" if not issues else "conflict",
+                                "issues": issues}
+    issues = [issue for entry in component_info.values() for issue in entry["issues"]]
+    delegation = records.get("delegation")
+    migration_required = state is not None and (state["version"] in (1, 2) or (delegation is not None and delegation.get("legacy_names", False)))
+    role_migration_required = state is not None and (state["version"] == 1 or
+        (delegation is not None and delegation.get("legacy_names", False)))
+    if state is not None and state["version"] in (1, 2):
         try:
-            if _block_parts(_decode(read(guidance), guidance)) is not None:
-                issues.append(f"unowned guidance block already exists: {guidance}")
+            parts = _guidance_parts(text, "delegation")
+            if parts and digest(parts[1].encode("utf-8")) == delegation["block_hash"]:
+                embedded = _legacy_handoff(parts[1]) is not None
+                component_info["handoff"]["migration_required"] = embedded
+                if embedded:
+                    component_info["handoff"]["installed"] = True
         except ConfigError as exc:
+            component_info["handoff"]["issues"].append(str(exc))
+            component_info["handoff"]["status"] = "conflict"
             issues.append(str(exc))
     return {"status": "ok" if not issues else "conflict", "scope": args.scope,
-            "installed": state is not None, "migration_required": state is not None and state["version"] == 1,
+            "installed": bool(records), "components": component_info, "migration_required": migration_required,
+            "role_migration_required": role_migration_required,
             "requested_configuration_only": True,
-            "review_mode": state["review_mode"] if state else "off",
+            "review_mode": delegation["review_mode"] if delegation else "off",
             "paths": {"config_root": str(base / "cc-feather"), "state": str(state_path),
                       "guidance": str(guidance), "agents": {role: str(path) for role, path in agents.items()}},
-            "choices": state["choices"] if state else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
+            "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
             "issues": issues, "warnings": _warnings(args)}
+
 
 
 def _session(args: argparse.Namespace) -> dict[str, Any]:
     inspected = _inspect(args)
-    if inspected["status"] != "ok":
-        raise ConfigError("installed configuration has drift: " + "; ".join(inspected["issues"]))
-    if inspected["migration_required"]:
+    if inspected["components"]["delegation"]["status"] != "ok":
+        raise ConfigError("installed delegation configuration has drift: " + "; ".join(inspected["components"]["delegation"]["issues"]))
+    if inspected["role_migration_required"]:
         raise ConfigError("legacy role names require setup update before session export")
     choices = {role: dict(value) for role, value in inspected["choices"].items()}
     for role, fields in _overrides(args.set).items():
@@ -582,7 +746,7 @@ def _session(args: argparse.Namespace) -> dict[str, Any]:
     base, _, _ = _scope(args)
     for role in ROLES:
         _validate_choice(choices[role]["model"], choices[role]["effort"])
-        if inspected["installed"]:
+        if inspected["components"]["delegation"]["installed"]:
             path = base / "agents" / f"{defaults[role]['name']}.md"
             _safe_path(path)
             saved = inspected["choices"][role]
@@ -636,6 +800,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--claude-home", help="Absolute Claude configuration directory (default: CLAUDE_CONFIG_DIR or ~/.claude)")
     parser.add_argument("--set", action="append", default=[], metavar="ROLE.FIELD=VALUE")
     parser.add_argument("--review-mode", choices=("auto", "off"))
+    parser.add_argument("--component", choices=("handoff", "delegation", "both"), help="Component for mutations; default delegation")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-plan")
     args = parser.parse_args(argv)
@@ -645,9 +810,11 @@ def main(argv: list[str] | None = None) -> int:
                 args.scope = "project"
             else:
                 raise ConfigError("--scope project|user is required for mutations")
+        if args.component is None:
+            args.component = "delegation" if args.command not in {"check", "show"} else "both"
         if args.command == "session":
-            if args.apply or args.expected_plan or args.review_mode:
-                raise ConfigError("session is read-only")
+            if args.apply or args.expected_plan or args.review_mode or args.component != "delegation":
+                raise ConfigError("session is read-only and delegation-only")
             result = _session(args)
         elif args.command in {"check", "show"}:
             if args.apply or args.expected_plan or args.set or args.review_mode:

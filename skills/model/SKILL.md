@@ -9,7 +9,7 @@ Manage scout, analyst, mech-executor, executor, security-executor and Explore wh
 
 ## Resolve values and duration
 
-Run `show --project <confirmed-absolute-root> --scope <project|user>` to read the intended owning installation. If scope is unclear, inspect the relevant scopes and ask only when ownership/target remains ambiguous. A user-scope change affects other projects using those roles. Installation or scope migration belongs to cc-feather:setup.
+Run `show --project <confirmed-absolute-root> --scope <project|user>` to read the intended owning installation. If scope is unclear, inspect the relevant scopes and ask only when ownership/target remains ambiguous. A user-scope change affects other projects using those roles. Permanent changes require the delegation component; handoff-only setup is insufficient. Installation or scope migration belongs to cc-feather:setup.
 
 Resolve each field independently: explicit current task/child request > applicable session preference > saved role value > package default. An instruction “use Sonnet to review” selects analyst duties and Sonnet for that review, retaining the resolved analyst effort. It does not authorize editing persistent files. Preserve explicit full model IDs; do not replace them with a family alias. A main-session-only preference does not override children.
 

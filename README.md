@@ -18,25 +18,52 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 ## Skills
 
 - `/cc-feather:handoff`: save, list, read or resume work; inspect, clear or seal completed history; capture source baselines.
-- `/cc-feather:setup`: check, install, update or remove owned native roles and a CLAUDE.md policy in a chosen user/project scope.
+- `/cc-feather:setup`: inspect status first, then independently manage handoff maintenance rules, delegation policy plus native agents, or both.
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
 - `/cc-feather:auto-on`: enable risk-triggered automatic plan review.
 - `/cc-feather:auto-off`: disable automatic plan review.
 
-Handoffs work after plugin installation. Delegation needs explicit setup, for example:
+Handoff commands work after plugin installation. Setup can install handoff maintenance rules, delegation (policy plus agents), or both. For example:
 
 ```text
-/cc-feather:setup Install roles and guidance for this project
+/cc-feather:setup Install only delegation policy and agents for this project
 /cc-feather:model Show this project's role settings
 /cc-feather:model Permanently set this project's executor effort to high
 ```
 
-Setup previews changes, checks ownership/conflicts and keeps backups. It does not modify the main model, concurrency, settings.json or handoff records. Model changes update native frontmatter outside the plugin cache; setup updates preserve saved choices. See [setup and lifecycle](docs/setup.md).
+Setup inspects status first, asks only for missing operation/component/scope choices, previews changes, checks ownership/conflicts and keeps backups. It does not modify the main model, concurrency, settings.json or handoff records. Model changes update native frontmatter outside the plugin cache; setup updates preserve saved choices. See [setup and lifecycle](docs/setup.md).
+
+## Setup: inspect status, then select components
+
+A bare `/cc-feather:setup` first checks project and user installation status, reporting each component as installed, absent, conflicted or requiring migration. It then asks what to install, update, remove or inspect, and in which scope. If a scope was already specified, it checks only that scope. Choices already supplied are reused.
+
+| Component | Installed content | Removal behavior |
+| --- | --- | --- |
+| handoff | An independent CLAUDE.md maintenance policy | Removes the reminder only; records and the plugin handoff command remain |
+| delegation | A separate delegation policy plus six native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
+| both | Both components | Applies the selected operation together; preserves records and unrelated settings |
+
+Specify the full request to avoid unnecessary questions:
+
+```text
+/cc-feather:setup Install only handoff maintenance rules for this project
+/cc-feather:setup Install only delegation policy and agents for this project
+/cc-feather:setup Install both components for this project
+/cc-feather:setup Update only this project's handoff rules
+/cc-feather:setup Remove only this project's delegation, keeping handoff
+/cc-feather:setup Show user-scope installation status
+```
+
+Installing both adds missing components without resetting installed ones. Updating both refreshes installed components only; removing both removes installed components only.
+
+Each component has its own managed CLAUDE.md block, with independent ownership recorded in the scope's cc-feather/state.json. Handoff rules do not start a record automatically: after a user requests creation or continuation, maintain that work at milestones, blockers and completion. Reading/listing alone does not activate maintenance.
+
+Legacy installations combined both policies in one block. Migration checks ownership and splits them while preserving models and review mode. Removing delegation alone must retain the existing handoff reminder. Modified owned files and occupied names are preserved for the user's decision.
 
 ## Everyday workflow
 
 1. Open Claude Code in the target project and install the plugin. Handoffs are immediately available.
-2. For delegation, run `/cc-feather:setup Install roles and guidance for this project`. Explicitly request user scope to share the installation across projects. Start a fresh session afterward.
+2. For delegation, run `/cc-feather:setup Install only delegation policy and agents for this project`. Explicitly request user scope to share the installation across projects. Start a fresh session afterward.
 3. Describe the work normally. Main chooses a suitable role, or you can name a role/model. Small tasks stay with Main.
 4. Save progress with `/cc-feather:handoff Save this work`, then resume in another session with `/cc-feather:handoff Resume the named work`.
 
@@ -109,7 +136,7 @@ Permanent modes are stored below. Use the commands to change them: manually edit
 | project | `<project>/CLAUDE.md` | `<project>/.claude/cc-feather/state.json` |
 | user | `<Claude config directory>/CLAUDE.md` | `<Claude config directory>/cc-feather/state.json` |
 
-The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. The managed line `Automatic plan review mode: off` disables review; `auto` enables it. Persistent toggles require setup in that scope. Project settings may supersede user settings; fresh sessions load the saved mode. Enabled review targets material risks such as security boundaries, data migration, irreversible operations and complex cross-module plans, rather than every task.
+The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. The managed line `Automatic plan review mode: off` disables review; `auto` enables it. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Project settings may supersede user settings; fresh sessions load the saved mode. Enabled review targets material risks such as security boundaries, data migration, irreversible operations and complex cross-module plans, rather than every task.
 
 ### Explore
 
@@ -133,7 +160,7 @@ Claude and Codex must use the same project directory and coordinate one writer. 
 
 ## Updates and validation
 
-Plugin updates refresh the package; run setup update to refresh external deployments. Removing the plugin alone leaves native roles/guidance. Remove selected setup scopes first if those should go too; handoff data remains. Modified owned files are preserved as conflicts.
+Plugin updates refresh the package; run setup update for the selected components to refresh external deployments. Removing the plugin alone leaves native roles/guidance. Remove selected setup scopes first if those should go too; handoff data remains. Modified owned files are preserved as conflicts.
 
 ```text
 /cc-feather:setup Update this project's installed roles and guidance, retaining models and review mode

@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages five skills. Handoff works immediately after plugin installation; delegation is deployed explicitly with `/cc-feather:setup`. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages five skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 
@@ -29,12 +29,12 @@ From the plugin checkout, for a confirmed target project:
 
 ```text
 python -B scripts/feather_config.py check --project /absolute/project --scope project
-python -B scripts/feather_config.py install --project /absolute/project --scope project
-python -B scripts/feather_config.py install --project /absolute/project --scope project --apply --expected-plan <returned-plan-id>
+python -B scripts/feather_config.py install --project /absolute/project --scope project --component delegation
+python -B scripts/feather_config.py install --project /absolute/project --scope project --component delegation --apply --expected-plan <returned-plan-id>
 python -B scripts/feather_config.py show --project /absolute/project --scope project
 ```
 
-Mutating operations preview by default; applying requires the same operation/arguments and expected plan ID. `update` refreshes owned templates while retaining model choices. `remove` removes only intact managed roles, state and the marked policy block. Unrelated file content and handoff records remain. Existing unowned Explore or Feather role files, malformed policy markers and edited managed files are conflicts; the tool will not adopt or replace them automatically. Reconcile custom content explicitly instead of bypassing ownership checks.
+Mutating operations preview by default; applying requires the same operation/arguments and expected plan ID. `update` refreshes owned templates while retaining model choices. `remove` removes only the selected intact managed component and its ownership metadata; delegation includes its native roles. Unselected components remain. Unrelated file content and handoff records remain. Existing unowned Explore or Feather role files, malformed policy markers and edited managed files are conflicts; the tool will not adopt or replace them automatically. Reconcile custom content explicitly instead of bypassing ownership checks.
 
 Change one field without resetting the others:
 
@@ -71,7 +71,7 @@ The corresponding scoped preview is:
 python -B scripts/feather_config.py review --project /absolute/project --scope project --review-mode off
 ```
 
-Apply using the returned plan ID and matching arguments. Install accepts `--review-mode auto|off`; show/check report the saved mode and updates preserve it. A session-only instruction such as “disable automatic plan review for this session” does not invoke the configuration writer. The toggle is implemented in managed CLAUDE.md instructions, not a deterministic runtime gate.
+Apply using the returned plan ID and matching arguments. Delegation install accepts `--review-mode auto|off`; show/check report the saved mode and updates preserve it. A session-only instruction such as “disable automatic plan review for this session” does not invoke the configuration writer. The toggle is implemented in managed CLAUDE.md instructions, not a deterministic runtime gate.
 
 ## CLI details and diagnostics
 
@@ -85,4 +85,14 @@ An install/update/model/review/remove preview returns `plan_id`; applying requir
 
 Native names are scout, analyst, mech-executor, executor, security-executor and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
 
-For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Model/review mutations and session export require migration first; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.
+For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Installations still using feather-* role names require delegation update before model/review mutations or session export; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.
+
+## Independent setup components
+
+Use `--component handoff|delegation|both` explicitly for setup install/update/remove. Handoff installs templates/handoff.md under `cc-feather:handoff` markers; delegation installs templates/CLAUDE.md under the existing `cc-feather` markers plus six native agent files. Check/show report each component's state. Bare skill invocation inspects the project and user scopes before asking for intent; an explicit scope limits inspection to that scope. The tool's legacy default for setup mutations is delegation; the skill always passes the user's selected component.
+
+State schema v3 records independent component ownership in each scope's state.json. Handoff-only operations do not need to resolve unrelated native agent collisions. Model/review operations require delegation, and handoff setup does not grant it. Both components share CLAUDE.md and the scope lock, so a combined operation is previewed and applied as one transaction with rollback and backups. Preserve unrelated text, unselected components and all handoff records.
+
+Legacy v1/v2 combined policy is split during migration without discarding the existing handoff reminder. Delegation-only removal retains handoff policy; a request to remove both removes both selected policies. Role-name migration and source-drift checks still apply. The preview must make any legacy split visible. Do not manually change state ownership to bypass conflicts.
+
+With both selected, install adds only missing components; update refreshes only installed components; remove skips absent components. A selected single component must be installed before update/removal.

@@ -20,25 +20,52 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 | Skill | 用途 |
 | --- | --- |
 | `/cc-feather:handoff` | 保存、列出、讀取、接續工作，查詢／清除／封存完成歷史與來源基準 |
-| `/cc-feather:setup` | 檢查、安裝、更新或移除指定 user/project 範圍的原生角色與分派政策 |
+| `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
 | `/cc-feather:auto-on` | 開啟依風險觸發的自動計畫審查 |
 | `/cc-feather:auto-off` | 關閉自動計畫審查 |
 
-交接在 plugin 安裝後即可使用。若要啟用分派，明確指定 setup 範圍，例如：
+交接指令在 plugin 安裝後即可使用。Setup 可只裝 handoff 自動維護規則、只裝 agent 分派（規則＋角色），或兩者都裝。例如：
 
 ```text
-/cc-feather:setup 在目前專案安裝角色與分派指引
+/cc-feather:setup 在目前專案只安裝 agent 分派規則與角色
 /cc-feather:model 顯示目前專案的角色模型設定
 /cc-feather:model 將目前專案 executor 的 effort 永久改為 high
 ```
 
-Setup 會先預覽，檢查衝突、備份並管理擁有權；不改主模型、並行數、settings.json 或既有交接資料。永久 model 修改寫入原生角色檔，setup 更新保留已選設定。單次指定不會修改永久設定。詳見[設定與生命週期](docs/setup.md)。
+Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫入前會預覽，檢查衝突、備份並管理擁有權；不改主模型、並行數、settings.json 或既有交接資料。永久 model 修改寫入原生角色檔，setup 更新保留已選設定。單次指定不會修改永久設定。詳見[設定與生命週期](docs/setup.md)。
+
+## Setup：先查狀態，再選擇項目
+
+直接輸入 `/cc-feather:setup`，會先查目前專案及使用者範圍的安裝狀態，列出兩項是否已安裝、是否衝突或需要遷移，再詢問要安裝、更新、移除或只查看哪一項，以及操作範圍。若已指定範圍，只檢查該範圍；已說清楚的選擇不會重問。
+
+| 可選項目 | 安裝內容 | 移除後 |
+| --- | --- | --- |
+| handoff | `CLAUDE.md` 中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
+| agent 分派（delegation） | 獨立分派規則＋六個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
+| 兩者（both） | 上述兩項 | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
+
+可直接指定，不必走逐項詢問：
+
+```text
+/cc-feather:setup 在目前專案只安裝 handoff 自動維護規則
+/cc-feather:setup 在目前專案只安裝 agent 分派規則與角色
+/cc-feather:setup 在目前專案兩者都安裝
+/cc-feather:setup 只更新目前專案的 handoff 規則
+/cc-feather:setup 只移除目前專案的 agent 分派，保留 handoff
+/cc-feather:setup 查看使用者範圍的安裝狀態
+```
+
+「兩者都安裝」只補上尚未安裝的項目；「更新兩者」只更新已安裝項目；「移除兩者」只移除已安裝項目。已存在或不存在的另一項不會因此被重設。
+
+兩項使用不同的 `CLAUDE.md` 管理區塊，安裝狀態在各範圍的 `cc-feather/state.json` 分項保存。handoff 規則不會自行建立新紀錄：仍需使用者要求建立或接續後，才在里程碑、受阻與完成時維護同一份紀錄。只查看／列出不啟用維護。
+
+舊版將兩種規則放在同一區塊；升級會檢查擁有權並拆分，保留模型與審查設定。只移除分派不能順便刪掉原有 handoff 提醒；既有檔案被修改或名稱衝突時，先保留並交由使用者決定。
 
 ## 日常使用流程
 
 1. 在要工作的專案開啟 Claude Code，安裝 plugin。交接功能可直接使用。
-2. 要啟用角色分派，執行 `/cc-feather:setup 在目前專案安裝角色與分派指引`；若要跨專案使用，明確改成「在使用者範圍安裝」。完成後開新 session。
+2. 可用 setup 安裝 handoff 規則、agent 分派或兩者。要只啟用角色分派，執行 `/cc-feather:setup 在目前專案只安裝 agent 分派規則與角色`；若要跨專案使用，明確改成「在使用者範圍安裝」。完成後開新 session。
 3. 直接描述工作，主 Agent 依任務分派；也可以點名角色或指定模型。小型工作仍由主 Agent 直接完成。
 4. 需要跨 session 接續時，用 `/cc-feather:handoff 保存目前工作`；下次用 `/cc-feather:handoff 接續指定工作`。
 
@@ -113,7 +140,7 @@ Setup 會先預覽，檢查衝突、備份並管理擁有權；不改主模型�
 | project | `<專案>/CLAUDE.md` | `<專案>/.claude/cc-feather/state.json` |
 | user | `<Claude 設定目錄>/CLAUDE.md` | `<Claude 設定目錄>/cc-feather/state.json` |
 
-Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先完成該範圍 setup；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後只對安全邊界、資料遷移、不可逆操作或複雜跨模組計畫等實質風險觸發，不會每個任務都送審。
+Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後只對安全邊界、資料遷移、不可逆操作或複雜跨模組計畫等實質風險觸發，不會每個任務都送審。
 
 ### Explore 的成本控制
 
@@ -137,7 +164,7 @@ Claude 與 Codex 需使用同一個專案目錄並協調單一寫入者；無跨
 
 ## 更新、移除與驗證
 
-Plugin 更新只更新套件，需另跑 setup update 更新已部署角色；移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
+Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目；移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
 
 ```text
 /cc-feather:setup 更新目前專案已安裝的角色與指引，保留模型與審查模式

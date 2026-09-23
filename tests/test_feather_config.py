@@ -205,7 +205,19 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("model", "project", "--set", "analyst.model=sonnet")
         state_path = self.project / ".claude" / "cc-feather" / "state.json"
         state = json.loads(state_path.read_bytes())
-        state["version"] = 1
+        state = {"version": 1, "scope": "project", **{
+            key: value for key, value in state["components"]["delegation"].items()
+            if key != "legacy_names"
+        }}
+        guidance = self.project / "CLAUDE.md"
+        body = guidance.read_text(encoding="utf-8")
+        reminder = ("\n\n## Handoff and setup lifecycle\n\n"
+                    "When asked to save, list, read or resume handoff work, use the available "
+                    "cc-feather:handoff skill and preserve its records/history rules. "
+                    "Maintain an already active handoff at useful milestones.\n")
+        body = body.replace(config.END, reminder + config.END)
+        guidance.write_bytes(body.encode("utf-8"))
+        state["block_hash"] = config.digest(config._block_parts(body)[1].encode("utf-8"))
         for role in config.ROLES:
             if role == "Explore":
                 continue
@@ -404,7 +416,7 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("model", "project", "--set", "scout.model=claude-opus-4-5[1m]", "--set", "scout.effort=max")
         state = self.project / ".claude" / "cc-feather" / "state.json"
         raw = json.loads(state.read_text(encoding="utf-8"))
-        raw["choices"]["scout"]["effort"] = []
+        raw["components"]["delegation"]["choices"]["scout"]["effort"] = []
         state.write_text(json.dumps(raw), encoding="utf-8")
         code, error = self.call("show")
         self.assertEqual(code, 2)
@@ -452,6 +464,220 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("linked path", result["error"])
         self.assertEqual(target.read_text(encoding="utf-8"), "keep")
+
+
+    def test_handoff_lifecycle_preserves_delegation_and_unrelated_text(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"User first\n")
+        self.apply("install", "project", "--component", "delegation")
+        agent = self.project / ".claude" / "agents" / "scout.md"
+        agent_before = agent.read_bytes()
+        delegation = config._block_parts(guidance.read_text(encoding="utf-8"))[1]
+        self.apply("install", "project", "--component", "handoff")
+        shown = self.call("show")[1]
+        self.assertTrue(shown["components"]["handoff"]["installed"])
+        self.assertTrue(shown["components"]["delegation"]["installed"])
+        self.assertEqual(shown["components"]["handoff"]["status"], "ok")
+        self.assertEqual(agent.read_bytes(), agent_before)
+        self.assertEqual(config._block_parts(guidance.read_text(encoding="utf-8"))[1], delegation)
+        self.apply("update", "project", "--component", "handoff")
+        self.apply("remove", "project", "--component", "handoff")
+        self.assertFalse(self.call("show")[1]["components"]["handoff"]["installed"])
+        self.assertTrue(self.call("show")[1]["components"]["delegation"]["installed"])
+        self.assertIn("User first", guidance.read_text(encoding="utf-8"))
+        self.assertEqual(agent.read_bytes(), agent_before)
+        self.apply("remove", "project", "--component", "delegation")
+        self.assertEqual(guidance.read_bytes(), b"User first\n")
+
+    def test_handoff_only_ignores_agent_conflict_and_delegation_drift(self):
+        agent = self.project / ".claude" / "agents" / "Explore.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("user agent", encoding="utf-8")
+        self.assertEqual(self.call("check")[1]["components"]["delegation"]["status"], "conflict")
+        self.apply("install", "project", "--component", "handoff")
+        self.assertEqual(agent.read_text(encoding="utf-8"), "user agent")
+        self.assertEqual(self.call("show")[1]["components"]["handoff"]["status"], "ok")
+        self.apply("update", "project", "--component", "handoff")
+        self.apply("remove", "project", "--component", "handoff")
+        self.assertEqual(agent.read_text(encoding="utf-8"), "user agent")
+        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
+
+    def test_both_mixed_install_update_remove_is_single_plan(self):
+        self.apply("install", "project", "--component", "handoff")
+        guidance = self.project / "CLAUDE.md"
+        handoff = config._block_parts(guidance.read_text(encoding="utf-8"),
+                                      config.HANDOFF_BEGIN, config.HANDOFF_END)[1]
+        result = self.apply("install", "project", "--component", "both")
+        self.assertEqual(len([change for change in result["changes"] if change["path"].endswith("state.json")]), 1)
+        self.assertEqual(config._block_parts(guidance.read_text(encoding="utf-8"),
+                                             config.HANDOFF_BEGIN, config.HANDOFF_END)[1], handoff)
+        self.apply("remove", "project", "--component", "delegation")
+        self.assertTrue(self.call("show")[1]["components"]["handoff"]["installed"])
+        self.apply("update", "project", "--component", "both")
+        self.assertFalse(self.call("show")[1]["components"]["delegation"]["installed"])
+        self.apply("remove", "project", "--component", "both")
+        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
+        self.assertFalse(guidance.exists() and guidance.read_text(encoding="utf-8").strip())
+
+    def test_legacy_delegation_remove_preserves_handoff_reminder(self):
+        self.legacy_install()
+        guidance = self.project / "CLAUDE.md"
+        self.apply("remove", "project", "--component", "delegation")
+        shown = self.call("show")[1]
+        self.assertTrue(shown["components"]["handoff"]["installed"])
+        self.assertFalse(shown["components"]["delegation"]["installed"])
+        self.assertIn("handoff work", guidance.read_text(encoding="utf-8"))
+        self.apply("update", "project", "--component", "handoff")
+        self.assertIn("handoff", guidance.read_text(encoding="utf-8"))
+        self.apply("remove", "project", "--component", "handoff")
+
+    def test_both_apply_rolls_back_components_together(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"Keep me")
+        _, preview = self.call("install", "project", "--component", "both")
+        real_replace = config._replace
+
+        def fail_handoff(path, data):
+            if path == guidance:
+                raise OSError("injected guidance failure")
+            return real_replace(path, data)
+
+        with mock.patch.object(config, "_replace", side_effect=fail_handoff):
+            code, result = self.call("install", "project", "--component", "both",
+                                     "--apply", "--expected-plan", preview["plan_id"])
+        self.assertEqual(code, 2, result)
+        self.assertIn("injected guidance failure", result["error"])
+        self.assertEqual(guidance.read_bytes(), b"Keep me")
+        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
+        self.assertFalse(list((self.project / ".claude" / "agents").glob("*.md")))
+
+    def test_legacy_v2_combined_block_splits_with_lf_and_crlf(self):
+        for newline in ("\n", "\r\n"):
+            with self.subTest(newline=repr(newline)):
+                self.apply("install", "project")
+                state_path = self.project / ".claude" / "cc-feather" / "state.json"
+                guidance = self.project / "CLAUDE.md"
+                raw = json.loads(state_path.read_bytes())
+                legacy = {"version": 2, "scope": "project", **{
+                    key: value for key, value in raw["components"]["delegation"].items()
+                    if key != "legacy_names"
+                }}
+                body = guidance.read_bytes().decode("utf-8")
+                historical = (
+                    "\n\n## Handoff and setup lifecycle\n\n"
+                    "When asked to save, list, read or resume handoff work, use the available "
+                    "cc-feather:handoff skill and preserve its records/history rules. "
+                    "Maintain an already active handoff at useful milestones with accepted findings, "
+                    "decisions, verification and remaining blockers. Delegation alone does not start "
+                    "a handoff or authorize editing other records.\n\n"
+                    "Use cc-feather:setup for installation checks, updates and removal. "
+                    "Preserve handoff data.\n"
+                )
+                body = body.replace(config.END, historical + config.END).replace("\n", newline)
+                guidance.write_bytes(body.encode("utf-8"))
+                legacy["block_hash"] = config.digest(config._block_parts(body)[1].encode("utf-8"))
+                state_path.write_bytes(config.canonical(legacy) + b"\n")
+                shown = self.call("show")[1]
+                self.assertTrue(shown["components"]["handoff"]["installed"])
+                self.assertTrue(shown["components"]["handoff"]["migration_required"])
+                self.assertFalse(shown["role_migration_required"])
+                before_export = {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()}
+                code, exported = self.call("session")
+                self.assertEqual(code, 0, exported)
+                self.assertEqual(set(exported), set(config.ROLES))
+                self.assertEqual(before_export, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
+                self.apply("update", "project", "--component", "handoff")
+                migrated = guidance.read_text(encoding="utf-8")
+                self.assertEqual(migrated.count("When asked to save"), 0)
+                self.assertIn("## Setup lifecycle", migrated)
+                self.assertIn("Preserve handoff data.", migrated)
+                self.assertTrue(self.call("show")[1]["components"]["delegation"]["installed"])
+                self.apply("remove", "project", "--component", "handoff")
+                self.assertIn("Preserve handoff data.", guidance.read_text(encoding="utf-8"))
+                self.apply("remove", "project", "--component", "delegation")
+
+    def test_both_update_remove_handoff_only_ignore_unowned_agents(self):
+        self.apply("install", "project", "--component", "handoff")
+        agent = self.project / ".claude" / "agents" / "analyst.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("user analyst", encoding="utf-8")
+        self.apply("update", "project", "--component", "both")
+        self.assertFalse(self.call("show")[1]["components"]["delegation"]["installed"])
+        self.apply("remove", "project", "--component", "both")
+        self.assertEqual(agent.read_text(encoding="utf-8"), "user analyst")
+        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
+
+    def test_v1_handoff_migration_requires_role_rename_before_model(self):
+        self.legacy_install()
+        self.apply("update", "project", "--component", "handoff")
+        shown = self.call("show")[1]
+        self.assertTrue(shown["migration_required"])
+        for command, extra in (("model", ("--set", "scout.model=opus")),
+                               ("review", ("--review-mode", "off"))):
+            code, result = self.call(command, "project", *extra)
+            self.assertEqual(code, 2, result)
+            self.assertIn("legacy", result["error"])
+        self.apply("update", "project", "--component", "delegation")
+        self.assertFalse(self.call("show")[1]["migration_required"])
+        self.apply("model", "project", "--set", "scout.model=opus")
+
+    def test_unreadable_agent_tree_does_not_hide_handoff_status(self):
+        self.apply("install", "project", "--component", "handoff")
+        with mock.patch.object(config, "_collisions", side_effect=PermissionError("agent tree denied")):
+            code, shown = self.call("check")
+            self.assertEqual(code, 2)
+            self.assertEqual(shown["status"], "conflict")
+            self.assertTrue(shown["components"]["handoff"]["installed"])
+            self.assertEqual(shown["components"]["handoff"]["status"], "ok")
+            self.assertEqual(shown["components"]["delegation"]["status"], "conflict")
+            self.assertIn("agent tree denied", shown["components"]["delegation"]["issues"])
+            self.apply("update", "project", "--component", "handoff")
+
+    def test_unreadable_or_linked_settings_remain_diagnostic_warnings(self):
+        self.apply("install", "project", "--component", "handoff")
+        target = self.home / "settings.json"
+        real_read, real_safe = config.read, config._safe_path
+
+        def denied_read(path):
+            if path == target:
+                raise PermissionError("settings denied")
+            return real_read(path)
+
+        def linked_path(path):
+            if path == target:
+                raise config.ConfigError("linked settings")
+            return real_safe(path)
+
+        for field, handler in (("read", denied_read), ("_safe_path", linked_path)):
+            with self.subTest(field=field), mock.patch.object(config, field, side_effect=handler):
+                code, shown = self.call("check")
+                self.assertEqual(code, 0, shown)
+                self.assertTrue(shown["components"]["handoff"]["installed"])
+                self.assertIn("runtime overrides are unknown", " ".join(shown["warnings"]))
+                self.assertIn(str(target), " ".join(shown["warnings"]))
+
+    def test_both_install_rejects_changed_mode_for_existing_delegation(self):
+        self.apply("install", "project", "--component", "delegation")
+        before = {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()}
+        code, result = self.call("install", "project", "--component", "both", "--review-mode", "auto")
+        self.assertEqual(code, 2, result)
+        self.assertIn("use review", result["error"])
+        self.assertEqual(before, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
+        result = self.apply("install", "project", "--component", "both", "--review-mode", "off")
+        self.assertEqual(result["review_mode"], "off")
+        self.assertEqual(self.call("show")[1]["review_mode"], "off")
+        self.assertTrue(self.call("show")[1]["components"]["handoff"]["installed"])
+
+    def test_handoff_options_do_not_require_delegation(self):
+        self.assertEqual(self.call("model", "project", "--component", "handoff",
+                                   "--set", "scout.model=opus")[0], 2)
+        self.assertEqual(self.call("review", "project", "--component", "handoff",
+                                   "--review-mode", "auto")[0], 2)
+        self.assertEqual(self.call("install", "project", "--component", "handoff",
+                                   "--review-mode", "auto")[0], 2)
+        self.apply("install", "project", "--component", "handoff")
+        self.assertEqual(self.call("session")[0], 0)
+        self.assertFalse((self.project / ".claude" / "agents").exists())
 
 
 if __name__ == "__main__":
