@@ -1,0 +1,32 @@
+{
+  "scout": {
+    "name": "scout",
+    "model": "haiku",
+    "effort": "low"
+  },
+  "analyst": {
+    "name": "analyst",
+    "model": "opus",
+    "effort": "high"
+  },
+  "mech-executor": {
+    "name": "mech-executor",
+    "model": "sonnet",
+    "effort": "medium"
+  },
+  "executor": {
+    "name": "executor",
+    "model": "opus",
+    "effort": "medium"
+  },
+  "Explore": {
+    "name": "Explore",
+    "model": "haiku",
+    "effort": "low"
+  },
+  "security-executor": {
+    "name": "security-executor",
+    "model": "opus",
+    "effort": "high"
+  }
+}
