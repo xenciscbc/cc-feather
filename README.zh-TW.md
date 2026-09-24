@@ -15,12 +15,13 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 
 本機 checkout 可用 `/plugin marketplace add D:/work_data/project/skill/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。
 
-## 五個入口
+## 六個入口
 
 | Skill | 用途 |
 | --- | --- |
 | `/cc-feather:handoff` | 保存、列出、讀取、接續工作，查詢／清除／封存完成歷史與來源基準 |
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
+| `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
 | `/cc-feather:auto-on` | 開啟依風險觸發的自動計畫審查 |
 | `/cc-feather:auto-off` | 關閉自動計畫審查 |

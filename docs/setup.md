@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages five skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages six skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 
@@ -12,6 +12,12 @@ The plugin packages five skills. Handoff commands work immediately after plugin 
 `claude-home` defaults to `CLAUDE_CONFIG_DIR`, otherwise the current user's `.claude`. Override it explicitly with `--claude-home`; use a confirmed absolute project root. The packaged templates remain in the plugin; native role files live outside its cache, so upgrades do not erase saved choices. Setup update is required after upgrading templates. Model changes update native frontmatter and ownership metadata together.
 
 The native roles are `scout`, `analyst`, `mech-executor`, `executor`, `security-executor`, and exact-case `Explore`. Role names have no Feather prefix. Setup reports existing same-name roles as conflicts and asks the user how to resolve them; it never adopts or overwrites them automatically. Explore intentionally has the built-in name to override it. Roles are not additionally loaded from a plugin agents directory, avoiding duplicate definitions.
+
+## Delegation entry and workflow
+
+The managed CLAUDE.md block keeps delegation boundaries, review mode and trigger conditions. Before dispatch, acceptance, recovery or required review, it directs main to cc-feather:delegation. That skill runs in the current conversation and loads its plan-review reference only when review is required. Native agent files retain child responsibilities and output requirements.
+
+Plugin updates supply the workflow skill; run setup update in each owning scope to deploy the concise entry, then start a fresh session. Keep the plugin available while using the managed delegation policy. Missing skills or roles block the affected delegation or required review.
 
 ## Explore and actual model selection
 

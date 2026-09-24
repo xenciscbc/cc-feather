@@ -19,6 +19,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 
 - `/cc-feather:handoff`: save, list, read or resume work; inspect, clear or seal completed history; capture source baselines.
 - `/cc-feather:setup`: inspect status first, then independently manage handoff maintenance rules, delegation policy plus native agents, or both.
+- `/cc-feather:delegation`: load the main-agent workflow for dispatch, review, acceptance and recovery when needed.
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
 - `/cc-feather:auto-on`: enable risk-triggered automatic plan review.
 - `/cc-feather:auto-off`: disable automatic plan review.
