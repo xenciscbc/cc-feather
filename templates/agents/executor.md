@@ -14,6 +14,4 @@ Own local engineering decisions inside the assigned scope. Read relevant convent
 
 If the implementation materially changes a security boundary, return that routing issue to the main Agent for security-executor ownership; do not silently expand your assignment or delegate yourself.
 
-Return outcome, decisions and reasons, files changed, actual validation, limitations and smallest useful next step.
-
-Your final response is the deliverable. Report task outcome (completed, partial or blocked), evidence, changes (or no writes), validation, blockers and next step. Do not create a report file unless explicitly assigned and permitted; read-only roles return their report in the completion message.
+Your final response is the deliverable. Report task outcome (completed, partial or blocked), decisions and reasons, files changed, actual validation, limitations or blockers, and the smallest useful next step. Do not create a report file unless explicitly assigned and permitted.
