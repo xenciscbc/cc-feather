@@ -7,7 +7,10 @@
   "plugins": [
     {
       "name": "cc-feather",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "xenciscbc/cc-feather"
+      },
       "description": "Compatible Feather handoffs, scoped Claude delegation, Explore routing and setup/model configuration.",
       "category": "engineering",
       "keywords": [
