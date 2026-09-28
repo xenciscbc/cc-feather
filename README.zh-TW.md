@@ -20,6 +20,9 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 | Skill | 用途 |
 | --- | --- |
 | `/cc-feather:handoff` | 保存、列出、讀取、接續工作，查詢／清除／封存完成歷史與來源基準 |
+| `/cc-feather:handoff-list` | 列出交接工作摘要（唯讀，不接續） |
+| `/cc-feather:handoff-save [工作]` | 保存指定工作；省略時保存目前工作 |
+| `/cc-feather:handoff-resume [工作]` | 接續指定工作或唯一未完成的工作；有多項時詢問 |
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
@@ -157,6 +160,9 @@ Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。�
 /cc-feather:handoff 讀取登入功能交接
 /cc-feather:handoff 接續登入功能
 /cc-feather:handoff 搜尋提到登入的完成紀錄
+/cc-feather:handoff-list
+/cc-feather:handoff-save login
+/cc-feather:handoff-resume login
 ```
 
 沿用 [codex-feather](https://github.com/xenciscbc/codex-feather) 的 `.feather/handoffs/<work>.md`、`history.md` 與 `archive/<batch>.md`。讀取不接續執行；接續核對來源後繼續已授權工作。完成自動歸檔，失敗保留可重試資料；清除與封存需要明確範圍。來源基準只涵蓋選定檔案，不代表測試通過。明確指定 Claude memory 才做外部記憶唯讀查找。

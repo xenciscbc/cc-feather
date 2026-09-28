@@ -18,6 +18,9 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 ## Skills
 
 - `/cc-feather:handoff`: save, list, read or resume work; inspect, clear or seal completed history; capture source baselines.
+- `/cc-feather:handoff-list`: list handoff work summaries (read-only, never resumes).
+- `/cc-feather:handoff-save [work]`: save progress for the named work, or the current work when omitted.
+- `/cc-feather:handoff-resume [work]`: resume the named work, or the sole unfinished one; asks when several remain.
 - `/cc-feather:setup`: inspect status first, then independently manage handoff maintenance rules, delegation policy plus native agents, or both.
 - `/cc-feather:delegation`: load the main-agent workflow for dispatch, review, acceptance and recovery when needed.
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
@@ -153,6 +156,9 @@ Saved settings do not prove execution: CLI/managed/nested definitions, force-mod
 /cc-feather:handoff Read the login handoff
 /cc-feather:handoff Resume the login work
 /cc-feather:handoff Search completed history for login
+/cc-feather:handoff-list
+/cc-feather:handoff-save login
+/cc-feather:handoff-resume login
 ```
 
 Use existing `.feather/handoffs/<work>.md`, `history.md` and `archive/<batch>.md` without conversion. Read only summarizes; resume checks sources before authorized work. Completion archives with recoverable retries; history clearing/sealing needs an explicit selection. Baselines cover selected files and do not prove tests passed. Claude memory lookup is explicitly selected and read-only.
