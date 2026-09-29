@@ -110,7 +110,7 @@ def read_file(path: Path) -> Snapshot:
         after_read = os.fstat(handle.fileno())
     check_path(path)
     after = path.stat()
-    signature = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    signature = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
     if signature(before) != signature(after_read) or signature(before) != signature(after):
         raise HandoffError("changed", f"File changed during read: {path}")
     return Snapshot(path, data)

@@ -12,7 +12,7 @@ from .storage import HandoffError, Store, check_path, read_file, git_environment
 
 def signature(info):
     return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
-            info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            info.st_size, info.st_mtime_ns)
 
 
 def source_info(project: Path, name: str):

@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import patch
 
 import test_handoff_tool as handoff_tests
+from test_handoff_storage import skewed_fstat
 RECORD = handoff_tests.RECORD
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/handoff/scripts"))
@@ -258,6 +259,16 @@ class ObservationUnitTest(unittest.TestCase):
         with patch.object(observations, "source_info", side_effect=HandoffError("changed", "race")) as probe:
             self.assertEqual(observations.observe(self.project, "a", [1])[0]["reason"], "changed")
             self.assertEqual(probe.call_count, 2)
+
+    def test_ctime_mismatch_between_stat_and_fstat_is_present(self):
+        # Python 3.12+ on Windows: stat() reports creation time, fstat() reports change time.
+        (self.project / "a").write_bytes(b"1234")
+        with patch.object(observations.os, "fstat", side_effect=skewed_fstat(st_ctime_ns=0)):
+            item, _ = observations.observe(self.project, "a", [100])
+        self.assertEqual(item, {"path": "a", "state": "present", "sha256": hashlib.sha256(b"1234").hexdigest()})
+        with patch.object(observations.os, "fstat", side_effect=skewed_fstat(st_mtime_ns=0)):
+            item, _ = observations.observe(self.project, "a", [100])
+        self.assertEqual(item["reason"], "changed")
 
     def test_batch_and_git_changes_are_partial(self):
         (self.project / "a").write_bytes(b"a")

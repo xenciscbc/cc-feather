@@ -4,11 +4,22 @@ import sys
 import tempfile
 import os
 import subprocess
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/handoff/scripts"))
 from feather_handoff import storage
+
+
+def skewed_fstat(**overrides):
+    real_fstat = os.fstat
+
+    def fstat(fd):
+        info = real_fstat(fd)
+        fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+        return SimpleNamespace(**{**fields, **overrides})
+    return fstat
 
 
 class HandoffStorageTest(unittest.TestCase):
@@ -42,6 +53,14 @@ class HandoffStorageTest(unittest.TestCase):
             result = capture(store, {"paths": ["source.txt"]})
             self.assertEqual(result["snapshot"]["files"][0]["sha256"], storage.hashlib.sha256(b"asked").hexdigest())
             self.assertEqual(Path(git(store, "rev-parse", "--show-toplevel").stdout.strip()), asked)
+
+    def test_ctime_mismatch_between_stat_and_fstat_is_not_a_change(self):
+        # Python 3.12+ on Windows: stat() reports creation time, fstat() reports change time.
+        with patch.object(storage.os, "fstat", side_effect=skewed_fstat(st_ctime_ns=0)):
+            self.assertEqual(storage.read_file(self.path).data, b"original")
+        with patch.object(storage.os, "fstat", side_effect=skewed_fstat(st_mtime_ns=0)), \
+                self.assertRaises(storage.HandoffError):
+            storage.read_file(self.path)
 
     def test_collisions_are_bounded_and_never_deleted(self):
         collision = self.path.parent / ".feather-fixed.tmp"
