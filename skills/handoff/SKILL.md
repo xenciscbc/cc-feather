@@ -50,10 +50,10 @@ Choose one status. Save and verify using the write discipline above. Report the 
 
 When a save or milestone update surfaces a new to-do item (a follow-up, side issue or deferred request), decide where it belongs before writing; do not fold it into the current record's `進度` or `下一步` by default.
 
-- **Undecided:** an optional idea or proposal whose worth is still in question (for example "maybe also add…", a nice-to-have improvement), and the user has not decided to do it. A concrete problem found during the work (a bug, outdated or incorrect content, something broken) is a to-do, not undecided, even if nobody has scheduled it. Keep an undecided item in the current record's `注意：` as an open question, prefixed `待決：`; do not create a record for it. Once the user decides to do it, classify it again with the rules below.
+- **Undecided:** an optional idea or proposal whose worth is still in question (for example "maybe also add…", a nice-to-have improvement), and the user has not decided to do it. A concrete problem found during the work (a bug, outdated or incorrect content, something broken) is a to-do, not undecided, even if nobody has scheduled it. Keep an undecided item in the current record's `注意：` as an open question, prefixed `待決：`; do not create a record for it. Once the user decides, remove its `待決：` entry: if they decline, drop it; if they decide to do it, classify it again with the rules below.
 - **Separable:** the item has its own goal and can be started, verified and completed without finishing the current work, and the current work can complete without it. Record it as a new work item under its own distinct, legal basename with its own goal, `進度` stating what is already known (or that it has not started), and `下一步`. Its status is `進行中` unless it is already blocked. Optionally mention the new work's name in the current record's `注意：` as a pointer; do not copy its details there.
 - **Coupled:** the item is a step of the current goal, blocks its completion, or shares its acceptance or verification. Keep it in the current record's `下一步` or `注意：`.
-- **Unclear:** prefer the current record and state the open question there; ask the user only when the split would change what counts as completing the current work.
+- **Unclear whether separable or coupled:** prefer the current record and state the open question there; ask the user only when the split would change what counts as completing the current work.
 
 Before creating, list existing work files and reuse a matching record instead of creating a duplicate. A separate record captures the item for a later session; it is not authorization to start that work now, and the current work keeps its own record and status. Report each created or updated path.
 
@@ -73,10 +73,11 @@ For Feather lists and reads, use the Python tool described in [Handoff file tool
 
 ## Archive completed work
 
-1. After verifying that the whole requested work is complete, list any remaining `待決：` items from its `注意：` in the completion report so they are not silently archived; the user decides whether each becomes new work. Then save the final handoff with `狀態：完成` and final verification. Its `更新` timestamp becomes the completion time. Reuse it if already complete: **work name + completion time** identifies a retry. Retain its source baseline unchanged during archival retries.
+1. After verifying that the whole requested work is complete, save the final handoff with `狀態：完成` and final verification. Its `更新` timestamp becomes the completion time. Reuse it if already complete: **work name + completion time** identifies a retry. Retain its source baseline unchanged during archival retries.
 2. Read history, or initialize `# 交接歷史` if absent. If it is a directory, link, unreadable, or unrecognizable, preserve the work file and report the blocker.
 3. Use `## <work> · 完成：<completion time>` followed by the complete final handoff body, omitting only its first title line. Preserve existing history. For an existing identical identity, compare the full body: identical means already saved; different means preserve both and ask. Append only a missing record, applying the write discipline.
 4. Read back and verify the entire saved entry and prior history. Reread the work file and require it to match the archived version before removing it; verify removal. Report a failed save or removal accurately and retry from the surviving files, without changing the completion identity or duplicating the entry.
+5. In the completion report, list any `待決：` items remaining in the final record's `注意：` so they are not silently archived; the user decides whether each becomes new work.
 
 Retain history until explicitly asked to clear it. Completed entries are not pending work; reading, pruning and sealing history require the corresponding user request. History operations default to `history.md`; include sealed files only when the user explicitly includes them. Clearing shared history leaves sealed files intact.
 
