@@ -452,7 +452,9 @@ def _explore_providers(base: Path, owned: dict[str, Path]) -> list[Path]:
     target = base / "agents" / "Explore.md"
     _safe_path(target)
     found = [path for _, path in _collision_entries(base, {"Explore": target})]
-    if owned.get("Explore") != target and read(target) is not None:
+    # A file at the Explore path only provides Explore when it declares that name; any other
+    # file there leaves the built-in Explore active and stays an unowned file for the user.
+    if owned.get("Explore") != target and read(target) is not None and _agent_name(target) == "Explore":
         found.insert(0, target)
     return found
 
@@ -609,6 +611,10 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     elif active_delegation and args.command in {"model", "review"}:
         provided = bool(_explore_providers(base, _release_user_explore(owned, delegation)))
         if provided != bool(external):
+            explore = base / "agents" / "Explore.md"
+            if not provided and read(explore) is not None:
+                # The file is no longer an agent named Explore, but update cannot replace it either.
+                raise ConfigError(f"unowned role file already exists: {explore}; user decision required")
             change = "now provided by another agent" if provided else "no longer provided by another agent"
             raise ConfigError(f"Explore is {change}; run setup update first")
     for role in _overrides(args.set):
@@ -1010,17 +1016,25 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
 def _session(args: argparse.Namespace) -> dict[str, Any]:
     inspected = _inspect(args)
     if inspected["components"]["delegation"]["status"] != "ok":
-        raise ConfigError("installed delegation configuration has drift: " + "; ".join(inspected["components"]["delegation"]["issues"]))
+        raise ConfigError("delegation configuration has conflicts or drift: " + "; ".join(inspected["components"]["delegation"]["issues"]))
     if inspected["role_migration_required"]:
         raise ConfigError("legacy role names are out of date; run setup update first")
     if inspected["role_update_required"]:
         raise ConfigError("delegation roles are out of date; run setup update first")
+    installed = inspected["components"]["delegation"]["installed"]
     external = inspected["external_roles"]
+    prefix = inspected["role_prefix"]
     if inspected["pending_external_roles"] is not None:
-        if inspected["components"]["delegation"]["installed"]:
+        if installed:
             raise ConfigError("Explore is now provided by another agent, or no longer is; run setup update first")
         # Without an installation, export what install would set up: no Explore over the user's own.
         external = inspected["pending_external_roles"]
+    if inspected["pending_role_prefix"] is not None:
+        if installed:
+            raise ConfigError("another agent now uses a role name, so the roles move to the "
+                              f"{inspected['pending_role_prefix']} prefix; run setup update first")
+        # Export the prefixed names install would use, never the names of the user's own agents.
+        prefix = inspected["pending_role_prefix"]
     choices = {role: dict(value) for role, value in inspected["choices"].items() if role not in external}
     for role, fields in _overrides(args.set).items():
         if role in external:
@@ -1030,14 +1044,14 @@ def _session(args: argparse.Namespace) -> dict[str, Any]:
     base, _, _ = _scope(args)
     for role in (role for role in ROLES if role not in external):
         _validate_choice(choices[role]["model"], choices[role]["effort"])
-        if inspected["components"]["delegation"]["installed"]:
-            path = base / "agents" / f"{_role_name(role, inspected['role_prefix'])}.md"
+        if installed:
+            path = base / "agents" / f"{_role_name(role, prefix)}.md"
             _safe_path(path)
             saved = inspected["choices"][role]
             data = read(path)
             rendered_bytes = _edit_role_fields(data, saved, choices[role], path) if choices[role] != saved else data
         else:
-            rendered_bytes = _render(role, choices[role])
+            rendered_bytes = _render(role, choices[role], prefix)
         rendered = rendered_bytes.decode("utf-8").replace("\r\n", "\n")
         if not rendered.startswith("---\n") or "\n---\n" not in rendered[4:]:
             raise ConfigError(f"invalid agent frontmatter: {role}")
@@ -1052,7 +1066,7 @@ def _session(args: argparse.Namespace) -> dict[str, Any]:
             if key in fields:
                 raise ConfigError(f"duplicate agent frontmatter field: {role}.{key}")
             fields[key] = value.strip()
-        if fields.get("name") != _role_name(role, inspected["role_prefix"]):
+        if fields.get("name") != _role_name(role, prefix):
             raise ConfigError(f"agent name mismatch: {role}")
         if fields.get("model") != choices[role]["model"] or fields.get("effort") != choices[role]["effort"]:
             raise ConfigError(f"agent model or effort mismatch: {role}")

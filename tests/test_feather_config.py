@@ -132,9 +132,19 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("matching", error["error"])
         explore = self.project / ".claude" / "agents" / "Explore.md"
         explore.parent.mkdir(parents=True)
-        explore.write_text("owned by user", encoding="utf-8")
+        for content in ("owned by user", "---\nname: explore-notes\n---\nNotes\n"):
+            with self.subTest(content=content):
+                # Not an agent named Explore: the built-in stays active, so this only blocks the path.
+                explore.write_text(content, encoding="utf-8")
+                before = self.files()
+                code, error = self.call("install")
+                self.assertEqual(code, 2, error)
+                self.assertIn("unowned role file already exists", error["error"])
+                self.assertEqual(before, self.files())
+                self.assertIsNone(self.call("check")[1]["pending_external_roles"])
+        explore.write_text("---\nname: Explore\n---\nMine\n", encoding="utf-8")
         self.apply("install")
-        self.assertEqual(explore.read_text(encoding="utf-8"), "owned by user")
+        self.assertEqual(explore.read_text(encoding="utf-8"), "---\nname: Explore\n---\nMine\n")
         self.assert_external_explore(prefix="")
 
     def test_drift_and_malformed_markers_block_mutation(self):
@@ -504,6 +514,43 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertEqual(before, self.files())
                 if setup_change == "rewritten":
                     explore.write_bytes(original)
+
+    def test_session_uses_a_pending_prefix_and_never_a_user_agent_name(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "scout.md").write_text("---\nname: scout\n---\nMine\n", encoding="utf-8")
+        code, exported = self.call("session")
+        self.assertEqual(code, 0, exported)
+        self.assertEqual(set(exported), {config._role_name(role, config.ROLE_PREFIX) for role in config.ROLES})
+        self.assertIn("cc-analyst", exported["cc-scout"]["description"])
+        (agents / "scout.md").unlink()
+        self.apply("install")
+        (agents / "team").mkdir()
+        (agents / "team" / "s.md").write_text("---\nname: scout\n---\nTeam\n", encoding="utf-8")
+        code, result = self.call("session")
+        self.assertEqual(code, 2, result)
+        self.assertIn("run setup update first", result["error"])
+        self.apply("update")
+        code, exported = self.call("session")
+        self.assertEqual(code, 0, exported)
+        self.assertIn("cc-scout", exported)
+
+    def test_user_explore_renamed_in_place_points_to_a_user_decision(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        explore = agents / "Explore.md"
+        explore.write_text("---\nname: Explore\n---\nMine\n", encoding="utf-8")
+        self.apply("install")
+        explore.write_text("---\nname: notes\n---\nNow notes\n", encoding="utf-8")
+        before = self.files()
+        for command in (("model", "project", "--set", "scout.model=haiku"),
+                        ("review", "project", "--review-mode", "auto"), ("update",)):
+            with self.subTest(command=command[0]):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("unowned role file already exists", result["error"])
+                self.assertIn("user decision required", result["error"])
+        self.assertEqual(before, self.files())
 
     def test_session_without_installation_skips_a_user_explore(self):
         agents = self.project / ".claude" / "agents"
