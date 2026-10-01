@@ -6,12 +6,22 @@ The plugin packages six skills. Handoff commands work immediately after plugin i
 
 | Scope | Roles | Main-session policy | Ownership/settings |
 | --- | --- | --- | --- |
-| project | `<project>/.claude/agents/` | `<project>/CLAUDE.md` | `<project>/.claude/cc-feather/state.json` |
+| project | `<project>/.claude/agents/` | Project instruction file (below) | `<project>/.claude/cc-feather/state.json` |
 | user | `<claude-home>/agents/` | `<claude-home>/CLAUDE.md` | `<claude-home>/cc-feather/state.json` |
 
 `claude-home` defaults to `CLAUDE_CONFIG_DIR`, otherwise the current user's `.claude`. Override it explicitly with `--claude-home`; use a confirmed absolute project root. The packaged templates remain in the plugin; native role files live outside its cache, so upgrades do not erase saved choices. Setup update is required after upgrading templates. Model changes update native frontmatter and ownership metadata together.
 
-The native roles are `scout`, `analyst`, `mech-executor`, `executor`, `security-executor`, `verifier`, and exact-case `Explore`. Role names have no Feather prefix. Setup reports existing same-name roles as conflicts and asks the user how to resolve them; it never adopts or overwrites them automatically. Explore intentionally has the built-in name to override it. Roles are not additionally loaded from a plugin agents directory, avoiding duplicate definitions.
+The native roles are `scout`, `analyst`, `mech-executor`, `executor`, `security-executor`, `verifier`, and exact-case `Explore`. Explore intentionally has the built-in name to override it. When another agent already uses one of these names (at the role's path, or declared in any file under the agents tree), install or update gives every role except Explore the `cc-` prefix, such as `cc-scout`, and renders cross-references and the delegation policy with those names. The preview lists the names. Explore keeps its exact name, because that name is what overrides the built-in Explore. If another agent already uses the name Explore (at `Explore.md` or declared in any file under the agents tree, including an `Explore.md` cc-feather installed and the user rewrote as their own Explore), that agent already overrides the built-in, so cc-feather installs no Explore of its own, leaves the user's file untouched and records Explore as external. Check/show warn that cc-feather does not manage that agent's model: without a `model` field it runs on the main model. When the user's Explore goes away, update installs cc-feather's Explore again. A conflict on a `cc-` name still stops for the user's decision. Once an installation uses the prefix it keeps it; to drop it, remove and reinstall. User and project scopes can differ; the project's policy block names the roles for that project. Roles are not additionally loaded from a plugin agents directory, avoiding duplicate definitions.
+
+## Project instruction file
+
+Claude Code reads a project's AGENTS.md files (and `.claude/AGENTS.md`) only while no CLAUDE.md, `.claude/CLAUDE.md` or CLAUDE.local.md exists in the project or its ancestor directories; the user's own `~/.claude/CLAUDE.md` does not count ([memory docs](https://code.claude.com/docs/en/memory#agents-md), Claude Code 2.1.277 or later). Creating a CLAUDE.md in such a project would silently stop Claude reading its AGENTS.md, so project-scope setup chooses its target in this order:
+
+1. an existing `CLAUDE.md`, else an existing `.claude/CLAUDE.md`;
+2. when AGENTS files are what Claude reads, a required choice: `--guidance claude` creates CLAUDE.md that starts with an `@` import of each of those AGENTS files, and `--guidance agents` writes into the project's own AGENTS.md or `.claude/AGENTS.md` (unavailable when only ancestor directories have one);
+3. otherwise a new `CLAUDE.md`.
+
+The choice is recorded in state.json and every later operation uses the same file. Imports of ancestor files resolve outside the project, so Claude asks once to approve those external imports. When removal leaves only the imports setup added, it deletes that CLAUDE.md. Check/show warn when guidance kept in an AGENTS file is no longer read: a CLAUDE file now exists, or the user's Project instructions setting is `claude-md` or `managed-only`. User scope always uses `<claude-home>/CLAUDE.md`.
 
 ## Delegation entry and workflow
 
@@ -21,7 +31,7 @@ Plugin updates supply the workflow skill; run setup update in each owning scope 
 
 ## Explore and actual model selection
 
-Claude Code's official documentation states that built-in Explore has inherited the main model since 2.1.198. A user/project agent named Explore overrides that built-in; a namespaced plugin scout by itself does not do so. Setup therefore includes Explore with explicit sonnet/low defaults.
+Claude Code's official documentation states that built-in Explore has inherited the main model since 2.1.198. A user/project agent named Explore overrides that built-in; a namespaced plugin scout by itself does not do so. Setup therefore includes Explore with explicit sonnet/low defaults, unless the user already has an agent named Explore (see Native deployment).
 
 A role file proves requested configuration only. CLI/managed definitions, nearer nested project definitions, duplicate names, invocation model arguments, environment force variables and provider allowlists may affect the live model. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` is particularly important: it forces the environment's subagent model, or the main model if no environment model is set. Current documentation says the ordinary SUBAGENT_MODEL variable alone is lower priority than explicit frontmatter, whereas older versions behaved differently. Settings-file environment overrides and launch flags may not be visible to the configuration script. Resolve known conflicts and check native execution; never claim all of these have been ruled out by a filesystem check.
 
@@ -40,7 +50,7 @@ python -B scripts/feather_config.py install --project /absolute/project --scope 
 python -B scripts/feather_config.py show --project /absolute/project --scope project
 ```
 
-Mutating operations preview by default; applying requires the same operation/arguments and expected plan ID. `update` refreshes owned templates while retaining model choices. `remove` removes only the selected intact managed component and its ownership metadata; delegation includes its native roles. Unselected components remain. Unrelated file content and handoff records remain. Existing unowned Explore or Feather role files, malformed policy markers and edited managed files are conflicts; the tool will not adopt or replace them automatically. Reconcile custom content explicitly instead of bypassing ownership checks.
+Mutating operations preview by default; applying requires the same operation/arguments and expected plan ID. `update` refreshes owned templates while retaining model choices. `remove` removes only the selected intact managed component and its ownership metadata; delegation includes its native roles. Unselected components remain. Unrelated file content and handoff records remain. Existing unowned role files that the prefix cannot avoid, malformed policy markers and edited managed files (other than an Explore the user rewrote as their own) are conflicts; the tool will not adopt or replace them automatically. Reconcile custom content explicitly instead of bypassing ownership checks.
 
 Change one field without resetting the others:
 
@@ -89,23 +99,23 @@ An install/update/model/review/remove preview returns `plan_id`; applying requir
 
 ## Unprefixed role names and migration
 
-Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
+Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore, or their `cc-` forms after a name conflict (see above). Other agents' files are never adopted or overwritten. When a conflict still needs the user, options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Installations still using feather-* role names require delegation update before model/review mutations or session export; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.
 
 ## Added roles and incompatible role sets
 
-A plugin version can package a role that an existing installation predates; `verifier` is such a role. Check/show then report `role_update_required: true`. Delegation update adds the missing role from its package default and keeps saved models, effort and review mode. Model/review changes and session export wait for that update; remove deletes only the roles the installation owns. An existing unowned file at the new role's path, or another agent declaring its name, blocks the update until the user resolves it.
+A plugin version can package a role that an existing installation predates; `verifier` is such a role. Check/show then report `role_update_required: true`. Delegation update adds the missing role from its package default and keeps saved models, effort and review mode. Model/review changes and session export wait for that update; remove deletes only the roles the installation owns. If another agent already uses the new role's name, update moves the installation to the `cc-` prefix.
 
-Delegation owns the native names scout, Explore, analyst, mech-executor, executor, security-executor and verifier, together with its own orchestration policy. Another plugin, skill or instruction file that defines a similar delegation workflow may conflict with it: same-name agents are reported as collisions, and two orchestration policies loaded in one session can give main contradictory routing, review and acceptance rules. Keep one delegation workflow active per scope.
+Delegation owns the native names scout, Explore, analyst, mech-executor, executor, security-executor and verifier, together with its own orchestration policy. Another plugin, skill or instruction file that defines a similar delegation workflow may conflict with it: same-name agents move cc-feather to its `cc-` names, but two orchestration policies loaded in one session can give main contradictory routing, review and acceptance rules. Keep one delegation workflow active per scope.
 
-Plugin versions before verifier require exactly six roles in state.json, so they reject an installation that update has extended. To go back to such a version, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.
+Plugin versions before verifier require exactly six roles in state.json, and versions before state v4 reject the v4 schema, so they cannot read an installation a newer setup has changed. To go back to such a version, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.
 
 ## Independent setup components
 
 Use `--component handoff|delegation|both` explicitly for setup install/update/remove. Handoff installs templates/handoff.md under `cc-feather:handoff` markers; delegation installs templates/CLAUDE.md under the existing `cc-feather` markers plus seven native agent files. Check/show report each component's state. Bare skill invocation inspects the project and user scopes before asking for intent; an explicit scope limits inspection to that scope. The tool's legacy default for setup mutations is delegation; the skill always passes the user's selected component.
 
-State schema v3 records independent component ownership in each scope's state.json. Handoff-only operations do not need to resolve unrelated native agent collisions. Model/review operations require delegation, and handoff setup does not grant it. Both components share CLAUDE.md and the scope lock, so a combined operation is previewed and applied as one transaction with rollback and backups. Preserve unrelated text, unselected components and all handoff records.
+State schema v4 records independent component ownership and the managed instruction file in each scope's state.json; v1-v3 states are read and rewritten as v4 on the next change. Handoff-only operations do not need to resolve unrelated native agent collisions. Model/review operations require delegation, and handoff setup does not grant it. Both components share the instruction file and the scope lock, so a combined operation is previewed and applied as one transaction with rollback and backups. Preserve unrelated text, unselected components and all handoff records.
 
 Legacy v1/v2 combined policy is split during migration without discarding the existing handoff reminder. Delegation-only removal retains handoff policy; a request to remove both removes both selected policies. Role-name migration and source-drift checks still apply. The preview must make any legacy split visible. Do not manually change state ownership to bypass conflicts.
 

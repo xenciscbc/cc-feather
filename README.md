@@ -43,7 +43,7 @@ A bare `/cc-feather:setup` first checks project and user installation status, re
 
 | Component | Installed content | Removal behavior |
 | --- | --- | --- |
-| handoff | An independent CLAUDE.md maintenance policy | Removes the reminder only; records and the plugin handoff command remain |
+| handoff | An independent maintenance policy in the instruction file | Removes the reminder only; records and the plugin handoff command remain |
 | delegation | A separate delegation policy plus seven native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
 | both | Both components | Applies the selected operation together; preserves records and unrelated settings |
 
@@ -60,7 +60,7 @@ Specify the full request to avoid unnecessary questions:
 
 Installing both adds missing components without resetting installed ones. Updating both refreshes installed components only; removing both removes installed components only.
 
-Each component has its own managed CLAUDE.md block, with independent ownership recorded in the scope's cc-feather/state.json. Handoff rules do not start a record automatically: after a user requests creation or continuation, maintain that work at milestones, blockers and completion. Reading/listing alone does not activate maintenance.
+Each component has its own managed block in the scope's instruction file, with independent ownership recorded in the scope's cc-feather/state.json. Handoff rules do not start a record automatically: after a user requests creation or continuation, maintain that work at milestones, blockers and completion. Reading/listing alone does not activate maintenance.
 
 Legacy installations combined both policies in one block. Migration checks ownership and splits them while preserving models and review mode. Removing delegation alone must retain the existing handoff reminder. Modified owned files and occupied names are preserved for the user's decision.
 
@@ -139,14 +139,16 @@ Permanent modes are stored below. Use the commands to change them: manually edit
 
 | Scope | Policy loaded by Claude | Synchronized management state |
 | --- | --- | --- |
-| project | `<project>/CLAUDE.md` | `<project>/.claude/cc-feather/state.json` |
+| project | `<project>/CLAUDE.md`, `.claude/CLAUDE.md` or AGENTS.md (see below) | `<project>/.claude/cc-feather/state.json` |
 | user | `<Claude config directory>/CLAUDE.md` | `<Claude config directory>/cc-feather/state.json` |
 
 The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. The managed line `Automatic plan review mode: off` disables review; `auto` enables it. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Project settings may supersede user settings; fresh sessions load the saved mode. Enabled review targets material risks such as security boundaries, data migration, irreversible operations and complex cross-module plans, rather than every task.
 
+In project scope, setup writes into an existing CLAUDE.md, else `.claude/CLAUDE.md`. Claude Code reads AGENTS.md only while no CLAUDE file exists, so in a project that relies on AGENTS.md setup asks first: write into the AGENTS file, or create a CLAUDE.md that imports it so Claude keeps reading it. The choice is saved and reused. See [project instruction file](docs/setup.md#project-instruction-file).
+
 ### Explore
 
-Built-in Explore inherits the main model. A namespaced plugin scout alone cannot prevent its use, so setup deploys an exact-name native `Explore` with sonnet/low. An existing custom Explore is a conflict, never silently overwritten.
+Built-in Explore inherits the main model. A namespaced plugin scout alone cannot prevent its use, so setup deploys an exact-name native `Explore` with sonnet/low. If you already have an agent named Explore, it already overrides the built-in: setup installs none of its own, leaves yours untouched and warns that cc-feather does not manage its model (without a `model` field it uses the main model). Remove yours and setup update installs cc-feather's again.
 
 Saved settings do not prove execution: CLI/managed/nested definitions, force-model environment settings, provider restrictions or invocation arguments can change selection. Use a fresh session and `/tasks` to inspect actual model/effort. This avoids unintended expensive-model use; it does not guarantee fewer tokens. See [official subagent documentation](https://code.claude.com/docs/en/sub-agents).
 
@@ -182,6 +184,6 @@ See [handoff compatibility](docs/compatibility.md) and [setup validation](docs/s
 
 ## Unprefixed role names and migration
 
-Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
+Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore. When another agent already uses one of these names, setup installs every role except Explore with a `cc-` prefix (for example `cc-scout`) and lists the names in the delegation policy; the prefix then stays. Other agents' files are never adopted or overwritten. Explore keeps its exact name, and your own Explore is used instead of cc-feather's. A conflict on a `cc-` name still stops for your decision. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Model/review mutations and session export require migration first; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.

@@ -5,7 +5,7 @@ description: "Inspect or change Claude Feather role models and effort, including
 
 # Feather Model for Claude Code
 
-Manage the native roles scout, analyst, mech-executor, executor, security-executor, verifier and Explore while preserving their responsibilities and tool permissions. Use [feather_config.py](../../scripts/feather_config.py) from the actual plugin installation with Python 3.11+. Never edit managed role files, ownership state or plugin cache manually.
+Manage the native roles scout, analyst, mech-executor, executor, security-executor, verifier and Explore while preserving their responsibilities and tool permissions. `--set` always takes these role ids, also when an installation names its agents with the `cc-` prefix. When show reports Explore under `external_roles`, the user's own Explore is in use; cc-feather cannot set its model or effort, so point the user to that agent file. Use [feather_config.py](../../scripts/feather_config.py) from the actual plugin installation with Python 3.11+. Never edit managed role files, ownership state or plugin cache manually.
 
 ## Resolve values and duration
 

@@ -45,7 +45,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 | 可選項目 | 安裝內容 | 移除後 |
 | --- | --- | --- |
-| handoff | `CLAUDE.md` 中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
+| handoff | 指示檔中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
 | agent 分派（delegation） | 獨立分派規則＋七個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
 | 兩者（both） | 上述兩項 | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
 
@@ -62,7 +62,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 「兩者都安裝」只補上尚未安裝的項目；「更新兩者」只更新已安裝項目；「移除兩者」只移除已安裝項目。已存在或不存在的另一項不會因此被重設。
 
-兩項使用不同的 `CLAUDE.md` 管理區塊，安裝狀態在各範圍的 `cc-feather/state.json` 分項保存。handoff 規則不會自行建立新紀錄：仍需使用者要求建立或接續後，才在里程碑、受阻與完成時維護同一份紀錄。只查看／列出不啟用維護。
+兩項在該範圍的指示檔中各有獨立的管理區塊，安裝狀態在各範圍的 `cc-feather/state.json` 分項保存。handoff 規則不會自行建立新紀錄：仍需使用者要求建立或接續後，才在里程碑、受阻與完成時維護同一份紀錄。只查看／列出不啟用維護。
 
 舊版將兩種規則放在同一區塊；升級會檢查擁有權並拆分，保留模型與審查設定。只移除分派不能順便刪掉原有 handoff 提醒；既有檔案被修改或名稱衝突時，先保留並交由使用者決定。
 
@@ -143,14 +143,16 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 | 範圍 | 載入給 Claude 的政策 | 同步管理狀態 |
 | --- | --- | --- |
-| project | `<專案>/CLAUDE.md` | `<專案>/.claude/cc-feather/state.json` |
+| project | `<專案>/CLAUDE.md`、`.claude/CLAUDE.md` 或 AGENTS.md（見下方） | `<專案>/.claude/cc-feather/state.json` |
 | user | `<Claude 設定目錄>/CLAUDE.md` | `<Claude 設定目錄>/cc-feather/state.json` |
 
 Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後只對安全邊界、資料遷移、不可逆操作或複雜跨模組計畫等實質風險觸發，不會每個任務都送審。
 
+project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.md`。Claude Code 只在沒有任何 CLAUDE 檔時才讀 AGENTS.md，所以專案若依賴 AGENTS.md，setup 會先詢問：直接寫進 AGENTS 檔，或建立一個 import 它的 CLAUDE.md，讓 Claude 繼續讀到它。選擇會記錄下來，之後沿用。詳見[專案指示檔](docs/setup.md#project-instruction-file)。
+
 ### Explore 的成本控制
 
-內建 Explore 會繼承主模型；只新增 plugin scout 無法防止它被呼叫。Setup 因此部署**真正名為 Explore 的原生角色**，明確寫入 sonnet/low。遇到既有自訂 Explore 會保留並回報衝突，不直接覆蓋。
+內建 Explore 會繼承主模型；只新增 plugin scout 無法防止它被呼叫。Setup 因此部署**真正名為 Explore 的原生角色**，明確寫入 sonnet/low。若你已有名為 Explore 的 agent，它本身就已取代內建 Explore：setup 不安裝自己的 Explore、不動你的檔案，並提醒它的 model 不由 cc-feather 管理（沒寫 `model` 就會使用主模型）。移除你的 Explore 後，setup update 會重新安裝 cc-feather 的版本。
 
 儲存值不是實際執行證據：CLI／managed／巢狀專案定義、模型 force 變數、provider allowlist 或單次參數可能影響模型。Setup 後用新 session，執行探索時以 `/tasks` 核對實際 model／effort。模型選擇降低的是意外使用昂貴模型的成本，不保證 token 數下降。參考 [Claude subagents](https://code.claude.com/docs/en/sub-agents)。
 
@@ -188,6 +190,6 @@ Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署�
 
 原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`Explore`，不再有 `feather-` 前綴。
 
-Setup 遇到既有同名角色（即使位於不同檔名或子目錄），會列出衝突並保留檔案，請使用者決定保留既有配置、將既有角色改名，或備份後替換；取得具體選擇前不覆蓋或接管。跨 user/project 範圍的同名角色依 Claude 優先序生效，需一併核對適用範圍。
+若已有其他 agent 使用同樣的名稱（即使位於不同檔名或子目錄），setup 會把 Explore 以外的角色都加上 `cc-` 前綴安裝（例如 `cc-scout`），並在分派規則中列出實際名稱；之後一直沿用前綴。其他 agent 的檔案不會被覆蓋或接管。Explore 維持原名；已有自己的 Explore 時直接沿用你的。`cc-` 名稱本身也衝突時，仍會保留檔案並請使用者決定。跨 user/project 範圍的同名角色依 Claude 優先序生效，需一併核對適用範圍。
 
 舊版已管理的 `feather-*` 角色請執行 `/cc-feather:setup 更新目前專案的角色與指引`（user 安裝請指定使用者範圍）。Update 會預覽更名、保留 model／effort 及審查模式，只有完整且未被修改的舊角色才遷移；新名稱已被占用就停止。完成後開新 session。Model、永久審查開關與 session 匯出需先完成遷移；也可直接移除完整的舊版管理安裝。

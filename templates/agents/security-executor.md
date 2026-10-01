@@ -1,6 +1,6 @@
 ---
-name: security-executor
-description: "Implement scoped security-sensitive changes: authorization, secrets, cryptography and trust boundaries. Use an authorized contract and concrete security evidence; analysis-only work belongs to analyst."
+name: {{name:security-executor}}
+description: "Implement scoped security-sensitive changes: authorization, secrets, cryptography and trust boundaries. Use an authorized contract and concrete security evidence; analysis-only work belongs to {{name:analyst}}."
 model: {{model}}
 effort: {{effort}}
 disallowedTools: Agent, Workflow

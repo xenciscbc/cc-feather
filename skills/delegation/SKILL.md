@@ -14,12 +14,14 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | Native role | Responsibility |
 | --- | --- |
 | scout | Bounded factual lookup |
-| Explore | Broad read-only discovery; use the managed native definition |
+| Explore | Broad read-only discovery; use the installed Explore, whether cc-feather or the user provides it |
 | analyst | Causal/impact analysis, security analysis or plan review |
 | mech-executor | Repetition with a complete specification |
 | executor | Scoped implementation requiring engineering judgment |
 | security-executor | Authorized changes to security boundaries |
 | verifier | Independent verification of a completed implementation claim |
+
+The table uses role ids. When the installed delegation policy lists native role names, such as `cc-scout`, dispatch each role to its listed name.
 
 Use configured role models and effort. For task/session overrides, persistent changes or uncertain bindings, read [model](../model/SKILL.md) before dispatch or configuration changes. Main-only preferences do not override children. Distinguish configured settings from native execution evidence; label unseen execution unconfirmed.
 

@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -122,7 +123,7 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertTrue((self.home / "agents" / "Explore.md").exists())
         self.assertFalse((self.project / ".claude" / "agents").exists())
 
-    def test_stale_plan_and_unowned_explore_conflict(self):
+    def test_stale_plan_and_user_explore_is_kept(self):
         code, preview = self.call("install")
         self.assertEqual(code, 0)
         (self.project / "CLAUDE.md").write_text("changed", encoding="utf-8")
@@ -132,10 +133,9 @@ class FeatherConfigTests(unittest.TestCase):
         explore = self.project / ".claude" / "agents" / "Explore.md"
         explore.parent.mkdir(parents=True)
         explore.write_text("owned by user", encoding="utf-8")
-        code, error = self.call("install")
-        self.assertEqual(code, 2)
-        self.assertIn("unowned role", error["error"])
+        self.apply("install")
         self.assertEqual(explore.read_text(encoding="utf-8"), "owned by user")
+        self.assert_external_explore(prefix="")
 
     def test_drift_and_malformed_markers_block_mutation(self):
         self.apply("install")
@@ -252,7 +252,10 @@ class FeatherConfigTests(unittest.TestCase):
         self.drop_added_roles(delegation)
         if version == 2:
             state = {"version": 2, "scope": "project",
-                     **{key: value for key, value in delegation.items() if key != "legacy_names"}}
+                     **{key: value for key, value in delegation.items() if key not in {"legacy_names", "role_prefix", "external_roles"}}}
+        else:
+            del delegation["role_prefix"], delegation["external_roles"]
+            state = {"version": 3, "scope": "project", "components": state["components"]}
         state_path.write_bytes(config.canonical(state) + b"\n")
         return state_path
 
@@ -306,25 +309,281 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertIn("run setup update first", result["error"])
         self.assertEqual(before, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
 
-    def test_six_role_update_preserves_unowned_verifier(self):
-        self.six_role_install(3)
-        agents = self.project / ".claude" / "agents"
+    def assert_prefixed_roles(self, agents, extra=()):
+        names = {config._role_name(role, config.ROLE_PREFIX) for role in config.ROLES}
+        self.assertEqual({p.name for p in agents.glob("*.md")}, {f"{name}.md" for name in names} | set(extra))
+        self.assertEqual(self.saved_state()["components"]["delegation"]["role_prefix"], config.ROLE_PREFIX)
+        scout = (agents / "cc-scout.md").read_text(encoding="utf-8")
+        self.assertIn("name: cc-scout", scout)
+        self.assertIn("belongs to cc-analyst", scout)
+        self.assertIn("name: Explore", (agents / "Explore.md").read_text(encoding="utf-8"))
+        self.assertIn("scout = cc-scout", (self.project / "CLAUDE.md").read_text(encoding="utf-8"))
+
+    def test_six_role_update_with_unowned_verifier_moves_to_prefix(self):
         for filename in ("verifier.md", "custom.md"):
             with self.subTest(filename=filename):
+                self.project = self.root / f"six-{filename}"
+                self.project.mkdir()
+                self.six_role_install(3)
+                agents = self.project / ".claude" / "agents"
                 conflict = agents / filename
                 conflict.write_text("---\nname: verifier\n---\nExisting user role\n", encoding="utf-8")
                 shown = self.call("show")[1]
-                self.assertEqual(shown["components"]["delegation"]["status"], "conflict", shown)
-                before = {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()}
-                code, result = self.call("update")
-                self.assertEqual(code, 2, result)
-                self.assertEqual(before, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
-                conflict.unlink()
-        conflict = agents / "verifier.md"
-        conflict.write_text("---\nname: verifier\n---\nExisting user role\n", encoding="utf-8")
+                self.assertEqual(shown["components"]["delegation"]["status"], "ok", shown)
+                self.assertEqual(shown["pending_role_prefix"], config.ROLE_PREFIX)
+                self.apply("update")
+                self.assert_prefixed_roles(agents, extra={filename})
+                self.assertEqual(self.call("show")[1]["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
+                self.apply("remove")
+                self.assertEqual([p.name for p in agents.glob("*.md")], [filename])
+                self.assertEqual(conflict.read_text(encoding="utf-8"), "---\nname: verifier\n---\nExisting user role\n")
+
+    def test_install_with_name_conflict_uses_prefix(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        user_scout = agents / "scout.md"
+        user_scout.write_text("---\nname: scout\n---\nMy scout\n", encoding="utf-8")
+        self.apply("install")
+        self.assert_prefixed_roles(agents, extra={"scout.md"})
+        self.assertEqual(user_scout.read_text(encoding="utf-8"), "---\nname: scout\n---\nMy scout\n")
+        self.apply("model", "project", "--set", "scout.effort=medium")
+        self.assertIn("effort: medium", (agents / "cc-scout.md").read_text(encoding="utf-8"))
+        code, exported = self.call("session")
+        self.assertEqual(code, 0, exported)
+        self.assertEqual(set(exported), {config._role_name(role, config.ROLE_PREFIX) for role in config.ROLES})
+        user_scout.unlink()
+        self.apply("update")
+        self.assertTrue((agents / "cc-scout.md").exists())
+        self.assertFalse((agents / "scout.md").exists())
         self.apply("remove")
-        self.assertEqual([p.name for p in agents.glob("*.md")], ["verifier.md"])
-        self.assertEqual(conflict.read_text(encoding="utf-8"), "---\nname: verifier\n---\nExisting user role\n")
+        self.assertEqual(list(agents.glob("*.md")), [])
+
+    def test_later_conflict_moves_unprefixed_install_to_prefix(self):
+        self.apply("install", "project", "--review-mode", "auto")
+        self.apply("model", "project", "--set", "executor.model=sonnet")
+        agents = self.project / ".claude" / "agents"
+        (agents / "team").mkdir()
+        (agents / "team" / "qa.md").write_text("---\nname: verifier\n---\nTeam QA\n", encoding="utf-8")
+        self.apply("update")
+        self.assert_prefixed_roles(agents)
+        shown = self.call("show")[1]
+        self.assertEqual(shown["choices"]["executor"], {"model": "sonnet", "effort": "medium"})
+        self.assertEqual(shown["review_mode"], "auto")
+        self.assertEqual(shown["status"], "ok", shown)
+
+    def test_prefixed_name_conflicts_still_block(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        for name in ("scout.md", "cc-scout.md"):
+            (agents / name).write_text(f"---\nname: {Path(name).stem}\n---\nMine\n", encoding="utf-8")
+        before = self.files()
+        code, result = self.call("install")
+        self.assertEqual(code, 2, result)
+        self.assertIn("cc-scout.md", result["error"])
+        self.assertEqual(before, self.files())
+        shown = self.call("check")[1]
+        self.assertEqual((shown["status"], shown["pending_role_prefix"]), ("conflict", None))
+
+    def assert_external_explore(self, prefix):
+        agents = self.project / ".claude" / "agents"
+        record = self.saved_state()["components"]["delegation"]
+        self.assertEqual((record["external_roles"], record["role_prefix"]), (["Explore"], prefix))
+        self.assertNotIn("Explore", record["choices"])
+        self.assertNotIn("Explore", record["hashes"])
+        for role in config.ROLES:
+            if role != "Explore":
+                self.assertTrue((agents / f"{config._role_name(role, prefix)}.md").exists(), role)
+        shown = self.call("show")[1]
+        self.assertEqual((shown["status"], shown["external_roles"], shown["pending_external_roles"]),
+                         ("ok", ["Explore"], None), shown)
+
+    def test_user_explore_with_another_conflict_uses_prefix(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        explore = agents / "Explore.md"
+        explore.write_bytes(b"---\nname: Explore\nmodel: haiku\n---\nMine\n")
+        (agents / "scout.md").write_text("---\nname: scout\n---\nMine\n", encoding="utf-8")
+        self.apply("install")
+        self.assert_external_explore(prefix=config.ROLE_PREFIX)
+        self.assertEqual(explore.read_bytes(), b"---\nname: Explore\nmodel: haiku\n---\nMine\n")
+        policy = (self.project / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("scout = cc-scout", policy)
+        self.assertNotIn("Explore = ", policy)
+
+    def test_later_user_explore_replaces_owned_explore_and_returns(self):
+        for prefixed in (False, True):
+            with self.subTest(prefixed=prefixed):
+                self.project = self.root / f"explore-{prefixed}"
+                self.project.mkdir()
+                agents = self.project / ".claude" / "agents"
+                agents.mkdir(parents=True)
+                if prefixed:
+                    (agents / "scout.md").write_text("---\nname: scout\n---\nMine\n", encoding="utf-8")
+                self.apply("install", "project", "--review-mode", "auto")
+                self.apply("model", "project", "--set", "Explore.model=opus")
+                prefix = config.ROLE_PREFIX if prefixed else ""
+                owned_explore = agents / "Explore.md"
+                self.assertIn("model: opus", owned_explore.read_text(encoding="utf-8"))
+                for variant in ("subdirectory", "replaced"):
+                    if variant == "subdirectory":
+                        user_file = agents / "team" / "explorer.md"
+                        user_file.parent.mkdir()
+                        user_file.write_text("---\nname: Explore\n---\nTeam explorer\n", encoding="utf-8")
+                    else:
+                        user_file = owned_explore
+                    shown = self.call("check")[1]
+                    if variant == "subdirectory":
+                        self.assertEqual((shown["status"], shown["pending_external_roles"]), ("ok", ["Explore"]), shown)
+                        self.assertFalse([i for i in shown["issues"] if "duplicate native agent name Explore" in i])
+                        self.apply("update")
+                        self.assertFalse(owned_explore.exists())
+                        self.assert_external_explore(prefix=prefix)
+                        user_file.unlink()
+                        user_file.parent.rmdir()
+                        self.assertEqual(self.call("show")[1]["pending_external_roles"], [])
+                        self.apply("update")
+                        self.assertIn("name: Explore", owned_explore.read_text(encoding="utf-8"))
+                        self.assertEqual(self.saved_state()["components"]["delegation"]["external_roles"], [])
+                    else:
+                        # The user rewrites the owned file as their own Explore: it is released, never deleted.
+                        user_file.write_bytes(b"---\nname: Explore\n---\nMine now\n")
+                        shown = self.call("check")[1]
+                        self.assertEqual((shown["status"], shown["pending_external_roles"]), ("ok", ["Explore"]), shown)
+                        self.apply("update")
+                        self.assertEqual(user_file.read_bytes(), b"---\nname: Explore\n---\nMine now\n")
+                        self.assert_external_explore(prefix=prefix)
+                        user_file.unlink()
+                        self.apply("update")
+                        self.assertIn("name: Explore", owned_explore.read_text(encoding="utf-8"))
+                        self.assertEqual(self.saved_state()["components"]["delegation"]["external_roles"], [])
+                self.assertEqual(self.saved_state()["components"]["delegation"]["review_mode"], "auto")
+
+    def test_external_explore_is_not_configured_exported_or_removed(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        explore = agents / "Explore.md"
+        explore.write_text("---\nname: Explore\n---\nMine\n", encoding="utf-8")
+        self.apply("install", "project", "--component", "both")
+        before = self.files()
+        for command in (("model", "project", "--set", "Explore.model=opus"),
+                        ("session", "project", "--set", "Explore.effort=high")):
+            with self.subTest(command=command[0]):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("provided by another agent", result["error"])
+        self.assertEqual(before, self.files())
+        self.apply("model", "project", "--set", "scout.effort=medium")
+        code, exported = self.call("session")
+        self.assertEqual(code, 0, exported)
+        self.assertNotIn("Explore", exported)
+        self.assertEqual(len(exported), len(config.ROLES) - 1)
+        self.apply("remove", "project", "--component", "both")
+        self.assertEqual(explore.read_text(encoding="utf-8"), "---\nname: Explore\n---\nMine\n")
+        self.assertEqual([p.name for p in agents.glob("*.md")], ["Explore.md"])
+
+    def test_commands_before_update_point_to_update_when_explore_changes(self):
+        self.apply("install")
+        agents = self.project / ".claude" / "agents"
+        explore = agents / "Explore.md"
+        user_file = agents / "team" / "explorer.md"
+        user_file.parent.mkdir()
+        for setup_change in ("subdirectory", "rewritten"):
+            with self.subTest(change=setup_change):
+                if setup_change == "subdirectory":
+                    user_file.write_text("---\nname: Explore\n---\nTeam\n", encoding="utf-8")
+                else:
+                    user_file.unlink()
+                    original = explore.read_bytes()
+                    explore.write_bytes(b"---\nname: Explore\n---\nMine\n")
+                before = self.files()
+                for command in (("model", "project", "--set", "scout.effort=medium"),
+                                ("review", "project", "--review-mode", "auto"), ("session",)):
+                    code, result = self.call(*command)
+                    self.assertEqual(code, 2, result)
+                    self.assertIn("run setup update first", result["error"])
+                self.assertEqual(before, self.files())
+                if setup_change == "rewritten":
+                    explore.write_bytes(original)
+
+    def test_session_without_installation_skips_a_user_explore(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "Explore.md").write_text("---\nname: Explore\n---\nMine\n", encoding="utf-8")
+        code, exported = self.call("session")
+        self.assertEqual(code, 0, exported)
+        self.assertNotIn("Explore", exported)
+        code, result = self.call("session", "project", "--set", "Explore.model=opus")
+        self.assertEqual(code, 2, result)
+        self.assertIn("provided by another agent", result["error"])
+
+    def test_old_states_with_a_user_explore_update(self):
+        for kind in ("legacy", "six-role"):
+            with self.subTest(kind=kind):
+                self.project = self.root / f"old-{kind}"
+                self.project.mkdir()
+                if kind == "legacy":
+                    self.legacy_install()
+                else:
+                    self.six_role_install(3)
+                agents = self.project / ".claude" / "agents"
+                user_file = agents / "mine" / "explore.md"
+                user_file.parent.mkdir()
+                user_file.write_text("---\nname: Explore\n---\nMine\n", encoding="utf-8")
+                self.apply("update")
+                self.assertFalse((agents / "Explore.md").exists())
+                self.assert_external_explore(prefix="")
+                self.assertEqual(user_file.read_text(encoding="utf-8"), "---\nname: Explore\n---\nMine\n")
+                self.assertEqual(self.call("show")[1]["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
+
+    def test_check_reports_a_conflict_the_prefix_resolves_as_pending(self):
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "scout.md").write_text("---\nname: scout\n---\nMine\n", encoding="utf-8")
+        code, shown = self.call("check")
+        self.assertEqual(code, 0, shown)
+        self.assertEqual((shown["status"], shown["pending_role_prefix"]), ("ok", config.ROLE_PREFIX))
+        (agents / "scout.md").unlink()
+        self.apply("install")
+        self.assertIsNone(self.call("check")[1]["pending_role_prefix"])
+        (agents / "custom.md").write_text("---\nname: analyst\n---\nMine\n", encoding="utf-8")
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"], shown["pending_role_prefix"]), (0, "ok", config.ROLE_PREFIX))
+        self.apply("update")
+        self.assertIsNone(self.call("check")[1]["pending_role_prefix"])
+
+    def test_created_claude_md_emptied_by_the_user_is_removed(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--guidance", "claude")
+        claude_md = self.project / "CLAUDE.md"
+        claude_md.write_bytes(claude_md.read_bytes().replace(b"@AGENTS.md\n", b"", 1))
+        self.apply("remove")
+        self.assertFalse(claude_md.exists())
+
+    def test_created_imports_only_with_a_created_claude_md(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--guidance", "agents")
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = self.saved_state()
+        state["created_imports"] = ["@AGENTS.md"]
+        state_path.write_bytes(config.canonical(state) + b"\n")
+        before = self.files()
+        code, result = self.call("remove")
+        self.assertEqual(code, 2, result)
+        self.assertIn("invalid instruction file state", result["error"])
+        self.assertEqual(before, self.files())
+
+    def test_unprefixed_rendering_matches_templates(self):
+        self.apply("install")
+        defaults = config._defaults()
+        for role in config.ROLES:
+            template = (config.ROOT / "templates" / "agents" / f"{role}.md").read_text(encoding="utf-8")
+            expected = re.sub(r"\{\{name:([A-Za-z-]+)\}\}", r"\1", template)
+            expected = expected.replace("{{model}}", defaults[role]["model"]).replace("{{effort}}", defaults[role]["effort"])
+            self.assertEqual((self.project / ".claude" / "agents" / f"{role}.md").read_bytes(), expected.encode("utf-8"))
+        guidance = (self.project / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertNotIn("Native role names", guidance)
+        self.assertNotIn("{{", guidance)
+        self.assertEqual(self.saved_state()["components"]["delegation"]["role_prefix"], "")
 
     def test_verifier_model_and_session_overrides(self):
         self.apply("install")
@@ -337,6 +596,169 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(exported["verifier"]["effort"], "medium")
         self.assertEqual(exported["verifier"]["tools"], ["Read", "Glob", "Grep", "Bash"])
 
+    def files(self, root=None):
+        root = root or self.root
+        return {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+    def saved_state(self):
+        return json.loads((self.project / ".claude" / "cc-feather" / "state.json").read_bytes())
+
+    def assert_choice_required(self, *extra):
+        before = self.files()
+        code, result = self.call("install", "project", *extra)
+        self.assertEqual(code, 2, result)
+        self.assertIn("guidance target choice required", result["error"])
+        self.assertEqual(before, self.files())
+
+    def test_agents_only_project_requires_a_choice(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.assert_choice_required()
+        self.assert_choice_required("--component", "handoff")
+        self.assertTrue(self.call("show")[1]["guidance_choice_required"])
+
+    def test_guidance_claude_creates_importing_claude_md_and_removes_it(self):
+        agents_md = self.project / "AGENTS.md"
+        agents_md.write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--component", "both", "--guidance", "claude")
+        claude_md = self.project / "CLAUDE.md"
+        self.assertTrue(claude_md.read_text(encoding="utf-8").startswith("@AGENTS.md\n\n" + config.HANDOFF_BEGIN))
+        self.assertEqual(agents_md.read_text(encoding="utf-8"), "Team rules\n")
+        state = self.saved_state()
+        self.assertEqual((state["version"], state["guidance"], state["created_imports"]), (4, "CLAUDE.md", ["@AGENTS.md"]))
+        self.assertEqual(self.call("update", "project", "--guidance", "claude")[0], 2)
+        self.apply("update", "project", "--component", "both")
+        self.apply("remove", "project", "--component", "both")
+        self.assertFalse(claude_md.exists())
+        self.assertEqual(agents_md.read_text(encoding="utf-8"), "Team rules\n")
+
+    def test_created_claude_md_with_user_text_is_kept_on_remove(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--guidance", "claude")
+        claude_md = self.project / "CLAUDE.md"
+        claude_md.write_bytes(claude_md.read_bytes() + b"\nUse pnpm.\n")
+        self.apply("remove")
+        text = claude_md.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("@AGENTS.md"))
+        self.assertIn("Use pnpm.", text)
+
+    def test_guidance_agents_writes_into_agents_md(self):
+        agents_md = self.project / "AGENTS.md"
+        agents_md.write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--component", "both", "--guidance", "agents")
+        self.assertFalse((self.project / "CLAUDE.md").exists())
+        text = agents_md.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("Team rules\n"))
+        self.assertIn(config.BEGIN, text)
+        self.assertIn(config.HANDOFF_BEGIN, text)
+        self.assertEqual(self.saved_state()["guidance"], "AGENTS.md")
+        self.assertEqual(self.call("show")[1]["paths"]["guidance"], str(agents_md))
+        self.apply("model", "project", "--set", "scout.effort=medium")
+        self.apply("remove", "project", "--component", "both")
+        self.assertEqual(agents_md.read_text(encoding="utf-8"), "Team rules\n")
+
+    def test_dot_claude_agents_md_and_both_agents_files(self):
+        nested = self.project / ".claude" / "AGENTS.md"
+        nested.parent.mkdir()
+        nested.write_text("Nested rules\n", encoding="utf-8")
+        self.assert_choice_required()
+        self.apply("install", "project", "--guidance", "agents")
+        self.assertIn(config.BEGIN, nested.read_text(encoding="utf-8"))
+        self.assertEqual(self.saved_state()["guidance"], ".claude/AGENTS.md")
+        self.apply("remove")
+        self.assertEqual(nested.read_text(encoding="utf-8"), "Nested rules\n")
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--guidance", "claude")
+        self.assertEqual(self.saved_state()["created_imports"], ["@AGENTS.md", "@.claude/AGENTS.md"])
+        self.assertTrue((self.project / "CLAUDE.md").read_text(encoding="utf-8").startswith("@AGENTS.md\n@.claude/AGENTS.md\n\n"))
+
+    def test_ancestor_agents_md_needs_an_importing_claude_md(self):
+        (self.root / "AGENTS.md").write_text("Monorepo rules\n", encoding="utf-8")
+        self.assert_choice_required()
+        code, result = self.call("install", "project", "--guidance", "agents")
+        self.assertEqual(code, 2, result)
+        self.assertIn("only ancestor AGENTS.md", result["error"])
+        self.apply("install", "project", "--guidance", "claude")
+        self.assertEqual(self.saved_state()["created_imports"], ["@../AGENTS.md"])
+
+    def test_user_instruction_file_in_an_ancestor_does_not_count(self):
+        fake_home = self.root / "home"
+        self.project = fake_home / "proj"
+        self.project.mkdir(parents=True)
+        user_file = fake_home / ".claude" / "CLAUDE.md"
+        user_file.parent.mkdir()
+        user_file.write_text("Personal rules\n", encoding="utf-8")
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        for claude_home in (self.home, fake_home / ".claude"):
+            with self.subTest(claude_home=claude_home), mock.patch("pathlib.Path.home", return_value=fake_home):
+                self.home = claude_home
+                self.assert_choice_required()
+        with mock.patch("pathlib.Path.home", return_value=fake_home):
+            self.apply("install", "project", "--guidance", "agents")
+            warnings = self.call("show")[1]["warnings"]
+        self.assertFalse([w for w in warnings if "skips AGENTS.md" in w], warnings)
+        self.assertEqual(user_file.read_text(encoding="utf-8"), "Personal rules\n")
+
+    def test_existing_claude_files_take_precedence_over_agents_md(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        dot_claude = self.project / ".claude" / "CLAUDE.md"
+        dot_claude.parent.mkdir()
+        dot_claude.write_text("Project rules\n", encoding="utf-8")
+        self.apply("install")
+        self.assertIn(config.BEGIN, dot_claude.read_text(encoding="utf-8"))
+        self.assertFalse((self.project / "CLAUDE.md").exists())
+        self.apply("remove")
+        dot_claude.unlink()
+        for counting in (self.project / "CLAUDE.local.md", self.root / "CLAUDE.md"):
+            with self.subTest(counting=counting.name):
+                counting.write_text("Local rules\n", encoding="utf-8")
+                self.apply("install")
+                text = (self.project / "CLAUDE.md").read_text(encoding="utf-8")
+                self.assertTrue(text.startswith(config.BEGIN))
+                self.assertEqual(self.saved_state()["created_imports"], [])
+                self.apply("remove")
+                (self.project / "CLAUDE.md").unlink()
+                counting.unlink()
+
+    def test_v3_state_migrates_to_recorded_claude_md(self):
+        self.apply("install", "project", "--component", "both")
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = self.saved_state()
+        components = {**state["components"], "delegation": {key: value for key, value in state["components"]["delegation"].items() if key not in {"role_prefix", "external_roles"}}}
+        v3 = {"version": 3, "scope": "project", "components": components}
+        state_path.write_bytes(config.canonical(v3) + b"\n")
+        guidance = (self.project / "CLAUDE.md").read_bytes()
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        shown = self.call("show")[1]
+        self.assertEqual(shown["status"], "ok", shown)
+        self.assertFalse(shown["guidance_choice_required"])
+        self.apply("update", "project", "--component", "both")
+        self.assertEqual((self.project / "CLAUDE.md").read_bytes(), guidance)
+        state = self.saved_state()
+        self.assertEqual((state["version"], state["guidance"], state["created_imports"]), (4, "CLAUDE.md", []))
+
+    def test_agents_md_guidance_warnings(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "project", "--guidance", "agents")
+        self.assertEqual(self.call("show")[1]["warnings"], [])
+        (self.home / "settings.json").write_text(json.dumps({"pluginConfigs": {"agents-md@builtin": {
+            "options": {"instructionFiles": "claude-md"}}}}), encoding="utf-8")
+        self.assertTrue([w for w in self.call("show")[1]["warnings"] if "set to claude-md" in w])
+        (self.home / "settings.json").unlink()
+        (self.project / "CLAUDE.local.md").write_text("Local rules\n", encoding="utf-8")
+        self.assertTrue([w for w in self.call("show")[1]["warnings"] if "skips AGENTS.md" in w])
+
+    def test_user_scope_and_guidance_misuse(self):
+        (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+        self.apply("install", "user")
+        self.assertIn(config.BEGIN, (self.home / "CLAUDE.md").read_text(encoding="utf-8"))
+        self.assertFalse((self.project / "CLAUDE.md").exists())
+        self.assertEqual(self.call("update", "user", "--guidance", "claude")[0], 2)
+        (self.project / "AGENTS.md").unlink()
+        for command in (("install", "project", "--guidance", "claude"), ("check", "project", "--guidance", "agents")):
+            with self.subTest(command=command[0]):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+
     def legacy_install(self):
         self.apply("install", "project", "--review-mode", "auto")
         self.apply("model", "project", "--set", "analyst.model=sonnet")
@@ -344,7 +766,7 @@ class FeatherConfigTests(unittest.TestCase):
         state = json.loads(state_path.read_bytes())
         state = {"version": 1, "scope": "project", **{
             key: value for key, value in state["components"]["delegation"].items()
-            if key != "legacy_names"
+            if key not in {"legacy_names", "role_prefix", "external_roles"}
         }}
         guidance = self.project / "CLAUDE.md"
         body = guidance.read_text(encoding="utf-8")
@@ -387,22 +809,27 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("remove")
         self.assertEqual(list(agents.glob("*.md")), [])
 
-    def test_legacy_migration_conflicts_and_drift_leave_files_untouched(self):
+    def test_legacy_migration_drift_leaves_files_untouched(self):
         self.legacy_install()
         agents = self.project / ".claude" / "agents"
-        for filename in ("analyst.md", "custom.md"):
-            with self.subTest(filename=filename):
-                conflict = agents / filename
-                conflict.write_text("---\nname: analyst\n---\nExisting user role\n", encoding="utf-8")
-                before = {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()}
-                code, result = self.call("update")
-                self.assertEqual(code, 2, result)
-                self.assertEqual(before, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
-                conflict.unlink()
         old = agents / "feather-analyst.md"
         old.write_bytes(old.read_bytes() + b"User customization\n")
+        before = self.files()
         self.assertEqual(self.call("update")[0], 2)
-        self.assertFalse((agents / "analyst.md").exists())
+        self.assertEqual(before, self.files())
+
+    def test_legacy_migration_with_name_conflict_moves_to_prefix(self):
+        for filename in ("analyst.md", "custom.md"):
+            with self.subTest(filename=filename):
+                self.project = self.root / f"legacy-{filename}"
+                self.project.mkdir()
+                self.legacy_install()
+                agents = self.project / ".claude" / "agents"
+                conflict = agents / filename
+                conflict.write_text("---\nname: analyst\n---\nExisting user role\n", encoding="utf-8")
+                self.apply("update")
+                self.assert_prefixed_roles(agents, extra={filename})
+                self.assertEqual(self.call("show")[1]["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
 
     def test_legacy_migration_failure_rolls_back_and_legacy_remove_is_supported(self):
         self.legacy_install()
@@ -442,18 +869,17 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertFalse((self.project / ".claude").exists())
         self.assertFalse((self.project / "CLAUDE.md").exists())
 
-    def test_custom_file_declaring_explore_blocks_install_and_check(self):
+    def test_custom_file_declaring_explore_is_used_instead_of_ours(self):
         custom = self.project / ".claude" / "agents" / "nested" / "custom.md"
         custom.parent.mkdir(parents=True)
         custom.write_text("---\nname: 'Explore'\n---\nMine", encoding="utf-8")
         code, shown = self.call("check")
-        self.assertEqual(code, 2)
-        self.assertIn("duplicate native agent name Explore", shown["issues"][0])
-        code, error = self.call("install")
-        self.assertEqual(code, 2)
-        self.assertIn("duplicate native agent name Explore", error["error"])
+        self.assertEqual(code, 0, shown)
+        self.assertEqual((shown["status"], shown["pending_external_roles"]), ("ok", ["Explore"]))
+        self.assertTrue([w for w in shown["warnings"] if "Explore is provided by another agent" in w and "custom.md" in w])
+        self.apply("install")
+        self.assert_external_explore(prefix="")
         self.assertEqual(custom.read_text(encoding="utf-8"), "---\nname: 'Explore'\n---\nMine")
-        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
 
     def test_subprocess_json_is_utf8_with_cp950_console(self):
         project = self.root / "中文 project"
@@ -469,28 +895,30 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("中文 project", result.stdout.decode("utf-8"))
         self.assertFalse((project / ".claude").exists())
 
-    def test_bom_and_comment_declared_explore_collision(self):
+    def test_bom_and_comment_declared_explore_is_external(self):
         custom = self.project / ".claude" / "agents" / "other.md"
         custom.parent.mkdir(parents=True)
         custom.write_text("\ufeff---\nname: Explore # native name\n---\nMine", encoding="utf-8")
         code, result = self.call("check")
-        self.assertEqual(code, 2)
-        self.assertIn("duplicate native agent name Explore", result["issues"][0])
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["pending_external_roles"], ["Explore"])
         custom.write_text("---\nname: [Explore]\n---\nMine", encoding="utf-8")
         code, error = self.call("install")
         self.assertEqual(code, 2)
         self.assertIn("cannot inspect agent name syntax", error["error"])
 
     def test_show_uninstalled_reports_conflicts_and_owner_paths(self):
-        owned_name = self.project / ".claude" / "agents" / "Explore.md"
-        owned_name.parent.mkdir(parents=True)
-        owned_name.write_text("mine", encoding="utf-8")
+        scout = self.project / ".claude" / "agents" / "scout.md"
+        scout.parent.mkdir(parents=True)
+        scout.write_text("mine", encoding="utf-8")
+        (scout.parent / "cc-scout.md").write_text("mine too", encoding="utf-8")
         code, shown = self.call("show")
         self.assertEqual(code, 2)
         self.assertFalse(shown["installed"])
         self.assertTrue(shown["requested_configuration_only"])
-        self.assertEqual(shown["paths"]["agents"]["Explore"], str(owned_name))
+        self.assertEqual(shown["paths"]["agents"]["scout"], str(scout))
         self.assertIn("unowned role", shown["issues"][0])
+        self.assertIsNone(shown["pending_role_prefix"])
 
     def test_model_preserves_installed_bodies_policy_and_session(self):
         self.apply("install")
@@ -631,6 +1059,8 @@ class FeatherConfigTests(unittest.TestCase):
         agent = self.project / ".claude" / "agents" / "Explore.md"
         agent.parent.mkdir(parents=True)
         agent.write_text("user agent", encoding="utf-8")
+        (agent.parent / "analyst.md").write_text("user analyst", encoding="utf-8")
+        (agent.parent / "cc-analyst.md").write_text("user cc-analyst", encoding="utf-8")
         self.assertEqual(self.call("check")[1]["components"]["delegation"]["status"], "conflict")
         self.apply("install", "project", "--component", "handoff")
         self.assertEqual(agent.read_text(encoding="utf-8"), "user agent")
@@ -698,7 +1128,7 @@ class FeatherConfigTests(unittest.TestCase):
                 raw = json.loads(state_path.read_bytes())
                 legacy = {"version": 2, "scope": "project", **{
                     key: value for key, value in raw["components"]["delegation"].items()
-                    if key != "legacy_names"
+                    if key not in {"legacy_names", "role_prefix", "external_roles"}
                 }}
                 body = guidance.read_bytes().decode("utf-8")
                 historical = (
@@ -754,7 +1184,7 @@ class FeatherConfigTests(unittest.TestCase):
                                ("review", ("--review-mode", "off"))):
             code, result = self.call(command, "project", *extra)
             self.assertEqual(code, 2, result)
-            self.assertIn("legacy", result["error"])
+            self.assertIn("run setup update first", result["error"])
         self.apply("update", "project", "--component", "delegation")
         self.assertFalse(self.call("show")[1]["migration_required"])
         self.apply("model", "project", "--set", "scout.model=opus")
