@@ -26,7 +26,7 @@ The table uses role ids. When the installed delegation policy lists native role 
 
 Use configured role models and effort. For task/session overrides, persistent changes or uncertain bindings, read [model](../model/SKILL.md) before dispatch or configuration changes. Main-only preferences do not override children. Distinguish configured settings from native execution evidence; label unseen execution unconfirmed.
 
-For requested security analysis or material security-boundary changes, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope. Evaluate findings before assigning authorized fixes to security-executor. Security analysis and plan review are separate assignments; apply the review trigger independently.
+For requested security analysis or material security-boundary changes, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope. Evaluate findings before assigning authorized fixes to security-executor. Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.
 
 ## Dispatch
 

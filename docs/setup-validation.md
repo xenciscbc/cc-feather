@@ -85,6 +85,8 @@ Validation after all fixes: Windows configuration suite ran 33 cases, with 31 pa
 
 ## Plan-driven review flow
 
+Superseded within 0.9.0: the analyst code review described here was replaced by the reviewer role before release (see the next section).
+
 On 2026-10-01 auto mode changed from material-risk triggers to plan-driven work: work from a plan, spec, ticket or conversation plan the user agreed to gets plan review, then analyst code review (APPROVED/CHANGES_REQUESTED, two-call budget), then outcome verification. Unplanned security-boundary, data-migration or irreversible work first needs a reviewed plan the user approves. The managed line `Automatic plan review mode: auto|off` is unchanged, so saved modes and the configuration tool are unaffected.
 
 Validation: `python -B -m unittest tests.test_feather_config` on Windows ran 70 tests, all passing except 2 platform skips. A grep of README*, docs/setup.md, skills and templates found no remaining material-risk trigger wording. A temporary project installed from the previous commit with mode auto and then updated with this version received the new trigger wording and the analyst Code review mode, and kept mode auto. Live Claude compliance with the new flow remains untested.
