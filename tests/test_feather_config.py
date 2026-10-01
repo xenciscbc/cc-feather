@@ -468,6 +468,17 @@ class FeatherConfigTests(unittest.TestCase):
                         self.assertEqual(self.saved_state()["components"]["delegation"]["external_roles"], [])
                 self.assertEqual(self.saved_state()["components"]["delegation"]["review_mode"], "auto")
 
+    def test_remove_keeps_a_rewritten_explore_without_update(self):
+        self.apply("install")
+        agents = self.project / ".claude" / "agents"
+        explore = agents / "Explore.md"
+        explore.write_bytes(b"---\nname: Explore\n---\nMine now\n")
+        self.assertEqual(self.call("check")[1]["status"], "ok")
+        self.apply("remove")
+        self.assertEqual(explore.read_bytes(), b"---\nname: Explore\n---\nMine now\n")
+        self.assertEqual([p.name for p in agents.glob("*.md")], ["Explore.md"])
+        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
+
     def test_external_explore_is_not_configured_exported_or_removed(self):
         agents = self.project / ".claude" / "agents"
         agents.mkdir(parents=True)

@@ -608,6 +608,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         # Another agent's Explore stays in place of ours; a taken role name moves the others to the prefix.
         owned = _release_user_explore(owned, delegation)
         prefix, external = _layout(base, owned, prefix)
+    elif active_delegation and args.command == "remove":
+        # The user's rewritten Explore.md is theirs now; remove leaves it in place.
+        owned = _release_user_explore(owned, delegation)
     elif active_delegation and args.command in {"model", "review"}:
         provided = bool(_explore_providers(base, _release_user_explore(owned, delegation)))
         if provided != bool(external):
