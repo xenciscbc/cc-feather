@@ -634,7 +634,8 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("install")
         defaults = config._defaults()
         for role in config.ROLES:
-            template = (config.ROOT / "templates" / "agents" / f"{role}.md").read_text(encoding="utf-8")
+            # Keep checkout newlines; rendering preserves the template bytes.
+            template = (config.ROOT / "templates" / "agents" / f"{role}.md").read_bytes().decode("utf-8")
             expected = re.sub(r"\{\{name:([A-Za-z-]+)\}\}", r"\1", template)
             expected = expected.replace("{{model}}", defaults[role]["model"]).replace("{{effort}}", defaults[role]["effort"])
             self.assertEqual((self.project / ".claude" / "agents" / f"{role}.md").read_bytes(), expected.encode("utf-8"))

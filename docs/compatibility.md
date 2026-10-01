@@ -73,3 +73,12 @@ hash manifest only after reviewing the new imported bytes.
 ## Command relocation in 0.2.1
 
 The local skill is now `skills/handoff`, invoked as `/cc-feather:handoff`. The 12 runtime files remain byte-identical to upstream. The eight inherited test modules now reference the relocated local path and use normalized text line endings. The original all-20-files identity result above describes the initial import, not the adapted tests. `upstream-manifest.json` maps current paths and hashes to original upstream paths and records adapted source hashes. Record schemas and on-disk handoff locations are unchanged.
+
+## Local history fixes pending upstream
+
+`history.py` and `history_mutations.py` now differ from upstream; their upstream hashes are recorded under `adaptations` in `upstream-manifest.json`.
+
+- Legacy-format entry starts are recognized only before the first modern `## <work> · 完成：<time>` entry. Archival only appends modern entries, so a completed body whose details hold a heading followed by `完成：…` or `狀態：完成` no longer blocks archival with `history-format`, nor leaves later clear or seal refusing the history.
+- `clear` and `seal` parse an archive source under its queried `archive/<batch>.md` name, matching the identities `history` returns.
+
+`tests/test_handoff_history.py` replaces the expectation that such a heading inside modern history is reported as an uncertain boundary. Re-import both files once upstream carries an equivalent fix.

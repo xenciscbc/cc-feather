@@ -7,8 +7,8 @@
     "skills/handoff/scripts/feather_handoff/archiving.py": "dcc05001a1d050d8b6ce1edff85054f1dab44f183859a45f84b9799fc2041ab8",
     "skills/handoff/scripts/feather_handoff/baseline.py": "726edc300cc0460a3f02e4c7a12f542cb038d131ddf4ed28da0032097b99b062",
     "skills/handoff/scripts/feather_handoff/cli.py": "65899a4918521baae30e6dc2401545088d6dfd35bc1bd3833f2f82c5aa22a22e",
-    "skills/handoff/scripts/feather_handoff/history.py": "7e68a3b831d0694f2048a79e373982bd272457b63530c86656aad25e746e4fc9",
-    "skills/handoff/scripts/feather_handoff/history_mutations.py": "31f0d7f5d4787fba1b838695689b2d47f5d184a279e0ae0cec1d33d6f7a1340a",
+    "skills/handoff/scripts/feather_handoff/history.py": "199d9abc69abcb1bcb5265474a7ea785777e36a2e338fde9ffa52a94adc99c46",
+    "skills/handoff/scripts/feather_handoff/history_mutations.py": "6cb81dcdfc5451319db427b915b808cb085e9291927ad84a3b0dbeb047d4c029",
     "skills/handoff/scripts/feather_handoff/observations.py": "b3376cbbd0a0a50d52c3dc36ea36f051ec95a9060a7ca4b1a7f8813be99d4c7c",
     "skills/handoff/scripts/feather_handoff/records.py": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
     "skills/handoff/scripts/feather_handoff/storage.py": "30273a1d110fbf60b56574435c11eecbd0d7985be9b4f8182cbed4c0027a9af5",
@@ -17,7 +17,7 @@
     "skills/handoff/scripts/handoff.py": "cb18fa4a4d3c350e1cba2f13162a5d03d87262651c6be5ae09e3d3abaeeeb491",
     "tests/test_handoff_archive.py": "513ea9d51e86f3503fc612838a63c297e16c612dc13b7ba5faac9eba6e9e8319",
     "tests/test_handoff_baseline.py": "5a2704812a91efa1a7bcf1526568cd1c257a89d3521c8ca3152edbc47423bc1a",
-    "tests/test_handoff_history.py": "0a3755b428c3c2b6d151f0907a28464fba228721340a81ab5c647c526cd6c547",
+    "tests/test_handoff_history.py": "547a0a45ab3b143a6a28b6264caa743196b703fc0faa1dc86bd9293f2864b2c0",
     "tests/test_handoff_mutations.py": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
     "tests/test_handoff_roots.py": "d7c4830e1275b7d8c991b144101c5824e6ed374ed6fbe1c9070bd54e0e276dea",
     "tests/test_handoff_snapshots.py": "4f431f0d168d1bc62940a560962c2cb4fdb545a2658bf3ab1fd398ba8a7cc57d",
@@ -57,7 +57,7 @@
     },
     "tests/test_handoff_history.py": {
       "source_sha256": "1293aa24002c698a21921f70016c5deeb1b1b4828531fcb56919eec1405dbc35",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Replaced the legacy-boundary-inside-modern-history expectation with the local boundary rule."
     },
     "tests/test_handoff_mutations.py": {
       "source_sha256": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
@@ -78,6 +78,14 @@
     "tests/test_handoff_tool.py": {
       "source_sha256": "4fc44d45642d3450e4c8af9f134a4b5dc8aef91227536fe3a880cd0d46cd54f3",
       "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings."
+    },
+    "skills/handoff/scripts/feather_handoff/history.py": {
+      "source_sha256": "7e68a3b831d0694f2048a79e373982bd272457b63530c86656aad25e746e4fc9",
+      "change": "Local fix pending upstream: legacy-format entry starts are recognized only before the first modern entry, so archived bodies with legacy-looking lines stay archivable."
+    },
+    "skills/handoff/scripts/feather_handoff/history_mutations.py": {
+      "source_sha256": "31f0d7f5d4787fba1b838695689b2d47f5d184a279e0ae0cec1d33d6f7a1340a",
+      "change": "Local fix pending upstream: clear and seal parse archive sources under their queried archive/<batch>.md name."
     }
   }
 }
