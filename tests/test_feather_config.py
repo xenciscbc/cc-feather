@@ -269,13 +269,93 @@ class FeatherConfigTests(unittest.TestCase):
         state_path.write_bytes(config.canonical(state) + b"\n")
         return state_path
 
-    def assert_seven_unprefixed_roles(self):
+    def assert_all_unprefixed_roles(self):
         agents = self.project / ".claude" / "agents"
         self.assertEqual({p.name for p in agents.glob("*.md")}, {f"{role}.md" for role in config.ROLES})
 
+    def test_delegation_policy_scopes_plan_driven_statement_to_auto(self):
+        self.apply("install")
+        policy = (self.project / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("In auto, before implementing, state whether the work is plan-driven", policy)
+        self.assertNotIn(". Before implementing, state", policy)
+        self.assertIn("In off, trigger review and verification only on request.", policy)
+
+    def seven_role_install(self):
+        """Simulate a delegation installation saved by 0.8.0, before reviewer existed."""
+        self.apply("install", "project", "--review-mode", "auto")
+        self.apply("model", "project", "--set", "executor.model=sonnet")
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = json.loads(state_path.read_bytes())
+        record = state["components"]["delegation"]
+        del record["choices"]["reviewer"], record["hashes"]["reviewer"]
+        (self.project / ".claude" / "agents" / "reviewer.md").unlink()
+        state_path.write_bytes(config.canonical(state) + b"\n")
+
+    def test_fresh_install_includes_reviewer(self):
+        self.apply("install")
+        self.assert_all_unprefixed_roles()
+        text = (self.project / ".claude" / "agents" / "reviewer.md").read_text(encoding="utf-8")
+        self.assertIn("name: reviewer", text)
+        self.assertIn("model: opus", text)
+        self.assertIn("effort: high", text)
+        self.assertIn("tools: Read, Glob, Grep, Bash", text)
+        for phrase in ("APPROVED", "CHANGES_REQUESTED", "base revision", "untracked", "Do not run tests"):
+            self.assertIn(phrase, text)
+        self.assertNotIn("{{", text)
+        self.assertEqual(self.call("show")[1]["choices"]["reviewer"], {"model": "opus", "effort": "high"})
+
+    def test_code_review_belongs_to_reviewer_not_analyst(self):
+        self.apply("install")
+        agents = self.project / ".claude" / "agents"
+        analyst = (agents / "analyst.md").read_text(encoding="utf-8")
+        self.assertNotIn("Code review", analyst)
+        self.assertNotIn("code review", analyst)
+        self.assertIn("code review to reviewer", (agents / "verifier.md").read_text(encoding="utf-8"))
+        self.assertIn("each claim can be verified independently", analyst)
+        self.assertIn("cut too finely", analyst)
+
+    def test_update_adds_reviewer_to_seven_role_state(self):
+        self.seven_role_install()
+        shown = self.call("show")[1]
+        self.assertEqual(shown["status"], "ok", shown)
+        self.assertTrue(shown["role_update_required"])
+        self.apply("update")
+        self.assert_all_unprefixed_roles()
+        shown = self.call("show")[1]
+        self.assertFalse(shown["role_update_required"])
+        self.assertEqual(shown["review_mode"], "auto")
+        self.assertEqual(shown["choices"]["executor"], {"model": "sonnet", "effort": "medium"})
+        self.assertEqual(shown["choices"]["reviewer"], {"model": "opus", "effort": "high"})
+
+    def test_seven_role_update_with_unowned_reviewer_moves_to_prefix(self):
+        self.seven_role_install()
+        agents = self.project / ".claude" / "agents"
+        conflict = agents / "reviewer.md"
+        user_role = "---\nname: reviewer\n---\nExisting user role\n"
+        conflict.write_text(user_role, encoding="utf-8")
+        self.assertEqual(self.call("show")[1]["pending_role_prefix"], config.ROLE_PREFIX)
+        self.apply("update")
+        self.assert_prefixed_roles(agents, extra={"reviewer.md"})
+        self.assertEqual(conflict.read_text(encoding="utf-8"), user_role)
+
+    def test_reviewer_model_and_session_overrides(self):
+        self.apply("install")
+        self.apply("model", "project", "--set", "reviewer.effort=medium")
+        self.assertEqual(self.call("show")[1]["choices"]["reviewer"], {"model": "opus", "effort": "medium"})
+        code, exported = self.call("session", "project", "--set", "reviewer.model=sonnet")
+        self.assertEqual(code, 0, exported)
+        self.assertEqual(exported["reviewer"]["model"], "sonnet")
+        self.assertEqual(exported["reviewer"]["effort"], "medium")
+        self.assertEqual(exported["reviewer"]["tools"], ["Read", "Glob", "Grep", "Bash"])
+
+    def test_handoff_policy_updates_before_waiting_during_implementation(self):
+        self.apply("install", "project", "--component", "handoff")
+        policy = (self.project / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("During implementation, before stopping to wait for the user", policy)
+
     def test_fresh_install_includes_verifier(self):
         self.apply("install")
-        self.assert_seven_unprefixed_roles()
+        self.assert_all_unprefixed_roles()
         text = (self.project / ".claude" / "agents" / "verifier.md").read_text(encoding="utf-8")
         self.assertIn("name: verifier", text)
         self.assertIn("model: opus", text)
@@ -291,12 +371,13 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertTrue(shown["role_update_required"])
         self.assertEqual(shown["components"]["delegation"]["issues"], [])
         self.apply("update")
-        self.assert_seven_unprefixed_roles()
+        self.assert_all_unprefixed_roles()
         shown = self.call("show")[1]
         self.assertFalse(shown["role_update_required"])
         self.assertEqual(shown["review_mode"], "auto")
         self.assertEqual(shown["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
         self.assertEqual(shown["choices"]["verifier"], {"model": "opus", "effort": "high"})
+        self.assertEqual(shown["choices"]["reviewer"], {"model": "opus", "effort": "high"})
         return shown
 
     def test_update_adds_verifier_to_six_role_v2_state(self):
@@ -863,7 +944,7 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(shown["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
         self.assertEqual(shown["choices"]["verifier"], {"model": "opus", "effort": "high"})
         agents = self.project / ".claude" / "agents"
-        self.assert_seven_unprefixed_roles()
+        self.assert_all_unprefixed_roles()
         self.assertEqual(set(self.call("session")[1]), set(config.ROLES))
         self.apply("remove")
         self.assertEqual(list(agents.glob("*.md")), [])

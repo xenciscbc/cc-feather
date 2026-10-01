@@ -1,6 +1,6 @@
 ---
 name: {{name:verifier}}
-description: "Independently verify a completed implementation against an exact claim and its acceptance checks. Runs checks and probes counterexamples; never fixes. Plan review belongs to {{name:analyst}}."
+description: "Independently verify a completed implementation against an exact claim and its acceptance checks. Runs checks and probes counterexamples; never fixes. Plan review belongs to {{name:analyst}}; code review to {{name:reviewer}}."
 model: {{model}}
 effort: {{effort}}
 tools: Read, Glob, Grep, Bash

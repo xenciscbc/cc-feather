@@ -26,8 +26,8 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
-| `/cc-feather:auto-on` | 開啟依風險觸發的自動計畫審查 |
-| `/cc-feather:auto-off` | 關閉自動計畫審查 |
+| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查與結果驗證 |
+| `/cc-feather:auto-off` | 關閉自動審查 |
 
 交接指令在 plugin 安裝後即可使用。Setup 可只裝 handoff 自動維護規則、只裝 agent 分派（規則＋角色），或兩者都裝。例如：
 
@@ -46,7 +46,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 可選項目 | 安裝內容 | 移除後 |
 | --- | --- | --- |
 | handoff | 指示檔中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
-| agent 分派（delegation） | 獨立分派規則＋七個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
+| agent 分派（delegation） | 獨立分派規則＋八個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
 | 兩者（both） | 上述兩項 | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
 
 可直接指定，不必走逐項詢問：
@@ -109,6 +109,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 一般工程實作 | executor | opus | medium |
 | 安全敏感實作 | security-executor | opus | high |
 | 實作後驗證 | verifier | opus | high |
+| 實作後程式碼審查 | reviewer | opus | high |
 
 | 角色 | 何時使用 | 產出與權限 |
 | --- | --- | --- |
@@ -119,14 +120,15 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | executor | 需要局部設計與工程判斷的功能或修正 | 可修改指定檔案並驗證，遇到架構或需求缺口交回主 Agent |
 | security-executor | 影響授權、秘密資料、密碼學或信任邊界的實作 | 可修改指定檔案；驗證正常行為及濫用／拒絕案例 |
 | verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE |
+| reviewer | 獨立審查實作某個 claim 的程式碼 | 自行從 base revision 取得 diff，可跑不改檔的靜態檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED |
 
 主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派。
 
 每個欄位獨立套用優先序：**該次任務明確指定 > 適用的 session 指定 > 已儲存角色設定 > 套件預設**。例如「用 Sonnet 審查計畫」仍使用 analyst 職責，model 改為 Sonnet，未指定 effort 則保留 analyst 的 high。指定值無法原生套用時先說明，不暗中替換或只在 prompt 假裝設定成功。
 
-安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動計畫審查可依任務／session 明確啟用或停用；預設關閉；開啟後依實質風險觸發，明確要求審查則不受開關限制，使用新 analyst context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。auto 模式下，觸發過計畫審查的工作在回報完成前，另以新的 verifier context 驗證結果，自動上限同樣兩次；明確要求驗證則不受開關限制。
+安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動審查可依任務／session 明確啟用或停用；預設關閉。開啟後，依使用者同意的計畫、spec、ticket 或對話中的計畫施工的工作，會依序經過計畫審查、程式碼審查與結果驗證；沒有計畫但會改動安全邊界、遷移資料或執行不可逆操作的工作，須先寫出計畫、通過審查並經使用者同意才施工；其他沒有計畫的小修改不自動審查。明確要求審查則不受開關限制，計畫審查使用新的 analyst context，程式碼審查使用新的 reviewer context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。實作後主 Agent 先跑主要驗收，再由新的 reviewer context 自行取得 diff 做程式碼審查，回覆 APPROVED／CHANGES_REQUESTED。阻擋性問題（正確性、安全、資料遺失、regression、偏離 spec）必須修正或附證據駁回；非阻擋問題列在最終回報；有進行中的交接時，另建一個獨立的後續工作項目。得到 APPROVED 後，才以新的 verifier context 驗證結果並回報完成。兩次仍未 APPROVED 就停止自動審查，不做自動驗證，claim 標為未審查，視為未完成且不 commit。程式碼審查與驗證的自動上限各為兩次；REFUTED 後的修正直接進入 verifier 複驗，並在回報註明未經程式碼審查。明確要求程式碼審查或驗證則不受開關限制，明確要求驗證也不需先做程式碼審查。
 
-### 自動計畫審查開關
+### 自動審查開關
 
 ```text
 /cc-feather:auto-on
@@ -137,7 +139,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 不帶參數（或加 `session`）只影響目前 session；加 `project` 或 `user` 則永久儲存至該範圍既有的 setup 安裝。保留 Claude plugin 的 `cc-feather:` 命名空間，指令名稱不再重複 `feather-`。
 
-預設 `off` 不自動觸發；開啟後的 `auto` 僅按實質風險觸發；兩者都接受明確要求的審查。永久設定不會取消另行指定的單次／session 偏好。可用 setup 查詢已儲存模式；更新保留永久選擇，切換不重置既有計畫的審查次數。
+預設 `off` 不自動觸發；開啟後的 `auto` 審查依計畫施工的工作；兩者都接受明確要求的審查。永久設定不會取消另行指定的單次／session 偏好。可用 setup 查詢已儲存模式；更新保留永久選擇，切換不重置既有計畫的審查次數。
 
 永久模式儲存位置如下；請透過指令修改，避免手動編輯管理區塊造成擁有權衝突。
 
@@ -146,7 +148,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | project | `<專案>/CLAUDE.md`、`.claude/CLAUDE.md` 或 AGENTS.md（見下方） | `<專案>/.claude/cc-feather/state.json` |
 | user | `<Claude 設定目錄>/CLAUDE.md` | `<Claude 設定目錄>/cc-feather/state.json` |
 
-Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後只對安全邊界、資料遷移、不可逆操作或複雜跨模組計畫等實質風險觸發，不會每個任務都送審。
+Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後審查依計畫施工的工作；沒有計畫的安全邊界、資料遷移或不可逆工作須先有經審查且使用者同意的計畫；其他沒有計畫的小修改不自動審查。
 
 project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.md`。Claude Code 只在沒有任何 CLAUDE 檔時才讀 AGENTS.md，所以專案若依賴 AGENTS.md，setup 會先詢問：直接寫進 AGENTS 檔，或建立一個 import 它的 CLAUDE.md，讓 Claude 繼續讀到它。選擇會記錄下來，之後沿用。詳見[專案指示檔](docs/setup.md#project-instruction-file)。
 
@@ -188,7 +190,7 @@ Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署�
 
 ## Agent 名稱與舊版升級
 
-原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`Explore`，不再有 `feather-` 前綴。
+原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`reviewer`、`Explore`，不再有 `feather-` 前綴。
 
 若已有其他 agent 使用同樣的名稱（即使位於不同檔名或子目錄），setup 會把 Explore 以外的角色都加上 `cc-` 前綴安裝（例如 `cc-scout`），並在分派規則中列出實際名稱；之後一直沿用前綴。其他 agent 的檔案不會被覆蓋或接管。Explore 維持原名；已有自己的 Explore 時直接沿用你的。`cc-` 名稱本身也衝突時，仍會保留檔案並請使用者決定。跨 user/project 範圍的同名角色依 Claude 優先序生效，需一併核對適用範圍。
 

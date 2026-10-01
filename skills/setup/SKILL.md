@@ -8,7 +8,7 @@ description: "Inspect and independently install, update or remove Feather handof
 Manage two independent components in a project or user scope:
 
 - `handoff`: persistent handoff maintenance rules in a marked block of the scope's instruction file. It installs no agents and does not touch handoff records. The plugin's handoff skill is usable without this setup component.
-- `delegation`: a concise instruction-file entry for cc-feather:delegation plus all seven native agents (scout, analyst, mech-executor, executor, security-executor, verifier and exact-name Explore). Includes model configuration and optional automatic plan review and outcome verification, default off.
+- `delegation`: a concise instruction-file entry for cc-feather:delegation plus all eight native agents (scout, analyst, mech-executor, executor, security-executor, verifier, reviewer and exact-name Explore). Includes model configuration and optional automatic plan review, code review and outcome verification of plan-driven work, default off.
 - `both`: operate on both selected components in one preview/apply transaction.
 
 Use [the bundled tool](../../scripts/feather_config.py) from this skill's loaded installation, not the target project's working directory. Python 3.11+ and the standard library are sufficient. Use it for all managed writes; do not hand-edit ownership state, role files or policy blocks.
@@ -46,7 +46,7 @@ Legacy installations had handoff and delegation in one block. Preserve the exist
 
 ## Models and review
 
-Use cc-feather:model for model/effort changes in the delegation component. Automatic review defaults off. Dedicated auto-on/auto-off follow [the toggle procedure](references/auto-review.md): no argument/session is a conversation preference, while project/user persists only when delegation is installed. Never install delegation just because a review toggle was requested. Explicit plan review requests still work when automatic review is off; changing the mode does not reset a logical plan's two-call automatic budget.
+Use cc-feather:model for model/effort changes in the delegation component. Automatic review defaults off. Dedicated auto-on/auto-off follow [the toggle procedure](references/auto-review.md): no argument/session is a conversation preference, while project/user persists only when delegation is installed. Never install delegation just because a review toggle was requested. Explicit plan review, code review and verification requests still work when automatic review is off; changing the mode does not reset any two-call automatic budget.
 
 Use fresh sessions to load installed guidance and roles reliably. When available, /tasks provides native evidence of actual model/effort; CLI/managed/nested definitions, force-model settings and provider restrictions may affect selection. Setup checks and policy instructions are not live dispatch verification or hook-enforced gates.
 

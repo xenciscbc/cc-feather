@@ -33,5 +33,10 @@
     "name": "verifier",
     "model": "opus",
     "effort": "high"
+  },
+  "reviewer": {
+    "name": "reviewer",
+    "model": "opus",
+    "effort": "high"
   }
 }

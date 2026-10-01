@@ -1,6 +1,6 @@
 ---
 name: delegation
-description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, triggered plan reviews or outcome verification."
+description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, plan reviews, code reviews or outcome verification."
 ---
 
 # Feather delegation
@@ -20,6 +20,7 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | executor | Scoped implementation requiring engineering judgment |
 | security-executor | Authorized changes to security boundaries |
 | verifier | Independent verification of a completed implementation claim |
+| reviewer | Independent code review of one implemented claim |
 
 The table uses role ids. When the installed delegation policy lists native role names, such as `cc-scout`, dispatch each role to its listed name.
 
@@ -39,8 +40,14 @@ Compare the child's report with its brief. Verify cited evidence, actual changes
 
 Classify a blocker as temporary failure, missing specification, role mismatch or out-of-scope dependency. Retry the same operation at most once, only for a recoverable temporary cause. Changing child, model or error wording does not reset this limit. Otherwise main reclaims the task, preserves the evidence and resolves or reports the blocker while independent authorized work continues. Missing authorization or unknown requirements remain unresolved until established.
 
-When outcome verification is required, follow [the outcome-verification procedure](references/outcome-verification.md) before reporting completion. Report the integrated result and remaining limitations. Update an active handoff through cc-feather:handoff when required by its maintenance policy.
+When the automatic flow requires them, follow [the code-review procedure](references/code-review.md) and then [the outcome-verification procedure](references/outcome-verification.md) before reporting completion. An explicit request runs only what was requested: explicit code review follows the code-review procedure without starting verification, and explicit verification follows the outcome-verification procedure without code review first. Report the integrated result and remaining limitations. Update an active handoff through cc-feather:handoff when required by its maintenance policy.
+
+When the user asks for a "review" without naming one, review the plan if the work is not yet implemented and review the code if it is.
 
 ## Plan review
 
-When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. Work that met a review trigger also needs outcome verification once implemented.
+When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. In auto, plan-driven work also needs code review and then outcome verification once implemented.
+
+## Code review
+
+When the installed policy or an explicit user request requires code review, read and follow [the code-review procedure](references/code-review.md) after the primary acceptance passes and before outcome verification. Keep its call count and open findings across mode and session changes.

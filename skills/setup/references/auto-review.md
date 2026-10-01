@@ -1,10 +1,10 @@
-# Automatic plan review toggle
+# Automatic review toggle
 
-Used by cc-feather:auto-on (mode auto) and cc-feather:auto-off (mode off). These are user-invoked commands. Interpret arguments as data, never shell code.
+Used by cc-feather:auto-on (mode auto) and cc-feather:auto-off (mode off). The mode covers automatic plan review, code review and outcome verification. These are user-invoked commands. Interpret arguments as data, never shell code.
 
 ## Scope
 
-- No argument or `session`: apply an explicit preference to future automatic plan-review decisions in this conversation. Do not write any file or run the configuration tool. Report the mode and session-only scope; mention that a new session uses its saved setting. A currently running review is not automatically interrupted.
+- No argument or `session`: apply an explicit preference to future automatic review decisions in this conversation. Do not write any file or run the configuration tool. Report the mode and session-only scope; mention that a new session uses its saved setting. A currently running review is not automatically interrupted.
 - `project`: persist for the confirmed current project installation.
 - `user`: persist for the selected Claude user configuration root, affecting projects that use that installation. Existing project-level guidance may supersede it.
 - A user-supplied equivalent natural-language scope is accepted. Unknown or conflicting scope needs clarification before writing. Never silently create an installation or choose user-wide scope when none was supplied.
@@ -19,4 +19,4 @@ An existing contrary task/session preference remains higher priority than a save
 
 ## Meaning
 
-The package default is `off`. `auto` permits automatic plan review on the configured material-risk triggers, and outcome verification of the resulting work before it is reported complete; it does not review every task. `off` disables those automatic triggers. An explicit request to review a plan or verify an implementation still runs in either mode. Turning a mode on/off does not grant implementation authority, erase findings, manufacture READY or CONFIRMED, or reset either two-call automatic budget. These are model instructions, not hook-enforced workflow gates. Hand-off records are not rewritten merely to persist a session preference.
+The package default is `off`. `auto` gives plan-driven work, meaning work done from a plan, spec or ticket the user agreed to, automatic plan review, code review and then outcome verification before it is reported complete. Unplanned work that changes a security boundary, migrates data or performs an irreversible operation first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically. `off` disables those automatic triggers. An explicit request to review a plan, review code or verify an implementation still runs in either mode. Turning a mode on/off does not grant implementation authority, erase findings, manufacture READY, APPROVED or CONFIRMED, or reset any two-call automatic budget. These are model instructions, not hook-enforced workflow gates. Hand-off records are not rewritten merely to persist a session preference.

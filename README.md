@@ -24,8 +24,8 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:setup`: inspect status first, then independently manage handoff maintenance rules, delegation policy plus native agents, or both.
 - `/cc-feather:delegation`: load the main-agent workflow for dispatch, review, acceptance and recovery when needed.
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
-- `/cc-feather:auto-on`: enable risk-triggered automatic plan review.
-- `/cc-feather:auto-off`: disable automatic plan review.
+- `/cc-feather:auto-on`: enable automatic plan review, code review and outcome verification of plan-driven work.
+- `/cc-feather:auto-off`: disable automatic review.
 
 Handoff commands work after plugin installation. Setup can install handoff maintenance rules, delegation (policy plus agents), or both. For example:
 
@@ -44,7 +44,7 @@ A bare `/cc-feather:setup` first checks project and user installation status, re
 | Component | Installed content | Removal behavior |
 | --- | --- | --- |
 | handoff | An independent maintenance policy in the instruction file | Removes the reminder only; records and the plugin handoff command remain |
-| delegation | A separate delegation policy plus seven native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
+| delegation | A separate delegation policy plus eight native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
 | both | Both components | Applies the selected operation together; preserves records and unrelated settings |
 
 Specify the full request to avoid unnecessary questions:
@@ -107,6 +107,7 @@ A task-specific request takes precedence over session preferences and saved sett
 | General implementation | executor | opus | medium |
 | Security-sensitive implementation | security-executor | opus | high |
 | Post-implementation verification | verifier | opus | high |
+| Post-implementation code review | reviewer | opus | high |
 
 | Role | When to use | Deliverable and permissions |
 | --- | --- | --- |
@@ -117,12 +118,13 @@ A task-specific request takes precedence over session preferences and saved sett
 | executor | Implementation requiring local design or engineering judgment | Writes and validates assigned files; returns missing architecture or requirements to Main |
 | security-executor | Implementation affecting authorization, secrets, cryptography or trust boundaries | Writes assigned files and verifies both allowed behavior and abuse/denial cases |
 | verifier | Independent check that completed work meets an exact claim | Runs checks and counterexamples without editing; CONFIRMED/REFUTED/INCONCLUSIVE |
+| reviewer | Independent review of the code implementing one claim | Reads the diff itself from a base revision, runs non-modifying static checks, never edits or runs tests; APPROVED/CHANGES_REQUESTED |
 
 Main owns understanding, decisions, integration and acceptance. Small or context-coupled tasks stay direct. Independent children have scoped contracts and exclusive write ownership; all are leaves. Read-only security analysis belongs to analyst, while security implementation belongs to security-executor.
 
-Resolve model and effort independently: **explicit task request > applicable session preference > saved role configuration > package default**. “Use Sonnet to review” keeps analyst duties/tools but selects Sonnet, retaining analyst's high effort unless overridden. Apply real native bindings; never silently substitute or pretend prompt text changed the runtime. A task override does not rewrite saved settings.
+Resolve model and effort independently: **explicit task request > applicable session preference > saved role configuration > package default**. “Use Sonnet to review this plan” keeps analyst duties/tools but selects Sonnet, retaining analyst's high effort unless overridden. Apply real native bindings; never silently substitute or pretend prompt text changed the runtime. A task override does not rewrite saved settings.
 
-Automatic plan review can be explicitly enabled or disabled for a task/session. It is disabled by default. After enabling it, material risk triggers fresh-context review; explicit review requests work in either mode. Its default automatic budget is two calls including the initial review. Unresolved blockers after the second stop automatic submission; this never means automatic approval. Renaming, switching reviewers/models or starting a new session does not reset the count. Preserve it in an active handoff. Explicit user direction is required for another round. READY plus existing authority proceeds without a routine additional confirmation. In auto, work that triggered plan review also gets a fresh verifier pass before it is reported complete, with the same two-call automatic budget; an explicit request runs verification in either mode.
+Automatic review can be explicitly enabled or disabled for a task/session. It is disabled by default. After enabling it, plan-driven work (from a plan, spec, ticket or conversation plan the user agreed to) gets fresh-context plan review, then code review, then outcome verification. Unplanned work that changes a security boundary, migrates data or performs an irreversible operation first needs a written, reviewed plan the user approves; other unplanned edits are not reviewed automatically. Explicit review requests work in either mode. Its default automatic budget is two calls including the initial review. Unresolved blockers after the second stop automatic submission; this never means automatic approval. Renaming, switching reviewers/models or starting a new session does not reset the count. Preserve it in an active handoff. Explicit user direction is required for another round. READY plus existing authority proceeds without a routine additional confirmation. After implementation, main runs the primary acceptance, then a fresh reviewer code review, which reads the diff itself, returns APPROVED or CHANGES_REQUESTED. Blocking findings (correctness, security, data loss, regression, spec deviation) must be fixed or rejected with evidence; non-blocking findings are listed in the final report, or become a separate follow-up work item when a handoff is active. Only after APPROVED does a fresh verifier check the result before it is reported complete. Two calls without APPROVED stop automatic review, skip automatic verification and leave the claim unreviewed: it is not complete and is not committed. Code review and verification each have the same two-call automatic budget; a fix after REFUTED goes straight to the verifier recheck and is reported as not code-reviewed. An explicit request runs code review or verification in either mode, and explicit verification needs no prior code review.
 
 ### Automatic review switch
 
@@ -133,7 +135,7 @@ Automatic plan review can be explicitly enabled or disabled for a task/session. 
 /cc-feather:auto-off user
 ```
 
-No argument (or `session`) changes this session only. `project` or `user` saves the choice in an existing setup installation of that scope. The `cc-feather:` plugin namespace remains; command names no longer repeat `feather-`. Default `off` disables automatic triggering; enabled mode `auto` triggers only on material risk. Explicit review requests work in both modes. Saved changes preserve any separate task/session override. Show/check report the saved mode; updates preserve it. Toggling never resets an existing plan's call budget.
+No argument (or `session`) changes this session only. `project` or `user` saves the choice in an existing setup installation of that scope. The `cc-feather:` plugin namespace remains; command names no longer repeat `feather-`. Default `off` disables automatic triggering; enabled mode `auto` reviews plan-driven work. Explicit review requests work in both modes. Saved changes preserve any separate task/session override. Show/check report the saved mode; updates preserve it. Toggling never resets an existing plan's call budget.
 
 Permanent modes are stored below. Use the commands to change them: manually editing managed blocks causes ownership conflicts.
 
@@ -142,7 +144,7 @@ Permanent modes are stored below. Use the commands to change them: manually edit
 | project | `<project>/CLAUDE.md`, `.claude/CLAUDE.md` or AGENTS.md (see below) | `<project>/.claude/cc-feather/state.json` |
 | user | `<Claude config directory>/CLAUDE.md` | `<Claude config directory>/cc-feather/state.json` |
 
-The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. The managed line `Automatic plan review mode: off` disables review; `auto` enables it. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Project settings may supersede user settings; fresh sessions load the saved mode. Enabled review targets material risks such as security boundaries, data migration, irreversible operations and complex cross-module plans, rather than every task.
+The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. The managed line `Automatic plan review mode: off` disables review; `auto` enables it. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Project settings may supersede user settings; fresh sessions load the saved mode. Enabled review covers plan-driven work and requires a reviewed, user-approved plan before unplanned security-boundary, data-migration or irreversible work; other unplanned edits are not reviewed automatically.
 
 In project scope, setup writes into an existing CLAUDE.md, else `.claude/CLAUDE.md`. Claude Code reads AGENTS.md only while no CLAUDE file exists, so in a project that relies on AGENTS.md setup asks first: write into the AGENTS file, or create a CLAUDE.md that imports it so Claude keeps reading it. The choice is saved and reused. See [project instruction file](docs/setup.md#project-instruction-file).
 
@@ -184,6 +186,6 @@ See [handoff compatibility](docs/compatibility.md) and [setup validation](docs/s
 
 ## Unprefixed role names and migration
 
-Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore. When another agent already uses one of these names, setup installs every role except Explore with a `cc-` prefix (for example `cc-scout`) and lists the names in the delegation policy; the prefix then stays. Other agents' files are never adopted or overwritten. Explore keeps its exact name, and your own Explore is used instead of cc-feather's. A conflict on a `cc-` name still stops for your decision. Check applicable user/project precedence when definitions exist in different scopes.
+Native names are scout, analyst, mech-executor, executor, security-executor, verifier, reviewer and Explore. When another agent already uses one of these names, setup installs every role except Explore with a `cc-` prefix (for example `cc-scout`) and lists the names in the delegation policy; the prefix then stays. Other agents' files are never adopted or overwritten. Explore keeps its exact name, and your own Explore is used instead of cc-feather's. A conflict on a `cc-` name still stops for your decision. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Model/review mutations and session export require migration first; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.

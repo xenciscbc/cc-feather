@@ -1,0 +1,16 @@
+# Code review
+
+This procedure governs main's orchestration. Reviewer's role definition governs review criteria and its APPROVED/CHANGES_REQUESTED report.
+
+Resolve the active review mode as in [plan review](plan-review.md). In auto, each claim of plan-driven work gets code review after implementation and before [outcome verification](outcome-verification.md). An explicit user request for code review applies in either mode and does not start verification. Code review checks the code itself; outcome verification checks that the claim holds, so one does not replace the other.
+
+1. Run the primary acceptance first. Review code that works, not code that is still incomplete. Review one claim at a time, the same claim outcome verification will judge.
+2. Use reviewer, under its installed native name, in fresh native context. Supply the claim, the plan or spec it implements, the base revision to diff against, the file scope including untracked new files, and the acceptance results. For a claim that changes a security boundary, name the trust boundaries to check. Do not supply only paths or a hand-picked excerpt; reviewer obtains the diff itself. If fresh context or the role is unavailable, report the limitation and keep the affected claim blocked.
+3. Allow at most two automatic code-review calls per claim, including failed, interrupted or protocol-failure calls. Changing reviewer, model or wording does not reset the count. A missing verdict is not APPROVED.
+4. On CHANGES_REQUESTED, disposition every blocking finding as FIX, correcting it within the authorized scope, or REJECT with concrete evidence: a failed reproduction, a source citation or the plan's own scope, never preference. Rerun the primary acceptance after any change. Send the second review the prior findings with each disposition and its closure or rejection evidence. It may uphold a rejection; an upheld finding can be rejected again only with new evidence. Never resubmit unchanged code unless every remaining finding carries rejection evidence.
+5. Non-blocking findings do not hold completion. List them in the final report. When a handoff is active, also record them as a separate follow-up work item under the handoff skill's separable-item rule, not in the current record.
+6. With APPROVED in the automatic flow, continue to outcome verification under the existing authority; an explicit code-review request alone does not start verification. The verdict grants no new authority. After two calls without APPROVED, for any reason, the claim is unreviewed: stop automatic review, do not start automatic outcome verification, do not commit it or report it complete, report its open findings and require an explicit user request for another call. Preserve the count and open findings in the task and in the `審查：` segment of the `注意：` field in any existing active handoff.
+
+Reviewer can still write through Bash; its no-edit rule is an instruction. Compare the workspace with the pre-dispatch state after each call and preserve or report any change it made.
+
+A fix made after the verifier refutes the claim goes straight to the verifier's recheck without another code review; the final report states that this fix was not code-reviewed.
