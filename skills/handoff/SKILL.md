@@ -74,10 +74,8 @@ For Feather lists and reads, use the Python tool described in [Handoff file tool
 ## Archive completed work
 
 1. After verifying that the whole requested work is complete, save the final handoff with `狀態：完成` and final verification. Its `更新` timestamp becomes the completion time. Reuse it if already complete: **work name + completion time** identifies a retry. Retain its source baseline unchanged during archival retries.
-2. Read history, or initialize `# 交接歷史` if absent. If it is a directory, link, unreadable, or unrecognizable, preserve the work file and report the blocker.
-3. Use `## <work> · 完成：<completion time>` followed by the complete final handoff body, omitting only its first title line. Preserve existing history. For an existing identical identity, compare the full body: identical means already saved; different means preserve both and ask. Append only a missing record, applying the write discipline.
-4. Read back and verify the entire saved entry and prior history. Reread the work file and require it to match the archived version before removing it; verify removal. Report a failed save or removal accurately and retry from the surviving files, without changing the completion identity or duplicating the entry.
-5. In the completion report, list any `待決：` items remaining in the final record's `注意：` so they are not silently archived; the user decides whether each becomes new work.
+2. The tool archives a completed save itself: it appends the `## <work> · 完成：<completion time>` entry to history, verifies it, and removes the identical work file (see [the tool reference](references/tool.md#update-and-completion)). Do not edit history directly. After a `partial` result or `defer_history`, retry with the tool's `archive` command and the current read version. On `conflict` or `history-format`, preserve both files, report the actual state and ask.
+3. In the completion report, list any `待決：` items remaining in the final record's `注意：` so they are not silently archived; the user decides whether each becomes new work.
 
 Retain history until explicitly asked to clear it. Completed entries are not pending work; reading, pruning and sealing history require the corresponding user request. History operations default to `history.md`; include sealed files only when the user explicitly includes them. Clearing shared history leaves sealed files intact.
 
