@@ -28,5 +28,10 @@
     "name": "security-executor",
     "model": "opus",
     "effort": "high"
+  },
+  "verifier": {
+    "name": "verifier",
+    "model": "opus",
+    "effort": "high"
   }
 }

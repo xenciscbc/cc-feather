@@ -21,7 +21,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ROLES = ("scout", "analyst", "mech-executor", "executor", "security-executor", "Explore")
+ROLES = ("scout", "analyst", "mech-executor", "executor", "security-executor", "Explore", "verifier")
+# Roles introduced after an installation may have been saved; update installs them.
+ADDED_ROLES = ("verifier",)
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?:\[[0-9]+m\])?$")
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 BEGIN = "<!-- cc-feather:begin -->"
@@ -94,10 +96,9 @@ def _defaults() -> dict[str, dict[str, str]]:
     except (OSError, ValueError) as exc:
         raise ConfigError(f"cannot read defaults: {path}: {exc}") from exc
     if not isinstance(raw, dict) or set(raw) != set(ROLES):
-        raise ConfigError("roles.json must contain exactly the six required roles")
-    expected = {"scout": "scout", "analyst": "analyst", "mech-executor": "mech-executor", "executor": "executor", "security-executor": "security-executor", "Explore": "Explore"}
+        raise ConfigError("roles.json must contain exactly the required roles: " + ", ".join(ROLES))
     for key, item in raw.items():
-        if not isinstance(item, dict) or set(item) != {"name", "model", "effort"} or item["name"] != expected[key]:
+        if not isinstance(item, dict) or set(item) != {"name", "model", "effort"} or item["name"] != key:
             raise ConfigError(f"invalid defaults for {key}")
         _validate_choice(item["model"], item["effort"])
     return raw
@@ -144,9 +145,11 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
                 raise ConfigError("invalid legacy role flag")
             if record["review_mode"] not in ("auto", "off"):
                 raise ConfigError("invalid saved review mode")
-            if not isinstance(record["choices"], dict) or set(record["choices"]) != set(ROLES) or not isinstance(record["hashes"], dict) or set(record["hashes"]) != set(ROLES):
+            if (not isinstance(record["choices"], dict) or not isinstance(record["hashes"], dict)
+                    or set(record["hashes"]) != set(record["choices"])
+                    or not set(ROLES) - set(ADDED_ROLES) <= set(record["choices"]) <= set(ROLES)):
                 raise ConfigError("state role schema mismatch")
-            for role in ROLES:
+            for role in _recorded_roles(record):
                 choice = record["choices"][role]
                 if not isinstance(choice, dict) or set(choice) != {"model", "effort"}:
                     raise ConfigError(f"invalid state choice for {role}")
@@ -154,6 +157,14 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
                 if not isinstance(record["hashes"][role], str) or not re.fullmatch(r"[0-9a-f]{64}", record["hashes"][role]):
                     raise ConfigError("invalid state hash")
     return value
+
+
+def _recorded_roles(record: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(role for role in ROLES if role in record["choices"])
+
+
+def _roles_outdated(record: dict[str, Any] | None) -> bool:
+    return record is not None and set(record["choices"]) != set(ROLES)
 
 
 def _components(state: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -194,7 +205,7 @@ def _handoff_policy() -> str:
 def _overrides(items: list[str]) -> dict[str, dict[str, str]]:
     result: dict[str, dict[str, str]] = {}
     for item in items:
-        match = re.fullmatch(r"(scout|analyst|mech-executor|executor|security-executor|Explore)\.(model|effort)=(.+)", item)
+        match = re.fullmatch(rf"({'|'.join(map(re.escape, ROLES))})\.(model|effort)=(.+)", item)
         if not match:
             raise ConfigError(f"invalid --set value: {item!r}")
         role, field, value = match.groups()
@@ -312,9 +323,15 @@ def _snapshot(paths: list[Path]) -> dict[str, bytes | None]:
 
 
 def _agent_paths(base: Path, state: dict[str, Any] | None = None) -> dict[str, Path]:
-    legacy = state is not None and (state["version"] == 1 or (state["version"] == VERSION and "delegation" in state["components"] and state["components"]["delegation"]["legacy_names"]))
+    """Target paths for every role, or the owned paths of the roles a state records."""
+    roles, legacy = ROLES, False
+    if state is not None:
+        delegation = _components(state).get("delegation")
+        if delegation is not None:
+            roles = _recorded_roles(delegation)
+        legacy = state["version"] == 1 or (state["version"] == VERSION and delegation is not None and delegation["legacy_names"])
     return {role: base / "agents" / f"{'feather-' if legacy and role != 'Explore' else ''}{role}.md"
-            for role in ROLES}
+            for role in roles}
 
 
 def _selected(args: argparse.Namespace) -> tuple[str, ...]:
@@ -398,6 +415,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("legacy guidance requires setup update before changing settings")
     if args.command in {"model", "review"} and delegation is None:
         raise ConfigError(f"{args.scope} delegation component is not installed")
+    if args.command in {"model", "review"} and _roles_outdated(delegation):
+        raise ConfigError("delegation roles are out of date; run setup update first")
     if (args.command == "install" and args.component == "both" and delegation is not None
             and args.review_mode is not None and args.review_mode != delegation["review_mode"]):
         raise ConfigError("delegation is already installed; use review to change its saved review mode")
@@ -457,16 +476,17 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 data = before[str(path)]
                 if data is None or digest(data) != delegation["hashes"][role]:
                     raise ConfigError(f"managed role changed or missing: {path}")
-            if legacy_names and args.command != "remove":
+            if args.command != "remove":
+                # Renamed legacy roles and newly added roles must not take over existing files.
                 for role, path in agents.items():
-                    if path != owned[role] and before[str(path)] is not None:
+                    if owned.get(role) != path and before[str(path)] is not None:
                         raise ConfigError(f"unowned role file already exists: {path}; user decision required")
         else:
             for path in agents.values():
                 if before[str(path)] is not None:
                     raise ConfigError(f"unowned role file already exists: {path}")
     after = dict(before)
-    choices = {r: dict(delegation["choices"][r]) if delegation else
+    choices = {r: dict(delegation["choices"][r]) if delegation and r in delegation["choices"] else
                {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES} if "delegation" in selected else {}
     for role, fields in _overrides(args.set).items():
         choices[role].update(fields)
@@ -696,7 +716,15 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             issues.append(str(exc))
         if name == "delegation":
             try:
-                issues.extend(_collisions(base, agents))
+                targets = _agent_paths(base)
+                issues.extend(_collisions(base, {**targets, **agents}))
+                if record:
+                    for role, path in targets.items():
+                        if role in agents:
+                            continue
+                        _safe_path(path)
+                        if read(path) is not None:
+                            issues.append(f"unowned role file already exists: {path}")
                 for role, path in agents.items():
                     _safe_path(path)
                     data = read(path)
@@ -729,6 +757,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     return {"status": "ok" if not issues else "conflict", "scope": args.scope,
             "installed": bool(records), "components": component_info, "migration_required": migration_required,
             "role_migration_required": role_migration_required,
+            "role_update_required": _roles_outdated(delegation),
             "requested_configuration_only": True,
             "review_mode": delegation["review_mode"] if delegation else "off",
             "paths": {"config_root": str(base / "cc-feather"), "state": str(state_path),
@@ -744,6 +773,8 @@ def _session(args: argparse.Namespace) -> dict[str, Any]:
         raise ConfigError("installed delegation configuration has drift: " + "; ".join(inspected["components"]["delegation"]["issues"]))
     if inspected["role_migration_required"]:
         raise ConfigError("legacy role names require setup update before session export")
+    if inspected["role_update_required"]:
+        raise ConfigError("delegation roles are out of date; run setup update first")
     choices = {role: dict(value) for role, value in inspected["choices"].items()}
     for role, fields in _overrides(args.set).items():
         choices[role].update(fields)

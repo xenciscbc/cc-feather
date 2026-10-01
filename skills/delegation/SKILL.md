@@ -1,6 +1,6 @@
 ---
 name: delegation
-description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis or triggered plan reviews."
+description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, triggered plan reviews or outcome verification."
 ---
 
 # Feather delegation
@@ -19,6 +19,7 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | mech-executor | Repetition with a complete specification |
 | executor | Scoped implementation requiring engineering judgment |
 | security-executor | Authorized changes to security boundaries |
+| verifier | Independent verification of a completed implementation claim |
 
 Use configured role models and effort. For task/session overrides, persistent changes or uncertain bindings, read [model](../model/SKILL.md) before dispatch or configuration changes. Main-only preferences do not override children. Distinguish configured settings from native execution evidence; label unseen execution unconfirmed.
 
@@ -36,8 +37,8 @@ Compare the child's report with its brief. Verify cited evidence, actual changes
 
 Classify a blocker as temporary failure, missing specification, role mismatch or out-of-scope dependency. Retry the same operation at most once, only for a recoverable temporary cause. Changing child, model or error wording does not reset this limit. Otherwise main reclaims the task, preserves the evidence and resolves or reports the blocker while independent authorized work continues. Missing authorization or unknown requirements remain unresolved until established.
 
-Report the integrated result and remaining limitations. Update an active handoff through cc-feather:handoff when required by its maintenance policy.
+When outcome verification is required, follow [the outcome-verification procedure](references/outcome-verification.md) before reporting completion. Report the integrated result and remaining limitations. Update an active handoff through cc-feather:handoff when required by its maintenance policy.
 
 ## Plan review
 
-When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes.
+When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. Work that met a review trigger also needs outcome verification once implemented.

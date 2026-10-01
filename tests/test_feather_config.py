@@ -234,6 +234,109 @@ class FeatherConfigTests(unittest.TestCase):
         config._replace(fresh, b"private")
         self.assertEqual(stat.S_IMODE(fresh.stat().st_mode), 0o600)
 
+    def drop_added_roles(self, record):
+        for role in config.ADDED_ROLES:
+            del record["choices"][role]
+            del record["hashes"][role]
+            (self.project / ".claude" / "agents" / f"{role}.md").unlink()
+
+    def six_role_install(self, version):
+        """Simulate a delegation installation saved before the added roles existed."""
+        # Version 2 kept only delegation, without the legacy name flag.
+        component = "both" if version == 3 else "delegation"
+        self.apply("install", "project", "--component", component, "--review-mode", "auto")
+        self.apply("model", "project", "--set", "analyst.model=sonnet")
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = json.loads(state_path.read_bytes())
+        delegation = state["components"]["delegation"]
+        self.drop_added_roles(delegation)
+        if version == 2:
+            state = {"version": 2, "scope": "project",
+                     **{key: value for key, value in delegation.items() if key != "legacy_names"}}
+        state_path.write_bytes(config.canonical(state) + b"\n")
+        return state_path
+
+    def assert_seven_unprefixed_roles(self):
+        agents = self.project / ".claude" / "agents"
+        self.assertEqual({p.name for p in agents.glob("*.md")}, {f"{role}.md" for role in config.ROLES})
+
+    def test_fresh_install_includes_verifier(self):
+        self.apply("install")
+        self.assert_seven_unprefixed_roles()
+        text = (self.project / ".claude" / "agents" / "verifier.md").read_text(encoding="utf-8")
+        self.assertIn("name: verifier", text)
+        self.assertIn("model: opus", text)
+        self.assertIn("effort: high", text)
+        self.assertIn("tools: Read, Glob, Grep, Bash", text)
+        self.assertNotIn("disallowedTools", text)
+        self.assertEqual(self.call("show")[1]["choices"]["verifier"], {"model": "opus", "effort": "high"})
+
+    def assert_update_adds_verifier(self, version):
+        self.six_role_install(version)
+        shown = self.call("show")[1]
+        self.assertEqual(shown["status"], "ok", shown)
+        self.assertTrue(shown["role_update_required"])
+        self.assertEqual(shown["components"]["delegation"]["issues"], [])
+        self.apply("update")
+        self.assert_seven_unprefixed_roles()
+        shown = self.call("show")[1]
+        self.assertFalse(shown["role_update_required"])
+        self.assertEqual(shown["review_mode"], "auto")
+        self.assertEqual(shown["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
+        self.assertEqual(shown["choices"]["verifier"], {"model": "opus", "effort": "high"})
+        return shown
+
+    def test_update_adds_verifier_to_six_role_v2_state(self):
+        self.assert_update_adds_verifier(2)
+
+    def test_update_adds_verifier_to_six_role_v3_state_and_keeps_handoff(self):
+        shown = self.assert_update_adds_verifier(3)
+        self.assertTrue(shown["components"]["handoff"]["installed"])
+        self.assertIn(config.HANDOFF_BEGIN, (self.project / "CLAUDE.md").read_text(encoding="utf-8"))
+
+    def test_six_role_state_blocks_settings_until_update(self):
+        self.six_role_install(3)
+        before = {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()}
+        for command in (("model", "project", "--set", "analyst.effort=low"),
+                        ("review", "project", "--review-mode", "off"),
+                        ("session",)):
+            with self.subTest(command=command[0]):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("run setup update first", result["error"])
+        self.assertEqual(before, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
+
+    def test_six_role_update_preserves_unowned_verifier(self):
+        self.six_role_install(3)
+        agents = self.project / ".claude" / "agents"
+        for filename in ("verifier.md", "custom.md"):
+            with self.subTest(filename=filename):
+                conflict = agents / filename
+                conflict.write_text("---\nname: verifier\n---\nExisting user role\n", encoding="utf-8")
+                shown = self.call("show")[1]
+                self.assertEqual(shown["components"]["delegation"]["status"], "conflict", shown)
+                before = {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()}
+                code, result = self.call("update")
+                self.assertEqual(code, 2, result)
+                self.assertEqual(before, {p: p.read_bytes() for p in self.project.rglob("*") if p.is_file()})
+                conflict.unlink()
+        conflict = agents / "verifier.md"
+        conflict.write_text("---\nname: verifier\n---\nExisting user role\n", encoding="utf-8")
+        self.apply("remove")
+        self.assertEqual([p.name for p in agents.glob("*.md")], ["verifier.md"])
+        self.assertEqual(conflict.read_text(encoding="utf-8"), "---\nname: verifier\n---\nExisting user role\n")
+
+    def test_verifier_model_and_session_overrides(self):
+        self.apply("install")
+        self.apply("model", "project", "--set", "verifier.effort=medium")
+        self.assertEqual(self.call("show")[1]["choices"]["verifier"], {"model": "opus", "effort": "medium"})
+        self.assertIn("effort: medium", (self.project / ".claude" / "agents" / "verifier.md").read_text(encoding="utf-8"))
+        code, exported = self.call("session", "project", "--set", "verifier.model=sonnet")
+        self.assertEqual(code, 0, exported)
+        self.assertEqual(exported["verifier"]["model"], "sonnet")
+        self.assertEqual(exported["verifier"]["effort"], "medium")
+        self.assertEqual(exported["verifier"]["tools"], ["Read", "Glob", "Grep", "Bash"])
+
     def legacy_install(self):
         self.apply("install", "project", "--review-mode", "auto")
         self.apply("model", "project", "--set", "analyst.model=sonnet")
@@ -252,7 +355,9 @@ class FeatherConfigTests(unittest.TestCase):
         body = body.replace(config.END, reminder + config.END)
         guidance.write_bytes(body.encode("utf-8"))
         state["block_hash"] = config.digest(config._block_parts(body)[1].encode("utf-8"))
-        for role in config.ROLES:
+        # Legacy installations predate the added roles.
+        self.drop_added_roles(state)
+        for role in state["choices"]:
             if role == "Explore":
                 continue
             path = self.project / ".claude" / "agents" / f"{role}.md"
@@ -275,8 +380,9 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertFalse(shown["migration_required"])
         self.assertEqual(shown["review_mode"], "auto")
         self.assertEqual(shown["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
+        self.assertEqual(shown["choices"]["verifier"], {"model": "opus", "effort": "high"})
         agents = self.project / ".claude" / "agents"
-        self.assertEqual({p.stem for p in agents.glob("*.md")}, set(config.ROLES))
+        self.assert_seven_unprefixed_roles()
         self.assertEqual(set(self.call("session")[1]), set(config.ROLES))
         self.apply("remove")
         self.assertEqual(list(agents.glob("*.md")), [])
@@ -327,9 +433,7 @@ class FeatherConfigTests(unittest.TestCase):
         code, agents = self.call("session", "project", "--set", "Explore.model=opus",
                                  "--set", "analyst.effort=medium")
         self.assertEqual(code, 0, agents)
-        self.assertEqual(set(agents), {"scout", "analyst",
-                                       "mech-executor", "executor",
-                                       "security-executor", "Explore"})
+        self.assertEqual(set(agents), set(config.ROLES))
         self.assertEqual(agents["Explore"]["model"], "opus")
         self.assertEqual(agents["Explore"]["effort"], "low")
         self.assertEqual(agents["analyst"]["effort"], "medium")

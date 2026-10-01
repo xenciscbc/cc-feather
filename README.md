@@ -44,7 +44,7 @@ A bare `/cc-feather:setup` first checks project and user installation status, re
 | Component | Installed content | Removal behavior |
 | --- | --- | --- |
 | handoff | An independent CLAUDE.md maintenance policy | Removes the reminder only; records and the plugin handoff command remain |
-| delegation | A separate delegation policy plus six native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
+| delegation | A separate delegation policy plus seven native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
 | both | Both components | Applies the selected operation together; preserves records and unrelated settings |
 
 Specify the full request to avoid unnecessary questions:
@@ -106,6 +106,7 @@ A task-specific request takes precedence over session preferences and saved sett
 | Mechanical implementation | mech-executor | sonnet | medium |
 | General implementation | executor | opus | medium |
 | Security-sensitive implementation | security-executor | opus | high |
+| Post-implementation verification | verifier | opus | high |
 
 | Role | When to use | Deliverable and permissions |
 | --- | --- | --- |
@@ -115,12 +116,13 @@ A task-specific request takes precedence over session preferences and saved sett
 | mech-executor | Repetitive edits with complete rules, scope and expected results | Writes only assigned files, for example applying an exact rename mapping |
 | executor | Implementation requiring local design or engineering judgment | Writes and validates assigned files; returns missing architecture or requirements to Main |
 | security-executor | Implementation affecting authorization, secrets, cryptography or trust boundaries | Writes assigned files and verifies both allowed behavior and abuse/denial cases |
+| verifier | Independent check that completed work meets an exact claim | Runs checks and counterexamples without editing; CONFIRMED/REFUTED/INCONCLUSIVE |
 
 Main owns understanding, decisions, integration and acceptance. Small or context-coupled tasks stay direct. Independent children have scoped contracts and exclusive write ownership; all are leaves. Read-only security analysis belongs to analyst, while security implementation belongs to security-executor.
 
 Resolve model and effort independently: **explicit task request > applicable session preference > saved role configuration > package default**. “Use Sonnet to review” keeps analyst duties/tools but selects Sonnet, retaining analyst's high effort unless overridden. Apply real native bindings; never silently substitute or pretend prompt text changed the runtime. A task override does not rewrite saved settings.
 
-Automatic plan review can be explicitly enabled or disabled for a task/session. It is disabled by default. After enabling it, material risk triggers fresh-context review; explicit review requests work in either mode. Its default automatic budget is two calls including the initial review. Unresolved blockers after the second stop automatic submission; this never means automatic approval. Renaming, switching reviewers/models or starting a new session does not reset the count. Preserve it in an active handoff. Explicit user direction is required for another round. READY plus existing authority proceeds without a routine additional confirmation.
+Automatic plan review can be explicitly enabled or disabled for a task/session. It is disabled by default. After enabling it, material risk triggers fresh-context review; explicit review requests work in either mode. Its default automatic budget is two calls including the initial review. Unresolved blockers after the second stop automatic submission; this never means automatic approval. Renaming, switching reviewers/models or starting a new session does not reset the count. Preserve it in an active handoff. Explicit user direction is required for another round. READY plus existing authority proceeds without a routine additional confirmation. In auto, work that triggered plan review also gets a fresh verifier pass before it is reported complete, with the same two-call automatic budget; an explicit request runs verification in either mode.
 
 ### Automatic review switch
 
@@ -180,6 +182,6 @@ See [handoff compatibility](docs/compatibility.md) and [setup validation](docs/s
 
 ## Unprefixed role names and migration
 
-Native names are scout, analyst, mech-executor, executor, security-executor and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
+Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Model/review mutations and session export require migration first; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.

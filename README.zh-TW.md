@@ -46,7 +46,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 可選項目 | 安裝內容 | 移除後 |
 | --- | --- | --- |
 | handoff | `CLAUDE.md` 中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
-| agent 分派（delegation） | 獨立分派規則＋六個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
+| agent 分派（delegation） | 獨立分派規則＋七個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
 | 兩者（both） | 上述兩項 | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
 
 可直接指定，不必走逐項詢問：
@@ -108,6 +108,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 機械式實作 | mech-executor | sonnet | medium |
 | 一般工程實作 | executor | opus | medium |
 | 安全敏感實作 | security-executor | opus | high |
+| 實作後驗證 | verifier | opus | high |
 
 | 角色 | 何時使用 | 產出與權限 |
 | --- | --- | --- |
@@ -117,12 +118,13 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | mech-executor | 規則、範圍與結果已明確的重複修改 | 可修改指定檔案；按完整規格執行，例如批次改名 |
 | executor | 需要局部設計與工程判斷的功能或修正 | 可修改指定檔案並驗證，遇到架構或需求缺口交回主 Agent |
 | security-executor | 影響授權、秘密資料、密碼學或信任邊界的實作 | 可修改指定檔案；驗證正常行為及濫用／拒絕案例 |
+| verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE |
 
 主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派。
 
 每個欄位獨立套用優先序：**該次任務明確指定 > 適用的 session 指定 > 已儲存角色設定 > 套件預設**。例如「用 Sonnet 審查計畫」仍使用 analyst 職責，model 改為 Sonnet，未指定 effort 則保留 analyst 的 high。指定值無法原生套用時先說明，不暗中替換或只在 prompt 假裝設定成功。
 
-安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動計畫審查可依任務／session 明確啟用或停用；預設關閉；開啟後依實質風險觸發，明確要求審查則不受開關限制，使用新 analyst context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。
+安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動計畫審查可依任務／session 明確啟用或停用；預設關閉；開啟後依實質風險觸發，明確要求審查則不受開關限制，使用新 analyst context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。auto 模式下，觸發過計畫審查的工作在回報完成前，另以新的 verifier context 驗證結果，自動上限同樣兩次；明確要求驗證則不受開關限制。
 
 ### 自動計畫審查開關
 
@@ -184,7 +186,7 @@ Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署�
 
 ## Agent 名稱與舊版升級
 
-原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`Explore`，不再有 `feather-` 前綴。
+原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`Explore`，不再有 `feather-` 前綴。
 
 Setup 遇到既有同名角色（即使位於不同檔名或子目錄），會列出衝突並保留檔案，請使用者決定保留既有配置、將既有角色改名，或備份後替換；取得具體選擇前不覆蓋或接管。跨 user/project 範圍的同名角色依 Claude 優先序生效，需一併核對適用範圍。
 

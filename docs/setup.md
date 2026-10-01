@@ -11,7 +11,7 @@ The plugin packages six skills. Handoff commands work immediately after plugin i
 
 `claude-home` defaults to `CLAUDE_CONFIG_DIR`, otherwise the current user's `.claude`. Override it explicitly with `--claude-home`; use a confirmed absolute project root. The packaged templates remain in the plugin; native role files live outside its cache, so upgrades do not erase saved choices. Setup update is required after upgrading templates. Model changes update native frontmatter and ownership metadata together.
 
-The native roles are `scout`, `analyst`, `mech-executor`, `executor`, `security-executor`, and exact-case `Explore`. Role names have no Feather prefix. Setup reports existing same-name roles as conflicts and asks the user how to resolve them; it never adopts or overwrites them automatically. Explore intentionally has the built-in name to override it. Roles are not additionally loaded from a plugin agents directory, avoiding duplicate definitions.
+The native roles are `scout`, `analyst`, `mech-executor`, `executor`, `security-executor`, `verifier`, and exact-case `Explore`. Role names have no Feather prefix. Setup reports existing same-name roles as conflicts and asks the user how to resolve them; it never adopts or overwrites them automatically. Explore intentionally has the built-in name to override it. Roles are not additionally loaded from a plugin agents directory, avoiding duplicate definitions.
 
 ## Delegation entry and workflow
 
@@ -58,7 +58,7 @@ Backups and conflict checks protect managed writes. Serialize setup/model operat
 
 Project scope writes versionable project files but does not stage or commit them or add ignore rules. Decide whether to share `.claude/agents`, CLAUDE.md and managed configuration according to project policy; backup directories should remain local and may contain prior CLAUDE.md text. Setup does not modify Git rules automatically.
 
-The policy's two-call automatic plan review limit is an agent instruction, not a hook-enforced counter. Preserve it in an active handoff across sessions; an explicit user request can authorize another review. Security/plan analysts have a read-only tool allowlist. Executors have Bash and write capabilities under normal Claude permission controls; no additional sandbox is created by this plugin.
+The policy's two-call automatic plan review limit is an agent instruction, not a hook-enforced counter. Preserve it in an active handoff across sessions; an explicit user request can authorize another review. Security/plan analysts have a read-only tool allowlist. Verifier's allowlist adds Bash so it can run checks; it has no edit tools, but Bash can still write, so its no-edit rule is an instruction. Executors have Bash and write capabilities under normal Claude permission controls; no additional sandbox is created by this plugin.
 
 ## Automatic plan review switch
 
@@ -89,13 +89,21 @@ An install/update/model/review/remove preview returns `plan_id`; applying requir
 
 ## Unprefixed role names and migration
 
-Native names are scout, analyst, mech-executor, executor, security-executor and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
+Native names are scout, analyst, mech-executor, executor, security-executor, verifier and Explore. During setup, report existing same-name roles (including different filenames or subdirectories), preserve their files and ask the user how to resolve the conflict. Options include keeping the existing configuration, renaming the existing role, or backing it up and replacing it after explicit authorization. Do not automatically adopt or overwrite a role. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Installations still using feather-* role names require delegation update before model/review mutations or session export; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.
 
+## Added roles and incompatible role sets
+
+A plugin version can package a role that an existing installation predates; `verifier` is such a role. Check/show then report `role_update_required: true`. Delegation update adds the missing role from its package default and keeps saved models, effort and review mode. Model/review changes and session export wait for that update; remove deletes only the roles the installation owns. An existing unowned file at the new role's path, or another agent declaring its name, blocks the update until the user resolves it.
+
+Delegation owns the native names scout, Explore, analyst, mech-executor, executor, security-executor and verifier, together with its own orchestration policy. Another plugin, skill or instruction file that defines a similar delegation workflow may conflict with it: same-name agents are reported as collisions, and two orchestration policies loaded in one session can give main contradictory routing, review and acceptance rules. Keep one delegation workflow active per scope.
+
+Plugin versions before verifier require exactly six roles in state.json, so they reject an installation that update has extended. To go back to such a version, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.
+
 ## Independent setup components
 
-Use `--component handoff|delegation|both` explicitly for setup install/update/remove. Handoff installs templates/handoff.md under `cc-feather:handoff` markers; delegation installs templates/CLAUDE.md under the existing `cc-feather` markers plus six native agent files. Check/show report each component's state. Bare skill invocation inspects the project and user scopes before asking for intent; an explicit scope limits inspection to that scope. The tool's legacy default for setup mutations is delegation; the skill always passes the user's selected component.
+Use `--component handoff|delegation|both` explicitly for setup install/update/remove. Handoff installs templates/handoff.md under `cc-feather:handoff` markers; delegation installs templates/CLAUDE.md under the existing `cc-feather` markers plus seven native agent files. Check/show report each component's state. Bare skill invocation inspects the project and user scopes before asking for intent; an explicit scope limits inspection to that scope. The tool's legacy default for setup mutations is delegation; the skill always passes the user's selected component.
 
 State schema v3 records independent component ownership in each scope's state.json. Handoff-only operations do not need to resolve unrelated native agent collisions. Model/review operations require delegation, and handoff setup does not grant it. Both components share CLAUDE.md and the scope lock, so a combined operation is previewed and applied as one transaction with rollback and backups. Preserve unrelated text, unselected components and all handoff records.
 

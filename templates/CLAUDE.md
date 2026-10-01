@@ -7,6 +7,6 @@ Before dispatching, accepting or recovering delegated work, read and follow cc-f
 
 Automatic plan review mode: {{review_mode}}
 
-Task/session choices override the saved mode. Explicit plan-review requests apply in either mode. In auto, use cc-feather:delegation for review before material security-boundary changes, data migrations, irreversible operations or complex cross-module changes. In off, trigger review only on request.
+Task/session choices override the saved mode. Explicit plan-review requests apply in either mode. In auto, use cc-feather:delegation for review before material security-boundary changes, data migrations, irreversible operations or complex cross-module changes, and for outcome verification before reporting such work complete. Before implementing work that plausibly matches one of these triggers, state whether review is triggered, with a one-line reason. In off, trigger review and verification only on request.
 
 <!-- cc-feather:end -->
