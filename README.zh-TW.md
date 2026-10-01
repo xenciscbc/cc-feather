@@ -102,8 +102,8 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 | 角色 | 原生名稱 | Model | Effort |
 | --- | --- | --- | --- |
-| 事實查找 | scout | haiku | low |
-| 廣域探索 | Explore | haiku | low |
+| 事實查找 | scout | sonnet | low |
+| 廣域探索 | Explore | sonnet | low |
 | 分析／安全分析／計畫審查 | analyst | opus | high |
 | 機械式實作 | mech-executor | sonnet | medium |
 | 一般工程實作 | executor | opus | medium |
@@ -148,7 +148,7 @@ Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。�
 
 ### Explore 的成本控制
 
-內建 Explore 會繼承主模型；只新增 plugin scout 無法防止它被呼叫。Setup 因此部署**真正名為 Explore 的原生角色**，明確寫入 haiku/low。遇到既有自訂 Explore 會保留並回報衝突，不直接覆蓋。
+內建 Explore 會繼承主模型；只新增 plugin scout 無法防止它被呼叫。Setup 因此部署**真正名為 Explore 的原生角色**，明確寫入 sonnet/low。遇到既有自訂 Explore 會保留並回報衝突，不直接覆蓋。
 
 儲存值不是實際執行證據：CLI／managed／巢狀專案定義、模型 force 變數、provider allowlist 或單次參數可能影響模型。Setup 後用新 session，執行探索時以 `/tasks` 核對實際 model／effort。模型選擇降低的是意外使用昂貴模型的成本，不保證 token 數下降。參考 [Claude subagents](https://code.claude.com/docs/en/sub-agents)。
 

@@ -101,7 +101,7 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("Automatic plan review mode: off", guidance.read_text(encoding="utf-8"))
         explore = self.project / ".claude" / "agents" / "Explore.md"
         self.assertIn("name: Explore", explore.read_text(encoding="utf-8"))
-        self.assertIn("model: haiku", explore.read_text(encoding="utf-8"))
+        self.assertIn("model: sonnet", explore.read_text(encoding="utf-8"))
         self.assertIn("effort: low", explore.read_text(encoding="utf-8"))
         self.assertNotIn("{{model}}", explore.read_text(encoding="utf-8"))
         self.assertEqual(self.call("check")[1]["status"], "ok")
@@ -118,7 +118,7 @@ class FeatherConfigTests(unittest.TestCase):
         show_code, show = self.call("show", "user")
         self.assertEqual(show_code, 0)
         self.assertEqual(show["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
-        self.assertEqual(show["choices"]["Explore"], {"model": "haiku", "effort": "high"})
+        self.assertEqual(show["choices"]["Explore"], {"model": "sonnet", "effort": "high"})
         self.assertTrue((self.home / "agents" / "Explore.md").exists())
         self.assertFalse((self.project / ".claude" / "agents").exists())
 
@@ -403,15 +403,15 @@ class FeatherConfigTests(unittest.TestCase):
         policy_template = fixture / "templates" / "CLAUDE.md"
         policy_template.write_text(policy_template.read_text(encoding="utf-8").replace(config.END, "UPGRADED POLICY\n" + config.END), encoding="utf-8")
         with mock.patch.object(config, "ROOT", fixture):
-            self.apply("model", "project", "--set", "Explore.model=sonnet")
+            self.apply("model", "project", "--set", "Explore.model=opus")
             code, session = self.call("session")
             self.assertEqual(code, 0)
-            self.assertEqual(session["Explore"]["model"], "sonnet")
+            self.assertEqual(session["Explore"]["model"], "opus")
             self.assertNotIn("UPGRADED TEMPLATE", session["Explore"]["prompt"])
             self.assertEqual(scout.read_bytes(), original_scout)
             self.assertEqual((self.project / "CLAUDE.md").read_bytes(), guidance)
             self.assertNotIn(b"UPGRADED TEMPLATE", explore.read_bytes())
-            self.assertEqual(explore.read_bytes().replace(b"model: sonnet", b"model: haiku"), original_explore)
+            self.assertEqual(explore.read_bytes().replace(b"model: opus", b"model: sonnet"), original_explore)
             self.apply("update")
             self.assertIn(b"UPGRADED TEMPLATE", explore.read_bytes())
 

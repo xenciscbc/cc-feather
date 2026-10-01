@@ -1,7 +1,7 @@
 {
   "scout": {
     "name": "scout",
-    "model": "haiku",
+    "model": "sonnet",
     "effort": "low"
   },
   "analyst": {
@@ -21,7 +21,7 @@
   },
   "Explore": {
     "name": "Explore",
-    "model": "haiku",
+    "model": "sonnet",
     "effort": "low"
   },
   "security-executor": {

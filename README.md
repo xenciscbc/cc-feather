@@ -100,8 +100,8 @@ A task-specific request takes precedence over session preferences and saved sett
 
 | Role | Native name | Model | Effort |
 | --- | --- | --- | --- |
-| Factual lookup | scout | haiku | low |
-| Broad exploration | Explore | haiku | low |
+| Factual lookup | scout | sonnet | low |
+| Broad exploration | Explore | sonnet | low |
 | Analysis, security analysis, plan review | analyst | opus | high |
 | Mechanical implementation | mech-executor | sonnet | medium |
 | General implementation | executor | opus | medium |
@@ -144,7 +144,7 @@ The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when
 
 ### Explore
 
-Built-in Explore inherits the main model. A namespaced plugin scout alone cannot prevent its use, so setup deploys an exact-name native `Explore` with haiku/low. An existing custom Explore is a conflict, never silently overwritten.
+Built-in Explore inherits the main model. A namespaced plugin scout alone cannot prevent its use, so setup deploys an exact-name native `Explore` with sonnet/low. An existing custom Explore is a conflict, never silently overwritten.
 
 Saved settings do not prove execution: CLI/managed/nested definitions, force-model environment settings, provider restrictions or invocation arguments can change selection. Use a fresh session and `/tasks` to inspect actual model/effort. This avoids unintended expensive-model use; it does not guarantee fewer tokens. See [official subagent documentation](https://code.claude.com/docs/en/sub-agents).
 

@@ -21,7 +21,7 @@ Plugin updates supply the workflow skill; run setup update in each owning scope 
 
 ## Explore and actual model selection
 
-Claude Code's official documentation states that built-in Explore has inherited the main model since 2.1.198. A user/project agent named Explore overrides that built-in; a namespaced plugin scout by itself does not do so. Setup therefore includes Explore with explicit haiku/low defaults.
+Claude Code's official documentation states that built-in Explore has inherited the main model since 2.1.198. A user/project agent named Explore overrides that built-in; a namespaced plugin scout by itself does not do so. Setup therefore includes Explore with explicit sonnet/low defaults.
 
 A role file proves requested configuration only. CLI/managed definitions, nearer nested project definitions, duplicate names, invocation model arguments, environment force variables and provider allowlists may affect the live model. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` is particularly important: it forces the environment's subagent model, or the main model if no environment model is set. Current documentation says the ordinary SUBAGENT_MODEL variable alone is lower priority than explicit frontmatter, whereas older versions behaved differently. Settings-file environment overrides and launch flags may not be visible to the configuration script. Resolve known conflicts and check native execution; never claim all of these have been ruled out by a filesystem check.
 
