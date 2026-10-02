@@ -2284,7 +2284,7 @@ class FeatherConfigTests(unittest.TestCase):
 
     def test_plain_text_between_rules_is_named_in_the_warnings(self):
         path = self.other_agent("---\nSome notes here\n---\nBody", "README.md")
-        warning = f"Agent file frontmatter is not a mapping: {path}; it was not read as an agent"
+        warning = f"Agent file frontmatter declares no agent name: {path}; it was not read as an agent"
         self.assertIn(warning, self.call("check")[1]["warnings"])
         code, preview = self.call("install")
         self.assertEqual(code, 0, preview)
@@ -2568,6 +2568,27 @@ class FeatherConfigTests(unittest.TestCase):
             pass
         else:
             self.assertIn(f"{self.home} exists and is not a directory", result["error"])
+        self.assertEqual(before, self.files())
+
+
+    def test_claude_home_that_is_a_file_is_refused_on_every_volume(self):
+        self.home = self.root / "claude-home-file"
+        self.home.write_bytes(b"not a directory")
+        before = self.files()
+        with mock.patch("os.path.realpath", side_effect=OSError(None, "invalid", None, 1)):
+            code, result = self.call("install", "user")
+        self.assertEqual(code, 2, result)
+        self.assertIn(f"{self.home} exists and is not a directory", result["error"])
+        self.assertEqual(before, self.files())
+
+    def test_claude_home_below_a_file_names_the_file(self):
+        parent = self.root / "claude-home-file"
+        parent.write_bytes(b"not a directory")
+        self.home = parent / "sub"
+        before = self.files()
+        code, result = self.call("install", "user")
+        self.assertEqual(code, 2, result)
+        self.assertIn(f"{parent} exists and is not a directory", result["error"])
         self.assertEqual(before, self.files())
 
 

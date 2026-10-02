@@ -174,11 +174,13 @@ def _resolve_project(project: Path) -> tuple[Path, bool]:
     return Path(real), True
 
 
-def _resolve_home(home: Path) -> tuple[Path, bool]:
+def _resolve_home(home: Path, require_directory: bool = True) -> tuple[Path, bool]:
     """Return the Claude home's real path and whether it is a trusted root.
 
     The home may not exist yet: its deepest existing ancestor is resolved and the missing
     components are appended, so a dangling link among them is refused rather than followed later.
+    A project-scope caller passes require_directory=False: it never writes the home, so a file there
+    keeps resolving as before.
     """
     supplied = os.path.abspath(home)
     existing, remaining = supplied, []
@@ -189,6 +191,8 @@ def _resolve_home(home: Path) -> tuple[Path, bool]:
             return Path(supplied), False
         remaining.insert(0, os.path.basename(existing))
         existing = parent
+    if require_directory and not os.path.isdir(existing):
+        raise ConfigError(f"{existing} exists and is not a directory")
     for index in range(len(remaining)):
         candidate = os.path.join(existing, *remaining[:index + 1])
         if os.path.lexists(candidate):
@@ -214,7 +218,7 @@ def _roots(args: argparse.Namespace) -> tuple[Path, Path]:
     project_root, project_trusted = _resolve_project(project)
     home = _claude_home(args)
     try:
-        home_root, home_trusted = _resolve_home(home)
+        home_root, home_trusted = _resolve_home(home, args.scope != "project")
     except (ConfigError, OSError):
         if args.scope != "project":
             raise
@@ -646,7 +650,7 @@ def _declared_agent_name(text: str, path: Path) -> str | None:
             contents.append(content)
     if contents and not any(TOP_LEVEL_KEY.match(content) or content[0] in YAML_INDICATORS for content in contents):
         # Plain text between two horizontal rules is a YAML scalar, not a mapping: Claude Code loads no agent.
-        _AGENT_WARNINGS[f"Agent file frontmatter is not a mapping: {path}; it was not read as an agent"] = None
+        _AGENT_WARNINGS[f"Agent file frontmatter declares no agent name: {path}; it was not read as an agent"] = None
         return None
     base = None
     # A compact block sequence ("- item" at the top level) is the value of the key above it.
