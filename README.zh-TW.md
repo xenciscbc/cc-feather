@@ -13,7 +13,7 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 /plugin install cc-feather@cc-feather
 ```
 
-本機 checkout 可用 `/plugin marketplace add D:/work_data/project/skill/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。
+本機 checkout 可用 `/plugin marketplace add D:/work_data/project/skill/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。之後更新 plugin 版本時，請對已安裝的項目執行 setup update，再開新 session，詳見[更新、移除與驗證](#更新移除與驗證)。
 
 ## 入口
 
@@ -179,7 +179,7 @@ Claude 與 Codex 需使用同一個專案目錄並協調單一寫入者；無跨
 
 ## 更新、移除與驗證
 
-Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目；移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
+Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入；在這之前，較早版本的安裝仍保留舊的指引格式。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
 
 ```text
 /cc-feather:setup 更新目前專案已安裝的角色與指引，保留模型與審查模式
@@ -197,3 +197,7 @@ Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署�
 若已有其他 agent 使用同樣的名稱（即使位於不同檔名或子目錄），setup 會把 Explore 以外的角色都加上 `cc-` 前綴安裝（例如 `cc-scout`），並在分派規則中列出實際名稱；之後一直沿用前綴。其他 agent 的檔案不會被覆蓋或接管。Explore 維持原名；已有自己的 Explore 時直接沿用你的。`cc-` 名稱本身也衝突時，仍會保留檔案並請使用者決定。跨 user/project 範圍的同名角色依 Claude 優先序生效，需一併核對適用範圍。
 
 舊版已管理的 `feather-*` 角色請執行 `/cc-feather:setup 更新目前專案的角色與指引`（user 安裝請指定使用者範圍）。Update 會預覽更名、保留 model／effort 及審查模式，只有完整且未被修改的舊角色才遷移；新名稱已被占用就停止。完成後開新 session。Model、永久審查開關與 session 匯出需先完成遷移；也可直接移除完整的舊版管理安裝。
+
+## 致謝
+
+代理角色與協作方式參考了 Nanako0129 的 [pilotfish](https://github.com/Nanako0129/pilotfish)。

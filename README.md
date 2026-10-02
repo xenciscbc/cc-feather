@@ -13,7 +13,7 @@ After publishing this version to [GitHub](https://github.com/xenciscbc/cc-feathe
 /plugin install cc-feather@cc-feather
 ```
 
-For a local checkout, add its absolute path as the marketplace instead. For development, run `claude --plugin-dir /absolute/path/to/cc-feather`. Start a fresh session after installation. See the [official plugin guide](https://code.claude.com/docs/en/plugins).
+For a local checkout, add its absolute path as the marketplace instead. For development, run `claude --plugin-dir /absolute/path/to/cc-feather`. Start a fresh session after installation. See the [official plugin guide](https://code.claude.com/docs/en/plugins). After a later plugin update, run setup update for the components you installed and then start a fresh session; see [Updates and validation](#updates-and-validation).
 
 ## Skills
 
@@ -175,7 +175,7 @@ Claude and Codex must use the same project directory and coordinate one writer. 
 
 ## Updates and validation
 
-Plugin updates refresh the package; run setup update for the selected components to refresh external deployments. Removing the plugin alone leaves native roles/guidance. Remove selected setup scopes first if those should go too; handoff data remains. Modified owned files are preserved as conflicts.
+Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. Until then, installations from earlier versions keep their older guidance format. Removing the plugin alone leaves native roles/guidance. Remove selected setup scopes first if those should go too; handoff data remains. Modified owned files are preserved as conflicts.
 
 ```text
 /cc-feather:setup Update this project's installed roles and guidance, retaining models and review mode
@@ -191,3 +191,7 @@ See [handoff compatibility](docs/compatibility.md) and [setup validation](docs/s
 Native names are scout, analyst, mech-executor, executor, security-executor, verifier, reviewer and Explore. When another agent already uses one of these names, setup installs every role except Explore with a `cc-` prefix (for example `cc-scout`) and lists the names in the delegation policy; the prefix then stays. Other agents' files are never adopted or overwritten. Explore keeps its exact name, and your own Explore is used instead of cc-feather's. A conflict on a `cc-` name still stops for your decision. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Model/review mutations and session export require migration first; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.
+
+## Acknowledgements
+
+The agent roles and the way they work together draw on [pilotfish](https://github.com/Nanako0129/pilotfish) by Nanako0129.
