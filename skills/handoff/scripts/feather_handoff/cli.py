@@ -28,6 +28,8 @@ def input_payload():
         return json.loads(sys.stdin.buffer.read().decode("utf-8-sig"), object_pairs_hook=unique_object)
     except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as error:
         raise HandoffError("input", f"Input must be valid UTF-8 JSON: {type(error).__name__}") from None
+    except HandoffError as error:  # unique_object's duplicate key is an input problem here, not a snapshot one
+        raise HandoffError("input", str(error)) from None
 
 
 class Parser(argparse.ArgumentParser):

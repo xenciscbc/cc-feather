@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -18,10 +19,14 @@ TOOL = SCRIPTS / "handoff.py"
 sys.path.insert(0, str(SCRIPTS))
 
 from feather_handoff import cli, storage  # noqa: E402
+from feather_handoff.records import read_work  # noqa: E402
 from feather_handoff.writing import create_work  # noqa: E402
 
 FIELDS = {"fields": {"goal": "g", "progress": "p", "next": "n"}}
 CROSSES = "the path crosses a link below the repository root; confirm with --exact-root"
+WORK = "# w\n更新：2026-09-11T10:00:00+08:00\n狀態：進行中\n目標：g\n進度：p\n下一步：n\n".encode("utf-8")
+REPARSE = 0x400
+JUNCTION, SYMLINK, CLOUD, DEDUP = 0xA0000003, 0xA000000C, 0x9000001A, 0x80000013
 
 
 def make_link(test: unittest.TestCase, link: Path, target: Path) -> None:
@@ -40,6 +45,53 @@ def make_link(test: unittest.TestCase, link: Path, target: Path) -> None:
     except OSError as error:
         errors.append(error)
     test.skipTest(f"Directory links unavailable: {errors}")
+
+
+def with_reparse(info, tag: int):
+    """A copy of a stat result that carries the reparse attribute and the given tag."""
+    fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+    return SimpleNamespace(**{**fields, "st_file_attributes": getattr(info, "st_file_attributes", 0) | REPARSE,
+                              "st_reparse_tag": tag})
+
+
+class Listing(list):
+    """Stands in for os.scandir's iterator, including its context manager."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class ListedEntry:
+    def __init__(self, entry, tag: int):
+        self.entry, self.tag, self.name, self.path = entry, tag, entry.name, entry.path
+
+    def stat(self, *, follow_symlinks=True):
+        info = self.entry.stat(follow_symlinks=follow_symlinks)
+        return info if follow_symlinks else with_reparse(info, self.tag)
+
+
+@contextlib.contextmanager
+def reparse_point(target: Path, lstat_tag: int, listed_tag: int | None):
+    """Report target as a reparse point: lstat shows the attribute with lstat_tag (0 when CPython followed a
+    non-surrogate point); the parent listing reports listed_tag, or omits the entry when it is None."""
+    real_lstat, real_scandir = Path.lstat, os.scandir
+
+    def lstat(self):
+        info = real_lstat(self)
+        return with_reparse(info, lstat_tag) if self == target else info
+
+    def scandir(path="."):
+        with real_scandir(path) as entries:
+            items = list(entries)
+        if os.path.normcase(os.fspath(path)) != os.path.normcase(str(target.parent)):
+            return Listing(items)
+        return Listing(ListedEntry(entry, listed_tag) if entry.name == target.name else entry
+                       for entry in items if listed_tag is not None or entry.name != target.name)
+    with mock.patch.object(Path, "lstat", lstat), mock.patch.object(storage.os, "scandir", scandir):
+        yield
 
 
 class LinkBase(unittest.TestCase):
@@ -273,6 +325,78 @@ class GitRootTest(LinkBase):
         created = self.run_tool(repo / "target", "create", "--work", "w.md", payload=FIELDS, exact=True)
         self.assertEqual((created["root"]["state"], created["root"]["path"]), ("explicit", str(repo / "target")))
         self.assertTrue((repo / "target/.feather/handoffs/w.md").is_file())
+
+
+class ReparseTagTest(LinkBase):
+    """HX7/R11: only symbolic links and name-surrogate reparse points are aliases; an unidentified reparse point
+    counts as one, and hard links stay refused. Tags are mocked except for the real junction and hard link."""
+
+    requires_strict_realpath = False
+
+    def setUp(self):
+        super().setUp()
+        self.project = self.base / "project"
+        self.directory = self.project / ".feather" / "handoffs"
+        self.directory.mkdir(parents=True)
+        self.work = self.directory / "w.md"
+        self.work.write_bytes(WORK)
+
+    def assert_refused(self, path: Path, message: str = "Link/reparse path is not supported"):
+        with self.assertRaises(storage.HandoffError) as raised:
+            storage.check_path(path)
+        self.assertEqual(raised.exception.code, "unsafe-path")
+        self.assertIn(message, str(raised.exception))
+
+    def test_non_surrogate_reparse_points_are_read_as_ordinary_data(self):
+        cases = {"cloud file from the listing": (self.work, 0, CLOUD),
+                 "cloud folder from the listing": (self.directory, 0, CLOUD),
+                 "deduplicated file from lstat": (self.work, DEDUP, None)}
+        for label, (target, lstat_tag, listed_tag) in cases.items():
+            with self.subTest(label), reparse_point(target, lstat_tag, listed_tag):
+                storage.check_path(self.work)
+                store = storage.Store(str(self.project), exact_root=True)
+                self.assertEqual(read_work(store, "w.md")["content"].encode("utf-8"), WORK)
+
+    def test_alias_and_unidentified_reparse_points_are_refused(self):
+        cases = {"junction tag from lstat": (JUNCTION, None), "symlink tag from lstat": (SYMLINK, None),
+                 "zero tag in the listing": (0, 0), "entry missing from the listing": (0, None),
+                 "surrogate tag in the listing": (0, JUNCTION)}
+        for label, (lstat_tag, listed_tag) in cases.items():
+            for target in (self.work, self.directory):
+                with self.subTest(label, target=target.name), reparse_point(target, lstat_tag, listed_tag):
+                    self.assert_refused(self.work)
+
+    def test_real_junction_reports_a_surrogate_tag_and_is_refused(self):
+        outside = self.base / "outside"
+        outside.mkdir()
+        (outside / "w.md").write_bytes(WORK)
+        alias = self.project / ".feather" / "linked"
+        make_link(self, alias, outside)
+        if os.name == "nt":
+            info = os.lstat(alias)
+            self.assertTrue(info.st_file_attributes & REPARSE)
+            self.assertEqual(info.st_reparse_tag, JUNCTION)
+        self.assert_refused(alias / "w.md")
+        # The handoff directory itself becomes the junction; the real data lives outside the project.
+        self.work.unlink()
+        os.rmdir(self.directory)
+        os.rename(alias, self.directory)
+        result = self.run_tool(self.project, "update", "--work", "w.md", expected=2,
+                               payload={"version": storage.Snapshot(self.work, WORK).version, "fields": {"next": "m"}})
+        self.assertEqual((result["status"], result["code"]), ("error", "unsafe-path"))
+        self.assertEqual(self.tree(outside), {"w.md": WORK})
+
+    def test_hard_linked_work_is_refused(self):
+        other = self.base / "other.md"
+        try:
+            os.link(self.work, other)
+        except OSError as error:
+            self.skipTest(f"Hard links unavailable: {error}")
+        self.assert_refused(self.work, "Hard-linked file is not supported")
+        result = self.run_tool(self.project, "update", "--work", "w.md", expected=2,
+                               payload={"version": storage.Snapshot(self.work, WORK).version, "fields": {"next": "m"}})
+        self.assertEqual((result["status"], result["code"]), ("error", "unsafe-path"))
+        self.assertEqual((self.work.read_bytes(), other.read_bytes()), (WORK, WORK))
 
 
 if __name__ == "__main__":

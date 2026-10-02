@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,7 @@ SCRIPTS = ROOT / "skills/handoff/scripts"
 TOOL = SCRIPTS / "handoff.py"
 sys.path.insert(0, str(SCRIPTS))
 
-from feather_handoff import cli, history, observations, storage, tracking  # noqa: E402
+from feather_handoff import cli, history, history_mutations, observations, storage, tracking  # noqa: E402
 
 COMPLETED = "2026-09-11T10:00:00+08:00"
 FAKE = "## Bar · 完成：2020-01-01T00:00:00+00:00"
@@ -464,21 +465,69 @@ class GitEnvironmentTest(LocalFixesBase):
 
 
 class PendingUnknownTest(LocalFixesBase):
-    """H4: an unreadable or malformed work cannot be reported as a pending archival."""
+    """H4/HX6: a work that may be an unfinished archival blocks clear and seal as pending-unknown; a malformed
+    work whose title is on the first line and whose only status line reads 進行中 or 受阻 is reported instead."""
 
-    def test_malformed_work_blocks_clear_and_seal_as_pending_unknown(self):
-        self.history.write_bytes(f"# 交接歷史\n\n## Foo · 完成：{COMPLETED}\nbody\n".encode("utf-8"))
-        self.put("legacy.md", record(title="Other", status="進行中", updated="2026-09-11T10:00:00"))
+    HISTORY = f"# 交接歷史\n\n## Foo · 完成：{COMPLETED}\nbody\n".encode("utf-8")
+    SELECTIONS = (("clear", {}), ("seal", {"destination": "batch.md"}))
+
+    def payload(self, extra: dict) -> dict:
         entry = self.run_tool("history")["entries"][0]
-        before = self.tree()
-        for command, extra in (("clear", {}), ("seal", {"destination": "batch.md"})):
-            with self.subTest(command):
-                result = self.run_tool(command, expected=2,
-                                       payload={"version": entry["document_version"], "ids": [entry["id"]], **extra})
-                self.assertEqual(result["code"], "pending-unknown")
-                self.assertIn("legacy.md", result["message"])
-                self.assertIn("cannot rule out an unfinished archival", result["message"])
-                self.assertEqual(self.tree(), before)
+        return {"version": entry["document_version"], "ids": [entry["id"]], **extra}
+
+    def test_work_that_may_be_completed_blocks_clear_and_seal_as_pending_unknown(self):
+        old = ("# Old\n更新：2026-09-10T10:00:00+08:00\n狀態：完成\n目標：g\n進度：p\n下一步：n\n")
+        new = old.replace("# Old", "# New").replace("狀態：完成", "狀態：進行中")
+        cases = {
+            "completed.md": record(title="Other", updated="2026-09-11T10:00:00"),
+            "duplicate.md": record(title="Other", status="進行中").replace(
+                "狀態：進行中".encode(), "狀態：進行中\n狀態：進行中".encode()),
+            "conflict.md": f"<<<<<<< ours\n{new}=======\n{old}>>>>>>> theirs\n".encode("utf-8"),
+            "untitled.md": record(title="Other", status="進行中").split(b"\n", 1)[1],
+        }
+        self.history.write_bytes(self.HISTORY)
+        for name, data in cases.items():
+            path = self.put(name, data)
+            before = self.tree()
+            for command, extra in self.SELECTIONS:
+                with self.subTest(work=name, command=command):
+                    result = self.run_tool(command, expected=2, payload=self.payload(extra))
+                    self.assertEqual(result["code"], "pending-unknown")
+                    self.assertIn(name, result["message"])
+                    self.assertIn("cannot rule out an unfinished archival", result["message"])
+                    self.assertEqual(self.tree(), before)
+            path.unlink()
+
+    def test_malformed_unfinished_work_is_reported_without_blocking_clear_or_seal(self):
+        # Expectation change: a readable 進行中 work with a zone-less timestamp used to return pending-unknown.
+        cases = {
+            "legacy.md": (record(title="Other", status="進行中", updated="2026-09-11T10:00:00"),
+                          "Invalid ISO timestamp with timezone"),
+            "baseline.md": (record(title="Other", status="受阻") + "\n## 檔案基準\n```json\n{bad}\n```\n".encode("utf-8"),
+                            "Expecting property name"),
+        }
+        for name, (data, problem) in cases.items():
+            work = self.put(name, data)
+            for command, extra in self.SELECTIONS:
+                with self.subTest(work=name, command=command):
+                    self.history.write_bytes(self.HISTORY)
+                    result = self.run_tool(command, payload=self.payload(extra))
+                    self.assertEqual(result["status"], "ok")
+                    self.assertEqual(len(result["warnings"]), 1)
+                    self.assertIn(name, result["warnings"][0])
+                    self.assertIn(problem, result["warnings"][0])
+                    self.assertEqual(work.read_bytes(), data)
+                    self.assertEqual(self.history.read_bytes(), "# 交接歷史\n\n".encode("utf-8"))
+                    (self.directory / "archive" / "batch.md").unlink(missing_ok=True)
+            work.unlink()
+
+    def test_reported_work_is_still_rechecked_before_writing(self):
+        self.history.write_bytes(self.HISTORY)
+        self.put("legacy.md", record(title="Other", status="進行中", updated="2026-09-11T10:00:00"))
+        with mock.patch.object(history_mutations, "require_current", wraps=history_mutations.require_current) as checked:
+            code, result = self.invoke("clear", payload=self.payload({}))
+        self.assertEqual((code, result["status"]), (0, "ok"))
+        self.assertIn("legacy.md", [call.args[0].path.name for call in checked.call_args_list])
 
 
 class CliUsageTest(LocalFixesBase):
@@ -553,6 +602,176 @@ class CreateCleanupTest(LocalFixesBase):
             storage.create_file(target, b"data")
         self.assertEqual(failed.exception.errno, errno.ENOSPC)
         self.assertTrue(target.exists())
+
+
+class CompletedTrackingRecoveryTest(LocalFixesBase):
+    """HX1: a completed save whose tracking failed is recovered with archive, which then applies tracking."""
+
+    def setUp(self):
+        super().setUp()
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        self.ignore = self.project / ".gitignore"
+
+    def save_completed(self, name: str, choice: str) -> dict:
+        self.ignore.write_bytes(b"\xff")
+        payload = {"title": name.removesuffix(".md"), "fields": {**FIELDS, "updated": COMPLETED, "status": "完成"},
+                   "tracking": choice}
+        saved = self.run_tool("create", "--work", name, payload=payload, expected=2)
+        self.assertEqual((saved["status"], saved["code"], saved["state"]), ("partial", "tracking-failed", "saved"))
+        self.assertTrue((self.directory / name).is_file())
+        return saved
+
+    def test_completed_save_with_tracking_failure_is_archived_and_tracked(self):
+        for choice, line, reported in (("default", "/.feather/handoffs/", "ignored"), ("track", MARKER, "track")):
+            with self.subTest(choice):
+                name = f"{choice}.md"
+                saved = self.save_completed(name, choice)
+                self.assertIn(f'run archive with {{"version": "<current version>", "tracking": "{choice}"}}',
+                              saved["recovery"])
+                self.assertNotIn("retry update", saved["recovery"])
+                self.assertEqual(saved["version"], sha((self.directory / name).read_bytes()))
+                self.ignore.write_bytes(b"# corrected by user\n")
+                for invalid in ({"version": saved["version"], "tracking": "always"},
+                                {"version": saved["version"], "defer_history": True}):
+                    refused = self.run_tool("archive", "--work", name, payload=invalid, expected=2)
+                    self.assertEqual(refused["code"], "input")
+                    self.assertTrue((self.directory / name).is_file())
+                archived = self.run_tool("archive", "--work", name,
+                                         payload={"version": saved["version"], "tracking": choice})
+                self.assertEqual((archived["status"], archived["archived"], archived["tracking"]),
+                                 ("ok", True, reported))
+                self.assertFalse((self.directory / name).exists())
+                self.assertEqual(self.ignore.read_bytes(), f"# corrected by user\n{line}\n".encode("utf-8"))
+
+    def test_tracking_failure_after_archival_reports_saved_history(self):
+        saved = self.save_completed("a.md", "default")
+        archived = self.run_tool("archive", "--work", "a.md", payload={"version": saved["version"]}, expected=2)
+        self.assertEqual((archived["status"], archived["code"], archived["tracking"]),
+                         ("partial", "tracking-failed", "error"))
+        self.assertTrue(archived["archived"])
+        self.assertFalse(archived["complete"])
+        self.assertIn("do not retry archive", archived["recovery"])
+        self.assertFalse((self.directory / "a.md").exists())
+        self.assertIn(f"## a · 完成：{COMPLETED}\n".encode("utf-8"), self.history.read_bytes())
+        self.assertEqual(archived["history_version"], sha(self.history.read_bytes()))
+        self.assertEqual(self.ignore.read_bytes(), b"\xff")
+
+
+class SwallowedDetailsTest(LocalFixesBase):
+    """HX2: a details update never drops sections that an unbalanced fence in the old details already hides."""
+
+    BASELINE = ('## 檔案基準\n```json\n{"schema_version": 1, "captured_at": "2026-09-11T10:00:00+08:00", '
+                '"git": {"state": "not-repository"}, "files": [{"path": "a.py", "state": "missing"}]}\n```\n')
+
+    def update_details(self, data: bytes, expected: int) -> dict:
+        path = self.put("a.md", data)
+        result = self.run_tool("update", "--work", "a.md", expected=expected,
+                               payload={"version": sha(data), "details": "new evidence"})
+        if expected:
+            self.assertEqual(path.read_bytes(), data)
+        return result
+
+    def test_unclosed_details_fence_over_later_sections_is_refused(self):
+        unclosed = record(status="進行中", details="```\nopen")
+        cases = {
+            "baseline": (unclosed + b"\n" + self.BASELINE.encode("utf-8"), "inside a code fence that also holds"),
+            "baseline-and-notes": (unclosed + b"\n" + self.BASELINE.encode("utf-8") + "## 手動備註\nkeep\n".encode(),
+                                   "inside a code fence that also holds"),
+            "notes": (unclosed + "\n## 手動備註\nkeep\n".encode("utf-8"), "leave a code fence open over"),
+        }
+        for label, (data, cause) in cases.items():
+            with self.subTest(label):
+                result = self.update_details(data, expected=2)
+                self.assertEqual(result["code"], "details-format")
+                self.assertIn(cause, result["message"])
+                self.assertIn("## 檔案基準" if label != "notes" else "## 手動備註", result["message"])
+                self.assertIn("reviewed replacement", result["message"])
+
+    def test_closed_fenced_example_with_a_heading_is_replaced_normally(self):
+        data = record(status="進行中", details="```text\n## X\n```\nmore") + "\n## 手動備註\nkeep\n".encode("utf-8")
+        result = self.update_details(data, expected=0)
+        self.assertEqual(result["preserved_sections"], ["## 手動備註"])
+        self.assertTrue((self.directory / "a.md").read_bytes().endswith(
+            "## 詳細紀錄\nnew evidence\n## 手動備註\nkeep\n".encode("utf-8")))
+
+
+class ReadOnlyTargetTest(LocalFixesBase):
+    """HX3: a read-only target is reported as such and no temporary file is left behind."""
+
+    def test_read_only_work_is_preserved_without_temporary_files(self):
+        data = record(status="進行中")
+        path = self.put("a.md", data)
+        os.chmod(path, stat.S_IREAD)
+        self.addCleanup(os.chmod, path, stat.S_IREAD | stat.S_IWRITE)
+        # Elsewhere rename may replace a read-only file, so only Windows reports the refusal.
+        windows = os.name == "nt"
+        result = self.run_tool("update", "--work", "a.md", expected=2 if windows else 0,
+                               payload={"version": sha(data), "fields": {"next": "m"}})
+        self.assertEqual(sorted(p.name for p in self.directory.iterdir()), ["a.md"])
+        if windows:
+            self.assertEqual((result["status"], result["code"]), ("error", "read-only"))
+            self.assertIn("is read-only; existing data preserved", result["message"])
+            self.assertEqual(path.read_bytes(), data)
+
+
+class InputValidationTest(LocalFixesBase):
+    """HX4, HX5, HX8, HX10: input that later operations would refuse or lose is rejected or normalized."""
+
+    def test_blank_optional_fields_are_refused_on_create_and_update(self):
+        result = self.run_tool("create", "--work", "a.md", expected=2, payload={"fields": {**FIELDS, "notes": "   "}})
+        self.assertEqual(result["code"], "input")
+        self.assertIn("notes (注意) must not be blank; omit it instead", result["message"])
+        self.assertEqual(self.tree(), {})
+        required = self.run_tool("create", "--work", "a.md", expected=2, payload={"fields": {**FIELDS, "next": " "}})
+        self.assertEqual(required["message"], "Missing or empty next")
+        created = self.run_tool("create", "--work", "a.md", payload={"fields": FIELDS})
+        path = self.directory / "a.md"
+        before = path.read_bytes()
+        result = self.run_tool("update", "--work", "a.md", expected=2,
+                               payload={"version": created["version"], "fields": {"notes": "  "}})
+        self.assertEqual(result["code"], "input")
+        self.assertEqual(path.read_bytes(), before)
+        updated = self.run_tool("update", "--work", "a.md", payload={"version": created["version"], "fields": {"notes": "real"}})
+        self.assertEqual(updated["notes"], "real")
+
+    def test_work_name_without_a_stem_is_refused_and_never_listed(self):
+        result = self.run_tool("create", "--work", ".md", expected=2, payload={"fields": FIELDS})
+        self.assertEqual(result["code"], "unsafe-name")
+        self.assertEqual(self.tree(), {})
+        self.put(".md", record(status="進行中"))
+        self.put("a.md", record(title="A", status="進行中"))
+        self.assertEqual([item["work"] for item in self.run_tool("list")["items"]], ["a.md"])
+        self.assertEqual(self.run_tool("read", "--work", ".md", expected=2)["code"], "unsafe-name")
+
+    def test_duplicate_json_keys_on_stdin_are_input_errors(self):
+        raw = json.dumps({"fields": FIELDS}).replace('{"fields"', '{"fields": {}, "fields"', 1).encode("utf-8")
+        result = self.run_tool("create", "--work", "a.md", raw=raw, expected=2)
+        self.assertEqual((result["status"], result["code"]), ("error", "input"))
+        self.assertEqual(result["message"], "Duplicate JSON key: fields")
+        self.assertEqual(self.tree(), {})
+
+    def test_create_normalizes_details_line_endings(self):
+        self.run_tool("create", "--work", "a.md", payload={"fields": FIELDS, "details": "a\r\nb\rc\r\n"})
+        saved = (self.directory / "a.md").read_bytes()
+        self.assertNotIn(b"\r", saved)
+        self.assertTrue(saved.endswith("## 詳細紀錄\na\nb\nc\n".encode("utf-8")))
+
+
+class EmptyHistoryFramingTest(LocalFixesBase):
+    """HX9: archival into an empty or whitespace-only history writes the history header."""
+
+    def test_completed_save_into_blank_history_writes_the_header(self):
+        for name, existing in (("a.md", b""), ("b.md", b" \r\n\n")):
+            with self.subTest(existing=existing):
+                self.history.write_bytes(existing)
+                created = self.run_tool("create", "--work", name, payload={
+                    "fields": {**FIELDS, "updated": COMPLETED, "status": "完成"}})
+                self.assertTrue(created["archived"])
+                saved = self.history.read_bytes()
+                self.assertTrue(saved.startswith("# 交接歷史\n\n## ".encode("utf-8")))
+                self.assertNotIn(b"\r", saved)
+                entries = self.run_tool("history")["entries"]
+                self.assertEqual([entry["title"] for entry in entries], [name.removesuffix(".md")])
 
 
 if __name__ == "__main__":

@@ -42,6 +42,39 @@ def reset_roots() -> None:
     _ROOTS.clear()
 
 
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+IO_REPARSE_TAG_NAME_SURROGATE = 0x20000000
+
+
+def _listed_reparse_tag(part: Path) -> int:
+    """The reparse tag from the parent directory listing, which reports it without opening or following the entry.
+
+    Returns 0 when the entry cannot be identified exactly once."""
+    try:
+        with os.scandir(part.parent) as entries:
+            matches = [entry for entry in entries if os.path.normcase(entry.name) == os.path.normcase(part.name)]
+        chosen = [entry for entry in matches if entry.name == part.name] or matches
+        if len(chosen) != 1:
+            return 0
+        return getattr(chosen[0].stat(follow_symlinks=False), "st_reparse_tag", 0)
+    except OSError:
+        return 0
+
+
+def _is_link(part: Path, info) -> bool:
+    """Symbolic links and name-surrogate reparse points (junctions, mount points) are aliases.
+
+    Other reparse points, such as cloud-file placeholders or deduplicated files, hold ordinary data. lstat reports
+    the tag of a point it did not follow; a zero tag with the reparse attribute means CPython followed a
+    non-surrogate point, so the tag comes from the directory listing. An unidentified tag counts as a link."""
+    if stat.S_ISLNK(info.st_mode):
+        return True
+    if not getattr(info, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT:
+        return False
+    tag = getattr(info, "st_reparse_tag", 0) or _listed_reparse_tag(part)
+    return not tag or bool(tag & IO_REPARSE_TAG_NAME_SURROGATE)
+
+
 def check_path(path: Path) -> None:
     """Check existing ancestors before following any target, including junctions.
 
@@ -63,7 +96,7 @@ def check_path(path: Path) -> None:
             info = part.lstat()
         except FileNotFoundError:
             continue
-        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+        if _is_link(part, info):
             raise HandoffError("unsafe-path", f"Link/reparse path is not supported: {part}")
         if part != path and not stat.S_ISDIR(info.st_mode):
             raise HandoffError("unsafe-path", f"Ancestor is not a directory: {part}")
@@ -286,7 +319,16 @@ def replace_file(snapshot: Snapshot, data: bytes) -> Snapshot:
             os.fsync(handle.fileno())
         os.chmod(temporary, stat.S_IMODE(snapshot.path.stat().st_mode))
         require_current(snapshot)
-        os.replace(temporary, snapshot.path)
+        try:
+            os.replace(temporary, snapshot.path)
+        except PermissionError:
+            try:
+                writable = snapshot.path.stat().st_mode & stat.S_IWRITE
+            except OSError:
+                writable = True
+            if not writable:
+                raise HandoffError("read-only", f"{snapshot.path} is read-only; existing data preserved") from None
+            raise
         temporary = None
         saved = read_file(snapshot.path)
         if saved.data != data:
@@ -294,7 +336,12 @@ def replace_file(snapshot: Snapshot, data: bytes) -> Snapshot:
         return saved
     finally:
         if temporary is not None:
-            temporary.unlink(missing_ok=True)
+            # The copied mode may be read-only, which blocks removal on Windows; the original error propagates.
+            try:
+                os.chmod(temporary, stat.S_IREAD | stat.S_IWRITE)
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 class Store:
@@ -315,8 +362,8 @@ class Store:
 
     def work_path(self, name: str) -> Path:
         legal_name(name)
-        if not name.lower().endswith(".md") or name.lower() == "history.md":
-            raise HandoffError("unsafe-name", "Work must be a direct Markdown file other than history.md")
+        if not is_work_name(name):
+            raise HandoffError("unsafe-name", "Work must be a direct Markdown file <name>.md other than history.md")
         path = self.directory / name
         check_path(path)
         return path
@@ -327,6 +374,9 @@ class Store:
             return []
         if not self.directory.is_dir():
             raise HandoffError("not-directory", f"Not a handoff directory: {self.directory}")
-        return sorted((p for p in self.directory.iterdir()
-                       if p.suffix.lower() == ".md" and p.name.lower() != "history.md"),
-                      key=lambda p: p.name)
+        return sorted((p for p in self.directory.iterdir() if is_work_name(p.name)), key=lambda p: p.name)
+
+
+def is_work_name(name: str) -> bool:
+    """One rule for creating and listing work: a .md suffix after a nonempty stem, other than history.md."""
+    return Path(name).suffix.lower() == ".md" and name.lower() != "history.md"
