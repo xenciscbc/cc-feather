@@ -354,7 +354,7 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertNotIn("code review", analyst)
         self.assertIn("code review to reviewer", (agents / "verifier.md").read_text(encoding="utf-8"))
         self.assertIn("each claim can be verified independently", analyst)
-        self.assertIn("cut too finely", analyst)
+        self.assertNotIn("cut too finely", analyst)
 
     def test_update_adds_reviewer_to_seven_role_state(self):
         self.seven_role_install()

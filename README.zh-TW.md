@@ -142,6 +142,8 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 - **未通過：**沒拿到 APPROVED 的 claim 視為未審查，不回報完成、不 commit。REFUTED 後的修正直接進 verifier 複驗，並在回報註明未經程式碼審查。有進行中的交接時，會記下尚未解決的結論，解決後移除。
 - **授權：**通過不代表新的授權；READY 且原本已有授權的工作直接繼續，不固定再問一次。
 - **明確要求**計畫審查、程式碼審查或驗證時不受開關限制，只執行你要求的那一項，也不佔自動次數。
+- **成本：**一份有 N 個 claim 的計畫，在一個 session 內至少自動呼叫 1 + 2N 次，最多約 2 + 4N 次；預設角色都是 opus/high。要降低成本，用 `/cc-feather:model` 調整角色，例如 `verifier.effort=medium`；package 預設不變。計畫要切成多細的 claim，由寫計畫的地方決定（例如 spec、規劃或切票的 skill），不是 cc-feather。
+- **獨立性：**每次審查都在新的 context 中自行取得證據，但通常和主 Agent 用同一個模型。想要模型多樣性，可用 `/cc-feather:model` 把 analyst 或 reviewer 設成其他模型。cc-feather 看不到也無法保證主 Agent 的模型；換角色模型不會重置該步驟的次數。若你有其他廠商的模型，可另外明確要求第二意見，它不屬於這個流程。
 
 完整規則見[計畫審查](skills/delegation/references/plan-review.md)、[程式碼審查](skills/delegation/references/code-review.md)與[結果驗證](skills/delegation/references/outcome-verification.md)程序；用語定義見 [CONTEXT.md](CONTEXT.md)。
 

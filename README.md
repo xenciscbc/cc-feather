@@ -138,6 +138,8 @@ Automatic review is off by default; turn it on or off with the [switch](#automat
 - **Not passed:** a claim without APPROVED is unreviewed: it is not reported complete or committed. A fix after REFUTED goes straight to the verifier recheck and is reported as not code-reviewed. An active handoff records what remains unresolved until it is resolved.
 - **Authority:** a pass grants no new authority. READY lets already authorized work continue without another routine confirmation.
 - **Explicit requests** for a plan review, code review or verification work in either mode, run only what you asked for and do not use the automatic budget.
+- **Cost:** a plan with N claims makes at least 1 + 2N automatic calls in a session and up to about 2 + 4N; the default roles run on opus/high. To lower it, change a role with `/cc-feather:model`, for example `verifier.effort=medium`; package defaults stay unchanged. How finely a plan is cut into claims is decided where the plan is written, such as a spec, planning or ticket-splitting skill, not by cc-feather.
+- **Independence:** each review runs in a fresh context and gathers its own evidence, but usually on the same model as main. For model diversity, set a different model for analyst or reviewer with `/cc-feather:model`. cc-feather cannot see or guarantee main's model, and switching a role's model never resets a step's budget. A second opinion from another vendor's model, if you have one, is an explicit request outside this flow.
 
 The full rules are in the [plan review](skills/delegation/references/plan-review.md), [code review](skills/delegation/references/code-review.md) and [outcome verification](skills/delegation/references/outcome-verification.md) procedures; terms are defined in [CONTEXT.md](CONTEXT.md).
 
