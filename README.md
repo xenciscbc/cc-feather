@@ -67,7 +67,7 @@ Legacy installations combined both policies in one block. Migration checks owner
 ## Everyday workflow
 
 1. Open Claude Code in the target project and install the plugin. Handoffs are immediately available.
-2. For delegation, run `/cc-feather:setup Install only delegation policy and agents for this project`. Explicitly request user scope to share the installation across projects. Start a fresh session afterward.
+2. For delegation, run `/cc-feather:setup Install only delegation policy and agents for this project`. Explicitly request user scope to share the installation across projects. Start a fresh session afterward. Before installing, remove or disable any other delegation or orchestration rules and agents in the instruction files Claude loads, including the user-scope CLAUDE.md: cc-feather does not detect them, and two sets of rules would both apply and can conflict.
 3. Describe the work normally. Main chooses a suitable role, or you can name a role/model. Small tasks stay with Main.
 4. Save progress with `/cc-feather:handoff Save this work`, then resume in another session with `/cc-feather:handoff Resume the named work`.
 
@@ -124,7 +124,22 @@ Main owns understanding, decisions, integration and acceptance. Small or context
 
 Resolve model and effort independently: **explicit task request > applicable session preference > saved role configuration > package default**. “Use Sonnet to review this plan” keeps analyst duties/tools but selects Sonnet, retaining analyst's high effort unless overridden. Apply real native bindings; never silently substitute or pretend prompt text changed the runtime. A task override does not rewrite saved settings.
 
-Automatic review can be explicitly enabled or disabled for a task/session. It is disabled by default. After enabling it, plan-driven work (from a plan, spec, ticket or conversation plan the user agreed to) gets fresh-context plan review, then code review, then outcome verification. Unplanned work that changes a security boundary, migrates data or performs an irreversible operation first needs a written, reviewed plan the user approves; other unplanned edits are not reviewed automatically. Explicit review requests work in either mode. Its default automatic budget is two calls including the initial review. Unresolved blockers after the second stop automatic submission; this never means automatic approval. Within a session, renaming or switching reviewers/models does not reset the count; a resumed session starts a new count. An active handoff records unresolved verdicts and what they block, and drops them once resolved. Explicit user direction is required for another round. READY plus existing authority proceeds without a routine additional confirmation. After implementation, main runs the primary acceptance, then a fresh reviewer code review, which reads the diff itself, returns APPROVED or CHANGES_REQUESTED. Blocking findings (correctness, security, data loss, regression, spec deviation) must be fixed or rejected with evidence; non-blocking findings are listed in the final report, or become a separate follow-up work item when a handoff is active. Only after APPROVED does a fresh verifier check the result before it is reported complete. Two calls without APPROVED stop automatic review, skip automatic verification and leave the claim unreviewed: it is not complete and is not committed. Code review and verification each have the same two-call automatic budget; a fix after REFUTED goes straight to the verifier recheck and is reported as not code-reviewed. An explicit request runs code review or verification in either mode, and explicit verification needs no prior code review. In off, an explicit plan-review request alone does not imply code review or verification.
+Automatic review is off by default; turn it on or off with the [switch](#automatic-review-switch). When on, it covers **plan-driven work**: work done from a plan, spec, ticket or conversation plan you agreed to.
+
+| Step | When | Role | Passes with |
+| --- | --- | --- | --- |
+| Plan review | Before implementation | analyst | READY |
+| Code review | After main's primary acceptance passes | reviewer, reading the diff itself | APPROVED |
+| Outcome verification | After APPROVED | verifier | CONFIRMED |
+
+- **Unplanned work** gets no automatic review, except that a security-boundary change, data migration or irreversible operation first needs a written plan that is reviewed and that you approve.
+- **Budget:** each step makes at most two automatic calls per plan or claim. Running out never counts as passing; the work stops and waits for you. Within a session, renaming or switching reviewers or models does not reset the count; a resumed session starts a new one.
+- **Findings:** blocking ones (correctness, security, data loss, regression, deviation from the plan) must be fixed or rejected with evidence. Non-blocking ones are listed in the final report, or become separate follow-up work when a handoff is active.
+- **Not passed:** a claim without APPROVED is unreviewed: it is not reported complete or committed. A fix after REFUTED goes straight to the verifier recheck and is reported as not code-reviewed. An active handoff records what remains unresolved until it is resolved.
+- **Authority:** a pass grants no new authority. READY lets already authorized work continue without another routine confirmation.
+- **Explicit requests** for a plan review, code review or verification work in either mode, run only what you asked for and do not use the automatic budget.
+
+The full rules are in the [plan review](skills/delegation/references/plan-review.md), [code review](skills/delegation/references/code-review.md) and [outcome verification](skills/delegation/references/outcome-verification.md) procedures; terms are defined in [CONTEXT.md](CONTEXT.md).
 
 ### Automatic review switch
 
@@ -144,7 +159,7 @@ Permanent modes are stored below. Use the commands to change them: manually edit
 | project | `<project>/CLAUDE.md`, `.claude/CLAUDE.md` or AGENTS.md (see below) | `<project>/.claude/cc-feather/state.json` |
 | user | `<Claude config directory>/CLAUDE.md` | `<Claude config directory>/cc-feather/state.json` |
 
-The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. In `auto`, the delegation block contains the automatic review rules; in `off`, they are removed, so neither main nor subagents load them. A project-scope `off` keeps one line stating that automatic plan review is off in this project, so it overrides a user-scope `auto`: a task/session choice wins, then project guidance, then user guidance. A project installed `off` by an earlier version gets that line on its next review or setup update. Installations from earlier versions keep an `Automatic plan review mode:` line until setup update. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Fresh sessions load the saved mode. Enabled review covers plan-driven work and requires a reviewed, user-approved plan before unplanned security-boundary, data-migration or irreversible work; other unplanned edits are not reviewed automatically.
+The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. In `auto`, the delegation block contains the automatic review rules; in `off`, they are removed, so neither main nor subagents load them. A project-scope `off` keeps one line stating that automatic plan review is off in this project, so it overrides a user-scope `auto`: a task/session choice wins, then project guidance, then user guidance. A project installed `off` by an earlier version gets that line on its next review or setup update. Installations from earlier versions keep an `Automatic plan review mode:` line until setup update. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Fresh sessions load the saved mode.
 
 In project scope, setup writes into an existing CLAUDE.md, else `.claude/CLAUDE.md`. Claude Code reads AGENTS.md only while no CLAUDE file exists, so in a project that relies on AGENTS.md setup asks first: write into the AGENTS file, or create a CLAUDE.md that imports it so Claude keeps reading it. The choice is saved and reused. See [project instruction file](docs/setup.md#project-instruction-file).
 
