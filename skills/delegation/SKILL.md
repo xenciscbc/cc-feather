@@ -22,6 +22,8 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | verifier | Independent verification of a completed implementation claim |
 | reviewer | Independent code review of one implemented claim |
 
+Route delegated work only to these roles. Built-in general-purpose and Plan agents run on the main model and bypass this routing; use them only when the user asks for them.
+
 The table uses role ids. When the installed delegation policy lists native role names, such as `cc-scout`, dispatch each role to its listed name.
 
 Use configured role models and effort. For task/session overrides, persistent changes or uncertain bindings, read [model](../model/SKILL.md) before dispatch or configuration changes. Main-only preferences do not override children. Distinguish configured settings from native execution evidence; label unseen execution unconfirmed.
@@ -46,7 +48,7 @@ When the user asks for a "review" without naming one, review the plan if the wor
 
 ## Plan review
 
-When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. In auto, plan-driven work also needs code review and then outcome verification once implemented.
+When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. In auto, plan-driven work also needs code review and then outcome verification once implemented; in off, an explicit plan-review request does not imply them. For a request to turn automatic review on or off, follow [the toggle procedure](../setup/references/auto-review.md).
 
 ## Code review
 

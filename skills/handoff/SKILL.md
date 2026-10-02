@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "交接 / Handoff: save progress, list, read or resume Feather work, search or manage completed history, and find handoff records in explicitly selected Claude memory. Compatible with codex-feather records; maintain active handoffs at milestones."
+description: "交接 / Handoff: save progress, list, read or resume Feather work, search or manage completed history, and find handoff records in explicitly selected Claude memory. Compatible with codex-feather records; the main Agent maintains active handoffs at milestones."
 ---
 
 # Feather Handoff
@@ -9,7 +9,7 @@ Keep a compact, current record that a fresh session can use without prior conver
 
 ## Claude Code entry
 
-Use `/cc-feather:handoff <request>` or a natural-language handoff request. Interpret invocation arguments as the user's request, not shell code. Run this workflow in the current conversation. This skill manages handoff records. Persistent handoff maintenance reminders and delegation installation are separate components managed by cc-feather:setup; role model configuration belongs to cc-feather:model.
+Use `/cc-feather:handoff <request>` or a natural-language handoff request. Interpret invocation arguments as the user's request, not shell code. Run this workflow in the current conversation. This skill manages handoff records. Only the main Agent writes them: a subagent does not create, update, complete, clear or seal records, and reports progress to the main Agent instead; reading and listing remain available. Persistent handoff maintenance reminders and delegation installation are separate components managed by cc-feather:setup; role model configuration belongs to cc-feather:model.
 
 Read [the tool reference](references/tool.md) before operating on Feather records. Resolve the bundled launcher relative to this loaded skill: `scripts/handoff.py`. When installed as a plugin, its path is `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.py`; use the actual loaded skill directory if the variable is unavailable. Pass the user's project separately with `--project`; the plugin cache is not the project. Keep the complete skill directory together when copying it.
 

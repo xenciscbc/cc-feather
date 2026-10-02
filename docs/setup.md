@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages six skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages nine skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 
@@ -87,7 +87,7 @@ The corresponding scoped preview is:
 python -B scripts/feather_config.py review --project /absolute/project --scope project --review-mode off
 ```
 
-Apply using the returned plan ID and matching arguments. Delegation install accepts `--review-mode auto|off`; show/check report the saved mode and updates preserve it. A session-only instruction such as “disable automatic plan review for this session” does not invoke the configuration writer. The toggle is implemented in managed CLAUDE.md instructions, not a deterministic runtime gate.
+Apply using the returned plan ID and matching arguments. Delegation install accepts `--review-mode auto|off`; show/check report the saved mode and updates preserve it. A session-only instruction such as “disable automatic plan review for this session” does not invoke the configuration writer. The toggle is implemented in managed CLAUDE.md instructions, not a deterministic runtime gate: auto adds the automatic review paragraph (`templates/review-auto.md`) to the delegation block, and off removes it, so an off installation loads no automatic review rules for main or any subagent. Explicit review and verification requests still reach cc-feather:delegation through the delegation entry. Guidance installed by earlier versions keeps its `Automatic plan review mode:` line until setup update; review switches that line, and guidance the tool cannot match needs setup update first.
 
 ## CLI details and diagnostics
 

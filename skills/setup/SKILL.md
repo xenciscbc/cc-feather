@@ -8,7 +8,7 @@ description: "Inspect and independently install, update or remove Feather handof
 Manage two independent components in a project or user scope:
 
 - `handoff`: persistent handoff maintenance rules in a marked block of the scope's instruction file. It installs no agents and does not touch handoff records. The plugin's handoff skill is usable without this setup component.
-- `delegation`: a concise instruction-file entry for cc-feather:delegation plus all eight native agents (scout, analyst, mech-executor, executor, security-executor, verifier, reviewer and exact-name Explore). Includes model configuration and optional automatic plan review, code review and outcome verification of plan-driven work, default off.
+- `delegation`: a concise instruction-file entry for cc-feather:delegation plus all eight native agents (scout, analyst, mech-executor, executor, security-executor, verifier, reviewer and exact-name Explore). Includes model configuration and optional automatic plan review, code review and outcome verification of plan-driven work, default off; the automatic review rules appear in the instruction file only while the mode is auto.
 - `both`: operate on both selected components in one preview/apply transaction.
 
 Use [the bundled tool](../../scripts/feather_config.py) from this skill's loaded installation, not the target project's working directory. Python 3.11+ and the standard library are sufficient. Use it for all managed writes; do not hand-edit ownership state, role files or policy blocks.

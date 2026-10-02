@@ -15,7 +15,7 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 
 本機 checkout 可用 `/plugin marketplace add D:/work_data/project/skill/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。
 
-## 六個入口
+## 入口
 
 | Skill | 用途 |
 | --- | --- |
@@ -122,11 +122,11 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE |
 | reviewer | 獨立審查實作某個 claim 的程式碼 | 自行從 base revision 取得 diff，可跑不改檔的靜態檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED |
 
-主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派。
+主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派，也不維護交接或進度紀錄，改由主 Agent 依其回報記錄。
 
 每個欄位獨立套用優先序：**該次任務明確指定 > 適用的 session 指定 > 已儲存角色設定 > 套件預設**。例如「用 Sonnet 審查計畫」仍使用 analyst 職責，model 改為 Sonnet，未指定 effort 則保留 analyst 的 high。指定值無法原生套用時先說明，不暗中替換或只在 prompt 假裝設定成功。
 
-安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動審查可依任務／session 明確啟用或停用；預設關閉。開啟後，依使用者同意的計畫、spec、ticket 或對話中的計畫施工的工作，會依序經過計畫審查、程式碼審查與結果驗證；沒有計畫但會改動安全邊界、遷移資料或執行不可逆操作的工作，須先寫出計畫、通過審查並經使用者同意才施工；其他沒有計畫的小修改不自動審查。明確要求審查則不受開關限制，計畫審查使用新的 analyst context，程式碼審查使用新的 reviewer context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。實作後主 Agent 先跑主要驗收，再由新的 reviewer context 自行取得 diff 做程式碼審查，回覆 APPROVED／CHANGES_REQUESTED。阻擋性問題（正確性、安全、資料遺失、regression、偏離 spec）必須修正或附證據駁回；非阻擋問題列在最終回報；有進行中的交接時，另建一個獨立的後續工作項目。得到 APPROVED 後，才以新的 verifier context 驗證結果並回報完成。兩次仍未 APPROVED 就停止自動審查，不做自動驗證，claim 標為未審查，視為未完成且不 commit。程式碼審查與驗證的自動上限各為兩次；REFUTED 後的修正直接進入 verifier 複驗，並在回報註明未經程式碼審查。明確要求程式碼審查或驗證則不受開關限制，明確要求驗證也不需先做程式碼審查。
+安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動審查可依任務／session 明確啟用或停用；預設關閉。開啟後，依使用者同意的計畫、spec、ticket 或對話中的計畫施工的工作，會依序經過計畫審查、程式碼審查與結果驗證；沒有計畫但會改動安全邊界、遷移資料或執行不可逆操作的工作，須先寫出計畫、通過審查並經使用者同意才施工；其他沒有計畫的小修改不自動審查。明確要求審查則不受開關限制，計畫審查使用新的 analyst context，程式碼審查使用新的 reviewer context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。實作後主 Agent 先跑主要驗收，再由新的 reviewer context 自行取得 diff 做程式碼審查，回覆 APPROVED／CHANGES_REQUESTED。阻擋性問題（正確性、安全、資料遺失、regression、偏離 spec）必須修正或附證據駁回；非阻擋問題列在最終回報；有進行中的交接時，另建一個獨立的後續工作項目。得到 APPROVED 後，才以新的 verifier context 驗證結果並回報完成。兩次仍未 APPROVED 就停止自動審查，不做自動驗證，claim 標為未審查，視為未完成且不 commit。程式碼審查與驗證的自動上限各為兩次；REFUTED 後的修正直接進入 verifier 複驗，並在回報註明未經程式碼審查。明確要求程式碼審查或驗證則不受開關限制，明確要求驗證也不需先做程式碼審查。off 模式下，只要求計畫審查不代表也要程式碼審查或驗證。
 
 ### 自動審查開關
 
@@ -148,13 +148,15 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | project | `<專案>/CLAUDE.md`、`.claude/CLAUDE.md` 或 AGENTS.md（見下方） | `<專案>/.claude/cc-feather/state.json` |
 | user | `<Claude 設定目錄>/CLAUDE.md` | `<Claude 設定目錄>/cc-feather/state.json` |
 
-Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後審查依計畫施工的工作；沒有計畫的安全邊界、資料遷移或不可逆工作須先有經審查且使用者同意的計畫；其他沒有計畫的小修改不自動審查。
+Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。`auto` 時分派區塊包含自動審查規則，`off` 時整段移除，主 Agent 與子 Agent 都不會載入。較早版本的安裝保留 `Automatic plan review mode:` 那行，執行 setup update 後改為新格式。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後審查依計畫施工的工作；沒有計畫的安全邊界、資料遷移或不可逆工作須先有經審查且使用者同意的計畫；其他沒有計畫的小修改不自動審查。
 
 project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.md`。Claude Code 只在沒有任何 CLAUDE 檔時才讀 AGENTS.md，所以專案若依賴 AGENTS.md，setup 會先詢問：直接寫進 AGENTS 檔，或建立一個 import 它的 CLAUDE.md，讓 Claude 繼續讀到它。選擇會記錄下來，之後沿用。詳見[專案指示檔](docs/setup.md#project-instruction-file)。
 
 ### Explore 的成本控制
 
 內建 Explore 會繼承主模型；只新增 plugin scout 無法防止它被呼叫。Setup 因此部署**真正名為 Explore 的原生角色**，明確寫入 sonnet/low。若你已有名為 Explore 的 agent，它本身就已取代內建 Explore：setup 不安裝自己的 Explore、不動你的檔案，並提醒它的 model 不由 cc-feather 管理（沒寫 `model` 就會使用主模型）。移除你的 Explore 後，setup update 會重新安裝 cc-feather 的版本。
+
+內建 general-purpose 與 Plan 同樣使用主模型，且無法以同樣方式取代；因此分派規則要求主 Agent 只派給 cc-feather 角色，除非你指定使用內建 agent。
 
 儲存值不是實際執行證據：CLI／managed／巢狀專案定義、模型 force 變數、provider allowlist 或單次參數可能影響模型。Setup 後用新 session，執行探索時以 `/tasks` 核對實際 model／effort。模型選擇降低的是意外使用昂貴模型的成本，不保證 token 數下降。參考 [Claude subagents](https://code.claude.com/docs/en/sub-agents)。
 
