@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -1723,10 +1724,13 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertEqual(code, 2, result)
                 self.assertIn("cannot inspect agent name syntax", result["error"])
                 self.assertEqual(before, self.files())
+        # Without a closing line Claude Code reads no frontmatter, so the file is no agent.
         notes.write_text("---\nname: My agent notes\nNo closing line\n", encoding="utf-8")
-        code, result = self.call("install")
-        self.assertEqual(code, 2, result)
-        self.assertIn("cannot inspect agent frontmatter", result["error"])
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        self.assertIn(f"Agent file has no closing frontmatter line: {notes}; it was not read as an agent",
+                      preview["warnings"])
+        self.apply("install")
 
     def test_non_utf8_agent_markdown_is_skipped_with_a_warning(self):
         legacy = self.project / ".claude" / "agents" / "legacy" / "old.md"
@@ -1800,7 +1804,6 @@ class FeatherConfigTests(unittest.TestCase):
         notes = self.project / ".claude" / "agents" / "notes" / "README.md"
         notes.parent.mkdir(parents=True)
         for content, error in ((b"---\nname: !!str scout\ndescription: \xff\n---\nNotes\n", "cannot inspect agent name syntax"),
-                               (b"---\nname: scout\ndescription: \xff\nNo closing line\n", "cannot inspect agent frontmatter"),
                                (b"---\nname: scout\nname: notes\ndescription: \xff\n---\n", "duplicate agent name declaration")):
             with self.subTest(error=error):
                 notes.write_bytes(content)
@@ -1809,6 +1812,14 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertEqual(code, 2, result)
                 self.assertIn(error, result["error"])
                 self.assertEqual(before, self.files())
+        # Without a closing line the file is no agent, as for UTF-8 files: a warning, not an error.
+        notes.write_bytes(b"---\nname: scout\ndescription: \xff\nNo closing line\n")
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        self.assertIn(f"Agent file has no closing frontmatter line: {notes}; it was not read as an agent",
+                      preview["warnings"])
+        self.apply("install")
+        self.assertEqual(self.saved_state()["components"]["delegation"]["role_prefix"], "")
 
     def test_utf16_agent_with_a_byte_order_mark_is_read_like_utf8(self):
         text = "---\nname: scout\ndescription: Mine\n---\nMine\n"
@@ -2148,6 +2159,416 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertIn("--guidance claude", result["error"])
                 self.assertEqual("--guidance agents" in result["error"], offered, result["error"])
                 self.assertEqual(before, self.files())
+
+    # DX1: only the top-level name of an agent's frontmatter is its name.
+
+    def other_agent(self, text, name="notes.md"):
+        """Another agent's file in a subdirectory of the project agents tree."""
+        path = self.project / ".claude" / "agents" / "mine" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.encode("utf-8"))
+        return path
+
+    def use_case(self, name):
+        self.project = self.root / name
+        self.project.mkdir()
+
+    def assert_other_agent_ignored(self, text):
+        path = self.other_agent(text)
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"], shown["pending_role_prefix"]), (0, "ok", None), shown)
+        self.apply("install")
+        self.assert_all_unprefixed_roles()
+        self.apply("remove")
+        self.assertEqual(path.read_bytes(), text.encode("utf-8"))
+
+    def assert_other_agent_named(self, text):
+        self.other_agent(text)
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"], shown["pending_role_prefix"]), (0, "ok", config.ROLE_PREFIX), shown)
+        self.apply("install")
+        self.assert_prefixed_roles(self.project / ".claude" / "agents")
+
+    def assert_other_agent_uninspectable(self, text, error="cannot inspect agent name syntax"):
+        self.other_agent(text)
+        before = self.files()
+        code, result = self.call("install")
+        self.assertEqual(code, 2, result)
+        self.assertIn(error, result["error"])
+        self.assertEqual(before, self.files())
+
+    def test_nested_mapping_name_is_not_the_agent_name(self):
+        for index, text in enumerate(("---\nname: mine\nmetadata:\n  name: verifier\n---\nMine\n",
+                                      "---\nname: mine\nskills:\n-\n  name: verifier\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"nested-{index}")
+                self.assert_other_agent_ignored(text)
+
+    def test_block_scalar_text_is_not_the_agent_name(self):
+        for index, text in enumerate(("---\nname: mine\ndescription: |\n  name: scout\n---\nMine\n",
+                                      "---\ndescription: >-\n  name: scout\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"block-{index}")
+                self.assert_other_agent_ignored(text)
+
+    def test_uniformly_indented_header_declares_its_name(self):
+        for index, text in enumerate(("---\n  name: scout\n  description: Mine\n---\nMine\n",
+                                      "---\n  name: scout\n  metadata:\n    name: other\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"indented-{index}")
+                self.assert_other_agent_named(text)
+
+    def test_multi_line_flow_mapping_header_is_uninspectable(self):
+        self.assert_other_agent_uninspectable("---\n{\n  name: verifier\n}\n---\nMine\n")
+
+    def test_merge_key_header_is_uninspectable(self):
+        # YAML merges the anchored mapping into the top level, so verifier would become the name.
+        self.assert_other_agent_uninspectable("---\nbase: &base\n  name: verifier\n<<: *base\ndescription: Mine\n---\nMine\n")
+
+    def test_tab_indented_header_line_is_uninspectable(self):
+        for index, text in enumerate(("---\n\tname: verifier\n---\nMine\n",
+                                      "---\nname: mine\nmetadata:\n\tname: verifier\n---\nMine\n",
+                                      "---\nname: mine\n \t# note\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"tab-{index}")
+                self.assert_other_agent_uninspectable(text)
+
+    def test_other_line_breaks_in_a_header_are_uninspectable(self):
+        for index, character in enumerate(("\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x1e", "\ufeff")):
+            with self.subTest(character=hex(ord(character))):
+                self.use_case(f"break-{index}")
+                self.assert_other_agent_uninspectable(f"---\n# note{character}name: verifier\n---\nMine\n")
+
+    def test_duplicate_top_level_name_still_blocks(self):
+        self.assert_other_agent_uninspectable("---\nname: mine\nmetadata:\n  name: other\nname: scout\n---\nMine\n",
+                                              "duplicate agent name declaration")
+
+    def test_compact_sequences_are_values_not_top_level_keys(self):
+        for index, text in enumerate(("---\nname: mine\ntools:\n- Read\n- Grep\n---\nMine\n",
+                                      "---\nname: mine\nskills:\n- name: verifier\n  description: Theirs\n- name: scout\n---\nMine\n",
+                                      "---\nname: mine\ntools: # listed below\n\n- Read\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"sequence-{index}")
+                self.assert_other_agent_ignored(text)
+
+    def test_sequence_entry_without_its_key_is_uninspectable(self):
+        for index, text in enumerate(("---\n- x\n---\nMine\n", "---\n- name: verifier\n---\nMine\n",
+                                      "---\nname: mine\ndescription: Mine\n- name: verifier\n---\nMine\n",
+                                      "---\nname: mine\ntools:\n  x: 1\n- name: verifier\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"entry-{index}")
+                self.assert_other_agent_uninspectable(text)
+
+    # DX2: the frontmatter ends at the first "---" after its opening line, as Claude Code reads it.
+
+    def test_frontmatter_closed_at_the_end_of_the_file_is_read(self):
+        self.assert_other_agent_ignored("---\nname: mine\ndescription: x\n---")
+        self.use_case("closed-at-eof")
+        self.assert_other_agent_named("---\nname: scout\ndescription: x\n---")
+
+    def test_markdown_opening_with_a_rule_is_not_an_agent(self):
+        path = self.other_agent("---\n\nNotes\n", "README.md")
+        warning = f"Agent file has no closing frontmatter line: {path}; it was not read as an agent"
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"], shown["pending_role_prefix"]), (0, "ok", None), shown)
+        self.assertIn(warning, shown["warnings"])
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        self.assertIn(warning, preview["warnings"])
+        self.apply("install")
+        self.assert_all_unprefixed_roles()
+
+    def test_plain_text_between_rules_is_not_an_agent(self):
+        # Notes framed by horizontal rules are a YAML scalar, not a mapping, as before the name rules changed.
+        self.assert_other_agent_ignored("---\nSome notes here\n---\nBody")
+
+    def test_plain_text_between_rules_is_named_in_the_warnings(self):
+        path = self.other_agent("---\nSome notes here\n---\nBody", "README.md")
+        warning = f"Agent file frontmatter is not a mapping: {path}; it was not read as an agent"
+        self.assertIn(warning, self.call("check")[1]["warnings"])
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        self.assertIn(warning, preview["warnings"])
+
+    def test_plain_text_beside_a_key_or_flow_mapping_is_uninspectable(self):
+        for index, text in enumerate(("---\nname: mine\nSome text\n---\n", "---\n{name: verifier}\n---\n")):
+            with self.subTest(text=text):
+                self.use_case(f"mixed-{index}")
+                self.assert_other_agent_uninspectable(text)
+
+    def test_ambiguous_closing_frontmatter_line_is_uninspectable(self):
+        for index, text in enumerate(("---\nname: scout\n----\nMine\n", "---\nname: scout\n--- end\nMine\n",
+                                      "---\nname: executor---x\n---\nMine\n",
+                                      "---\nname: mine\ndescription: a --- b\n---\nMine\n")):
+            with self.subTest(text=text):
+                self.use_case(f"closing-{index}")
+                self.assert_other_agent_uninspectable(text, "ambiguous closing frontmatter line")
+
+    def test_opening_line_with_trailing_whitespace_opens_frontmatter(self):
+        for index, text in enumerate(("---  \nname: scout\n---\nMine\n", "---\t\nname: scout\n---\nMine\n",
+                                      "---\r\nname: scout\r\n---\r\nMine\r\n")):
+            with self.subTest(text=text):
+                self.use_case(f"opening-{index}")
+                self.assert_other_agent_named(text)
+
+    # DX3: managed blocks follow the instruction file's line endings, and ownership ignores them.
+
+    def assert_crlf_only(self, data):
+        self.assertIsNone(re.search(rb"(?<!\r)\n", data), data)
+
+    def assert_normalized_block_hashes(self, guidance, components=("handoff", "delegation")):
+        text = guidance.read_bytes().decode("utf-8")
+        markers = {"handoff": (config.HANDOFF_BEGIN, config.HANDOFF_END), "delegation": (config.BEGIN, config.END)}
+        recorded = self.saved_state()["components"]
+        for name in components:
+            block = config._block_parts(text, *markers[name])[1]
+            self.assertEqual(recorded[name]["block_hash"], config.digest(block.replace("\r\n", "\n").encode("utf-8")), name)
+
+    def test_install_into_crlf_guidance_writes_crlf_blocks(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"User rules\r\nlast line")
+        self.apply("install", "project", "--component", "both")
+        self.assert_crlf_only(guidance.read_bytes())
+        self.assert_normalized_block_hashes(guidance)
+        self.assertEqual(self.call("check")[1]["status"], "ok")
+        # A later conversion of the whole file to LF keeps the installation owned.
+        guidance.write_bytes(guidance.read_bytes().replace(b"\r\n", b"\n"))
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.apply("review", "project", "--review-mode", "auto")
+        self.apply("update", "project", "--component", "both")
+        self.assertNotIn(b"\r", guidance.read_bytes())
+        self.apply("remove", "project", "--component", "both")
+        self.assertEqual(guidance.read_bytes(), b"User rules\nlast line")
+
+    def test_lf_guidance_converted_to_crlf_stays_owned(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"User rules\n")
+        self.apply("install", "project", "--component", "both")
+        guidance.write_bytes(guidance.read_bytes().replace(b"\n", b"\r\n"))
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.apply("model", "project", "--set", "scout.effort=medium")
+        self.assert_normalized_block_hashes(guidance, ("delegation",))
+        self.apply("review", "project", "--review-mode", "auto")
+        self.apply("update", "project", "--component", "both")
+        self.assert_crlf_only(guidance.read_bytes())
+        self.assert_normalized_block_hashes(guidance)
+        self.apply("remove", "project", "--component", "both")
+        self.assertEqual(guidance.read_bytes(), b"User rules\r\n")
+
+    def test_block_hash_recorded_from_a_crlf_block_is_still_accepted(self):
+        self.apply("install", "project", "--review-mode", "auto")
+        guidance = self.project / "CLAUDE.md"
+        block = config._block_parts(guidance.read_bytes().decode("utf-8"))[1]
+        # The earlier review path recorded the raw digest of a block it kept in CRLF.
+        self.replace_delegation_block(guidance, block.replace("\n", "\r\n"))
+        self.assertEqual(self.call("check")[1]["status"], "ok")
+        guidance.write_bytes(guidance.read_bytes().replace(b"\r\n", b"\n"))
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.apply("review", "project", "--review-mode", "off")
+        self.assert_normalized_block_hashes(guidance, ("delegation",))
+        self.apply("remove")
+        self.assertFalse(guidance.exists())
+
+    def test_guidance_template_with_a_bare_carriage_return_is_refused(self):
+        fixture = self.root / "package"
+        shutil.copytree(config.ROOT / "templates", fixture / "templates")
+        for template, extra in (("handoff.md", ("--component", "handoff")), ("CLAUDE.md", ()),
+                                ("review-auto.md", ("--review-mode", "auto"))):
+            with self.subTest(template=template):
+                path = fixture / "templates" / template
+                original = path.read_bytes()
+                path.write_bytes(original.replace(b"\r\n", b"\n").replace(b"\n", b"\r \n", 1))
+                before = self.files()
+                with mock.patch.object(config, "ROOT", fixture):
+                    code, result = self.call("install", "project", *extra)
+                self.assertEqual(code, 2, result)
+                self.assertIn("bare carriage return", result["error"])
+                self.assertEqual(before, self.files())
+                path.write_bytes(original)
+
+    # DX4: only name-surrogate reparse points are links; cloud placeholders and similar entries are not.
+
+    def reparse(self, target, *, lstat_tag=None, listed_tag=None, listed=True):
+        """Report target as a reparse point to lstat (with lstat_tag) and its parent listing (with listed_tag).
+
+        CPython's lstat traverses a non-surrogate reparse point and reports tag 0, while the directory
+        listing keeps the tag. None leaves that source unchanged; listed=False omits the entry.
+        """
+        real_lstat, real_scandir = Path.lstat, os.scandir
+        same = lambda path: os.path.normcase(os.fspath(path)) == os.path.normcase(os.fspath(target))
+
+        def reparse_point(info, tag):
+            return types.SimpleNamespace(st_mode=info.st_mode, st_nlink=info.st_nlink, st_reparse_tag=tag,
+                                         st_file_attributes=getattr(info, "st_file_attributes", 0) | 0x400)
+
+        def lstat(path):
+            info = real_lstat(path)
+            return reparse_point(info, lstat_tag) if lstat_tag is not None and same(path) else info
+
+        class Entry:
+            def __init__(self, entry):
+                self.entry, self.name, self.path = entry, entry.name, entry.path
+
+            def stat(self, *, follow_symlinks=True):
+                info = self.entry.stat(follow_symlinks=follow_symlinks)
+                return info if follow_symlinks else reparse_point(info, listed_tag)
+
+        @contextlib.contextmanager
+        def scandir(path):
+            with real_scandir(path) as entries:
+                listing = []
+                for entry in entries:
+                    if not same(entry.path):
+                        listing.append(entry)
+                    elif listed:
+                        listing.append(entry if listed_tag is None else Entry(entry))
+                yield iter(listing)
+
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(Path, "lstat", autospec=True, side_effect=lstat))
+        stack.enter_context(mock.patch("os.scandir", scandir))
+        return stack
+
+    def test_reparse_point_with_a_listed_non_surrogate_tag_is_an_ordinary_file(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"User rules\n")
+        # A cloud placeholder: lstat traversed it, the listing reports IO_REPARSE_TAG_CLOUD_6.
+        with self.reparse(guidance, lstat_tag=0, listed_tag=0x9000601A):
+            self.apply("install")
+            code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.assertTrue(guidance.read_text(encoding="utf-8").startswith("User rules\n" + config.BEGIN))
+
+    def test_non_surrogate_tag_reported_by_lstat_is_an_ordinary_file(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"User rules\n")
+        # IO_REPARSE_TAG_DEDUP, reported by lstat itself.
+        with self.reparse(guidance, lstat_tag=0x80000013):
+            self.apply("install")
+        self.assertIn(config.BEGIN, guidance.read_text(encoding="utf-8"))
+
+    def test_reparse_point_without_a_known_non_surrogate_tag_is_refused(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"User rules\n")
+        cases = (("listed without a tag", {"lstat_tag": 0, "listed_tag": 0}),
+                 ("missing from the listing", {"lstat_tag": 0, "listed": False}),
+                 ("junction", {"lstat_tag": 0xA0000003}), ("symlink", {"lstat_tag": 0xA000000C}))
+        for name, options in cases:
+            with self.subTest(case=name):
+                before = self.files()
+                with self.reparse(guidance, **options):
+                    code, result = self.call("install")
+                self.assertEqual(code, 2, result)
+                self.assertIn("linked path is unsafe", result["error"])
+                self.assertEqual(before, self.files())
+
+    def test_agents_tree_takes_reparse_tags_from_its_listing(self):
+        mine = self.other_agent("---\nname: scout\n---\nMine\n", "scout.md")
+        with self.reparse(mine, lstat_tag=0, listed_tag=0x9000601A):
+            code, shown = self.call("check")
+        self.assertEqual((code, shown["status"], shown["pending_role_prefix"]), (0, "ok", config.ROLE_PREFIX), shown)
+        for name, tag in (("junction", 0xA0000003), ("no tag", 0)):
+            with self.subTest(case=name):
+                with self.reparse(mine, lstat_tag=tag, listed_tag=tag):
+                    code, shown = self.call("check")
+                self.assertEqual((code, shown["status"]), (2, "conflict"), shown)
+                self.assertIn(f"linked agents tree entry cannot be inspected: {mine}", shown["issues"])
+
+    def test_junction_in_the_agents_tree_is_refused(self):
+        base = self.use_link_base()
+        (base / "elsewhere").mkdir()
+        agents = self.project / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        make_directory_link(agents / "linked", base / "elsewhere")
+        before = self.files()
+        code, result = self.call("install")
+        self.assertEqual(code, 2, result)
+        self.assertIn(f"linked agents tree entry cannot be inspected: {agents / 'linked'}", result["error"])
+        self.assertEqual(before, self.files())
+
+    # DX5 and DX6: setup and review guidance say only what the tool and the flow do.
+
+    def test_setup_never_offers_to_replace_another_agents_file(self):
+        for path in (config.ROOT / "skills" / "setup" / "SKILL.md", config.ROOT / "docs" / "setup.md"):
+            with self.subTest(path=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertNotIn("replace it", text)
+                self.assertNotIn("replacing it", text)
+                self.assertIn("rerun setup", text)
+
+    def test_explicit_reviews_are_outside_every_automatic_budget(self):
+        rule = "Explicit calls do not count toward the automatic budget below"
+        references = config.ROOT / "skills" / "delegation" / "references"
+        for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
+            with self.subTest(reference=name):
+                self.assertIn(rule, (references / name).read_text(encoding="utf-8"))
+        self.assertIn("an explicit call is outside the count",
+                      (references / "plan-review.md").read_text(encoding="utf-8"))
+
+    # DX7: a state from before created_guidance cannot claim the instruction file it leaves empty.
+
+    def test_remove_keeps_and_reports_a_file_a_pre_flag_state_leaves_empty(self):
+        guidance = self.project / "CLAUDE.md"
+        self.apply("install", "project", "--component", "both")
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = self.saved_state()
+        del state["created_guidance"]
+        state_path.write_bytes(config.canonical(state) + b"\n")
+        result = self.apply("remove", "project", "--component", "both")
+        self.assertEqual(guidance.read_bytes(), b"")
+        self.assertIn(f"{guidance} is now empty; setup did not record creating it, so it was kept", result["warnings"])
+
+    # DX8: check and show name the role files install or update would write.
+
+    def test_check_reports_the_role_paths_install_or_update_would_write(self):
+        agents = self.project / ".claude" / "agents"
+        self.other_agent("---\nname: scout\n---\nMine\n", "scout.md")
+        self.other_agent("---\nname: Explore\n---\nMine\n", "explorer.md")
+        prefixed = {role: str(agents / f"{config._role_name(role, config.ROLE_PREFIX)}.md")
+                    for role in config.ROLES if role != "Explore"}
+        shown = self.call("check")[1]
+        self.assertEqual((shown["pending_role_prefix"], shown["pending_external_roles"]),
+                         (config.ROLE_PREFIX, ["Explore"]), shown)
+        self.assertEqual(shown["paths"]["agents"], prefixed)
+        self.apply("install")
+        self.assertEqual(self.call("show")[1]["paths"]["agents"], prefixed)
+        # An unprefixed installation that another agent's name now moves to the prefix.
+        self.use_case("later-conflict")
+        agents = self.project / ".claude" / "agents"
+        self.apply("install")
+        self.other_agent("---\nname: analyst\n---\nMine\n", "analyst.md")
+        shown = self.call("check")[1]
+        self.assertEqual((shown["pending_role_prefix"], shown["pending_external_roles"]), (config.ROLE_PREFIX, None))
+        self.assertEqual(shown["paths"]["agents"], {role: str(agents / f"{config._role_name(role, config.ROLE_PREFIX)}.md")
+                                                    for role in config.ROLES})
+
+    # DX10: a configuration directory that is a file stops at preview, not part-way through apply.
+
+    def test_configuration_directory_that_is_a_file_is_refused_at_preview(self):
+        dot_claude = self.project / ".claude"
+        dot_claude.write_bytes(b"not a directory")
+        before = self.files()
+        for command in (("install", "project"), ("install", "project", "--component", "handoff"), ("check", "project")):
+            with self.subTest(command=command):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn(f"{dot_claude} exists and is not a directory", result["error"])
+        self.home = self.root / "claude-home-file"
+        self.home.write_bytes(b"not a directory")
+        before[self.home] = b"not a directory"
+        code, result = self.call("install", "user")
+        self.assertEqual(code, 2, result)
+        try:
+            os.path.realpath(self.home, strict=True)
+        except OSError:
+            # A volume without strict realpath refuses this home earlier, while resolving it.
+            pass
+        else:
+            self.assertIn(f"{self.home} exists and is not a directory", result["error"])
+        self.assertEqual(before, self.files())
 
 
 if __name__ == "__main__":

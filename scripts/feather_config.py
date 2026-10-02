@@ -43,6 +43,15 @@ PROJECT_REVIEW_OFF = "Automatic plan review is off in this project; this overrid
 ALIASED_PROJECT_COMMANDS = {"check", "show", "session", "remove"}
 # YAML plain scalars starting with these may mean something other than their text.
 YAML_INDICATORS = "[{>|!&*@%`'\"-?:,#"
+# Agent frontmatter: Claude Code reads the text between an opening "---" line and the next "---".
+FRONTMATTER_OPEN = re.compile(r"---(?:[^\S\n]|\ufeff)*\n")
+FRONTMATTER_CLOSE = re.compile(r"---[ \t]*(?:\r|\n|\Z)")
+# Characters some YAML or Python readers take as line breaks or byte order marks.
+FRONTMATTER_BREAKS = re.compile("[\x0b\x0c\x1c-\x1e\x85\u2028\u2029\ufeff]")
+TOP_LEVEL_KEY = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*)\s*:")
+# Windows reparse points: only name surrogates (symlinks, junctions, mount points) redirect a path.
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+REPARSE_TAG_NAME_SURROGATE = 0x20000000
 
 # Per-invocation state, reset by main(): roots resolved once (with their supplied spelling as key),
 # the resolved roots trusted as link-check boundaries, and agent files skipped during inspection.
@@ -73,6 +82,32 @@ def read(path: Path) -> bytes | None:
     return path.read_bytes() if path.exists() else None
 
 
+def _is_link(path: Path, info: Any) -> bool:
+    """Whether an entry redirects its path: a symlink, or a reparse point whose tag is a name surrogate.
+
+    Other reparse points, such as cloud placeholders and deduplicated files, are ordinary entries.
+    CPython's lstat traverses those and reports tag 0; the tag then comes from the parent's listing,
+    and an entry missing there, or still without a tag, is refused.
+    """
+    if stat.S_ISLNK(info.st_mode):
+        return True
+    if not getattr(info, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT:
+        return False
+    tag = getattr(info, "st_reparse_tag", 0) or _listed_reparse_tag(path)
+    return not tag or bool(tag & REPARSE_TAG_NAME_SURROGATE)
+
+
+def _listed_reparse_tag(path: Path) -> int:
+    try:
+        with os.scandir(path.parent) as entries:
+            for entry in entries:
+                if entry.name == path.name:
+                    return getattr(entry.stat(follow_symlinks=False), "st_reparse_tag", 0)
+    except OSError:
+        pass
+    return 0
+
+
 def _safe_path(path: Path) -> None:
     """Reject links at the target and its existing ancestors, including junctions.
 
@@ -87,7 +122,7 @@ def _safe_path(path: Path) -> None:
         root = _TRUSTED_ROOTS.get(os.path.normcase(str(member)))
         if root is not None and os.path.normcase(os.path.realpath(member)) != os.path.normcase(root):
             raise ConfigError(f"configuration root changed after it was resolved: {root}")
-        if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+        if _is_link(member, info):
             raise ConfigError(f"linked path is unsafe: {member}")
         if member == path and info.st_nlink > 1 and stat.S_ISREG(info.st_mode):
             raise ConfigError(f"hard-linked target is unsafe: {member}")
@@ -241,6 +276,13 @@ def _scope(args: argparse.Namespace) -> tuple[Path, Path, Path]:
         raise ConfigError(f"project directory does not exist: {Path(args.project)}")
     base = project / ".claude" if args.scope == "project" else home
     guidance = project / "CLAUDE.md" if args.scope == "project" else home / "CLAUDE.md"
+    try:
+        info = base.lstat()
+    except FileNotFoundError:
+        info = None
+    # Apply would fail part-way creating directories below it; a link is refused by _safe_path below.
+    if info is not None and not stat.S_ISDIR(info.st_mode) and not _is_link(base, info):
+        raise ConfigError(f"{base} exists and is not a directory")
     _safe_path(base / "cc-feather" / "state.json")
     _safe_path(guidance)
     return base, guidance, base / "cc-feather" / "state.json"
@@ -479,10 +521,21 @@ def _role_name(role: str, prefix: str) -> str:
     return role if role == "Explore" else prefix + role
 
 
+def _block_template(path: Path) -> str:
+    """A guidance template's text with LF line endings, whatever line endings the checkout gave it.
+
+    Blocks are written with the instruction file's line endings and hashed with LF ones, so a bare
+    carriage return, which neither conversion handles, is refused.
+    """
+    text = _decode(read(path), path).replace("\r\n", "\n")
+    if "\r" in text:
+        raise ConfigError(f"guidance template contains a bare carriage return: {path}")
+    return text
+
+
 def _policy(review_mode: str, prefix: str = "", *, scope: str = "user") -> str:
     path = ROOT / "templates" / "CLAUDE.md"
-    # Templates render with LF whatever line endings the checkout gave them.
-    text = _decode(read(path), path).replace("\r\n", "\n")
+    text = _block_template(path)
     parts = _block_parts(text)
     if (parts is None or parts[0].strip() or parts[2].strip() or parts[1].count("{{auto_review}}") != 1
             or parts[1].count("{{role_names}}") != 1):
@@ -502,7 +555,7 @@ def _policy(review_mode: str, prefix: str = "", *, scope: str = "user") -> str:
 
 def _auto_review() -> str:
     path = ROOT / "templates" / "review-auto.md"
-    text = _decode(read(path), path).replace("\r\n", "\n").strip()
+    text = _block_template(path).strip()
     if not text or "{{" in text or "\n\n" in text or "<!--" in text:
         raise ConfigError("automatic review template must be one paragraph without placeholders or markers")
     return text
@@ -510,7 +563,7 @@ def _auto_review() -> str:
 
 def _handoff_policy() -> str:
     path = ROOT / "templates" / "handoff.md"
-    text = _decode(read(path), path).replace("\r\n", "\n")
+    text = _block_template(path)
     parts = _block_parts(text, HANDOFF_BEGIN, HANDOFF_END)
     if parts is None or parts[0].strip() or parts[2].strip() or "{{" in parts[1]:
         raise ConfigError("handoff template must contain one marked block without placeholders")
@@ -560,20 +613,72 @@ def _agent_name(path: Path) -> str | None:
 
 
 def _declared_agent_name(text: str, path: Path) -> str | None:
-    """The agent name a definition's frontmatter declares, or None; unclear syntax is an inspection error."""
-    text = text.removeprefix("\ufeff").replace("\r\n", "\n")
-    if not text.startswith("---\n"):
+    """The agent name a definition's frontmatter declares, or None; unclear syntax is an inspection error.
+
+    Claude Code ends the frontmatter at the first "---" after the opening line, wherever it stands,
+    and reads only the top-level name of the YAML mapping before it. Structure this line scan cannot
+    settle stays an inspection error rather than a guess.
+    """
+    text = text.removeprefix("\ufeff")
+    opening = FRONTMATTER_OPEN.match(text)
+    if opening is None:
         return None
-    if "\n---\n" not in text[4:]:
-        raise ConfigError(f"cannot inspect agent frontmatter: {path}")
-    header = text[4:].split("\n---\n", 1)[0]
+    start = opening.end()
+    closing = text.find("---", start)
+    if closing < 0:
+        # A Markdown file that opens with a horizontal rule: Claude Code finds no frontmatter in it.
+        _AGENT_WARNINGS[f"Agent file has no closing frontmatter line: {path}; it was not read as an agent"] = None
+        return None
+    if (closing > start and text[closing - 1] not in "\r\n") or not FRONTMATTER_CLOSE.match(text, closing):
+        raise ConfigError(f"ambiguous closing frontmatter line: {path}")
+    header = text[start:closing]
+    if FRONTMATTER_BREAKS.search(header):
+        raise ConfigError(f"cannot inspect agent name syntax: {path}")
     names = []
-    lines = header.splitlines()
+    lines = re.split(r"\r\n|\r|\n", header)
+    contents = []
+    for line in lines:
+        content = line.lstrip(" \t")
+        if content and "\t" in line[:len(line) - len(content)]:
+            # Claude Code retries such YAML with leading tabs as spaces, which changes its structure.
+            raise ConfigError(f"cannot inspect agent name syntax: {path}")
+        if content and not content.startswith("#"):
+            contents.append(content)
+    if contents and not any(TOP_LEVEL_KEY.match(content) or content[0] in YAML_INDICATORS for content in contents):
+        # Plain text between two horizontal rules is a YAML scalar, not a mapping: Claude Code loads no agent.
+        _AGENT_WARNINGS[f"Agent file frontmatter is not a mapping: {path}; it was not read as an agent"] = None
+        return None
+    base = None
+    # A compact block sequence ("- item" at the top level) is the value of the key above it.
+    sequence = after_entry = False
     for index, line in enumerate(lines):
-        match = re.match(r"^\s*name\s*:\s*(.*?)\s*$", line)
-        if not match:
+        content = line.lstrip(" \t")
+        if not content or content.startswith("#"):
             continue
-        scalar = match.group(1).strip()
+        lead = line[:len(line) - len(content)]
+        if base is None:
+            base = len(lead)
+        if len(lead) < base:
+            raise ConfigError(f"cannot inspect agent name syntax: {path}")
+        if len(lead) > base:
+            # Nested mappings, block scalar text and sequence entry content hold no top-level key.
+            sequence = sequence and after_entry
+            continue
+        if content.startswith("-") and content[1:2] in ("", " "):
+            if not sequence:
+                raise ConfigError(f"cannot inspect agent name syntax: {path}")
+            after_entry = True
+            continue
+        key = TOP_LEVEL_KEY.match(content)
+        if key is None:
+            # Flow collections, quoted, tagged, anchored, complex or merge keys, directives and markers.
+            raise ConfigError(f"cannot inspect agent name syntax: {path}")
+        value = content[key.end():]
+        rest = value.strip(" \t")
+        sequence, after_entry = not rest or (value[0] in " \t" and rest.startswith("#")), False
+        if key.group(1) != "name":
+            continue
+        scalar = value.strip()
         if scalar.startswith('"'):
             quoted = re.fullmatch(r'("(?:\\.|[^"\\])*")(?:\s+#.*)?', scalar)
             if quoted is None:
@@ -592,8 +697,8 @@ def _declared_agent_name(text: str, path: Path) -> str | None:
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
                 # Plain text such as "My agent notes" is no native name. Anything YAML could read
                 # differently (indicators, quotes, an indented continuation line) stays uninspectable.
-                following = next((item for item in lines[index + 1:] if item.strip()), "")
-                if not name or name[0] in YAML_INDICATORS or following[:1] in (" ", "\t"):
+                following = next((item for item in lines[index + 1:] if item.strip(" \t")), "")
+                if not name or name[0] in YAML_INDICATORS or len(following) - len(following.lstrip(" \t")) > base:
                     raise ConfigError(f"cannot inspect agent name syntax: {path}")
         names.append(name)
     if len(names) > 1:
@@ -620,8 +725,9 @@ def _collision_entries(base: Path, agents: dict[str, Path]) -> list[tuple[str, P
         with os.scandir(current) as entries:
             for item in entries:
                 path = Path(item.path)
-                info = path.lstat()
-                if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+                # The listing reports the reparse tag that lstat drops for points it traverses.
+                info = item.stat(follow_symlinks=False)
+                if _is_link(path, info):
                     raise ConfigError(f"linked agents tree entry cannot be inspected: {path}")
                 if stat.S_ISDIR(info.st_mode):
                     pending.append(path)
@@ -763,12 +869,34 @@ def _guidance_parts(text: str, name: str) -> tuple[str, str, str] | None:
     return _block_parts(text, HANDOFF_BEGIN, HANDOFF_END) if name == "handoff" else _block_parts(text)
 
 
+def _file_line_endings(block: str, text: str) -> str:
+    """A rendered (LF) block in the line endings of the instruction file it goes into."""
+    return block.replace("\n", "\r\n") if "\r\n" in text else block
+
+
+def _block_digest(block: str) -> str:
+    """The recorded hash of a managed block: its text with LF line endings."""
+    return digest(block.replace("\r\n", "\n").encode("utf-8"))
+
+
+def _block_matches(block: str, recorded: str) -> bool:
+    """Whether a managed block is the recorded one, whatever line endings the file has now.
+
+    Earlier versions recorded the raw block, which may hold CRLF line endings the file has since lost.
+    """
+    normalized = block.replace("\r\n", "\n")
+    return recorded in {digest(block.encode("utf-8")), digest(normalized.encode("utf-8")),
+                        digest(normalized.replace("\n", "\r\n").encode("utf-8"))}
+
+
 def _put_block(text: str, name: str, block: str, record: dict[str, Any] | None) -> tuple[str, bool, bool]:
     parts = _guidance_parts(text, name)
     if parts:
         return parts[0] + block + parts[2], record["added_before"], record["added_after"]
+    # Separators follow the file's line endings; _drop_block accepts either.
+    newline = "\r\n" if "\r\n" in text else "\n"
     before = bool(text and not text.endswith("\n"))
-    return text + ("\n" if before else "") + block + "\n", before, True
+    return text + (newline if before else "") + block + newline, before, True
 
 
 def _drop_block(text: str, name: str, record: dict[str, Any]) -> str:
@@ -895,7 +1023,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         text = "\n".join(target["imports"]) + "\n\n"
     if legacy_schema and delegation is not None:
         old = _guidance_parts(text, "delegation")
-        if old is None or digest(old[1].encode("utf-8")) != delegation["block_hash"]:
+        if old is None or not _block_matches(old[1], delegation["block_hash"]):
             raise ConfigError(f"managed delegation guidance block changed or missing: {guidance}")
         split = _legacy_handoff(old[1])
         if split is not None:
@@ -904,9 +1032,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
             reminder, remaining = split
             text = old[0] + remaining + old[2]
             text, added_before, added_after = _put_block(text, "handoff", reminder, None)
-            records["handoff"] = {"block_hash": digest(reminder.encode("utf-8")),
+            records["handoff"] = {"block_hash": _block_digest(reminder),
                                   "added_before": added_before, "added_after": added_after}
-            delegation["block_hash"] = digest(remaining.encode("utf-8"))
+            delegation["block_hash"] = _block_digest(remaining)
     for name in selected:
         installed = name in records
         if args.command == "install" and installed and args.component != "both":
@@ -920,7 +1048,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         record = records.get(name)
         parts = _guidance_parts(text, name)
         if record:
-            if parts is None or digest(parts[1].encode("utf-8")) != record["block_hash"]:
+            if parts is None or not _block_matches(parts[1], record["block_hash"]):
                 raise ConfigError(f"managed {name} guidance block changed or missing: {guidance}")
         elif parts is not None:
             raise ConfigError(f"unowned {name} guidance block already exists: {guidance}")
@@ -961,9 +1089,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 text = _drop_block(text, name, record)
                 del records[name]
             else:
-                block = _handoff_policy()
+                block = _file_line_endings(_handoff_policy(), text)
                 text, added_before, added_after = _put_block(text, name, block, record)
-                records[name] = {"block_hash": digest(block.encode("utf-8")),
+                records[name] = {"block_hash": _block_digest(block),
                                  "added_before": added_before, "added_after": added_after}
             continue
         if args.command == "remove":
@@ -990,14 +1118,15 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         elif args.command == "model":
             block = parts[1]
         else:
-            block = _policy(review_mode, prefix, scope=args.scope)
+            block = _file_line_endings(_policy(review_mode, prefix, scope=args.scope), text)
         text, added_before, added_after = _put_block(text, name, block, record)
         records[name] = {"choices": choices, "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
-                         "block_hash": digest(block.encode("utf-8")), "review_mode": review_mode,
+                         "block_hash": _block_digest(block), "review_mode": review_mode,
                          "added_before": added_before, "added_after": added_after, "legacy_names": False,
                          "role_prefix": prefix, "external_roles": external}
     created_imports = list(target["imports"])
     created_guidance = state is not None and state.get("created_guidance") is True
+    guidance_warnings = []
     if not records and created_imports and (not text.strip() or text.split() == [
             word for line in created_imports for word in line.split()]):
         # Only the imports setup added remain; drop the CLAUDE.md it created.
@@ -1007,6 +1136,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         after[str(guidance)] = None
     else:
         after[str(guidance)] = text.encode("utf-8")
+        if not records and not text.strip():
+            # Without the flag, a file setup created and the user's own empty file look the same.
+            guidance_warnings.append(f"{guidance} is now empty; setup did not record creating it, so it was kept")
     new_state = {"version": VERSION, "scope": args.scope, "components": records,
                  "guidance": target["rel"], "created_imports": created_imports}
     if created_guidance or (args.command == "install" and before[str(guidance)] is None
@@ -1035,7 +1167,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
               "plan_id": plan_id, "components": {name: {"installed": name in records} for name in ("handoff", "delegation")},
               "choices": choices if choices else (delegation["choices"] if delegation else {}),
               "review_mode": review_mode, "guidance": str(guidance), "requested_configuration_only": True,
-              "changes": changes, "warnings": _warnings(args) + list(_AGENT_WARNINGS) if "delegation" in selected else []}
+              "changes": changes,
+              "warnings": (_warnings(args) + list(_AGENT_WARNINGS) if "delegation" in selected else []) + guidance_warnings}
     resolved = _resolved_paths(args)
     if resolved is not None:
         result["resolved_paths"] = resolved
@@ -1203,13 +1336,14 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     component_info: dict[str, dict[str, Any]] = {}
     pending_prefix = pending_external = None
     external_warnings: list[str] = []
+    reported_agents = agents
     for name in ("handoff", "delegation"):
         record = records.get(name)
         issues = []
         try:
             parts = _guidance_parts(text, name)
             if record:
-                if parts is None or digest(parts[1].encode("utf-8")) != record["block_hash"]:
+                if parts is None or not _block_matches(parts[1], record["block_hash"]):
                     issues.append(f"managed {name} guidance block changed or missing: {guidance}")
                 elif name == "delegation" and _older_template(parts[1], record, args.scope):
                     # Not a conflict: the block is intact and owned, only rendered by an earlier template.
@@ -1250,6 +1384,9 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             if issues:
                 # A planned layout is only reported when install or update could apply it.
                 pending_prefix = pending_external = None
+            elif pending_prefix is not None or pending_external is not None:
+                # The role files install or update would write, not the installed or default ones.
+                reported_agents = targets
         component_info[name] = {"installed": record is not None, "status": "ok" if not issues else "conflict",
                                 "issues": issues}
     issues = [issue for entry in component_info.values() for issue in entry["issues"]]
@@ -1260,7 +1397,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     if state is not None and state["version"] in (1, 2):
         try:
             parts = _guidance_parts(text, "delegation")
-            if parts and digest(parts[1].encode("utf-8")) == delegation["block_hash"]:
+            if parts and _block_matches(parts[1], delegation["block_hash"]):
                 embedded = _legacy_handoff(parts[1]) is not None
                 component_info["handoff"]["migration_required"] = embedded
                 if embedded:
@@ -1282,7 +1419,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             "requested_configuration_only": True,
             "review_mode": delegation["review_mode"] if delegation else "off",
             "paths": {"config_root": str(base / "cc-feather"), "state": str(state_path),
-                      "guidance": str(guidance), "agents": {role: str(path) for role, path in agents.items()}},
+                      "guidance": str(guidance), "agents": {role: str(path) for role, path in reported_agents.items()}},
             "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
             "guidance_choice_required": target["choice_required"],
             "issues": issues, "warnings": _warnings(args) + guidance_warnings + external_warnings + list(_AGENT_WARNINGS)}

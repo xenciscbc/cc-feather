@@ -87,5 +87,61 @@ class PluginPortabilityTest(unittest.TestCase):
         self.workflow(upstream, self.tool)
 
 
+class SetupPortabilityTest(unittest.TestCase):
+    """The setup tool finds its templates from a relocated copy, as in a plugin cache."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.package = self.base / "plugin cache with spaces"
+        shutil.copytree(ROOT / "templates", self.package / "templates")
+        (self.package / "scripts").mkdir()
+        shutil.copy2(ROOT / "scripts/feather_config.py", self.package / "scripts")
+        self.tool = self.package / "scripts/feather_config.py"
+        self.project = self.base / "使用者專案"
+        self.project.mkdir()
+        self.claude_home = self.base / "claude home"
+        self.claude_home.mkdir()
+        # The user home stays inside the temporary directory too, so nothing reads or writes the real one.
+        self.user_home = self.base / "user home"
+        self.user_home.mkdir()
+
+    def run_setup(self, *args):
+        environment = {key: value for key, value in os.environ.items() if key != "CLAUDE_CONFIG_DIR"}
+        environment.update(HOME=str(self.user_home), USERPROFILE=str(self.user_home))
+        result = subprocess.run(
+            [sys.executable, "-B", str(self.tool), *args, "--project", str(self.project),
+             "--claude-home", str(self.claude_home)],
+            cwd=self.base, env=environment, text=True, encoding="utf-8", capture_output=True, timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout)
+
+    def apply(self, *args):
+        preview = self.run_setup(*args)
+        self.assertEqual(preview["status"], "preview")
+        applied = self.run_setup(*args, "--apply", "--expected-plan", preview["plan_id"])
+        self.assertEqual(applied["status"], "applied")
+
+    def test_relocated_setup_checks_installs_and_removes(self):
+        before = {p.relative_to(self.package): p.read_bytes() for p in self.package.rglob("*") if p.is_file()}
+        self.assertEqual(self.run_setup("check", "--scope", "project")["status"], "ok")
+        self.apply("install", "--scope", "project", "--component", "both")
+        shown = self.run_setup("check", "--scope", "project")
+        self.assertEqual((shown["status"], shown["installed"]), ("ok", True), shown)
+        self.assertTrue((self.project / ".claude/agents/scout.md").is_file())
+        self.assertIn("<!-- cc-feather:handoff:begin -->", (self.project / "CLAUDE.md").read_text(encoding="utf-8"))
+        self.apply("remove", "--scope", "project", "--component", "both")
+        shown = self.run_setup("check", "--scope", "project")
+        self.assertEqual((shown["status"], shown["installed"]), ("ok", False), shown)
+        self.assertFalse((self.project / "CLAUDE.md").exists())
+        self.assertEqual(list((self.project / ".claude/agents").glob("*.md")), [])
+        self.assertEqual(list(self.claude_home.iterdir()), [])
+        self.assertEqual(list(self.user_home.iterdir()), [])
+        self.assertEqual(before, {p.relative_to(self.package): p.read_bytes()
+                                  for p in self.package.rglob("*") if p.is_file()})
+
+
 if __name__ == "__main__":
     unittest.main()
