@@ -37,10 +37,28 @@ HANDOFF_END = "<!-- cc-feather:handoff:end -->"
 VERSION = 4
 # Instruction files a project-scope installation may manage, relative to the project.
 GUIDANCE_FILES = ("CLAUDE.md", ".claude/CLAUDE.md", "AGENTS.md", ".claude/AGENTS.md")
+# Project guidance loads after user guidance, so an off project states it to override a user-scope auto.
+PROJECT_REVIEW_OFF = "Automatic plan review is off in this project; this overrides broader Feather guidance."
+# Commands allowed where project scope is the user configuration: inspection and removal of an earlier install.
+ALIASED_PROJECT_COMMANDS = {"check", "show", "session", "remove"}
+# YAML plain scalars starting with these may mean something other than their text.
+YAML_INDICATORS = "[{>|!&*@%`'\"-?:,#"
+
+# Per-invocation state, reset by main(): roots resolved once (with their supplied spelling as key),
+# the resolved roots trusted as link-check boundaries, and agent files skipped during inspection.
+_ROOTS: dict[tuple[str, str], tuple[Path, Path]] = {}
+_TRUSTED_ROOTS: dict[str, str] = {}
+_AGENT_WARNINGS: dict[str, None] = {}
 
 
 class ConfigError(Exception):
     pass
+
+
+def _reset_invocation() -> None:
+    _ROOTS.clear()
+    _TRUSTED_ROOTS.clear()
+    _AGENT_WARNINGS.clear()
 
 
 def digest(data: bytes) -> str:
@@ -56,18 +74,27 @@ def read(path: Path) -> bytes | None:
 
 
 def _safe_path(path: Path) -> None:
-    """Reject links at the target and all existing ancestors, including junctions."""
+    """Reject links at the target and its existing ancestors, including junctions.
+
+    The walk stops at a configuration root resolved for this invocation once that root still
+    resolves to itself: links above it were resolved once and accepted, links at or below it are not.
+    """
     for member in (path, *path.parents):
         try:
             info = member.lstat()
         except FileNotFoundError:
             continue
+        root = _TRUSTED_ROOTS.get(os.path.normcase(str(member)))
+        if root is not None and os.path.normcase(os.path.realpath(member)) != os.path.normcase(root):
+            raise ConfigError(f"configuration root changed after it was resolved: {root}")
         if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400):
             raise ConfigError(f"linked path is unsafe: {member}")
         if member == path and info.st_nlink > 1 and stat.S_ISREG(info.st_mode):
             raise ConfigError(f"hard-linked target is unsafe: {member}")
         if member == path and not stat.S_ISREG(info.st_mode):
             raise ConfigError(f"target is not a regular file: {member}")
+        if root is not None:
+            return
 
 
 def _decode(data: bytes | None, path: Path) -> str:
@@ -77,17 +104,134 @@ def _decode(data: bytes | None, path: Path) -> str:
         raise ConfigError(f"not UTF-8: {path}") from exc
 
 
-def _scope(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+def _user_home() -> Path:
+    try:
+        return Path.home()
+    except RuntimeError as exc:
+        raise ConfigError(f"cannot determine the user home directory: {exc}") from exc
+
+
+def _claude_home(args: argparse.Namespace) -> Path:
+    """The Claude configuration directory as supplied, before any link resolution."""
+    home_text = args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR")
+    home = Path(home_text) if home_text else _user_home() / ".claude"
+    if not home.is_absolute() or ".." in home.parts:
+        raise ConfigError("--claude-home and CLAUDE_CONFIG_DIR must be absolute without '..'")
+    return home
+
+
+def _resolve_project(project: Path) -> tuple[Path, bool]:
+    """Return the project's real path and whether it is a trusted root.
+
+    A filesystem that cannot report final paths keeps the supplied path with full ancestor link checks.
+    """
+    supplied = os.path.abspath(project)
+    try:
+        real = os.path.realpath(supplied, strict=True)
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise ConfigError(f"project directory does not exist: {project}") from exc
+    except OSError as exc:
+        if not os.path.isdir(supplied):
+            raise ConfigError(f"project directory does not exist: {project}") from exc
+        return Path(supplied), False
+    if not os.path.isdir(real):
+        raise ConfigError(f"project directory does not exist: {project}")
+    return Path(real), True
+
+
+def _resolve_home(home: Path) -> tuple[Path, bool]:
+    """Return the Claude home's real path and whether it is a trusted root.
+
+    The home may not exist yet: its deepest existing ancestor is resolved and the missing
+    components are appended, so a dangling link among them is refused rather than followed later.
+    """
+    supplied = os.path.abspath(home)
+    existing, remaining = supplied, []
+    while not os.path.exists(existing):
+        parent = os.path.dirname(existing)
+        if parent == existing:
+            # Nothing on this path exists, so no link can be on it yet.
+            return Path(supplied), False
+        remaining.insert(0, os.path.basename(existing))
+        existing = parent
+    for index in range(len(remaining)):
+        candidate = os.path.join(existing, *remaining[:index + 1])
+        if os.path.lexists(candidate):
+            raise ConfigError(f"linked path is unsafe: {candidate}")
+    try:
+        real = os.path.realpath(existing, strict=True)
+    except OSError as exc:
+        if isinstance(exc, (FileNotFoundError, NotADirectoryError)) or not os.path.isdir(existing):
+            raise
+        return Path(supplied), False
+    return Path(real, *remaining), True
+
+
+def _roots(args: argparse.Namespace) -> tuple[Path, Path]:
+    """Resolve the project and Claude home once per invocation; every later call must agree.
+
+    Every managed path derives from these roots, so links above them are followed once here and
+    the walk in _safe_path stops at them.
+    """
     project = Path(args.project)
     if not project.is_absolute() or ".." in project.parts:
         raise ConfigError("--project must be absolute without '..'")
+    project_root, project_trusted = _resolve_project(project)
+    home = _claude_home(args)
+    home_root, home_trusted = _resolve_home(home)
+    key = (str(project), str(home))
+    cached = _ROOTS.get(key)
+    if cached is None:
+        _ROOTS[key] = (project_root, home_root)
+        for root, trusted in ((project_root, project_trusted), (home_root, home_trusted)):
+            if trusted:
+                _TRUSTED_ROOTS[os.path.normcase(str(root))] = str(root)
+        return project_root, home_root
+    for old, new in zip(cached, (project_root, home_root)):
+        if os.path.normcase(str(old)) != os.path.normcase(str(new)):
+            raise ConfigError(f"configuration root changed after it was resolved: {old}")
+    return cached
+
+
+def _resolved_paths(args: argparse.Namespace) -> dict[str, str] | None:
+    """Report the resolved roots when either differs from the supplied spelling."""
+    project, home = _roots(args)
+    supplied = (os.path.abspath(args.project), os.path.abspath(_claude_home(args)))
+    if all(os.path.normcase(text) == os.path.normcase(str(root)) for text, root in zip(supplied, (project, home))):
+        return None
+    return {"project": str(project), "claude_home": str(home)}
+
+
+def _same_directory(first: Path, second: Path) -> bool:
+    try:
+        if first.exists() and second.exists():
+            return os.path.samefile(first, second)
+        return os.path.normcase(first.resolve()) == os.path.normcase(second.resolve())
+    except RuntimeError as exc:
+        raise ConfigError(f"cannot resolve configuration path: {exc}") from exc
+
+
+def _user_configuration_alias(project: Path, home: Path) -> Path | None:
+    """Return the project path that is the user configuration, when project scope would write it."""
+    user_home = _user_home()
+    pairs = ((project, (user_home, home, user_home / ".claude")),
+             (project / ".claude", (home, user_home / ".claude")))
+    for local, targets in pairs:
+        if any(_same_directory(local, target) for target in targets):
+            return local
+    return None
+
+
+def _scope(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+    project, home = _roots(args)
+    if args.scope == "project":
+        alias = _user_configuration_alias(project, home)
+        # An earlier aliased install stays inspectable and removable; nothing new is written there.
+        if alias is not None and args.command not in ALIASED_PROJECT_COMMANDS:
+            raise ConfigError(f"project scope here would write the user configuration ({alias}); use --scope user")
     _safe_path(project / ".cc-feather-path-check")
     if not project.is_dir():
-        raise ConfigError(f"project directory does not exist: {project}")
-    home_text = args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR")
-    home = Path(home_text) if home_text else Path.home() / ".claude"
-    if not home.is_absolute() or ".." in home.parts:
-        raise ConfigError("--claude-home and CLAUDE_CONFIG_DIR must be absolute without '..'")
+        raise ConfigError(f"project directory does not exist: {Path(args.project)}")
     base = project / ".claude" if args.scope == "project" else home
     guidance = project / "CLAUDE.md" if args.scope == "project" else home / "CLAUDE.md"
     _safe_path(base / "cc-feather" / "state.json")
@@ -102,24 +246,53 @@ def _exists(path: Path) -> bool:
         raise ConfigError(f"cannot inspect instruction file: {path}: {exc}") from exc
 
 
-def _instruction_files(args: argparse.Namespace) -> tuple[list[Path], list[Path]]:
-    """Return the CLAUDE files that make Claude skip AGENTS.md, and the AGENTS files it reads.
-
-    Claude Code reads AGENTS.md files from the project and its ancestors only when no
-    CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md exists there; the user's own
-    instruction file does not count.
-    """
-    project = Path(args.project)
-    home_text = args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR")
-    claude_home = Path(home_text) if home_text else Path.home() / ".claude"
-    user_files = {(Path.home() / ".claude" / "CLAUDE.md").resolve(), (claude_home / "CLAUDE.md").resolve()}
+def _chain_files(project: Path, user_files: set[Path]) -> tuple[list[Path], list[Path]]:
     directories = [project, *project.parents]
-    counting = [directory / name for directory in directories
-                for name in ("CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md")
-                if _exists(directory / name) and (directory / name).resolve() not in user_files]
+    try:
+        counting = [directory / name for directory in directories
+                    for name in ("CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md")
+                    if _exists(directory / name) and (directory / name).resolve() not in user_files]
+    except RuntimeError as exc:
+        raise ConfigError(f"cannot resolve instruction file: {exc}") from exc
     agents = [] if counting else [directory / name for directory in reversed(directories)
                                   for name in ("AGENTS.md", ".claude/AGENTS.md") if _exists(directory / name)]
     return counting, agents
+
+
+def _instruction_files(args: argparse.Namespace) -> tuple[list[Path], list[Path], str | None]:
+    """Return the CLAUDE files that make Claude skip AGENTS.md, the AGENTS files it reads, and a conflict.
+
+    Claude Code reads AGENTS.md files from the project and its ancestors only when no
+    CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md exists there; the user's own
+    instruction file does not count. A project reached through a link has two ancestor chains,
+    the supplied one and the resolved one; when Claude would read different files through them,
+    the conflict describes both and the caller asks the user to choose.
+    """
+    project, claude_home = _roots(args)
+    try:
+        user_files = {(_user_home() / ".claude" / "CLAUDE.md").resolve(), (claude_home / "CLAUDE.md").resolve()}
+    except RuntimeError as exc:
+        raise ConfigError(f"cannot resolve instruction file: {exc}") from exc
+    counting, agents = _chain_files(project, user_files)
+    supplied = Path(os.path.abspath(args.project))
+    if os.path.normcase(str(supplied)) == os.path.normcase(str(project)):
+        return counting, agents, None
+    other_counting, other_agents = _chain_files(supplied, user_files)
+    if bool(counting) == bool(other_counting) and (
+            [_import_line(path, project) for path in agents] == [_import_line(path, supplied) for path in other_agents]):
+        return counting, agents, None
+
+    def describe(chain: Path, chain_counting: list[Path], chain_agents: list[Path]) -> str:
+        files = ", ".join(map(str, chain_agents)) or "none"
+        skipped = f" (AGENTS.md skipped while {chain_counting[0]} exists)" if chain_counting else ""
+        return f"through {chain}: AGENTS files {files}{skipped}"
+
+    conflict = (f"the project path {supplied} resolves to {project}, and Claude reads different instruction files "
+                f"through each ({describe(supplied, other_counting, other_agents)}; "
+                f"{describe(project, counting, agents)}); rerun with --guidance claude to create CLAUDE.md "
+                f"importing the AGENTS files read through {project}, or --guidance agents to write into the "
+                "project's own AGENTS.md")
+    return counting or other_counting, agents, conflict
 
 
 def _import_line(target: Path, project: Path) -> str:
@@ -134,7 +307,7 @@ def _resolve_guidance(args: argparse.Namespace, state: dict[str, Any] | None) ->
         if choice:
             raise ConfigError("--guidance applies only to project scope")
         return {"rel": "CLAUDE.md", "path": user_guidance, "imports": [], "choice_required": False}
-    project = Path(args.project)
+    project, _ = _roots(args)
     recorded = (state["guidance"] if state["version"] == VERSION else "CLAUDE.md") if state is not None else None
     if recorded is not None:
         if choice:
@@ -143,20 +316,24 @@ def _resolve_guidance(args: argparse.Namespace, state: dict[str, Any] | None) ->
                   "imports": state["created_imports"] if state["version"] == VERSION else []}
     else:
         existing = next((rel for rel in GUIDANCE_FILES[:2] if _exists(project / rel)), None)
-        agents = [] if existing else _instruction_files(args)[1]
-        if not agents:
+        _, agents, conflict = ([], [], None) if existing else _instruction_files(args)
+        if not agents and conflict is None:
             if choice:
                 raise ConfigError("--guidance applies only when AGENTS.md is the project's instruction file")
             rel = existing or "CLAUDE.md"
             result = {"rel": rel, "path": project / rel, "imports": [], "choice_required": False}
         elif choice == "agents":
-            rel = next((rel for rel in GUIDANCE_FILES[2:] if project / rel in agents), None)
+            # When the two chains differ, the project's own AGENTS file is in effect through at least one.
+            rel = next((rel for rel in GUIDANCE_FILES[2:]
+                        if (_exists(project / rel) if conflict else project / rel in agents)), None)
             if rel is None:
                 raise ConfigError("--guidance agents needs an AGENTS.md in the project itself; only ancestor AGENTS.md files are in effect")
             result = {"rel": rel, "path": project / rel, "imports": [], "choice_required": False}
         else:
             result = {"rel": "CLAUDE.md", "path": project / "CLAUDE.md", "choice_required": choice is None,
                       "imports": [_import_line(path, project) for path in agents]}
+            if conflict is not None:
+                result["choice_reason"] = conflict
     _safe_path(result["path"])
     return result
 
@@ -196,6 +373,11 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
         raise ConfigError("state schema or scope mismatch")
     if value["version"] >= 3:
         top = {"version", "scope", "components"} | ({"guidance", "created_imports"} if value["version"] == VERSION else set())
+        if value["version"] == VERSION and "created_guidance" in value:
+            # Optional: present only as true, when setup created the scope's instruction file.
+            if value["created_guidance"] is not True:
+                raise ConfigError("state component schema mismatch")
+            top |= {"created_guidance"}
         if set(value) != top or not isinstance(value["components"], dict) or not set(value["components"]) <= {"handoff", "delegation"} or not value["components"]:
             raise ConfigError("state component schema mismatch")
         if value["version"] == VERSION:
@@ -281,15 +463,20 @@ def _role_name(role: str, prefix: str) -> str:
     return role if role == "Explore" else prefix + role
 
 
-def _policy(review_mode: str, prefix: str = "") -> str:
+def _policy(review_mode: str, prefix: str = "", *, scope: str = "user") -> str:
     path = ROOT / "templates" / "CLAUDE.md"
-    text = _decode(read(path), path)
+    # Templates render with LF whatever line endings the checkout gave them.
+    text = _decode(read(path), path).replace("\r\n", "\n")
     parts = _block_parts(text)
     if (parts is None or parts[0].strip() or parts[2].strip() or parts[1].count("{{auto_review}}") != 1
             or parts[1].count("{{role_names}}") != 1):
         raise ConfigError("policy template must contain one marked block with auto review and role names tokens")
     # The automatic review rules exist in the guidance only while the mode is auto, so off loads nothing to ignore.
-    auto = _auto_review() + "\n\n" if review_mode == "auto" else ""
+    # A project that is off says so, because user-scope guidance with the rules loads in the same session.
+    if review_mode == "auto":
+        auto = _auto_review() + "\n\n"
+    else:
+        auto = PROJECT_REVIEW_OFF + "\n\n" if scope == "project" else ""
     names = ""
     if prefix:
         listed = ", ".join(f"{role} = {_role_name(role, prefix)}" for role in ROLES if role != "Explore")
@@ -307,7 +494,7 @@ def _auto_review() -> str:
 
 def _handoff_policy() -> str:
     path = ROOT / "templates" / "handoff.md"
-    text = _decode(read(path), path)
+    text = _decode(read(path), path).replace("\r\n", "\n")
     parts = _block_parts(text, HANDOFF_BEGIN, HANDOFF_END)
     if parts is None or parts[0].strip() or parts[2].strip() or "{{" in parts[1]:
         raise ConfigError("handoff template must contain one marked block without placeholders")
@@ -328,7 +515,7 @@ def _overrides(items: list[str]) -> dict[str, dict[str, str]]:
 
 def _render(role: str, choice: dict[str, str], prefix: str = "") -> bytes:
     path = ROOT / "templates" / "agents" / f"{role}.md"
-    template = _decode(read(path), path)
+    template = _decode(read(path), path).replace("\r\n", "\n")
     if template.count("{{model}}") != 1 or template.count("{{effort}}") != 1:
         raise ConfigError(f"template requires one model and effort token: {path}")
     text = template.replace("{{model}}", choice["model"]).replace("{{effort}}", choice["effort"])
@@ -340,14 +527,21 @@ def _render(role: str, choice: dict[str, str], prefix: str = "") -> bytes:
 
 
 def _agent_name(path: Path) -> str | None:
-    text = _decode(read(path), path).removeprefix("\ufeff").replace("\r\n", "\n")
+    try:
+        text = (read(path) or b"").decode("utf-8")
+    except UnicodeDecodeError:
+        # Not readable as an agent definition: reported rather than blocking setup.
+        _AGENT_WARNINGS[f"Skipped agent file that is not UTF-8: {path}; any agent name it declares was not checked."] = None
+        return None
+    text = text.removeprefix("\ufeff").replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return None
     if "\n---\n" not in text[4:]:
         raise ConfigError(f"cannot inspect agent frontmatter: {path}")
     header = text[4:].split("\n---\n", 1)[0]
     names = []
-    for line in header.splitlines():
+    lines = header.splitlines()
+    for index, line in enumerate(lines):
         match = re.match(r"^\s*name\s*:\s*(.*?)\s*$", line)
         if not match:
             continue
@@ -368,7 +562,11 @@ def _agent_name(path: Path) -> str | None:
         else:
             name = re.split(r"\s+#", scalar, maxsplit=1)[0].strip()
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
-                raise ConfigError(f"cannot inspect agent name syntax: {path}")
+                # Plain text such as "My agent notes" is no native name. Anything YAML could read
+                # differently (indicators, quotes, an indented continuation line) stays uninspectable.
+                following = next((item for item in lines[index + 1:] if item.strip()), "")
+                if not name or name[0] in YAML_INDICATORS or following[:1] in (" ", "\t"):
+                    raise ConfigError(f"cannot inspect agent name syntax: {path}")
         names.append(name)
     if len(names) > 1:
         raise ConfigError(f"duplicate agent name declaration: {path}")
@@ -428,14 +626,19 @@ def _edit_role_fields(data: bytes, old: dict[str, str], new: dict[str, str], pat
     return (header + tail).encode("utf-8")
 
 
-def _edit_review_block(block: str, old: str, new: str, prefix: str) -> str:
-    if block == _policy(old, prefix):
-        return _policy(new, prefix)
-    # Guidance from earlier templates keeps its rules and switches them with a mode line.
-    line = f"Automatic plan review mode: {old}"
-    if block.count(line) == 1:
-        return block.replace(line, f"Automatic plan review mode: {new}", 1)
-    raise ConfigError("installed guidance is from an older template; run setup update first")
+def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: str = "user") -> str:
+    # Blocks rendered from a CRLF checkout keep CRLF; compare as LF and write back the file's endings.
+    current = block.replace("\r\n", "\n")
+    # A project that was off before the off line existed has the user-scope rendering.
+    if current in (_policy(old, prefix, scope=scope), _policy(old, prefix, scope="user")):
+        result = _policy(new, prefix, scope=scope)
+    else:
+        # Guidance from earlier templates keeps its rules and switches them with a mode line.
+        line = f"Automatic plan review mode: {old}"
+        if current.count(line) != 1:
+            raise ConfigError("installed guidance is from an older template; run setup update first")
+        result = current.replace(line, f"Automatic plan review mode: {new}", 1)
+    return result.replace("\n", "\r\n") if "\r\n" in block else result
 
 
 def _snapshot(paths: list[Path]) -> dict[str, bytes | None]:
@@ -582,8 +785,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     state = _load_state(state_path, args.scope, defaults)
     target = _resolve_guidance(args, state)
     if target["choice_required"] and args.command == "install":
-        raise ConfigError("guidance target choice required: AGENTS.md is the project's instruction file; "
-                          "rerun with --guidance claude to create CLAUDE.md importing it, or --guidance agents to write into it")
+        raise ConfigError("guidance target choice required: " + target.get("choice_reason", (
+            "AGENTS.md is the project's instruction file; "
+            "rerun with --guidance claude to create CLAUDE.md importing it, or --guidance agents to write into it")))
     guidance = target["path"]
     records = {k: dict(v) for k, v in _components(state).items()}
     legacy_schema = state is not None and state["version"] in (1, 2)
@@ -625,7 +829,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         # The user's rewritten Explore.md is theirs now; remove leaves it in place.
         owned = _release_user_explore(owned, delegation)
     elif active_delegation and args.command in {"model", "review"}:
-        provided = bool(_explore_providers(base, _release_user_explore(owned, delegation)))
+        released = _release_user_explore(owned, delegation)
+        provided = bool(_explore_providers(base, released))
         if provided != bool(external):
             explore = base / "agents" / "Explore.md"
             if not provided and read(explore) is not None:
@@ -633,6 +838,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 raise ConfigError(f"unowned role file already exists: {explore}; user decision required")
             change = "now provided by another agent" if provided else "no longer provided by another agent"
             raise ConfigError(f"Explore is {change}; run setup update first")
+        if _layout(base, released, prefix)[0] != prefix:
+            # Update moves the roles to the prefix first, as check reports with pending_role_prefix.
+            raise ConfigError("role names are now taken by other agents; run setup update first")
     for role in _overrides(args.set):
         if role in external:
             raise ConfigError(f"{role} is provided by another agent and is not managed by cc-feather")
@@ -676,7 +884,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         elif parts is not None:
             raise ConfigError(f"unowned {name} guidance block already exists: {guidance}")
     if active_delegation:
-        collisions = _collisions(base, agents)
+        # Remove deletes only owned files, so another agent using a role name cannot block it.
+        collisions = _collisions(base, agents) if args.command != "remove" else []
         if collisions:
             raise ConfigError("; ".join(collisions))
         if delegation:
@@ -736,25 +945,33 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 after[str(path)] = _render(role, choices[role], prefix)
         parts = _guidance_parts(text, name)
         if args.command == "review":
-            block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix)
+            block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix, scope=args.scope)
         elif args.command == "model":
             block = parts[1]
         else:
-            block = _policy(review_mode, prefix)
+            block = _policy(review_mode, prefix, scope=args.scope)
         text, added_before, added_after = _put_block(text, name, block, record)
         records[name] = {"choices": choices, "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
                          "block_hash": digest(block.encode("utf-8")), "review_mode": review_mode,
                          "added_before": added_before, "added_after": added_after, "legacy_names": False,
                          "role_prefix": prefix, "external_roles": external}
     created_imports = list(target["imports"])
+    created_guidance = state is not None and state.get("created_guidance") is True
     if not records and created_imports and (not text.strip() or text.split() == [
             word for line in created_imports for word in line.split()]):
         # Only the imports setup added remain; drop the CLAUDE.md it created.
         after[str(guidance)] = None
+    elif not records and created_guidance and not text.strip():
+        # Setup created this instruction file and nothing else remains in it.
+        after[str(guidance)] = None
     else:
         after[str(guidance)] = text.encode("utf-8")
-    after[str(state_path)] = canonical({"version": VERSION, "scope": args.scope, "components": records,
-                                        "guidance": target["rel"], "created_imports": created_imports}) + b"\n" if records else None
+    new_state = {"version": VERSION, "scope": args.scope, "components": records,
+                 "guidance": target["rel"], "created_imports": created_imports}
+    if created_guidance or (args.command == "install" and before[str(guidance)] is None
+                            and after[str(guidance)] is not None):
+        new_state["created_guidance"] = True
+    after[str(state_path)] = canonical(new_state) + b"\n" if records else None
     changes = []
     for path in paths:
         key = str(path)
@@ -770,14 +987,17 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 "changes": [{"path": c["path"], "after_sha256": c["after_sha256"]} for c in changes],
                 "templates": {role: digest(_render(role, choices[role], prefix)) for role in choices}
                              if "delegation" in active_components and args.command in {"install", "update"} else {},
-                "policy": digest(_policy(review_mode, prefix).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
+                "policy": digest(_policy(review_mode, prefix, scope=args.scope).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
                 "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
     result = {"status": "preview", "command": args.command, "component": args.component, "scope": args.scope,
               "plan_id": plan_id, "components": {name: {"installed": name in records} for name in ("handoff", "delegation")},
               "choices": choices if choices else (delegation["choices"] if delegation else {}),
               "review_mode": review_mode, "guidance": str(guidance), "requested_configuration_only": True,
-              "changes": changes, "warnings": _warnings(args) if "delegation" in selected else []}
+              "changes": changes, "warnings": _warnings(args) + list(_AGENT_WARNINGS) if "delegation" in selected else []}
+    resolved = _resolved_paths(args)
+    if resolved is not None:
+        result["resolved_paths"] = resolved
     return result, before, after
 
 def _warnings(args: argparse.Namespace) -> list[str]:
@@ -789,10 +1009,7 @@ def _warnings(args: argparse.Namespace) -> list[str]:
             warnings.append(f"Environment {key} is set; requested role models may differ at runtime.")
     if os.environ.get("CLAUDE_CODE_SUBAGENT_MODEL_FORCE"):
         warnings.append("CLAUDE_CODE_SUBAGENT_MODEL_FORCE may force the main model even when CLAUDE_CODE_SUBAGENT_MODEL is unset.")
-    project = Path(args.project)
-    _, _, _ = _scope(args)
-    home_text = args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR")
-    home = Path(home_text) if home_text else Path.home() / ".claude"
+    project, home = _roots(args)
     for path in (home / "settings.json", home / "settings.local.json",
                  project / ".claude" / "settings.json", project / ".claude" / "settings.local.json"):
         try:
@@ -823,8 +1040,7 @@ def _warnings(args: argparse.Namespace) -> list[str]:
 
 def _instruction_setting(args: argparse.Namespace) -> str | None:
     """Read the user's Project instructions choice; only that key is inspected."""
-    home_text = args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR")
-    path = (Path(home_text) if home_text else Path.home() / ".claude") / "settings.json"
+    path = _roots(args)[1] / "settings.json"
     try:
         _safe_path(path)
         settings = json.loads(read(path) or b"{}")
@@ -871,7 +1087,7 @@ def _apply(args: argparse.Namespace, result: dict[str, Any], before: dict[str, b
     try:
         fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError as exc:
-        raise ConfigError(f"scope is locked: {lock}") from exc
+        raise ConfigError(f"scope is locked: {lock}; if no other setup is running, delete {lock} and retry") from exc
     os.close(fd)
     try:
         fresh, old_now, new_now = _plan(args)
@@ -1025,7 +1241,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
                       "guidance": str(guidance), "agents": {role: str(path) for role, path in agents.items()}},
             "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
             "guidance_choice_required": target["choice_required"],
-            "issues": issues, "warnings": _warnings(args) + guidance_warnings + external_warnings}
+            "issues": issues, "warnings": _warnings(args) + guidance_warnings + external_warnings + list(_AGENT_WARNINGS)}
 
 
 
@@ -1120,6 +1336,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-plan")
     args = parser.parse_args(argv)
+    # Roots, trusted link boundaries and inspection warnings belong to this invocation only.
+    _reset_invocation()
     try:
         if args.scope is None:
             if args.command in {"check", "show", "session"}:
@@ -1147,6 +1365,8 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigError, OSError) as exc:
         print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stdout)
         return 2
+    finally:
+        _reset_invocation()
 
 
 if __name__ == "__main__":

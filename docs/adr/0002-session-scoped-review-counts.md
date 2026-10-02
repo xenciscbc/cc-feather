@@ -1,6 +1,6 @@
 # Review counts are scoped to a session
 
-Automatic review counts (plan review, code review, outcome verification) are per session: a resumed session starts a new count, because resuming requires the user. Within a session the non-reset rules stay (mode change, renamed plan, cosmetic split, different reviewer, model or wording). What crosses sessions is an unresolved verdict and the restriction it imposes, recorded as plain text in an active handoff and removed once a later call passes it or the user decides.
+Automatic review counts (plan review, code review, outcome verification) are per session: a resumed session starts a new count, because resuming requires the user. Within a session the non-reset rules stay (mode change, renamed plan, cosmetic split, different reviewer, model or wording). What crosses sessions is an unresolved verdict and the restriction it imposes, and only when an active handoff records it as plain text; the note is removed once a later call passes it or the user decides. Without such a handoff record, a resumed session carries no restriction from an earlier one.
 
 ## Considered Options
 
@@ -9,4 +9,4 @@ Automatic review counts (plan review, code review, outcome verification) are per
 
 ## Consequences
 
-A resume may run up to two more automatic calls for the same plan or claim. Restriction notes still cross sessions, so an unresolved claim is not committed or reported complete after a resume. The handoff runtime and record schema do not change.
+A resume may run up to two more automatic calls for the same plan or claim. Restriction notes recorded in an active handoff still cross sessions, so such a claim is not committed or reported complete after a resume; an unresolved verdict that no active handoff records does not restrict a later session. The handoff runtime and record schema do not change.

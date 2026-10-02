@@ -148,7 +148,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | project | `<專案>/CLAUDE.md`、`.claude/CLAUDE.md` 或 AGENTS.md（見下方） | `<專案>/.claude/cc-feather/state.json` |
 | user | `<Claude 設定目錄>/CLAUDE.md` | `<Claude 設定目錄>/cc-feather/state.json` |
 
-Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。`auto` 時分派區塊包含自動審查規則，`off` 時整段移除，主 Agent 與子 Agent 都不會載入。較早版本的安裝保留 `Automatic plan review mode:` 那行，執行 setup update 後改為新格式。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後審查依計畫施工的工作；沒有計畫的安全邊界、資料遷移或不可逆工作須先有經審查且使用者同意的計畫；其他沒有計畫的小修改不自動審查。
+Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。`auto` 時分派區塊包含自動審查規則，`off` 時整段移除，主 Agent 與子 Agent 都不會載入。專案範圍的 `off` 會保留一行「此專案關閉自動計畫審查」的說明，因此覆蓋使用者範圍的 `auto`：任務／session 選擇優先，其次是專案指示，最後是使用者指示。較早版本以 `off` 安裝的專案，要到下次執行 review 或 setup update 才加入這一行。較早版本的安裝保留 `Automatic plan review mode:` 那行，執行 setup update 後改為新格式。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；新 session 載入已儲存模式。開啟後審查依計畫施工的工作；沒有計畫的安全邊界、資料遷移或不可逆工作須先有經審查且使用者同意的計畫；其他沒有計畫的小修改不自動審查。
 
 project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.md`。Claude Code 只在沒有任何 CLAUDE 檔時才讀 AGENTS.md，所以專案若依賴 AGENTS.md，setup 會先詢問：直接寫進 AGENTS 檔，或建立一個 import 它的 CLAUDE.md，讓 Claude 繼續讀到它。選擇會記錄下來，之後沿用。詳見[專案指示檔](docs/setup.md#project-instruction-file)。
 

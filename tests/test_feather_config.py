@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import importlib.util
 import io
 import json
@@ -20,6 +21,40 @@ spec = importlib.util.spec_from_file_location("feather_config", SCRIPT)
 assert spec and spec.loader
 config = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(config)
+
+
+def make_directory_link(link: Path, target: Path) -> None:
+    """Link a directory with a junction on Windows, else a symlink; skip when neither works."""
+    if os.name == "nt":
+        try:
+            import _winapi
+            _winapi.CreateJunction(str(target), str(link))
+            return
+        except (ImportError, OSError):
+            pass
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        raise unittest.SkipTest(f"directory link creation unavailable: {exc}")
+
+
+def remove_directory_link(link: Path) -> None:
+    """Remove the link itself, never its target's content."""
+    try:
+        os.unlink(link)
+    except (IsADirectoryError, PermissionError):
+        os.rmdir(link)
+
+
+def remove_link_base(base: Path) -> None:
+    # Unlink every directory link first so removing the tree never reaches through one.
+    for current, directories, _ in os.walk(base):
+        for name in list(directories):
+            info = (Path(current) / name).lstat()
+            if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400):
+                remove_directory_link(Path(current) / name)
+                directories.remove(name)
+    shutil.rmtree(base)
 
 
 class FeatherConfigTests(unittest.TestCase):
@@ -100,7 +135,8 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("install")
         self.assertEqual(self.call("show")[1]["review_mode"], "off")
         self.assertIn("cc-feather:delegation", guidance.read_text(encoding="utf-8"))
-        self.assertNotIn("Automatic plan review", guidance.read_text(encoding="utf-8"))
+        self.assertIn(config.PROJECT_REVIEW_OFF, guidance.read_text(encoding="utf-8"))
+        self.assertNotIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
         explore = self.project / ".claude" / "agents" / "Explore.md"
         self.assertIn("name: Explore", explore.read_text(encoding="utf-8"))
         self.assertIn("model: sonnet", explore.read_text(encoding="utf-8"))
@@ -859,7 +895,7 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertTrue(text.startswith(config.BEGIN))
                 self.assertEqual(self.saved_state()["created_imports"], [])
                 self.apply("remove")
-                (self.project / "CLAUDE.md").unlink()
+                self.assertFalse((self.project / "CLAUDE.md").exists())
                 counting.unlink()
 
     def test_v3_state_migrates_to_recorded_claude_md(self):
@@ -1101,7 +1137,8 @@ class FeatherConfigTests(unittest.TestCase):
         guidance = self.project / "CLAUDE.md"
         self.assertIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
         self.apply("review", "project", "--review-mode", "off")
-        self.assertNotIn("Automatic plan review", guidance.read_text(encoding="utf-8"))
+        self.assertIn(config.PROJECT_REVIEW_OFF, guidance.read_text(encoding="utf-8"))
+        self.assertNotIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
         self.apply("review", "project", "--review-mode", "auto")
         self.apply("update")
         self.assertIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
@@ -1115,7 +1152,7 @@ class FeatherConfigTests(unittest.TestCase):
     def test_review_toggle_keeps_guidance_from_older_templates(self):
         legacy = ("<!-- cc-feather:begin -->\n# Feather delegation for Claude Code\n\nOlder rules.\n\n"
                   "Automatic plan review mode: {mode}\n\nOlder triggers.\n\n<!-- cc-feather:end -->")
-        with mock.patch.object(config, "_policy", lambda mode, prefix="": legacy.format(mode=mode)):
+        with mock.patch.object(config, "_policy", lambda mode, prefix="", *, scope="user": legacy.format(mode=mode)):
             self.apply("install", "project", "--review-mode", "off")
         guidance = self.project / "CLAUDE.md"
         self.apply("review", "project", "--review-mode", "auto")
@@ -1128,7 +1165,7 @@ class FeatherConfigTests(unittest.TestCase):
 
     def test_review_toggle_requires_update_for_unrecognized_older_guidance(self):
         older = "<!-- cc-feather:begin -->\n# Feather delegation for Claude Code\n\nOlder rules.\n<!-- cc-feather:end -->"
-        with mock.patch.object(config, "_policy", lambda mode, prefix="": older):
+        with mock.patch.object(config, "_policy", lambda mode, prefix="", *, scope="user": older):
             self.apply("install", "project")
         guidance = self.project / "CLAUDE.md"
         before = guidance.read_bytes()
@@ -1426,6 +1463,503 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("install", "project", "--component", "handoff")
         self.assertEqual(self.call("session")[0], 0)
         self.assertFalse((self.project / ".claude" / "agents").exists())
+
+    # D1: an off project overrides user-scope automatic review.
+
+    def replace_delegation_block(self, guidance, block):
+        """Install-time rendering from an earlier version: put the block in place and own it."""
+        parts = config._block_parts(guidance.read_bytes().decode("utf-8"))
+        guidance.write_bytes((parts[0] + block + parts[2]).encode("utf-8"))
+        base = self.home if guidance.parent == self.home else self.project / ".claude"
+        state_path = base / "cc-feather" / "state.json"
+        state = json.loads(state_path.read_bytes())
+        state["components"]["delegation"]["block_hash"] = config.digest(block.encode("utf-8"))
+        state_path.write_bytes(config.canonical(state) + b"\n")
+
+    def test_project_off_overrides_user_auto(self):
+        self.apply("install", "user", "--review-mode", "auto")
+        self.apply("install", "project")
+        project_text = (self.project / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn(config.PROJECT_REVIEW_OFF + "\n\n" + config.END, project_text)
+        self.assertNotIn("Automatic plan review is on.", project_text)
+        user_text = (self.home / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn(config._auto_review(), user_text)
+        self.assertNotIn(config.PROJECT_REVIEW_OFF, user_text)
+        self.apply("review", "user", "--review-mode", "off")
+        self.assertNotIn("Automatic plan review", (self.home / "CLAUDE.md").read_text(encoding="utf-8"))
+
+    def test_project_off_auto_off_round_trip(self):
+        self.apply("install", "project")
+        guidance = self.project / "CLAUDE.md"
+        installed = guidance.read_bytes()
+        self.apply("review", "project", "--review-mode", "auto")
+        text = guidance.read_text(encoding="utf-8")
+        self.assertIn("Automatic plan review is on.", text)
+        self.assertNotIn(config.PROJECT_REVIEW_OFF, text)
+        self.apply("review", "project", "--review-mode", "off")
+        self.assertEqual(guidance.read_bytes(), installed)
+        self.assertEqual(self.call("check")[1]["components"]["delegation"]["status"], "ok")
+
+    def test_project_off_install_from_before_the_off_line_is_accepted(self):
+        self.apply("install", "project")
+        guidance = self.project / "CLAUDE.md"
+        self.replace_delegation_block(guidance, config._policy("off", "", scope="user"))
+        self.assertNotIn("Automatic plan review", guidance.read_text(encoding="utf-8"))
+        shown = self.call("check")[1]
+        self.assertEqual((shown["status"], shown["components"]["delegation"]["status"]), ("ok", "ok"), shown)
+        self.apply("review", "project", "--review-mode", "auto")
+        self.assertIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
+        self.apply("review", "project", "--review-mode", "off")
+        self.assertIn(config.PROJECT_REVIEW_OFF, guidance.read_text(encoding="utf-8"))
+
+    def crlf_package(self):
+        """A copy of the templates as a CRLF checkout would have them."""
+        fixture = self.root / "crlf-package"
+        shutil.copytree(config.ROOT / "templates", fixture / "templates")
+        for path in (fixture / "templates").rglob("*"):
+            if path.is_file():
+                path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+        return fixture
+
+    def test_crlf_installs_from_before_lf_templates_switch_review_and_keep_crlf(self):
+        fixture = self.crlf_package()
+        template = (fixture / "templates" / "CLAUDE.md").read_bytes().decode("utf-8")
+        with mock.patch.object(config, "ROOT", fixture):
+            auto = config._auto_review() + "\n\n"
+        # Rendering by versions that kept the template's line endings.
+        legacy = {mode: config._block_parts(template)[1].replace("{{auto_review}}", text).replace("{{role_names}}", "")
+                  for mode, text in (("off", ""), ("auto", auto))}
+        self.assertIn("\r\n", legacy["off"])
+        for scope, mode, new_mode, expected in (("project", "off", "auto", "Automatic plan review is on."),
+                                                ("user", "auto", "off", None)):
+            with self.subTest(scope=scope):
+                self.apply("install", scope, "--review-mode", mode)
+                guidance = (self.project if scope == "project" else self.home) / "CLAUDE.md"
+                self.replace_delegation_block(guidance, legacy[mode])
+                self.assertEqual(self.call("check", scope)[1]["components"]["delegation"]["status"], "ok")
+                self.apply("review", scope, "--review-mode", new_mode)
+                block = config._block_parts(guidance.read_bytes().decode("utf-8"))[1]
+                self.assertEqual(block.count("\n"), block.count("\r\n"))
+                self.assertGreater(block.count("\r\n"), 3)
+                if expected:
+                    self.assertIn(expected, block)
+                    self.assertNotIn(config.PROJECT_REVIEW_OFF, block)
+                else:
+                    self.assertNotIn("Automatic plan review", block)
+                shown = self.call("check", scope)[1]
+                self.assertEqual(shown["components"]["delegation"]["status"], "ok", shown)
+                self.assertEqual(shown["review_mode"], new_mode)
+
+    # D5: rendering does not depend on the checkout's line endings.
+
+    def test_crlf_templates_render_like_lf(self):
+        def rendered():
+            defaults = config._defaults()
+            items = {"handoff": config._handoff_policy(), "auto": config._auto_review()}
+            for prefix in ("", config.ROLE_PREFIX):
+                for role in config.ROLES:
+                    items[(role, prefix)] = config._render(role, defaults[role], prefix)
+                for mode in ("auto", "off"):
+                    for scope in ("project", "user"):
+                        items[(mode, prefix, scope)] = config._policy(mode, prefix, scope=scope)
+            return items
+        expected = rendered()
+        with mock.patch.object(config, "ROOT", self.crlf_package()):
+            actual = rendered()
+        self.assertEqual(actual, expected)
+        for value in actual.values():
+            self.assertNotIn("\r", value if isinstance(value, str) else value.decode("utf-8"))
+
+    # D2: a later agent using a role name blocks only what update must settle first.
+
+    def test_later_same_name_agent_does_not_block_remove(self):
+        self.apply("install")
+        agents = self.project / ".claude" / "agents"
+        mine = agents / "mine" / "my-scout.md"
+        mine.parent.mkdir()
+        mine.write_text("---\nname: scout\n---\nMine\n", encoding="utf-8")
+        before = self.files()
+        for command in (("model", "project", "--set", "scout.effort=medium"),
+                        ("review", "project", "--review-mode", "auto")):
+            with self.subTest(command=command[0]):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("role names are now taken by other agents; run setup update first", result["error"])
+        self.assertEqual(before, self.files())
+        self.assertEqual(self.call("check")[1]["pending_role_prefix"], config.ROLE_PREFIX)
+        self.apply("remove")
+        self.assertEqual([p.relative_to(agents).as_posix() for p in agents.rglob("*.md")], ["mine/my-scout.md"])
+        self.assertEqual(mine.read_text(encoding="utf-8"), "---\nname: scout\n---\nMine\n")
+
+    def test_later_same_name_agent_update_moves_to_prefix(self):
+        self.apply("install", "project", "--review-mode", "auto")
+        agents = self.project / ".claude" / "agents"
+        mine = agents / "mine" / "my-scout.md"
+        mine.parent.mkdir()
+        mine.write_text("---\nname: scout\n---\nMine\n", encoding="utf-8")
+        self.apply("update")
+        self.assert_prefixed_roles(agents)
+        self.apply("model", "project", "--set", "scout.effort=medium")
+        self.apply("review", "project", "--review-mode", "off")
+        # A prefixed name taken later still blocks settings, but never removal.
+        taken = agents / "mine" / "taken.md"
+        taken.write_text("---\nname: cc-scout\n---\nMine too\n", encoding="utf-8")
+        code, result = self.call("model", "project", "--set", "scout.effort=high")
+        self.assertEqual(code, 2, result)
+        self.assertIn("duplicate native agent name cc-scout", result["error"])
+        self.apply("remove")
+        self.assertEqual(sorted(p.name for p in agents.rglob("*.md")), ["my-scout.md", "taken.md"])
+
+    # D3: project scope must not be the user configuration.
+
+    def assert_user_configuration_refused(self, command=("install", "project")):
+        # Nothing is created: no file, no lock and no backup directory.
+        entries = lambda: {p: p.read_bytes() if p.is_file() else None for p in self.root.rglob("*")}
+        before = entries()
+        code, result = self.call(*command)
+        self.assertEqual(code, 2, result)
+        self.assertIn("project scope here would write the user configuration", result["error"])
+        self.assertIn("use --scope user", result["error"])
+        self.assertEqual(before, entries())
+
+    def test_project_scope_that_is_the_user_configuration_is_refused(self):
+        fake_home = self.root / "home"
+        (fake_home / ".claude").mkdir(parents=True)
+        other = self.root / "other"
+        other.mkdir()
+        config_dir = self.root / "config"
+        config_dir.mkdir()
+        cases = [("home", fake_home, self.home),
+                 ("home claude directory", fake_home / ".claude", self.home),
+                 ("claude home", config_dir, config_dir),
+                 ("project .claude is the claude home", other, other / ".claude")]
+        if os.name == "nt":
+            cases.append(("case variant of home", Path(str(fake_home).upper()), self.home))
+        environment = {"HOME": str(fake_home), "USERPROFILE": str(fake_home)}
+        with mock.patch.dict(os.environ, environment):
+            self.assertEqual(Path.home(), fake_home)
+            for name, project, claude_home in cases:
+                with self.subTest(case=name):
+                    self.project, self.home = project, claude_home
+                    self.assert_user_configuration_refused()
+                    self.assert_user_configuration_refused(("install", "project", "--component", "handoff"))
+
+    def test_existing_aliased_project_install_can_be_checked_and_removed(self):
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        with mock.patch.dict(os.environ, {"HOME": str(elsewhere), "USERPROFILE": str(elsewhere)}):
+            self.apply("install", "project", "--component", "both")
+        # The same project directory later is the user's home: its .claude is the user configuration.
+        with mock.patch.dict(os.environ, {"HOME": str(self.project), "USERPROFILE": str(self.project)}):
+            for command in (("install", "project", "--component", "both"), ("update", "project"),
+                            ("model", "project", "--set", "scout.effort=medium"),
+                            ("review", "project", "--review-mode", "auto")):
+                with self.subTest(command=command[0]):
+                    self.assert_user_configuration_refused(command)
+            code, shown = self.call("check")
+            self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+            self.apply("remove", "project", "--component", "both")
+        self.assertEqual(list((self.project / ".claude" / "agents").glob("*.md")), [])
+        self.assertFalse((self.project / ".claude" / "cc-feather" / "state.json").exists())
+
+    # D6: plain-text names in other Markdown files do not block setup.
+
+    def test_plain_text_agent_name_is_not_a_native_name(self):
+        notes = self.project / ".claude" / "agents" / "notes" / "README.md"
+        notes.parent.mkdir(parents=True)
+        notes.write_text("---\nname: My agent notes\n---\nNotes\n", encoding="utf-8")
+        self.apply("install")
+        self.assertEqual(self.call("check")[1]["status"], "ok")
+        self.apply("remove")
+        for header in ("name: >-\n  scout", "name: !!str scout", "name: My agent\n  notes", "name: - scout",
+                       "name: 'unterminated", "name: My notes\n\n  continued"):
+            with self.subTest(header=header):
+                notes.write_text(f"---\n{header}\n---\nNotes\n", encoding="utf-8")
+                before = self.files()
+                code, result = self.call("install")
+                self.assertEqual(code, 2, result)
+                self.assertIn("cannot inspect agent name syntax", result["error"])
+                self.assertEqual(before, self.files())
+        notes.write_text("---\nname: My agent notes\nNo closing line\n", encoding="utf-8")
+        code, result = self.call("install")
+        self.assertEqual(code, 2, result)
+        self.assertIn("cannot inspect agent frontmatter", result["error"])
+
+    def test_non_utf8_agent_markdown_is_skipped_with_a_warning(self):
+        legacy = self.project / ".claude" / "agents" / "legacy" / "old.md"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_bytes(b"---\nname: \xff\xfe scout\n---\n")
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        self.assertTrue([w for w in preview["warnings"] if "not UTF-8" in w and str(legacy) in w], preview["warnings"])
+        self.apply("install")
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.assertTrue([w for w in shown["warnings"] if "not UTF-8" in w and str(legacy) in w], shown["warnings"])
+        self.apply("remove")
+        self.assertEqual(legacy.read_bytes(), b"---\nname: \xff\xfe scout\n---\n")
+
+    # D8: a lock left by an interrupted run names the file to delete.
+
+    def test_lock_error_names_the_lock_to_delete(self):
+        _, preview = self.call("install")
+        lock = self.project / ".claude" / "cc-feather" / ".lock"
+        lock.parent.mkdir(parents=True)
+        lock.write_bytes(b"")
+        code, result = self.call("install", "project", "--apply", "--expected-plan", preview["plan_id"])
+        self.assertEqual(code, 2, result)
+        self.assertIn(f"scope is locked: {lock}; if no other setup is running, delete {lock} and retry", result["error"])
+        self.assertTrue(lock.exists())
+
+    # D9: remove deletes an instruction file setup created once nothing else remains in it.
+
+    def test_remove_deletes_a_created_instruction_file_left_empty(self):
+        guidance = self.project / "CLAUDE.md"
+        self.apply("install")
+        self.assertIs(self.saved_state()["created_guidance"], True)
+        self.apply("remove")
+        self.assertFalse(guidance.exists())
+        self.apply("install", "user")
+        self.apply("remove", "user")
+        self.assertFalse((self.home / "CLAUDE.md").exists())
+
+    def test_remove_keeps_instruction_files_setup_did_not_create_or_the_user_changed(self):
+        guidance = self.project / "CLAUDE.md"
+        guidance.write_bytes(b"")
+        self.apply("install")
+        self.assertNotIn("created_guidance", self.saved_state())
+        self.apply("remove")
+        self.assertEqual(guidance.read_bytes(), b"")
+        guidance.unlink()
+        self.apply("install")
+        guidance.write_bytes(guidance.read_bytes() + b"\nUse pnpm.\n")
+        self.apply("remove")
+        self.assertEqual(guidance.read_text(encoding="utf-8").strip(), "Use pnpm.")
+
+    def test_created_instruction_file_flag_survives_component_changes(self):
+        guidance = self.project / "CLAUDE.md"
+        self.apply("install", "project", "--component", "handoff")
+        self.apply("install", "project", "--component", "delegation")
+        self.apply("review", "project", "--review-mode", "auto")
+        self.apply("remove", "project", "--component", "delegation")
+        self.assertIs(self.saved_state()["created_guidance"], True)
+        self.apply("update", "project", "--component", "handoff")
+        self.assertIs(self.saved_state()["created_guidance"], True)
+        self.apply("remove", "project", "--component", "handoff")
+        self.assertFalse(guidance.exists())
+
+    def test_created_guidance_state_is_validated(self):
+        self.apply("install", "project", "--component", "both")
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        original = self.saved_state()
+        components = {**original["components"], "delegation": {
+            key: value for key, value in original["components"]["delegation"].items()
+            if key not in {"role_prefix", "external_roles"}}}
+        for name, state in (("false", {**original, "created_guidance": False}),
+                            ("string", {**original, "created_guidance": "true"}),
+                            ("one", {**original, "created_guidance": 1}),
+                            ("v3", {"version": 3, "scope": "project", "components": components, "created_guidance": True})):
+            with self.subTest(value=name):
+                state_path.write_bytes(config.canonical(state) + b"\n")
+                code, result = self.call("show")
+                self.assertEqual(code, 2, result)
+                self.assertIn("state component schema mismatch", result["error"])
+                code, result = self.call("remove", "project", "--component", "both")
+                self.assertEqual(code, 2, result)
+        state_path.write_bytes(config.canonical(original) + b"\n")
+        self.assertEqual(self.call("show")[1]["status"], "ok")
+
+    # D4: linked ancestors of the roots are resolved once; links at or below them stay refused.
+
+    def use_link_base(self, require_strict_realpath=True):
+        """Move this test to a base where directory links work; FEATHER_LINK_TEST_DIR selects the volume."""
+        parent = os.environ.get("FEATHER_LINK_TEST_DIR")
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        base = Path(tempfile.mkdtemp(prefix="link-", dir=parent or None))
+        self.addCleanup(remove_link_base, base)
+        if require_strict_realpath:
+            try:
+                os.path.realpath(base, strict=True)
+            except OSError:
+                self.skipTest("strict realpath unsupported")
+        self.root = base
+        self.project = base / "project"
+        self.home = base / "claude-home"
+        self.project.mkdir()
+        self.home.mkdir()
+        return base
+
+    def test_linked_project_ancestor_is_resolved_once_and_reported(self):
+        base = self.use_link_base()
+        (base / "real" / "proj").mkdir(parents=True)
+        make_directory_link(base / "alias", base / "real")
+        self.project = base / "alias" / "proj"
+        real_project = Path(os.path.realpath(base / "real" / "proj", strict=True))
+        result = self.apply("install")
+        self.assertEqual(result["resolved_paths"]["project"], str(real_project))
+        self.assertTrue(result["changes"])
+        for change in result["changes"]:
+            self.assertTrue(Path(change["path"]).is_relative_to(real_project), change["path"])
+        self.assertTrue((real_project / ".claude" / "agents" / "scout.md").exists())
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.assertEqual(shown["paths"]["guidance"], str(real_project / "CLAUDE.md"))
+        self.apply("remove")
+        self.assertFalse((real_project / ".claude" / "agents" / "scout.md").exists())
+
+    def test_claude_home_under_a_linked_ancestor_installs_user_scope(self):
+        base = self.use_link_base()
+        (base / "real-config").mkdir()
+        make_directory_link(base / "config-link", base / "real-config")
+        self.home = base / "config-link" / "claude"
+        real_home = Path(os.path.realpath(base / "real-config", strict=True)) / "claude"
+        result = self.apply("install", "user")
+        self.assertEqual(result["resolved_paths"]["claude_home"], str(real_home))
+        self.assertTrue((real_home / "agents" / "scout.md").exists())
+        self.assertTrue((real_home / "CLAUDE.md").exists())
+        self.assertEqual(self.call("check", "user")[1]["status"], "ok")
+        self.apply("remove", "user")
+        self.assertFalse((real_home / "CLAUDE.md").exists())
+
+    def test_links_below_the_roots_are_refused(self):
+        base = self.use_link_base()
+        (base / "elsewhere").mkdir()
+        make_directory_link(self.project / ".claude", base / "elsewhere")
+        make_directory_link(self.home / "cc-feather", base / "elsewhere")
+        for command in (("install", "project"), ("remove", "project"), ("install", "user")):
+            with self.subTest(command=command):
+                before = self.files()
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("linked path is unsafe", result["error"])
+                self.assertEqual(before, self.files())
+        self.assertEqual(list((base / "elsewhere").iterdir()), [])
+
+    def test_root_changed_after_resolution_is_refused(self):
+        base = self.use_link_base()
+        real_project = os.path.realpath(self.project, strict=True)
+        original = os.path.realpath
+        other = base / "other"
+        other.mkdir()
+
+        def swapped(path, *, strict=False):
+            # Every later check of the root sees another directory.
+            if not strict and os.path.normcase(os.fspath(path)) == os.path.normcase(real_project):
+                return original(other, strict=strict)
+            return original(path, strict=strict)
+
+        resolutions = []
+
+        def moving(path, *, strict=False):
+            # A second resolution of the project in the same invocation reaches another directory.
+            if strict and os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(self.project)):
+                resolutions.append(path)
+                if len(resolutions) > 1:
+                    return original(other, strict=strict)
+            return original(path, strict=strict)
+
+        for name, fake in (("checked root", swapped), ("resolved again", moving)):
+            with self.subTest(case=name), mock.patch("os.path.realpath", side_effect=fake):
+                before = self.files()
+                code, result = self.call("install")
+                self.assertEqual(code, 2, result)
+                self.assertIn("configuration root changed after it was resolved", result["error"])
+                self.assertEqual(before, self.files())
+
+    def test_repointed_ancestor_link_between_preview_and_apply_writes_nothing(self):
+        base = self.use_link_base()
+        for name in ("one", "two"):
+            (base / name / "proj").mkdir(parents=True)
+            (base / name / "proj" / "CLAUDE.md").write_text("Same rules\n", encoding="utf-8")
+        link = base / "current"
+        make_directory_link(link, base / "one")
+        self.project = link / "proj"
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        trees = {name: self.files(base / name) for name in ("one", "two")}
+        remove_directory_link(link)
+        make_directory_link(link, base / "two")
+        code, result = self.call("install", "project", "--apply", "--expected-plan", preview["plan_id"])
+        self.assertEqual(code, 2, result)
+        self.assertTrue(any(text in result["error"] for text in
+                            ("matching", "plan became stale", "configuration root changed")), result)
+        for name in ("one", "two"):
+            self.assertEqual(self.files(base / name), trees[name], name)
+
+    def test_unsupported_strict_realpath_keeps_full_ancestor_checks(self):
+        base = self.use_link_base(require_strict_realpath=False)
+        (base / "real" / "proj").mkdir(parents=True)
+        make_directory_link(base / "alias", base / "real")
+        original = os.path.realpath
+
+        def unsupported(path, *, strict=False):
+            if strict:
+                raise OSError(errno.EINVAL, "Incorrect function", os.fspath(path))
+            return original(path, strict=strict)
+
+        with mock.patch("os.path.realpath", side_effect=unsupported):
+            self.project = base / "alias" / "proj"
+            before = self.files()
+            code, result = self.call("install")
+            self.assertEqual(code, 2, result)
+            self.assertIn("linked path is unsafe", result["error"])
+            self.assertEqual(before, self.files())
+            self.project = base / "real" / "proj"
+            result = self.apply("install")
+            self.assertNotIn("resolved_paths", result)
+            self.assertEqual(self.call("check")[1]["status"], "ok")
+            self.apply("remove")
+
+    def test_dangling_link_in_a_missing_claude_home_is_refused(self):
+        base = self.use_link_base()
+        gone = base / "gone"
+        gone.mkdir()
+        make_directory_link(base / "dangling", gone)
+        gone.rmdir()
+        self.home = base / "dangling" / "claude"
+
+        def entries():
+            # os.walk skips the dangling link that pathlib's rglob would fail to list.
+            found = {}
+            for current, directories, files in os.walk(base):
+                found.update({Path(current) / name: None for name in directories})
+                found.update({Path(current) / name: (Path(current) / name).read_bytes() for name in files})
+            return found
+
+        before = entries()
+        for command in (("install", "user"), ("install", "project")):
+            with self.subTest(command=command):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("linked path is unsafe", result["error"])
+                self.assertEqual(before, entries())
+        self.assertFalse(os.path.exists(base / "dangling"))
+
+    def test_linked_project_reading_different_agents_files_requires_a_choice(self):
+        base = self.use_link_base()
+        found = [directory / name for directory in base.parents for name in
+                 ("CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".claude/AGENTS.md")
+                 if (directory / name).exists()]
+        if found:
+            self.skipTest(f"an ancestor instruction file changes this layout: {found[0]}")
+        (base / "outer").mkdir()
+        (base / "target" / "proj").mkdir(parents=True)
+        make_directory_link(base / "outer" / "link", base / "target")
+        outer_agents = base / "outer" / "AGENTS.md"
+        outer_agents.write_text("Outer rules\n", encoding="utf-8")
+        self.project = base / "outer" / "link" / "proj"
+        real_project = os.path.realpath(base / "target" / "proj", strict=True)
+        before = self.files()
+        code, result = self.call("install")
+        self.assertEqual(code, 2, result)
+        self.assertIn("guidance target choice required", result["error"])
+        self.assertIn(f"through {self.project}: AGENTS files {outer_agents}", result["error"])
+        self.assertIn(f"through {real_project}: AGENTS files none", result["error"])
+        self.assertEqual(before, self.files())
+        self.assertTrue(self.call("show")[1]["guidance_choice_required"])
+        self.apply("install", "project", "--guidance", "claude")
+        self.assertTrue((Path(real_project) / "CLAUDE.md").read_text(encoding="utf-8").startswith(config.BEGIN))
 
 
 if __name__ == "__main__":
