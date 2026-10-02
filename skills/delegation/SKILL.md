@@ -21,6 +21,8 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | security-executor | Authorized changes to security boundaries |
 | verifier | Independent verification of a completed implementation claim |
 
+Route delegated work only to these roles. Built-in general-purpose and Plan agents run on the main model and bypass this routing; use them only when the user asks for them.
+
 The table uses role ids. When the installed delegation policy lists native role names, such as `cc-scout`, dispatch each role to its listed name.
 
 Use configured role models and effort. For task/session overrides, persistent changes or uncertain bindings, read [model](../model/SKILL.md) before dispatch or configuration changes. Main-only preferences do not override children. Distinguish configured settings from native execution evidence; label unseen execution unconfirmed.

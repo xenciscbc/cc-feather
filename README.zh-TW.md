@@ -15,7 +15,7 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 
 本機 checkout 可用 `/plugin marketplace add D:/work_data/project/skill/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。
 
-## 六個入口
+## 入口
 
 | Skill | 用途 |
 | --- | --- |
@@ -153,6 +153,8 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 ### Explore 的成本控制
 
 內建 Explore 會繼承主模型；只新增 plugin scout 無法防止它被呼叫。Setup 因此部署**真正名為 Explore 的原生角色**，明確寫入 sonnet/low。若你已有名為 Explore 的 agent，它本身就已取代內建 Explore：setup 不安裝自己的 Explore、不動你的檔案，並提醒它的 model 不由 cc-feather 管理（沒寫 `model` 就會使用主模型）。移除你的 Explore 後，setup update 會重新安裝 cc-feather 的版本。
+
+內建 general-purpose 與 Plan 同樣使用主模型，且無法以同樣方式取代；因此分派規則要求主 Agent 只派給 cc-feather 角色，除非你指定使用內建 agent。
 
 儲存值不是實際執行證據：CLI／managed／巢狀專案定義、模型 force 變數、provider allowlist 或單次參數可能影響模型。Setup 後用新 session，執行探索時以 `/tasks` 核對實際 model／effort。模型選擇降低的是意外使用昂貴模型的成本，不保證 token 數下降。參考 [Claude subagents](https://code.claude.com/docs/en/sub-agents)。
 

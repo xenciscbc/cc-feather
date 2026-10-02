@@ -150,6 +150,8 @@ In project scope, setup writes into an existing CLAUDE.md, else `.claude/CLAUDE.
 
 Built-in Explore inherits the main model. A namespaced plugin scout alone cannot prevent its use, so setup deploys an exact-name native `Explore` with sonnet/low. If you already have an agent named Explore, it already overrides the built-in: setup installs none of its own, leaves yours untouched and warns that cc-feather does not manage its model (without a `model` field it uses the main model). Remove yours and setup update installs cc-feather's again.
 
+Built-in general-purpose and Plan agents also run on the main model and cannot be overridden the same way, so the delegation policy tells main to delegate only to the cc-feather roles unless you ask for a built-in agent.
+
 Saved settings do not prove execution: CLI/managed/nested definitions, force-model environment settings, provider restrictions or invocation arguments can change selection. Use a fresh session and `/tasks` to inspect actual model/effort. This avoids unintended expensive-model use; it does not guarantee fewer tokens. See [official subagent documentation](https://code.claude.com/docs/en/sub-agents).
 
 ## Handoff compatibility
