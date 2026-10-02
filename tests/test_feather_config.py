@@ -1206,10 +1206,15 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertEqual(set(exported), set(config.ROLES))
                 self.apply("update", scope)
                 self.assertNotIn(warning, self.call("check", scope)[1]["warnings"])
-        # A project installed off before the off line has an accepted older rendering.
+        # A project installed off before the off line lets a user-scope auto win until setup update.
         guidance = self.project / "CLAUDE.md"
         self.apply("review", "project", "--review-mode", "off")
         self.replace_delegation_block(guidance, config._policy("off", "", scope="user"))
+        code, shown = self.call("check")
+        self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+        self.assertIn(warning, shown["warnings"])
+        self.apply("update")
+        self.assertIn(config.PROJECT_REVIEW_OFF, guidance.read_text(encoding="utf-8"))
         self.assertNotIn(warning, self.call("check")[1]["warnings"])
 
     def test_automatic_review_triggers_match_the_plan_review_procedure(self):
@@ -1822,6 +1827,20 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assert_prefixed_roles(agents)
                 self.apply("remove")
                 self.assertEqual(mine.read_bytes(), content)
+
+    def test_unmanaged_non_utf8_agent_warning_names_how_it_was_read(self):
+        text = "---\nname: my-helper\ndescription: Mine\n---\nMine\n"
+        for name, content, how in (("utf-16-le", b"\xff\xfe" + text.encode("utf-16-le"), "read as UTF-16"),
+                                   ("latin-1", text.replace("Mine\n---", "Mine \xff\n---").encode("latin-1"),
+                                    "read with replacement characters")):
+            with self.subTest(encoding=name):
+                self.project = self.root / name
+                mine = self.project / ".claude" / "agents" / "mine" / "helper.md"
+                mine.parent.mkdir(parents=True)
+                mine.write_bytes(content)
+                code, preview = self.call("install")
+                self.assertEqual(code, 0, preview)
+                self.assertTrue([w for w in preview["warnings"] if "not UTF-8" in w and how in w], preview["warnings"])
 
     # D8: a lock left by an interrupted run names the file to delete.
 

@@ -550,10 +550,11 @@ def _agent_name(path: Path) -> str | None:
         # A file that is not UTF-8 still goes through the same parser, so a native name it declares gets
         # the normal collision handling and its syntax errors block. UTF-16 with a byte order mark is
         # decoded as such; other bytes keep replacement characters.
-        encoding = "utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8"
-        name = _declared_agent_name(data.decode(encoding, errors="replace"), path)
+        utf16 = data.startswith((b"\xff\xfe", b"\xfe\xff"))
+        name = _declared_agent_name(data.decode("utf-16" if utf16 else "utf-8", errors="replace"), path)
         if name not in {_role_name(role, prefix) for role in ROLES for prefix in ("", ROLE_PREFIX)}:
-            _AGENT_WARNINGS[f"Agent file is not UTF-8: {path}; its name was read with replacement characters."] = None
+            how = "as UTF-16" if utf16 else "with replacement characters"
+            _AGENT_WARNINGS[f"Agent file is not UTF-8: {path}; its name was read {how}."] = None
         return name
     return _declared_agent_name(text, path)
 
@@ -669,17 +670,18 @@ def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: st
 
 
 def _older_template(block: str, record: dict[str, Any], scope: str) -> bool:
-    """Whether a delegation block is neither the current rendering nor an accepted older one for its saved mode.
+    """Whether a delegation block differs from the current rendering for its saved mode.
 
-    The accepted older rendering is a project installed off before the off line existed, which
-    has the user-scope rendering. An unreadable template reports nothing here; install and update report it.
+    A project installed off before the off line existed is included: review still switches it, but
+    until setup update a user-scope auto overrides it. An unreadable template reports nothing here;
+    install and update report it.
     """
     mode, prefix = record["review_mode"], record.get("role_prefix", "")
     try:
-        accepted = {_policy(mode, prefix, scope=scope), _policy(mode, prefix, scope="user")}
+        current = _policy(mode, prefix, scope=scope)
     except ConfigError:
         return False
-    return block.replace("\r\n", "\n") not in accepted
+    return block.replace("\r\n", "\n") != current
 
 
 def _snapshot(paths: list[Path]) -> dict[str, bytes | None]:
