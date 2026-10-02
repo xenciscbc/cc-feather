@@ -1,6 +1,6 @@
 ---
 name: delegation
-description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, plan reviews, code reviews or outcome verification, including automatic review turned on for this session only."
+description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, plan reviews, code reviews or outcome verification, including automatic review of plan-driven work when enabled through saved guidance or a task/session preference."
 ---
 
 # Feather delegation
@@ -53,3 +53,7 @@ When the installed policy, a session preference that turns automatic review on (
 ## Code review
 
 When the installed policy, a session preference that turns automatic review on or an explicit user request requires code review, read and follow [the code-review procedure](references/code-review.md) after the primary acceptance passes and before outcome verification. Keep its call count and open findings across mode changes within a session.
+
+## Outcome verification
+
+For automatic verification of plan-driven work or an explicit verification request, read and follow [the outcome-verification procedure](references/outcome-verification.md).
