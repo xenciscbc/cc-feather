@@ -80,6 +80,20 @@ def with_warnings(result: dict, warnings: list[str]) -> dict:
 
 
 STATUS_LINE = re.compile(r"(?m)^[ \t]*狀態[ \t]*[：:]([^\n]*)")
+# Not =======, which also underlines setext headings.
+MERGE_MARKER = re.compile(r"(?m)^(<<<<<<<|>>>>>>>|\|{7})( |\r?$)")
+
+
+def hidden_copy(text: str) -> list[str]:
+    """Why a well-formed work may still hold a second copy of a record, such as a git conflict copy.
+
+    Fences and indentation do not exempt a status line: the copy's status cannot be ruled out."""
+    reasons = []
+    if len(STATUS_LINE.findall(text)) > 1:
+        reasons.append("more than one status line")
+    if MERGE_MARKER.search(text):
+        reasons.append("merge-conflict marker line")
+    return reasons
 
 
 def unfinished_status(text: str) -> str | None:
@@ -124,6 +138,11 @@ def check_pending(store: Store, entries: list[HistoryEntry], document: HistoryDo
                     if not same_body(entry, body, document):
                         raise HandoffError("conflict", f"Completed work and history differ: {path}")
                     raise HandoffError("pending-archive", f"Retry archival before sealing: {path}")
+            # After the identity check, so pending-archive and conflict for a selected completion keep precedence.
+            reasons = hidden_copy(snapshot.text)
+            if reasons:
+                raise HandoffError("pending-unknown", f"{path}: {'; '.join(reasons)}; "
+                                   "cannot rule out an unfinished archival")
         except (OSError, UnicodeError) as error:
             raise HandoffError("pending-unknown", f"{path}: {error}; cannot rule out an unfinished archival") from error
     if paths != store.work_paths():

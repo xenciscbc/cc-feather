@@ -8,7 +8,7 @@
     "skills/handoff/scripts/feather_handoff/baseline.py": "726edc300cc0460a3f02e4c7a12f542cb038d131ddf4ed28da0032097b99b062",
     "skills/handoff/scripts/feather_handoff/cli.py": "7b34b4cf18de7375ad4c60d16b8d9a75ef6bdeb5d8410a0cd340a2681f4290da",
     "skills/handoff/scripts/feather_handoff/history.py": "238153ce6c6d0d728591b6fa622d06b0d3c137ff0d843c3386741107297d855d",
-    "skills/handoff/scripts/feather_handoff/history_mutations.py": "487058ec8b8f8be6d58dd0b1ac3e341f32308f3414f600ac38ab9e4466d5ee90",
+    "skills/handoff/scripts/feather_handoff/history_mutations.py": "da86a9249595192f8c8d22b240c95f1cb529370491c463846ea883b267d03208",
     "skills/handoff/scripts/feather_handoff/observations.py": "43a09d92e6f95ebd17c36849889f86c1894b4a1096a9960b4d9be9180374e478",
     "skills/handoff/scripts/feather_handoff/records.py": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
     "skills/handoff/scripts/feather_handoff/storage.py": "c3bef2ee22ce85d373f5b03f7570874df0f2d06e0a84962a52d38a996f9f2eb0",
@@ -85,7 +85,7 @@
     },
     "skills/handoff/scripts/feather_handoff/history_mutations.py": {
       "source_sha256": "31f0d7f5d4787fba1b838695689b2d47f5d184a279e0ae0cec1d33d6f7a1340a",
-      "change": "Local fix pending upstream: clear and seal parse archive sources under their queried archive/<batch>.md name. clear checks for pending completed work like seal and defers with pending-archive. A malformed or unreadable work file blocks clear and seal with pending-unknown when it may be completed: unreadable, no title on the first line, or not exactly one 狀態 line reading 進行中 or 受阻; other malformed works are re-checked before writing and reported in warnings."
+      "change": "Local fix pending upstream: clear and seal parse archive sources under their queried archive/<batch>.md name. clear checks for pending completed work like seal and defers with pending-archive. A malformed or unreadable work file blocks clear and seal with pending-unknown when it may be completed: unreadable, no title on the first line, or not exactly one 狀態 line reading 進行中 or 受阻; other malformed works are re-checked before writing and reported in warnings. After the selected-identity check, a work without format problems also blocks clear and seal with pending-unknown when its whole text has more than one status line or a merge-conflict marker line (<<<<<<<, >>>>>>> or ||||||| at the line start followed by a space or the line end)."
     },
     "skills/handoff/scripts/feather_handoff/archiving.py": {
       "source_sha256": "dcc05001a1d050d8b6ce1edff85054f1dab44f183859a45f84b9799fc2041ab8",

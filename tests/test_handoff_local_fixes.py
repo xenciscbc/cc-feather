@@ -466,7 +466,8 @@ class GitEnvironmentTest(LocalFixesBase):
 
 class PendingUnknownTest(LocalFixesBase):
     """H4/HX6: a work that may be an unfinished archival blocks clear and seal as pending-unknown; a malformed
-    work whose title is on the first line and whose only status line reads 進行中 or 受阻 is reported instead."""
+    work whose title is on the first line and whose only status line reads 進行中 or 受阻 is reported instead.
+    HP1: a well-formed work with more than one status line or a merge-conflict marker line also blocks them."""
 
     HISTORY = f"# 交接歷史\n\n## Foo · 完成：{COMPLETED}\nbody\n".encode("utf-8")
     SELECTIONS = (("clear", {}), ("seal", {"destination": "batch.md"}))
@@ -474,6 +475,18 @@ class PendingUnknownTest(LocalFixesBase):
     def payload(self, extra: dict) -> dict:
         entry = self.run_tool("history")["entries"][0]
         return {"version": entry["document_version"], "ids": [entry["id"]], **extra}
+
+    def assert_pending_unknown(self, name: str, reasons: str):
+        for command, extra in self.SELECTIONS:
+            with self.subTest(work=name, command=command):
+                self.history.write_bytes(self.HISTORY)
+                (self.directory / "archive" / "batch.md").unlink(missing_ok=True)
+                before = self.tree()
+                result = self.run_tool(command, expected=2, payload=self.payload(extra))
+                self.assertEqual(result["code"], "pending-unknown")
+                self.assertTrue(result["message"].endswith(
+                    f"{name}: {reasons}; cannot rule out an unfinished archival"), result["message"])
+                self.assertEqual(self.tree(), before)
 
     def test_work_that_may_be_completed_blocks_clear_and_seal_as_pending_unknown(self):
         old = ("# Old\n更新：2026-09-10T10:00:00+08:00\n狀態：完成\n目標：g\n進度：p\n下一步：n\n")
@@ -528,6 +541,77 @@ class PendingUnknownTest(LocalFixesBase):
             code, result = self.invoke("clear", payload=self.payload({}))
         self.assertEqual((code, result["status"]), (0, "ok"))
         self.assertIn("legacy.md", [call.args[0].path.name for call in checked.call_args_list])
+
+    def test_second_status_line_in_a_well_formed_work_blocks_clear_and_seal(self):
+        # The title is on the first line and the header holds one status line, so the summary finds no problem.
+        copy = f"# Foo\n更新：{COMPLETED}\n狀態：完成\n目標：g\n進度：p\n下一步：n\n".encode("utf-8")
+        cases = {
+            "copy.md": record(status="進行中", updated="2026-09-12T10:00:00+08:00", details="new") + copy,
+            "indented.md": record(title="Other", status="進行中", details="  狀態：完成"),
+            "ascii-colon.md": record(title="Other", status="進行中", details="狀態: 完成"),
+            "spaced-colon.md": record(title="Other", status="進行中", details="狀態 ：完成"),
+            # Documented cost: a status line under a details heading also blocks until it is reworded.
+            "section.md": record(title="Other", status="進行中", details="## 附註\n狀態：完成"),
+        }
+        for name, data in cases.items():
+            path = self.put(name, data)
+            self.assert_pending_unknown(name, "more than one status line")
+            path.unlink()
+
+    def test_shared_title_merge_conflict_blocks_clear_and_seal(self):
+        # Git kept the shared title outside the conflict, which spans 詳細紀錄; the summary reads only one side.
+        new = record(status="進行中", updated="2026-09-12T10:00:00+08:00", details="new").split(b"\n", 1)[1]
+        old = record(details="old").split(b"\n", 1)[1]
+        conflict = b"# Foo\n<<<<<<< ours\n" + new + b"=======\n" + old + b">>>>>>> theirs\n"
+        cases = {"conflict.md": conflict, "conflict-crlf.md": b"\xef\xbb\xbf" + conflict.replace(b"\n", b"\r\n")}
+        for name, data in cases.items():
+            path = self.put(name, data)
+            self.assert_pending_unknown(name, "more than one status line; merge-conflict marker line")
+            path.unlink()
+
+    def test_merge_marker_with_one_status_line_blocks_clear_and_seal(self):
+        cases = {
+            "ours.md": record(title="Other", status="進行中", details="<<<<<<< ours\nnew"),
+            "base.md": record(title="Other", status="受阻", details="||||||| base\nold"),
+            "theirs.md": record(title="Other", status="進行中", details="new\n>>>>>>>", eol="\r\n"),
+        }
+        for name, data in cases.items():
+            path = self.put(name, data)
+            self.assert_pending_unknown(name, "merge-conflict marker line")
+            path.unlink()
+
+    def test_selected_completed_work_with_a_second_status_line_stays_pending_archive(self):
+        # Order guard (passes before HP1 too): the selected completion identity is checked first.
+        work = record(details="## 附註\n狀態：完成\n其餘說明")
+        self.history.write_bytes(f"# 交接歷史\n\n## Foo · 完成：{COMPLETED}\n".encode("utf-8") + work.split(b"\n", 1)[1])
+        self.put("a.md", work)
+        before = self.tree()
+        for command, extra in self.SELECTIONS:
+            with self.subTest(command=command):
+                result = self.run_tool(command, expected=2, payload=self.payload(extra))
+                self.assertEqual(result["code"], "pending-archive")
+                self.assertIn("a.md", result["message"])
+                self.assertEqual(self.tree(), before)
+
+    def test_well_formed_unfinished_work_does_not_block_clear_or_seal(self):
+        # Guard (passes before HP1 too); the reworded lines and a setext underline are not status or marker lines.
+        cases = {
+            "plain.md": record(title="Other", status="進行中"),
+            "reworded.md": record(title="Other", status="受阻",
+                                  details="- 狀態：完成\n> 狀態：完成\n`狀態：完成`\n標題\n======="),
+        }
+        for name, data in cases.items():
+            work = self.put(name, data)
+            for command, extra in self.SELECTIONS:
+                with self.subTest(work=name, command=command):
+                    self.history.write_bytes(self.HISTORY)
+                    result = self.run_tool(command, payload=self.payload(extra))
+                    self.assertEqual(result["status"], "ok")
+                    self.assertNotIn("warnings", result)
+                    self.assertEqual(work.read_bytes(), data)
+                    self.assertEqual(self.history.read_bytes(), "# 交接歷史\n\n".encode("utf-8"))
+                    (self.directory / "archive" / "batch.md").unlink(missing_ok=True)
+            work.unlink()
 
 
 class CliUsageTest(LocalFixesBase):
@@ -693,6 +777,15 @@ class SwallowedDetailsTest(LocalFixesBase):
         self.assertEqual(result["preserved_sections"], ["## 手動備註"])
         self.assertTrue((self.directory / "a.md").read_bytes().endswith(
             "## 詳細紀錄\nnew evidence\n## 手動備註\nkeep\n".encode("utf-8")))
+
+    def test_unclosed_opener_over_a_section_holding_a_bare_code_block_is_refused(self):
+        # T2 by design: from the text alone this swallowed section looks like a closed example with a heading
+        # followed by an unrelated open fence, so both stay refused rather than risk dropping the section.
+        data = (record(status="進行中", details="```text\nopen")
+                + "\n## 手動備註\nkeep\n```\ncode\n```\ntail\n".encode("utf-8"))
+        result = self.update_details(data, expected=2)
+        self.assertEqual(result["code"], "details-format")
+        self.assertIn("leave a code fence open over ## 手動備註", result["message"])
 
 
 class ReadOnlyTargetTest(LocalFixesBase):
