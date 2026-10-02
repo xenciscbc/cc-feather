@@ -124,7 +124,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 每個欄位獨立套用優先序：**該次任務明確指定 > 適用的 session 指定 > 已儲存角色設定 > 套件預設**。例如「用 Sonnet 審查計畫」仍使用 analyst 職責，model 改為 Sonnet，未指定 effort 則保留 analyst 的 high。指定值無法原生套用時先說明，不暗中替換或只在 prompt 假裝設定成功。
 
-安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動計畫審查可依任務／session 明確啟用或停用；預設關閉；開啟後依實質風險觸發，明確要求審查則不受開關限制，使用新 analyst context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。auto 模式下，觸發過計畫審查的工作在回報完成前，另以新的 verifier context 驗證結果，自動上限同樣兩次；明確要求驗證則不受開關限制。
+安全分析由唯讀 analyst 做；涉及實際安全邊界的實作交給 security-executor。自動計畫審查可依任務／session 明確啟用或停用；預設關閉；開啟後依實質風險觸發，明確要求審查則不受開關限制，使用新 analyst context；預設自動最多兩次（包含初審），第二次仍有阻礙則停止自動送審。上限不是自動通過，改名／換模型／新 session 不重置。有既存交接時保存輪數與阻礙；超過上限需要使用者明確要求。READY 且已有授權就繼續，不固定再問一次批准。auto 模式下，觸發過計畫審查的工作在回報完成前，另以新的 verifier context 驗證結果，自動上限同樣兩次。off 模式下只有明確要求驗證才執行；只要求計畫審查不代表也要驗證。
 
 ### 自動計畫審查開關
 
@@ -146,7 +146,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | project | `<專案>/CLAUDE.md`、`.claude/CLAUDE.md` 或 AGENTS.md（見下方） | `<專案>/.claude/cc-feather/state.json` |
 | user | `<Claude 設定目錄>/CLAUDE.md` | `<Claude 設定目錄>/cc-feather/state.json` |
 
-Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。管理區塊的 `Automatic plan review mode: off` 表示關閉，`auto` 表示開啟。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後只對安全邊界、資料遷移、不可逆操作或複雜跨模組計畫等實質風險觸發，不會每個任務都送審。
+Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。`auto` 時分派區塊包含自動審查規則，`off` 時整段移除，主 Agent 與子 Agent 都不會載入。較早版本的安裝保留 `Automatic plan review mode:` 那行，執行 setup update 後改為新格式。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；專案設定可能優先於使用者設定，新 session 載入已儲存模式。開啟後只對安全邊界、資料遷移、不可逆操作或複雜跨模組計畫等實質風險觸發，不會每個任務都送審。
 
 project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.md`。Claude Code 只在沒有任何 CLAUDE 檔時才讀 AGENTS.md，所以專案若依賴 AGENTS.md，setup 會先詢問：直接寫進 AGENTS 檔，或建立一個 import 它的 CLAUDE.md，讓 Claude 繼續讀到它。選擇會記錄下來，之後沿用。詳見[專案指示檔](docs/setup.md#project-instruction-file)。
 

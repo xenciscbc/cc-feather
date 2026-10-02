@@ -62,7 +62,7 @@ class FeatherConfigTests(unittest.TestCase):
     def test_both_install_preserves_skipped_delegation_drift(self):
         self.apply("install", "project", "--component", "delegation")
         guidance = self.project / "CLAUDE.md"
-        changed = guidance.read_bytes().replace(b"Automatic plan review mode: off", b"Automatic plan review mode: auto")
+        changed = guidance.read_bytes().replace(b"# Feather delegation for Claude Code", b"# Feather delegation, edited")
         guidance.write_bytes(changed)
         role = self.project / ".claude" / "agents" / "analyst.md"
         role.write_bytes(role.read_bytes() + b"\nUser changes\n")
@@ -99,7 +99,8 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(preview["review_mode"], "off")
         self.apply("install")
         self.assertEqual(self.call("show")[1]["review_mode"], "off")
-        self.assertIn("Automatic plan review mode: off", guidance.read_text(encoding="utf-8"))
+        self.assertIn("cc-feather:delegation", guidance.read_text(encoding="utf-8"))
+        self.assertNotIn("Automatic plan review", guidance.read_text(encoding="utf-8"))
         explore = self.project / ".claude" / "agents" / "Explore.md"
         self.assertIn("name: Explore", explore.read_text(encoding="utf-8"))
         self.assertIn("model: sonnet", explore.read_text(encoding="utf-8"))
@@ -1014,13 +1015,51 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(self.call("show")[1]["review_mode"], "off")
         self.apply("review", "project", "--review-mode", "auto")
         self.assertEqual(scout.read_bytes(), original)
-        self.assertIn("Automatic plan review mode: auto", (self.project / "CLAUDE.md").read_text(encoding="utf-8"))
+        guidance = self.project / "CLAUDE.md"
+        self.assertIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
+        self.apply("review", "project", "--review-mode", "off")
+        self.assertNotIn("Automatic plan review", guidance.read_text(encoding="utf-8"))
+        self.apply("review", "project", "--review-mode", "auto")
+        self.apply("update")
+        self.assertIn("Automatic plan review is on.", guidance.read_text(encoding="utf-8"))
         self.apply("review", "project", "--review-mode", "off")
         self.apply("update")
         shown = self.call("show")[1]
         self.assertEqual(shown["review_mode"], "off")
         self.assertEqual(shown["choices"]["scout"]["model"], "sonnet")
         self.apply("remove")
+
+    def test_review_toggle_keeps_guidance_from_older_templates(self):
+        legacy = ("<!-- cc-feather:begin -->\n# Feather delegation for Claude Code\n\nOlder rules.\n\n"
+                  "Automatic plan review mode: {mode}\n\nOlder triggers.\n\n<!-- cc-feather:end -->")
+        with mock.patch.object(config, "_policy", lambda mode, prefix="": legacy.format(mode=mode)):
+            self.apply("install", "project", "--review-mode", "off")
+        guidance = self.project / "CLAUDE.md"
+        self.apply("review", "project", "--review-mode", "auto")
+        self.assertIn("Automatic plan review mode: auto\n\nOlder triggers.", guidance.read_text(encoding="utf-8"))
+        self.apply("update")
+        text = guidance.read_text(encoding="utf-8")
+        self.assertNotIn("Automatic plan review mode", text)
+        self.assertIn("Automatic plan review is on.", text)
+        self.assertEqual(self.call("show")[1]["review_mode"], "auto")
+
+    def test_review_toggle_requires_update_for_unrecognized_older_guidance(self):
+        older = "<!-- cc-feather:begin -->\n# Feather delegation for Claude Code\n\nOlder rules.\n<!-- cc-feather:end -->"
+        with mock.patch.object(config, "_policy", lambda mode, prefix="": older):
+            self.apply("install", "project")
+        guidance = self.project / "CLAUDE.md"
+        before = guidance.read_bytes()
+        code, result = self.call("review", "project", "--review-mode", "auto")
+        self.assertNotEqual(code, 0)
+        self.assertIn("run setup update first", json.dumps(result))
+        self.assertEqual(guidance.read_bytes(), before)
+
+    def test_automatic_review_triggers_match_the_plan_review_procedure(self):
+        triggers = ("material security-boundary changes, data migrations, irreversible operations "
+                    "or complex cross-module changes")
+        self.assertIn(triggers, config._auto_review())
+        procedure = (config.ROOT / "skills" / "delegation" / "references" / "plan-review.md").read_text(encoding="utf-8")
+        self.assertIn(triggers, procedure)
 
     def test_scope_path_state_and_choice_validation(self):
         output = io.StringIO()

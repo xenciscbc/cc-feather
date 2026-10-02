@@ -285,14 +285,24 @@ def _policy(review_mode: str, prefix: str = "") -> str:
     path = ROOT / "templates" / "CLAUDE.md"
     text = _decode(read(path), path)
     parts = _block_parts(text)
-    if (parts is None or parts[0].strip() or parts[2].strip() or parts[1].count("{{review_mode}}") != 1
+    if (parts is None or parts[0].strip() or parts[2].strip() or parts[1].count("{{auto_review}}") != 1
             or parts[1].count("{{role_names}}") != 1):
-        raise ConfigError("policy template must contain one marked block with review mode and role names tokens")
+        raise ConfigError("policy template must contain one marked block with auto review and role names tokens")
+    # The automatic review rules exist in the guidance only while the mode is auto, so off loads nothing to ignore.
+    auto = _auto_review() + "\n\n" if review_mode == "auto" else ""
     names = ""
     if prefix:
         listed = ", ".join(f"{role} = {_role_name(role, prefix)}" for role in ROLES if role != "Explore")
         names = f"Native role names in this scope: {listed}; Explore is unchanged. Dispatch each role to its listed name.\n\n"
-    return parts[1].replace("{{review_mode}}", review_mode).replace("{{role_names}}", names)
+    return parts[1].replace("{{auto_review}}", auto).replace("{{role_names}}", names)
+
+
+def _auto_review() -> str:
+    path = ROOT / "templates" / "review-auto.md"
+    text = _decode(read(path), path).replace("\r\n", "\n").strip()
+    if not text or "{{" in text or "\n\n" in text or "<!--" in text:
+        raise ConfigError("automatic review template must be one paragraph without placeholders or markers")
+    return text
 
 
 def _handoff_policy() -> str:
@@ -418,11 +428,14 @@ def _edit_role_fields(data: bytes, old: dict[str, str], new: dict[str, str], pat
     return (header + tail).encode("utf-8")
 
 
-def _edit_review_block(block: str, old: str, new: str) -> str:
+def _edit_review_block(block: str, old: str, new: str, prefix: str) -> str:
+    if block == _policy(old, prefix):
+        return _policy(new, prefix)
+    # Guidance from earlier templates keeps its rules and switches them with a mode line.
     line = f"Automatic plan review mode: {old}"
-    if block.count(line) != 1:
-        raise ConfigError("installed guidance review mode line changed")
-    return block.replace(line, f"Automatic plan review mode: {new}", 1)
+    if block.count(line) == 1:
+        return block.replace(line, f"Automatic plan review mode: {new}", 1)
+    raise ConfigError("installed guidance is from an older template; run setup update first")
 
 
 def _snapshot(paths: list[Path]) -> dict[str, bytes | None]:
@@ -723,7 +736,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 after[str(path)] = _render(role, choices[role], prefix)
         parts = _guidance_parts(text, name)
         if args.command == "review":
-            block = _edit_review_block(parts[1], record["review_mode"], review_mode)
+            block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix)
         elif args.command == "model":
             block = parts[1]
         else:

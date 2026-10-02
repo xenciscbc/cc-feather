@@ -2,7 +2,7 @@
 
 This procedure governs main's orchestration. Verifier's role definition governs how it checks a claim and reports CONFIRMED, REFUTED or INCONCLUSIVE.
 
-Resolve the active review mode as in [plan review](plan-review.md). In auto, completed work that met a plan-review trigger gets outcome verification before main reports it complete; an explicit user request applies in either mode. Plan review checks the plan before work starts; outcome verification checks the result, so one does not replace the other.
+Resolve the active review mode as in [plan review](plan-review.md). In auto, completed work that met a plan-review trigger gets outcome verification before main reports it complete. In off, only an explicit verification request runs it; an explicit plan-review request alone does not. An explicit verification request applies in either mode. Plan review checks the plan before work starts; outcome verification checks the result, so one does not replace the other.
 
 1. Verify at the smallest integration boundary where the whole claim can be refuted, after main has run the primary acceptance itself. Tests and builds are evidence for the verifier, not a substitute for it.
 2. Use verifier, under its installed native name, in fresh native context. Supply the exact claim, its acceptance checks, the relevant diff or paths and the commands main ran. If fresh context or the role is unavailable, report the limitation and keep completion of the affected claim blocked.

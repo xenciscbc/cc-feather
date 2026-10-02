@@ -45,4 +45,4 @@ When outcome verification is required, follow [the outcome-verification procedur
 
 ## Plan review
 
-When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. Work that met a review trigger also needs outcome verification once implemented.
+When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. In auto, work that met a review trigger also needs outcome verification once implemented; in off, an explicit plan-review request does not imply verification. For a request to turn automatic review on or off, follow [the toggle procedure](../setup/references/auto-review.md).
