@@ -44,6 +44,16 @@ def validated_fields(payload: dict, create: bool) -> dict[str, str]:
     return fields
 
 
+def sections(text: str, start: int = 0) -> list[str]:
+    """Fence-aware level-1/2 headings at or after start; each one ends a managed section."""
+    return [line for offset, _, line in baseline.headings(text) if offset >= start and re.match(r"^#{1,2} ", line)]
+
+
+def details_warnings(details: str) -> list[str]:
+    return [f"details heading '{line}' starts a separate section; later details updates replace only text before it"
+            for line in sections(details)]
+
+
 def create_work(store: Store, name: str, raw: object) -> dict:
     store.require_write_root()
     payload = input_object(raw)
@@ -58,8 +68,11 @@ def create_work(store: Store, name: str, raw: object) -> dict:
     if not isinstance(tracking, str) or tracking not in {"default", "track"}:
         raise HandoffError("input", "tracking must be default or track")
     content = f"# {title}\n" + "\n".join(f"{label}：{fields[key]}" for key, label in FIELDS.items() if key in fields) + "\n"
+    warnings = []
     if "details" in payload:
-        content += "\n## 詳細紀錄\n" + text_value(payload["details"], "details", multiline=True).rstrip("\n") + "\n"
+        details = text_value(payload["details"], "details", multiline=True).rstrip("\n")
+        warnings = details_warnings(details)
+        content += "\n## 詳細紀錄\n" + details + "\n"
     if "snapshot" in payload:
         # A second managed section in details must not be silently replaced.
         if baseline.section(content) is not None:
@@ -72,7 +85,10 @@ def create_work(store: Store, name: str, raw: object) -> dict:
     if fields["status"] == "完成":
         check_archivable(Snapshot(path, data))
     create_file(path, data)
-    return finish_save(store, name, tracking, payload)
+    result = finish_save(store, name, tracking, payload)
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 def update_work(store: Store, name: str, raw: object) -> dict:
@@ -90,6 +106,7 @@ def update_work(store: Store, name: str, raw: object) -> dict:
                            "replacement keeping title, 更新 and 狀態：完成 when archive reports a body format problem")
     content = original.text
     newline = "\r\n" if "\r\n" in content else "\n"
+    warnings = siblings = None
     if "replacement" in payload:
         if set(payload) - {"version", "replacement", "tracking", "defer_history"}:
             raise HandoffError("input", "replacement cannot be combined with partial edits")
@@ -132,11 +149,16 @@ def update_work(store: Store, name: str, raw: object) -> dict:
                 details_span = baseline.section(content, "## 詳細紀錄")
             except ValueError as error:
                 raise HandoffError("format", str(error)) from None
+            warnings = details_warnings(details)
             if details_span:
                 prefix = content[:details_span[1]]
                 if not prefix.endswith("\n"):
                     prefix += newline
-                content = prefix + details.rstrip("\r\n") + newline + content[details_span[2]:]
+                # Sibling sections after the managed span must survive unchanged (and stay visible).
+                siblings = sections(content, details_span[2])
+                inserted = prefix + details.rstrip("\r\n") + newline
+                content = inserted + content[details_span[2]:]
+                visible = sections(content, len(inserted))
             else:
                 content = content.rstrip("\r\n") + newline * 2 + "## 詳細紀錄" + newline + details.rstrip("\r\n") + newline
         if "snapshot" in payload:
@@ -168,11 +190,19 @@ def update_work(store: Store, name: str, raw: object) -> dict:
             raise HandoffError("completed", "History already holds this completion identity; use archive to retry archival")
     if after["status"] == "完成":
         check_archivable(Snapshot(original.path, data))
+    if siblings is not None and visible != siblings:
+        raise HandoffError("details-format", f"this details text would hide or change existing sections "
+                           f"({', '.join(siblings)}); close the code fence or use ### headings")
     tracking = payload.get("tracking", "default")
     if not isinstance(tracking, str) or tracking not in {"default", "track"}:
         raise HandoffError("input", "tracking must be default or track")
     replace_file(original, data)
-    return finish_save(store, name, tracking, payload)
+    result = finish_save(store, name, tracking, payload)
+    if siblings is not None:
+        result["preserved_sections"] = siblings
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
@@ -199,5 +229,17 @@ def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
             return {**result, "status": "partial", "complete": False, "code": "deferred",
                     "message": "Completed work saved; shared history deferred for coordinated retry"}
         from .archiving import archive_work
-        return {**archive_work(store, name, {"version": result["version"]}), "tracking": result["tracking"]}
+        try:
+            archived = archive_work(store, name, {"version": result["version"]})
+        except (OSError, ValueError) as error:
+            observed = {}
+            try:
+                observed = read_work(store, name)
+            except (OSError, ValueError):
+                pass
+            return {**observed, "status": "partial", "complete": False, "code": "archive-failed",
+                    "cause_code": getattr(error, "code", "io"), "message": str(error), "work": name,
+                    "work_path": str(store.directory / name), "saved_version": result["version"],
+                    "tracking": result["tracking"], "recovery": "retry-archive"}
+        return {**archived, "tracking": result["tracking"]}
     return result

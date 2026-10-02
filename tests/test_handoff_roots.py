@@ -7,7 +7,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
-import test_handoff_tool as handoff_tests
+from tests import test_handoff_tool as handoff_tests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/handoff/scripts"))
 from feather_handoff import cli, storage
@@ -20,6 +20,7 @@ class HandoffRootTest(unittest.TestCase):
     tree = handoff_tests.HandoffToolTest.snapshot
 
     def invoke(self, command, *args, payload=None, exact=False):
+        self.addCleanup(storage.reset_roots)
         argv = ["handoff", "--project", str(self.project)]
         if exact:
             argv.append("--exact-root")

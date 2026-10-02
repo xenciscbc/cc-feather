@@ -85,12 +85,31 @@ The local skill is now `skills/handoff`, invoked as `/cc-feather:handoff`. The 1
 Further local runtime fixes (also pending upstream; `archiving.py`, `writing.py`, `cli.py`, `storage.py` and `observations.py` now have `adaptations` entries recording their upstream hashes):
 
 - `archiving.py`, `writing.py`: `check_archivable` refuses to save a `完成` work (create or update) whose body would not archive as exactly one history entry, for example a body line shaped like `## <title> · 完成：<time>`; nothing is written. `archive` reports such an already-stuck work as `format`, naming the offending line and the repair path. A completed work accepts exactly one edit, `update {version, replacement}` keeping the same title, `更新` and `狀態：完成`, passing the archive check, with no matching identity already in history. `skills/handoff/references/tool.md` ("Update and completion") documents this. The title line is compared after stripping, matching `summary()` and history parsing.
-- `cli.py`: invalid JSON, non-UTF-8 and over-deep stdin are `input` errors, and any other unexpected exception is a JSON `internal` error with exit 2, so the JSON/exit-code contract always holds.
+- `cli.py`: invalid JSON, non-UTF-8 and over-deep stdin are `input` errors, and any other unexpected exception is a JSON `internal` error with exit 2, so the JSON/exit-code contract holds for every invocation except `--help`.
 - `writing.py`, `archiving.py`: `update` details are normalized to the file's newline; archival into a CRLF history uses CRLF for the marker and separator (work bodies stay byte-exact), and the retry check accepts a CRLF separator only where another entry starts at the entry's end. New history files stay LF.
 - `storage.py`: superscript `COM¹²³` and `LPT¹²³` names are reserved. `observations.py`: when `st_ino` is unavailable, duplicate-source detection uses the resolved path instead of `(st_dev, 0)`.
 
 Deferred, no change: relaxing `same_body` for a retry after the following entry was cleared (indistinguishable on disk from the upstream-tested extra-newline conflict; outcome is a preserved-data `conflict`), and a history lock for the check-then-replace lost-update window (a lock would not coordinate codex-feather, adds stale-lock failure modes and contradicts the documented single-writer contract).
 
-New local-only tests live in `tests/test_handoff_local_fixes.py`; it is not in the manifest `files` or `adaptations`.
+New local-only tests live in `tests/test_handoff_local_fixes.py` and `tests/test_handoff_links.py`; neither is in the manifest `files` or `adaptations`.
 
 `tests/test_handoff_history.py` replaces the expectation that such a heading inside modern history is reported as an uncertain boundary. Re-import both files once upstream carries an equivalent fix.
+
+## Review fixes pending upstream
+
+These local divergences are also pending upstream. `tracking.py` now has an `adaptations` entry, and the entries for `writing.py`, `cli.py`, `storage.py` and `history_mutations.py` describe them. The on-disk record, history and baseline formats are unchanged; codex-feather reads and writes the same files.
+
+- `writing.py`: a details update that would hide or change the level-1/2 sections after `## 詳細紀錄` (for example an unclosed code fence) is refused with `details-format` and nothing is written. Create/update results add `warnings` for level-1/2 headings inside details and update results add `preserved_sections`. A completed save whose archival then fails returns `partial` with `code: archive-failed`, `cause_code` and `recovery: retry-archive` instead of an `error` for already saved work.
+- `tracking.py`: `tracking: track` records the choice as the `.gitignore` comment `# cc-feather: track /.feather/handoffs/` (removing only the exact `/.feather/handoffs/` rule, in one write); later default saves report `existing-rule` and leave `.gitignore` unchanged. The marker is Git-inert and unknown to codex-feather, whose default save still appends the rule while no handoff is tracked.
+- `history_mutations.py`: a malformed or unreadable work file blocks `clear` and `seal` with `pending-unknown` (upstream: `pending-archive`).
+- `cli.py`: usage errors return the JSON envelope with `code: usage` and a missing selected file `code: not-found`, exit 2 (upstream: argparse text with exit 2, and `io`).
+- `storage.py`: a linked or junction `--project` path or ancestor above the project is resolved once with a strict real path; `root.path` reports it and `root.requested` the supplied spelling. Every path check stops at that registered root after confirming it still resolves to itself (`unsafe-path`, "Project root changed after it was resolved"). The Git root is the resolved path or its nearest ancestor that is the same directory as the Git top level, and a supplied path that crosses a link below the repository root is `uncertain`. Links, junctions, reparse points and hard links at or below the root stay refused. Where a volume cannot resolve strict real paths, the previous full-ancestor link refusal applies (upstream refuses links anywhere in the path). `create_file` removes the partial file it created when writing fails, after confirming the same file identity, and re-raises the original error.
+
+Test adaptations: `tests/test_handoff_tool.py` expects the tracking marker after `tracking: track`. `tests/test_handoff_roots.py` and `tests/test_handoff_snapshots.py` import their fixtures through the `tests` package, so `python -B -m unittest tests.test_handoff_snapshots tests.test_handoff_roots` works from the repository root, and reset the root registry after building stores in-process.
+
+The link tests in `tests/test_handoff_links.py` run under `FEATHER_LINK_TEST_DIR` when it is set (they create and remove a unique subdirectory there) and otherwise under the system temporary directory. They skip with "strict realpath unsupported" on a volume that cannot resolve strict real paths, such as some RAM disks:
+
+```powershell
+$env:FEATHER_LINK_TEST_DIR = 'D:/path/on/an/NTFS/volume'
+python -B -m unittest discover -s tests -t . -v
+```

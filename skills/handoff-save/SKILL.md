@@ -11,7 +11,7 @@ Save progress for one work item. Follow [Save progress](../handoff/SKILL.md#save
 
 The operation is already known to be a save, so a bare invocation does not ask what to do.
 
-- **Argument given:** save that work. Reuse its existing record when present (read it first and update with its version); otherwise create a new record under a legal basename derived from the name.
+- **Argument given:** save that work. List existing records first and match the argument against work filenames (without `.md`), then titles. Ask when several records match. Reuse the matching record (read it first and update with its version); never create a second record for a matching title. Only when nothing matches, create a new record under a legal basename derived from the name.
 - **No argument:** save the work this conversation is carrying out. Reuse the record already created or resumed in this conversation. If none exists, create one named after the current work. Ask only when the conversation covers several distinct work items and none is clearly current, or when there is no identifiable work to record.
 
 When the save surfaces new to-do items, apply [New to-do items](../handoff/SKILL.md#new-to-do-items): separable items become their own work records instead of being appended to the current record's summary.

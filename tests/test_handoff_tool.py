@@ -125,7 +125,7 @@ class HandoffToolTest(unittest.TestCase):
         self.run_tool("create", "--work", "audit.md", payload=payload)
         self.assertEqual(ignore.read_text(), "# Existing\n*.log\n/.feather/handoffs/\n")
         self.run_tool("create", "--work", "tracked.md", payload={**payload, "tracking": "track"})
-        self.assertEqual(ignore.read_text(), "# Existing\n*.log\n")
+        self.assertEqual(ignore.read_text(), "# Existing\n*.log\n# cc-feather: track /.feather/handoffs/\n")
         index = subprocess.run(["git", "-c", f"safe.directory={self.project.as_posix()}", "-C",
                                 str(self.project), "ls-files"], capture_output=True, check=True)
         self.assertEqual(index.stdout, b"")

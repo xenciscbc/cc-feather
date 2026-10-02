@@ -15,10 +15,17 @@ def input_payload():
         raise HandoffError("input", f"Input must be valid UTF-8 JSON: {type(error).__name__}") from None
 
 
+class Parser(argparse.ArgumentParser):
+    """Usage errors use the JSON contract; --help stays plain text."""
+
+    def error(self, message):
+        raise HandoffError("usage", f"{self.prog}: {message}")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Feather handoff files (Python 3.11+)")
+    parser = Parser(description="Feather handoff files (Python 3.11+)")
     parser.add_argument("--project", required=True, help="Existing project directory")
     parser.add_argument("--exact-root", action="store_true", help="Use --project as the confirmed root without Git discovery")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -43,9 +50,9 @@ def main() -> int:
     history.add_argument("--keyword")
     history.add_argument("--timezone", default="UTC")
     history.add_argument("--include-sealed", action="store_true")
-    args = parser.parse_args()
-    store = None
+    args = store = None
     try:
+        args = parser.parse_args()
         store = Store(args.project, exact_root=args.exact_root)
         if args.command == "snapshot":
             from .observations import capture
@@ -75,8 +82,8 @@ def main() -> int:
         else:
             result = list_work(store) if args.command == "list" else read_work(store, args.work)
     except (OSError, UnicodeError, ValueError) as error:
-        result = {"status": "error", "complete": False,
-                  "code": getattr(error, "code", "io"), "message": str(error)}
+        code = "not-found" if isinstance(error, FileNotFoundError) else getattr(error, "code", "io")
+        result = {"status": "error", "complete": False, "code": code, "message": str(error)}
     except Exception as error:
         result = {"status": "error", "complete": False, "code": "internal",
                   "message": f"{type(error).__name__}: {error}"}
@@ -85,4 +92,5 @@ def main() -> int:
         if store.root["state"] == "uncertain" and result["status"] != "error":
             result.update(operation_status=result["status"], status="partial", complete=False)
     print(json.dumps(result, ensure_ascii=False))
-    return 2 if result["status"] in {"error", "partial"} or (args.command == "compare" and result["status"] == "missing") else 0
+    return 2 if result["status"] in {"error", "partial"} or (
+        getattr(args, "command", None) == "compare" and result["status"] == "missing") else 0

@@ -12,4 +12,5 @@ List Feather handoff work in the current project. Follow the list rules in [Read
 - This is read-only: do not write records or Git rules, compare sources, select, resume or execute any next step. Exclude `history.md` and `archive/`.
 - For each item show its work name (filename without `.md`), title, status and the recorded `進度` summary. The work name is what `/cc-feather:handoff-resume <work>` accepts.
 - An optional argument filters the displayed items by status or keyword; state the filter applied. Without an argument, list everything.
+- Show `record_status: 完成待歸檔` items as completed work still pending archival: offer an archive retry (see [Archive completed work](../handoff/SKILL.md#archive-completed-work)), never present them as resumable. Show `格式待確認` items with their reported problems; never select them automatically.
 - Report `partial` or uncertain-root results with their affected files; an incomplete list cannot establish that no other pending work exists. Report an empty list as no pending work only when the result is complete.

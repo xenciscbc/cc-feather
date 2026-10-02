@@ -11,13 +11,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-import test_handoff_tool as handoff_tests
-from test_handoff_storage import skewed_fstat
+from tests import test_handoff_tool as handoff_tests
+from tests.test_handoff_storage import skewed_fstat
 RECORD = handoff_tests.RECORD
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/handoff/scripts"))
 from feather_handoff import baseline, observations
-from feather_handoff.storage import HandoffError, Store
+from feather_handoff.storage import HandoffError, Store, reset_roots
 
 
 class HandoffSnapshotsTest(unittest.TestCase):
@@ -288,6 +288,7 @@ class ObservationUnitTest(unittest.TestCase):
         self.assertFalse(result["complete"])
 
     def test_comparison_detects_handoff_version_change(self):
+        self.addCleanup(reset_roots)
         store = Store(str(self.project))
         path = store.directory / "w.md"
         path.parent.mkdir(parents=True)
@@ -315,6 +316,7 @@ class ObservationUnitTest(unittest.TestCase):
     def test_git_trust_failure_is_not_overridden_during_root_discovery_or_capture(self):
         (self.project / "a").write_bytes(b"a")
         denied = subprocess.CompletedProcess([], 128, "", "fatal: detected dubious ownership in repository")
+        self.addCleanup(reset_roots)
         with patch.object(subprocess, "run", return_value=denied) as git:
             store = Store(str(self.project))
             result = observations.capture(store, {"paths": ["a"]})
@@ -328,6 +330,7 @@ class ObservationUnitTest(unittest.TestCase):
 
     def test_tracking_failure_reports_saved_baseline_and_version(self):
         from feather_handoff.writing import create_work
+        self.addCleanup(reset_roots)
         store = Store(str(self.project))
         (self.project / "a").write_bytes(b"a")
         with patch.object(observations, "git_observation", return_value={"state": "not-repository"}):

@@ -1,5 +1,6 @@
 """Local handoff fixes that are not part of the inherited upstream tests."""
 import contextlib
+import errno
 import hashlib
 import io
 import json
@@ -11,16 +12,19 @@ import tempfile
 import unittest
 from unittest import mock
 
+from tests.test_handoff_storage import skewed_fstat
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "skills/handoff/scripts"
 TOOL = SCRIPTS / "handoff.py"
 sys.path.insert(0, str(SCRIPTS))
 
-from feather_handoff import cli, history, observations, storage  # noqa: E402
+from feather_handoff import cli, history, observations, storage, tracking  # noqa: E402
 
 COMPLETED = "2026-09-11T10:00:00+08:00"
 FAKE = "## Bar · 完成：2020-01-01T00:00:00+00:00"
+MARKER = "# cc-feather: track /.feather/handoffs/"
+FIELDS = {"goal": "g", "progress": "p", "next": "n"}
 
 
 def record(title="Foo", status="完成", updated=COMPLETED, details="證據。", eol="\n", heading=None):
@@ -58,6 +62,18 @@ class LocalFixesBase(unittest.TestCase):
     def archive(self, name: str, data: bytes | None = None, expected=0) -> dict:
         data = self.put(name, data).read_bytes() if data is not None else (self.directory / name).read_bytes()
         return self.run_tool("archive", "--work", name, payload={"version": sha(data)}, expected=expected)
+
+    def invoke(self, *args, payload=None) -> tuple[int, dict]:
+        self.addCleanup(storage.reset_roots)
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["handoff", "--project", str(self.project), *args]), \
+                mock.patch.object(cli, "input_payload", return_value=payload), contextlib.redirect_stdout(out):
+            code = cli.main()
+        return code, json.loads(out.getvalue())
+
+    def tree(self) -> dict:
+        return {p.relative_to(self.project).as_posix(): p.read_bytes()
+                for p in self.project.rglob("*") if p.is_file() and ".git" not in p.relative_to(self.project).parts}
 
 
 class CompletedBodyTest(LocalFixesBase):
@@ -228,6 +244,7 @@ class SmallFixesTest(LocalFixesBase):
     def test_unavailable_inode_does_not_flag_distinct_sources_as_duplicates(self):
         (self.project / "a.txt").write_text("a", encoding="utf-8")
         (self.project / "b.txt").write_text("b", encoding="utf-8")
+        self.addCleanup(storage.reset_roots)
         zero_inode = lambda info: (info.st_dev, 0, info.st_mode, info.st_nlink, info.st_size, info.st_mtime_ns)
         with mock.patch.object(observations, "signature", zero_inode), \
                 mock.patch.object(observations, "git_observation", return_value={"state": "not-repository"}):
@@ -250,6 +267,214 @@ class SmallFixesTest(LocalFixesBase):
                     self.assertEqual(expected, len(bom) + len(text[:offset].encode("utf-8")))
                 self.assertEqual(entry.content_bytes.decode("utf-8"), entry.content)
                 self.assertEqual(entry.body_bytes.decode("utf-8"), entry.body)
+
+
+class DetailsSectionsTest(LocalFixesBase):
+    """H1: a details update never hides or changes the sections that follow it."""
+
+    def test_details_that_would_hide_a_sibling_are_refused_then_closed_fence_keeps_it(self):
+        self.run_tool("create", "--work", "a.md", payload={"title": "Foo", "fields": FIELDS, "details": "old"})
+        path = self.directory / "a.md"
+        path.write_bytes(path.read_bytes() + b"\n## Notes\nKEEP\n")
+        before = path.read_bytes()
+        result = self.run_tool("update", "--work", "a.md", expected=2,
+                               payload={"version": sha(before), "details": "```text\nexample"})
+        self.assertEqual(result["code"], "details-format")
+        self.assertIn("## Notes", result["message"])
+        self.assertEqual(path.read_bytes(), before)
+        saved = self.run_tool("update", "--work", "a.md",
+                              payload={"version": sha(before), "details": "```text\nexample\n```"})
+        self.assertEqual(saved["preserved_sections"], ["## Notes"])
+        self.assertTrue(path.read_text(encoding="utf-8").endswith("## 詳細紀錄\n```text\nexample\n```\n## Notes\nKEEP\n"))
+
+    def test_plain_details_update_reports_preserved_sections(self):
+        data = record(status="進行中") + b"\n## Notes\nKEEP\n"
+        path = self.put("a.md", data)
+        saved = self.run_tool("update", "--work", "a.md", payload={"version": sha(data), "details": "new evidence"})
+        self.assertEqual(saved["preserved_sections"], ["## Notes"])
+        self.assertNotIn("warnings", saved)
+        self.assertTrue(path.read_bytes().endswith(b"new evidence\n## Notes\nKEEP\n"))
+
+    def test_level_two_heading_inside_details_is_reported_without_refusal(self):
+        created = self.run_tool("create", "--work", "a.md",
+                                payload={"title": "Foo", "fields": FIELDS, "details": "a\n## 附錄\nb"})
+        self.assertEqual(created["status"], "ok")
+        self.assertEqual(len(created["warnings"]), 1)
+        self.assertIn("'## 附錄' starts a separate section", created["warnings"][0])
+        fenced = self.run_tool("create", "--work", "b.md",
+                               payload={"title": "Bar", "fields": FIELDS, "details": "```text\n## 附錄\n```\n### Sub"})
+        self.assertNotIn("warnings", fenced)
+        updated = self.run_tool("update", "--work", "a.md", payload={"version": created["version"], "details": "c\n# X\nd"})
+        self.assertEqual(updated["preserved_sections"], ["## 附錄"])
+        self.assertEqual(len(updated["warnings"]), 1)
+
+
+class CompletionArchiveFailureTest(LocalFixesBase):
+    """H2: an archival failure after the completed work was saved is a partial result."""
+
+    BROKEN = "# 交接歷史\n\nmanual preamble\n## old · 完成：2026-09-10T00:00:00+00:00\nold\n".encode("utf-8")
+
+    def check_partial(self, result):
+        path = self.directory / "a.md"
+        self.assertEqual((result["status"], result["code"], result["cause_code"]), ("partial", "archive-failed", "history-format"))
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["recovery"], "retry-archive")
+        self.assertEqual(Path(result["work_path"]), path)
+        self.assertEqual(result["saved_version"], sha(path.read_bytes()))
+        self.assertEqual(result["version"], result["saved_version"])
+        self.assertIn("狀態：完成", path.read_text(encoding="utf-8"))
+        self.assertEqual(self.history.read_bytes(), self.BROKEN)
+
+    def test_create_and_update_completion_report_archive_failure_then_retry_succeeds(self):
+        self.history.write_bytes(self.BROKEN)
+        completed = {"title": "Foo", "fields": {**FIELDS, "updated": COMPLETED, "status": "完成"}}
+        self.check_partial(self.run_tool("create", "--work", "a.md", payload=completed, expected=2))
+        (self.directory / "a.md").unlink()
+        created = self.run_tool("create", "--work", "a.md", payload={"title": "Foo", "fields": {**FIELDS, "updated": COMPLETED}})
+        result = self.run_tool("update", "--work", "a.md", expected=2,
+                               payload={"version": created["version"], "fields": {"status": "完成"}})
+        self.check_partial(result)
+        self.history.write_bytes(self.BROKEN.replace(b"manual preamble\n", b""))
+        retried = self.run_tool("archive", "--work", "a.md", payload={"version": result["saved_version"]})
+        self.assertTrue(retried["archived"])
+        self.assertFalse((self.directory / "a.md").exists())
+
+
+class TrackingMarkerTest(LocalFixesBase):
+    """H3: an explicit track choice is recorded as a Git-inert comment and survives default saves."""
+
+    def setUp(self):
+        super().setUp()
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        self.ignore = self.project / ".gitignore"
+
+    def index(self) -> bytes:
+        return subprocess.run(["git", "-c", f"safe.directory={self.project.as_posix()}", "-C", str(self.project),
+                               "ls-files"], capture_output=True, check=True).stdout
+
+    def test_track_records_marker_and_later_default_update_keeps_it(self):
+        created = self.run_tool("create", "--work", "a.md", payload={"fields": FIELDS, "tracking": "track"})
+        self.assertEqual(created["tracking"], "track")
+        self.assertEqual(self.ignore.read_bytes(), (MARKER + "\n").encode())
+        updated = self.run_tool("update", "--work", "a.md", payload={"version": created["version"], "fields": {"next": "m"}})
+        self.assertEqual(updated["tracking"], "existing-rule")
+        self.assertEqual(self.ignore.read_bytes(), (MARKER + "\n").encode())
+        self.assertEqual(self.index(), b"")
+
+    def test_track_replaces_rule_with_marker_in_one_write_and_keeps_crlf(self):
+        for newline in ("\n", "\r\n"):
+            with self.subTest(newline=repr(newline)):
+                self.ignore.write_bytes(f"*.log{newline}/.feather/handoffs/{newline}".encode())
+                self.addCleanup(storage.reset_roots)
+                store = storage.Store(str(self.project))
+                with mock.patch.object(tracking, "replace_file", wraps=tracking.replace_file) as replaced, \
+                        mock.patch.object(tracking, "create_file", wraps=tracking.create_file) as created:
+                    self.assertEqual(tracking.ensure_tracking(store, "a.md", "track"), "track")
+                self.assertEqual(replaced.call_count + created.call_count, 1)
+                self.assertEqual(self.ignore.read_bytes(), f"*.log{newline}{MARKER}{newline}".encode())
+                self.assertEqual(tracking.ensure_tracking(store, "a.md", "default"), "existing-rule")
+                self.assertEqual(self.ignore.read_bytes(), f"*.log{newline}{MARKER}{newline}".encode())
+        self.assertEqual(self.index(), b"")
+
+    def test_broader_ignore_rule_still_blocks_tracking(self):
+        self.ignore.write_bytes(b".feather/\n")
+        result = self.run_tool("create", "--work", "a.md", payload={"fields": FIELDS, "tracking": "track"}, expected=2)
+        self.assertEqual((result["code"], result["cause_code"]), ("tracking-failed", "tracking-blocked"))
+        self.assertEqual(self.ignore.read_bytes(), f".feather/\n{MARKER}\n".encode())
+        self.assertTrue((self.directory / "a.md").is_file())
+        self.assertEqual(self.index(), b"")
+
+
+class PendingUnknownTest(LocalFixesBase):
+    """H4: an unreadable or malformed work cannot be reported as a pending archival."""
+
+    def test_malformed_work_blocks_clear_and_seal_as_pending_unknown(self):
+        self.history.write_bytes(f"# 交接歷史\n\n## Foo · 完成：{COMPLETED}\nbody\n".encode("utf-8"))
+        self.put("legacy.md", record(title="Other", status="進行中", updated="2026-09-11T10:00:00"))
+        entry = self.run_tool("history")["entries"][0]
+        before = self.tree()
+        for command, extra in (("clear", {}), ("seal", {"destination": "batch.md"})):
+            with self.subTest(command):
+                result = self.run_tool(command, expected=2,
+                                       payload={"version": entry["document_version"], "ids": [entry["id"]], **extra})
+                self.assertEqual(result["code"], "pending-unknown")
+                self.assertIn("legacy.md", result["message"])
+                self.assertIn("cannot rule out an unfinished archival", result["message"])
+                self.assertEqual(self.tree(), before)
+
+
+class CliUsageTest(LocalFixesBase):
+    """H6: usage errors and missing files keep the JSON contract."""
+
+    def test_usage_errors_and_missing_work_are_json(self):
+        for args, code in ((("read",), "usage"), (("unknown",), "usage"), ((), "usage"),
+                           (("read", "--work", "absent.md"), "not-found")):
+            with self.subTest(args=args):
+                result = self.run_tool(*args, raw=b"", expected=2)
+                self.assertEqual((result["status"], result["complete"], result["code"]), ("error", False, code))
+        result = subprocess.run([sys.executable, "-B", str(TOOL), "--help"], capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(result.stdout.startswith(b"usage:"))
+
+
+class FailingWrite:
+    def __init__(self, handle):
+        self.handle = handle
+
+    def fileno(self):
+        return self.handle.fileno()
+
+    def write(self, data):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def flush(self):
+        self.handle.flush()
+
+    def close(self):
+        self.handle.close()
+
+
+def failing_open(name):
+    real = Path.open
+
+    def open_(self, mode="r", *args, **kwargs):
+        handle = real(self, mode, *args, **kwargs)
+        return FailingWrite(handle) if mode == "xb" and self.name == name else handle
+    return open_
+
+
+class CreateCleanupTest(LocalFixesBase):
+    """H7: an interrupted first-time creation leaves no partial file."""
+
+    def test_failed_create_write_leaves_no_work_file(self):
+        with mock.patch.object(Path, "open", failing_open("a.md")):
+            code, result = self.invoke("create", "--work", "a.md", payload={"fields": FIELDS})
+        self.assertEqual((code, result["status"], result["code"]), (2, "error", "io"))
+        self.assertFalse((self.directory / "a.md").exists())
+
+    def test_failed_first_history_creation_reports_pending_archive(self):
+        work = self.put("a.md", record())
+        with mock.patch.object(Path, "open", failing_open("history.md")):
+            code, result = self.invoke("archive", "--work", "a.md", payload={"version": sha(work.read_bytes())})
+        self.assertEqual((code, result["status"], result["code"]), (2, "partial", "history-save-failed"))
+        self.assertFalse(result["history_present"])
+        self.assertTrue(result["work_present"])
+        self.assertFalse(self.history.exists())
+        self.assertEqual(work.read_bytes(), record())
+
+    def test_existing_destination_and_unknown_identity_are_kept(self):
+        path = self.put("a.md", b"existing")
+        with self.assertRaises(storage.HandoffError) as raised:
+            storage.create_file(path, b"new")
+        self.assertEqual(raised.exception.code, "exists")
+        self.assertEqual(path.read_bytes(), b"existing")
+        target = self.directory / "b.md"
+        with mock.patch.object(Path, "open", failing_open("b.md")), \
+                mock.patch.object(storage.os, "fstat", side_effect=skewed_fstat(st_ino=0)), \
+                self.assertRaises(OSError) as failed:
+            storage.create_file(target, b"data")
+        self.assertEqual(failed.exception.errno, errno.ENOSPC)
+        self.assertTrue(target.exists())
 
 
 if __name__ == "__main__":

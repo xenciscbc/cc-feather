@@ -79,7 +79,8 @@ def check_pending(store: Store, entries: list[HistoryEntry], document: HistoryDo
             snapshot = read_file(path)
             item = summary(snapshot)
             if item["problems"]:
-                raise HandoffError("pending-archive", f"Cannot exclude unfinished archival for {path}")
+                raise HandoffError("pending-unknown", f"{path}: {'; '.join(item['problems'])}; "
+                                   "cannot rule out an unfinished archival")
             snapshots.append(snapshot)
             for entry in entries:
                 if (item["status"] == "完成" and item["title"] == entry.title
@@ -89,7 +90,7 @@ def check_pending(store: Store, entries: list[HistoryEntry], document: HistoryDo
                         raise HandoffError("conflict", f"Completed work and history differ: {path}")
                     raise HandoffError("pending-archive", f"Retry archival before sealing: {path}")
         except (OSError, UnicodeError) as error:
-            raise HandoffError("pending-archive", f"Cannot exclude unfinished archival for {path}: {error}") from error
+            raise HandoffError("pending-unknown", f"{path}: {error}; cannot rule out an unfinished archival") from error
     if paths != store.work_paths():
         raise HandoffError("pending-archive", "Work directory changed; repeat pending archival check")
     for snapshot in snapshots:
