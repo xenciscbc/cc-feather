@@ -3,6 +3,8 @@ from datetime import datetime
 import re
 import subprocess
 
+from .archiving import _matching, check_archivable
+from .history import parse_history
 from .records import FIELDS, REQUIRED, STATUSES, read_work, summary, valid_time
 from .storage import HandoffError, Snapshot, Store, create_file, read_file, replace_file
 from .tracking import ensure_tracking
@@ -66,7 +68,10 @@ def create_work(store: Store, name: str, raw: object) -> dict:
     new_baseline = baseline.parse(content)
     if new_baseline is not None:
         verify_for_save(store, new_baseline)
-    create_file(path, content.encode("utf-8"))
+    data = content.encode("utf-8")
+    if fields["status"] == "完成":
+        check_archivable(Snapshot(path, data))
+    create_file(path, data)
     return finish_save(store, name, tracking, payload)
 
 
@@ -78,8 +83,11 @@ def update_work(store: Store, name: str, raw: object) -> dict:
     original = read_file(store.work_path(name))
     if payload.get("version") != original.version:
         raise HandoffError("conflict", "Source changed or version missing; read the work again")
-    if summary(original)["status"] == "完成":
-        raise HandoffError("completed", "Completed identity is retained; use archive to retry archival")
+    before = summary(original)
+    if before["status"] == "完成" and (
+            "replacement" not in payload or set(payload) - {"version", "replacement", "tracking", "defer_history"}):
+        raise HandoffError("completed", "Completed identity is retained; use archive to retry archival, or a reviewed "
+                           "replacement keeping title, 更新 and 狀態：完成 when archive reports a body format problem")
     content = original.text
     newline = "\r\n" if "\r\n" in content else "\n"
     if "replacement" in payload:
@@ -117,7 +125,7 @@ def update_work(store: Store, name: str, raw: object) -> dict:
                 header = header.rstrip("\r\n") + newline + line + newline + newline
         content = header + tail
         if "details" in payload:
-            details = text_value(payload["details"], "details", multiline=True)
+            details = re.sub(r"\r\n|\r|\n", newline, text_value(payload["details"], "details", multiline=True))
             if "snapshot" in payload and baseline.section(details) is not None:
                 raise HandoffError("snapshot-format", "Snapshot supplied both in details and payload")
             try:
@@ -148,6 +156,18 @@ def update_work(store: Store, name: str, raw: object) -> dict:
     problems = summary(Snapshot(original.path, data))["problems"]
     if problems:
         raise HandoffError("format", "; ".join(problems))
+    after = summary(Snapshot(original.path, data))
+    if before["status"] == "完成":
+        if (after["title"], after["updated"], after["status"]) != (before["title"], before["updated"], "完成"):
+            raise HandoffError("completed", "A completed work replacement must keep its title, 更新 and 狀態：完成")
+        try:
+            history = parse_history(read_file(store.directory / "history.md"))
+        except FileNotFoundError:
+            history = None
+        if history is not None and _matching(history, before["title"], before["updated"]):
+            raise HandoffError("completed", "History already holds this completion identity; use archive to retry archival")
+    if after["status"] == "完成":
+        check_archivable(Snapshot(original.path, data))
     tracking = payload.get("tracking", "default")
     if not isinstance(tracking, str) or tracking not in {"default", "track"}:
         raise HandoffError("input", "tracking must be default or track")

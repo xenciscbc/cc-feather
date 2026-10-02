@@ -75,8 +75,8 @@ def resolve_root(value: str, exact: bool = False) -> dict:
 
 
 def legal_name(name: str) -> None:
-    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)),
-                *(f"LPT{n}" for n in range(1, 10))}
+    digits = [*map(str, range(1, 10)), "\u00b9", "\u00b2", "\u00b3"]
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in digits), *(f"LPT{n}" for n in digits)}
     if (not name or name in {".", ".."} or name.rstrip(" .") != name
             or any(c in name for c in '/\\:<>"|?*') or any(ord(c) < 32 for c in name)
             or name.split(".")[0].upper() in reserved):

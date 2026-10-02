@@ -80,5 +80,17 @@ The local skill is now `skills/handoff`, invoked as `/cc-feather:handoff`. The 1
 
 - Legacy-format entry starts are recognized only before the first modern `## <work> · 完成：<time>` entry. Archival only appends modern entries, so a completed body whose details hold a heading followed by `完成：…` or `狀態：完成` no longer blocks archival with `history-format`, nor leaves later clear or seal refusing the history.
 - `clear` and `seal` parse an archive source under its queried `archive/<batch>.md` name, matching the identities `history` returns.
+- `history.py` also computes byte offsets in one incremental pass; `history_mutations.py` `clear` runs the same pending-archive check as `seal`, so clearing an entry whose completed work file still exists is deferred with `pending-archive`.
+
+Further local runtime fixes (also pending upstream; `archiving.py`, `writing.py`, `cli.py`, `storage.py` and `observations.py` now have `adaptations` entries recording their upstream hashes):
+
+- `archiving.py`, `writing.py`: `check_archivable` refuses to save a `完成` work (create or update) whose body would not archive as exactly one history entry, for example a body line shaped like `## <title> · 完成：<time>`; nothing is written. `archive` reports such an already-stuck work as `format`, naming the offending line and the repair path. A completed work accepts exactly one edit, `update {version, replacement}` keeping the same title, `更新` and `狀態：完成`, passing the archive check, with no matching identity already in history. `skills/handoff/references/tool.md` ("Update and completion") documents this. The title line is compared after stripping, matching `summary()` and history parsing.
+- `cli.py`: invalid JSON, non-UTF-8 and over-deep stdin are `input` errors, and any other unexpected exception is a JSON `internal` error with exit 2, so the JSON/exit-code contract always holds.
+- `writing.py`, `archiving.py`: `update` details are normalized to the file's newline; archival into a CRLF history uses CRLF for the marker and separator (work bodies stay byte-exact), and the retry check accepts a CRLF separator only where another entry starts at the entry's end. New history files stay LF.
+- `storage.py`: superscript `COM¹²³` and `LPT¹²³` names are reserved. `observations.py`: when `st_ino` is unavailable, duplicate-source detection uses the resolved path instead of `(st_dev, 0)`.
+
+Deferred, no change: relaxing `same_body` for a retry after the following entry was cleared (indistinguishable on disk from the upstream-tested extra-newline conflict; outcome is a preserved-data `conflict`), and a history lock for the check-then-replace lost-update window (a lock would not coordinate codex-feather, adds stale-lock failure modes and contradicts the documented single-writer contract).
+
+New local-only tests live in `tests/test_handoff_local_fixes.py`; it is not in the manifest `files` or `adaptations`.
 
 `tests/test_handoff_history.py` replaces the expectation that such a heading inside modern history is reported as an uncertain boundary. Re-import both files once upstream carries an equivalent fix.

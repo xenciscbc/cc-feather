@@ -4,16 +4,16 @@
   "identity": "SHA-256 of source bytes; source Git HEAD unavailable due to ownership trust check",
   "files": {
     "skills/handoff/scripts/feather_handoff/__init__.py": "734d59568233868e61dffbbad4cbc721b40a94d169cf965221d51f534e5470d2",
-    "skills/handoff/scripts/feather_handoff/archiving.py": "dcc05001a1d050d8b6ce1edff85054f1dab44f183859a45f84b9799fc2041ab8",
+    "skills/handoff/scripts/feather_handoff/archiving.py": "2a431e176950dea9901fa622525fe6ddbe3d6b96c6383ea63a9ee37a442a582a",
     "skills/handoff/scripts/feather_handoff/baseline.py": "726edc300cc0460a3f02e4c7a12f542cb038d131ddf4ed28da0032097b99b062",
-    "skills/handoff/scripts/feather_handoff/cli.py": "65899a4918521baae30e6dc2401545088d6dfd35bc1bd3833f2f82c5aa22a22e",
-    "skills/handoff/scripts/feather_handoff/history.py": "199d9abc69abcb1bcb5265474a7ea785777e36a2e338fde9ffa52a94adc99c46",
-    "skills/handoff/scripts/feather_handoff/history_mutations.py": "6cb81dcdfc5451319db427b915b808cb085e9291927ad84a3b0dbeb047d4c029",
-    "skills/handoff/scripts/feather_handoff/observations.py": "b3376cbbd0a0a50d52c3dc36ea36f051ec95a9060a7ca4b1a7f8813be99d4c7c",
+    "skills/handoff/scripts/feather_handoff/cli.py": "363b58c3759011848e74088d3838cc59585e83094ba9a7fc0f50ac47851ba7c2",
+    "skills/handoff/scripts/feather_handoff/history.py": "238153ce6c6d0d728591b6fa622d06b0d3c137ff0d843c3386741107297d855d",
+    "skills/handoff/scripts/feather_handoff/history_mutations.py": "ee65d864a8ed071379610214551a34bf75922e50e9d5878c9a2bc44aef39e2a0",
+    "skills/handoff/scripts/feather_handoff/observations.py": "43a09d92e6f95ebd17c36849889f86c1894b4a1096a9960b4d9be9180374e478",
     "skills/handoff/scripts/feather_handoff/records.py": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
-    "skills/handoff/scripts/feather_handoff/storage.py": "30273a1d110fbf60b56574435c11eecbd0d7985be9b4f8182cbed4c0027a9af5",
+    "skills/handoff/scripts/feather_handoff/storage.py": "c9ad3ab7b4333eee3f2e645dc783d4603955396fe504d5c1c1f4003be837114e",
     "skills/handoff/scripts/feather_handoff/tracking.py": "5f9eb71dfc4a18cc31489ab979d9492c5865f494891b75d7c700af8ef5988797",
-    "skills/handoff/scripts/feather_handoff/writing.py": "b4b618b8c5ad98e35520c5ae3c9d6e1421117e07b55b12c8a450a063427aed07",
+    "skills/handoff/scripts/feather_handoff/writing.py": "13765c747f12b7ab8211b11fee5ded0c45cee4e92ee9d5ec661bcf11a87d76fc",
     "skills/handoff/scripts/handoff.py": "cb18fa4a4d3c350e1cba2f13162a5d03d87262651c6be5ae09e3d3abaeeeb491",
     "tests/test_handoff_archive.py": "513ea9d51e86f3503fc612838a63c297e16c612dc13b7ba5faac9eba6e9e8319",
     "tests/test_handoff_baseline.py": "5a2704812a91efa1a7bcf1526568cd1c257a89d3521c8ca3152edbc47423bc1a",
@@ -81,11 +81,31 @@
     },
     "skills/handoff/scripts/feather_handoff/history.py": {
       "source_sha256": "7e68a3b831d0694f2048a79e373982bd272457b63530c86656aad25e746e4fc9",
-      "change": "Local fix pending upstream: legacy-format entry starts are recognized only before the first modern entry, so archived bodies with legacy-looking lines stay archivable."
+      "change": "Local fix pending upstream: legacy-format entry starts are recognized only before the first modern entry, so archived bodies with legacy-looking lines stay archivable. History byte offsets are computed in one incremental pass."
     },
     "skills/handoff/scripts/feather_handoff/history_mutations.py": {
       "source_sha256": "31f0d7f5d4787fba1b838695689b2d47f5d184a279e0ae0cec1d33d6f7a1340a",
-      "change": "Local fix pending upstream: clear and seal parse archive sources under their queried archive/<batch>.md name."
+      "change": "Local fix pending upstream: clear and seal parse archive sources under their queried archive/<batch>.md name. clear checks for pending completed work like seal and defers with pending-archive."
+    },
+    "skills/handoff/scripts/feather_handoff/archiving.py": {
+      "source_sha256": "dcc05001a1d050d8b6ce1edff85054f1dab44f183859a45f84b9799fc2041ab8",
+      "change": "Local fix pending upstream: completed work is checked for exact archivability (check_archivable) and reported as format with a reword/replacement hint; title line compared after stripping; CRLF histories get CRLF marker and separator, and a CRLF separator before a following entry is accepted on retry."
+    },
+    "skills/handoff/scripts/feather_handoff/writing.py": {
+      "source_sha256": "b4b618b8c5ad98e35520c5ae3c9d6e1421117e07b55b12c8a450a063427aed07",
+      "change": "Local fix pending upstream: create/update refuse a 完成 save whose body would not archive; a completed work accepts one reviewed replacement keeping title, 更新 and 狀態：完成 when history lacks that identity; update details follow the file newline."
+    },
+    "skills/handoff/scripts/feather_handoff/cli.py": {
+      "source_sha256": "65899a4918521baae30e6dc2401545088d6dfd35bc1bd3833f2f82c5aa22a22e",
+      "change": "Local fix pending upstream: invalid JSON, non-UTF-8 or too deeply nested stdin is an input error, and any unexpected exception becomes a JSON internal error with exit 2."
+    },
+    "skills/handoff/scripts/feather_handoff/storage.py": {
+      "source_sha256": "30273a1d110fbf60b56574435c11eecbd0d7985be9b4f8182cbed4c0027a9af5",
+      "change": "Local fix pending upstream: superscript COM and LPT names are reserved."
+    },
+    "skills/handoff/scripts/feather_handoff/observations.py": {
+      "source_sha256": "b3376cbbd0a0a50d52c3dc36ea36f051ec95a9060a7ca4b1a7f8813be99d4c7c",
+      "change": "Local fix pending upstream: duplicate-source detection uses the resolved path when st_ino is unavailable."
     }
   }
 }

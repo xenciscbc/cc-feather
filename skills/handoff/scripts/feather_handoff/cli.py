@@ -9,7 +9,10 @@ from .baseline import unique_object
 
 
 def input_payload():
-    return json.loads(sys.stdin.buffer.read().decode("utf-8-sig"), object_pairs_hook=unique_object)
+    try:
+        return json.loads(sys.stdin.buffer.read().decode("utf-8-sig"), object_pairs_hook=unique_object)
+    except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as error:
+        raise HandoffError("input", f"Input must be valid UTF-8 JSON: {type(error).__name__}") from None
 
 
 def main() -> int:
@@ -74,6 +77,9 @@ def main() -> int:
     except (OSError, UnicodeError, ValueError) as error:
         result = {"status": "error", "complete": False,
                   "code": getattr(error, "code", "io"), "message": str(error)}
+    except Exception as error:
+        result = {"status": "error", "complete": False, "code": "internal",
+                  "message": f"{type(error).__name__}: {error}"}
     if store is not None:
         result["root"] = store.root
         if store.root["state"] == "uncertain" and result["status"] != "error":

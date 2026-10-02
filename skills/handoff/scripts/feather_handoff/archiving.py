@@ -1,7 +1,7 @@
 """Save a completed work body to shared history before removing its source."""
 from pathlib import Path
 
-from .history import HistoryDocument, HistoryEntry, parse_history
+from .history import HEADING, MODERN, HistoryDocument, HistoryEntry, parse_history
 from .records import summary
 from .storage import HandoffError, Snapshot, Store, create_file, read_file, replace_file, require_current
 
@@ -24,7 +24,7 @@ def work_body(snapshot: Snapshot, title: str) -> bytes:
         title_line = snapshot.data[start:line_end].decode("utf-8").removesuffix("\r")
     except UnicodeError as error:
         raise HandoffError("format", f"Invalid UTF-8 title: {error}") from error
-    if title_line != f"# {title}":
+    if not title_line.startswith("# ") or title_line[1:].strip() != title:
         raise HandoffError("format", "The first line must be the work title")
     return snapshot.data[line_end + 1:]
 
@@ -38,10 +38,30 @@ def same_body(entry: HistoryEntry, body: bytes, document: HistoryDocument) -> bo
     """Compare an archived body, allowing only a newline that frames a following entry."""
     if entry.body_bytes == body:
         return True
-    if body.endswith(b"\n") or entry.body_bytes != body + b"\n":
+    if body.endswith(b"\n") or entry.body_bytes not in (body + b"\n", body + b"\r\n"):
         return False
     return any(candidate.byte_start == entry.byte_end for candidate in document.entries
                if candidate is not entry)
+
+
+def check_archivable(snapshot: Snapshot) -> None:
+    """Refuse a completed work whose body would not archive as exactly one history entry."""
+    item = summary(snapshot)
+    if item["problems"]:
+        raise HandoffError("format", "; ".join(item["problems"]))
+    title, completed = item["title"], item["updated"]
+    body = work_body(snapshot, title)
+    candidate = HISTORY_HEADER + f"## {title} · 完成：{completed}\n".encode("utf-8") + body
+    document = parse_history(Snapshot(Path("history.md"), candidate), "history.md")
+    intended = _matching(document, title, completed)
+    if (len(document.entries) == 1 and len(intended) == 1 and not document.issues
+            and intended[0].boundary_known and intended[0].body_bytes == body):
+        return
+    line = next((h.group().strip() for h in HEADING.finditer(body.decode("utf-8", "replace"))
+                 if MODERN.fullmatch(h.group(1).strip())), None)
+    cause = (f"line {line!r} looks like a history entry marker" if line
+             else "its body would not parse as a single history entry")
+    raise HandoffError("format", f"Completed work cannot be archived exactly: {cause}; reword it")
 
 
 def _validated_document(snapshot: Snapshot) -> HistoryDocument:
@@ -51,10 +71,16 @@ def _validated_document(snapshot: Snapshot) -> HistoryDocument:
     return document
 
 
+def _newline(existing: Snapshot | None) -> bytes:
+    """Line terminator of an existing history's first line, so appended framing matches it."""
+    end = existing.data.find(b"\n") if existing is not None else -1
+    return b"\r\n" if end > 0 and existing.data[end - 1:end] == b"\r" else b"\n"
+
+
 def _candidate(existing: Snapshot | None, entry_data: bytes) -> bytes:
     if existing is None:
         return HISTORY_HEADER + entry_data
-    separator = b"" if existing.data.endswith(b"\n") else b"\n"
+    separator = b"" if existing.data.endswith(b"\n") else _newline(existing)
     return existing.data + separator + entry_data
 
 
@@ -82,10 +108,13 @@ def archive_work(store: Store, name: str, raw: object) -> dict:
         raise HandoffError("format", "; ".join(item["problems"]))
     if item["status"] != "完成":
         raise HandoffError("completed", "Only a completed work can be archived")
+    try:
+        check_archivable(work)
+    except HandoffError as error:
+        raise HandoffError(error.code, f"{error}. Reword it with update {{version, replacement}} "
+                           "keeping the same title, 更新 and 狀態：完成") from None
     title, completed = item["title"], item["updated"]
     body = work_body(work, title)
-    marker = f"## {title} · 完成：{completed}\n".encode("utf-8")
-    entry_data = marker + body
     history_path = store.directory / "history.md"
 
     existing = None
@@ -93,6 +122,8 @@ def archive_work(store: Store, name: str, raw: object) -> dict:
         existing = read_file(history_path)
     except FileNotFoundError:
         pass
+    marker = f"## {title} · 完成：{completed}".encode("utf-8") + _newline(existing)
+    entry_data = marker + body
     if existing is not None:
         document = _validated_document(existing)
         matches = _matching(document, title, completed)

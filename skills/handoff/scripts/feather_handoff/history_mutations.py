@@ -49,6 +49,7 @@ def clear_history(store: Store, raw: object) -> dict:
         raise HandoffError("conflict", "History changed or version missing; query and reconcile original selection")
     document = parse_history(original, source)
     entries = selection(document, payload.get("ids"))
+    check_pending(store, entries, document)
     expected = remainder(document, entries)
     try:
         saved = replace_file(original, expected)
