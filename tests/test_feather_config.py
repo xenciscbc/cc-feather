@@ -61,7 +61,9 @@ class FeatherConfigTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        # Setup reports and writes resolved paths, so expected paths start from the canonical temp root
+        # even when TEMP itself is reached through a link.
+        self.root = Path(os.path.realpath(self.temp.name))
         self.project = self.root / "project"
         self.home = self.root / "claude-home"
         self.project.mkdir()
@@ -859,6 +861,20 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("install", "project", "--guidance", "claude")
         self.assertEqual(self.saved_state()["created_imports"], ["@../AGENTS.md"])
 
+    def test_guidance_choice_offers_agents_only_with_a_project_agents_file(self):
+        (self.root / "AGENTS.md").write_text("Monorepo rules\n", encoding="utf-8")
+        for own, offered in ((False, False), (True, True)):
+            with self.subTest(own=own):
+                if own:
+                    (self.project / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+                before = self.files()
+                code, result = self.call("install")
+                self.assertEqual(code, 2, result)
+                self.assertIn("guidance target choice required", result["error"])
+                self.assertIn("--guidance claude", result["error"])
+                self.assertEqual("--guidance agents" in result["error"], offered, result["error"])
+                self.assertEqual(before, self.files())
+
     def test_user_instruction_file_in_an_ancestor_does_not_count(self):
         fake_home = self.root / "home"
         self.project = fake_home / "proj"
@@ -1173,6 +1189,28 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("run setup update first", json.dumps(result))
         self.assertEqual(guidance.read_bytes(), before)
+
+    def test_check_warns_about_guidance_from_an_older_template(self):
+        older = "<!-- cc-feather:begin -->\n# Feather delegation for Claude Code\n\nOlder rules.\n<!-- cc-feather:end -->"
+        warning = "delegation guidance is from an older template; run setup update"
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                with mock.patch.object(config, "_policy", lambda mode, prefix="", *, scope="user": older):
+                    self.apply("install", scope, "--review-mode", "auto")
+                code, shown = self.call("check", scope)
+                self.assertEqual((code, shown["status"], shown["components"]["delegation"]["status"]),
+                                 (0, "ok", "ok"), shown)
+                self.assertIn(warning, shown["warnings"])
+                code, exported = self.call("session", scope)
+                self.assertEqual(code, 0, exported)
+                self.assertEqual(set(exported), set(config.ROLES))
+                self.apply("update", scope)
+                self.assertNotIn(warning, self.call("check", scope)[1]["warnings"])
+        # A project installed off before the off line has an accepted older rendering.
+        guidance = self.project / "CLAUDE.md"
+        self.apply("review", "project", "--review-mode", "off")
+        self.replace_delegation_block(guidance, config._policy("off", "", scope="user"))
+        self.assertNotIn(warning, self.call("check")[1]["warnings"])
 
     def test_automatic_review_triggers_match_the_plan_review_procedure(self):
         triggers = "Unplanned work that changes a security boundary, migrates data or performs an irreversible operation"
@@ -1699,6 +1737,92 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("remove")
         self.assertEqual(legacy.read_bytes(), b"---\nname: \xff\xfe scout\n---\n")
 
+    # DF2: an agent file that is not UTF-8 goes through the same name parser as a UTF-8 one.
+
+    def test_non_utf8_agent_using_a_role_name_does_not_block_remove(self):
+        # test_later_same_name_agent_does_not_block_remove with a byte that is not UTF-8.
+        self.apply("install")
+        agents = self.project / ".claude" / "agents"
+        mine = agents / "mine" / "my-scout.md"
+        mine.parent.mkdir()
+        content = b"---\nname: scout\ndescription: \xff\n---\nMine\n"
+        mine.write_bytes(content)
+        before = self.files()
+        for command in (("model", "project", "--set", "scout.effort=medium"),
+                        ("review", "project", "--review-mode", "auto")):
+            with self.subTest(command=command[0]):
+                code, result = self.call(*command)
+                self.assertEqual(code, 2, result)
+                self.assertIn("role names are now taken by other agents; run setup update first", result["error"])
+        self.assertEqual(before, self.files())
+        shown = self.call("check")[1]
+        self.assertEqual(shown["pending_role_prefix"], config.ROLE_PREFIX)
+        # A managed name gets the collision handling instead of the warning.
+        self.assertFalse([w for w in shown["warnings"] if "not UTF-8" in w], shown["warnings"])
+        self.apply("remove")
+        self.assertEqual([p.relative_to(agents).as_posix() for p in agents.rglob("*.md")], ["mine/my-scout.md"])
+        self.assertEqual(mine.read_bytes(), content)
+
+    def test_non_utf8_agent_using_a_role_name_moves_install_and_update_to_prefix(self):
+        # test_later_same_name_agent_update_moves_to_prefix with bytes that are not UTF-8, for a fresh install too.
+        content = b"---\nname: scout\ndescription: \xff\n---\nMine\n"
+        for when in ("install", "update"):
+            with self.subTest(when=when):
+                self.project = self.root / f"non-utf8-{when}"
+                agents = self.project / ".claude" / "agents"
+                mine = agents / "mine" / "my-scout.md"
+                mine.parent.mkdir(parents=True)
+                if when == "install":
+                    mine.write_bytes(content)
+                self.apply("install", "project", "--review-mode", "auto")
+                if when == "update":
+                    mine.write_bytes(content)
+                    self.apply("update")
+                self.assert_prefixed_roles(agents)
+                self.apply("model", "project", "--set", "scout.effort=medium")
+                self.apply("review", "project", "--review-mode", "off")
+                # A prefixed name taken later still blocks settings, but never removal.
+                taken = agents / "mine" / "taken.md"
+                taken.write_bytes(b"---\nname: cc-scout\ndescription: \xff\n---\nMine too\n")
+                code, result = self.call("model", "project", "--set", "scout.effort=high")
+                self.assertEqual(code, 2, result)
+                self.assertIn("duplicate native agent name cc-scout", result["error"])
+                self.apply("remove")
+                self.assertEqual(sorted(p.name for p in agents.rglob("*.md")), ["my-scout.md", "taken.md"])
+                self.assertEqual(mine.read_bytes(), content)
+
+    def test_non_utf8_agent_name_syntax_errors_block_like_utf8(self):
+        notes = self.project / ".claude" / "agents" / "notes" / "README.md"
+        notes.parent.mkdir(parents=True)
+        for content, error in ((b"---\nname: !!str scout\ndescription: \xff\n---\nNotes\n", "cannot inspect agent name syntax"),
+                               (b"---\nname: scout\ndescription: \xff\nNo closing line\n", "cannot inspect agent frontmatter"),
+                               (b"---\nname: scout\nname: notes\ndescription: \xff\n---\n", "duplicate agent name declaration")):
+            with self.subTest(error=error):
+                notes.write_bytes(content)
+                before = self.files()
+                code, result = self.call("install")
+                self.assertEqual(code, 2, result)
+                self.assertIn(error, result["error"])
+                self.assertEqual(before, self.files())
+
+    def test_utf16_agent_with_a_byte_order_mark_is_read_like_utf8(self):
+        text = "---\nname: scout\ndescription: Mine\n---\nMine\n"
+        for name, content in (("utf-16-le", b"\xff\xfe" + text.encode("utf-16-le")),
+                              ("utf-16-be", b"\xfe\xff" + text.encode("utf-16-be"))):
+            with self.subTest(encoding=name):
+                self.project = self.root / name
+                agents = self.project / ".claude" / "agents"
+                mine = agents / "mine" / "scout.md"
+                mine.parent.mkdir(parents=True)
+                mine.write_bytes(content)
+                shown = self.call("check")[1]
+                self.assertEqual((shown["status"], shown["pending_role_prefix"]), ("ok", config.ROLE_PREFIX), shown)
+                self.assertFalse([w for w in shown["warnings"] if "not UTF-8" in w], shown["warnings"])
+                self.apply("install")
+                self.assert_prefixed_roles(agents)
+                self.apply("remove")
+                self.assertEqual(mine.read_bytes(), content)
+
     # D8: a lock left by an interrupted run names the file to delete.
 
     def test_lock_error_names_the_lock_to_delete(self):
@@ -1776,7 +1900,8 @@ class FeatherConfigTests(unittest.TestCase):
         parent = os.environ.get("FEATHER_LINK_TEST_DIR")
         if parent:
             os.makedirs(parent, exist_ok=True)
-        base = Path(tempfile.mkdtemp(prefix="link-", dir=parent or None))
+        # The canonical base keeps links above the temp directory out of tests that build their own.
+        base = Path(os.path.realpath(tempfile.mkdtemp(prefix="link-", dir=parent or None)))
         self.addCleanup(remove_link_base, base)
         if require_strict_realpath:
             try:
@@ -1928,13 +2053,33 @@ class FeatherConfigTests(unittest.TestCase):
             return found
 
         before = entries()
-        for command in (("install", "user"), ("install", "project")):
-            with self.subTest(command=command):
-                code, result = self.call(*command)
-                self.assertEqual(code, 2, result)
-                self.assertIn("linked path is unsafe", result["error"])
-                self.assertEqual(before, entries())
+        with self.subTest(command=("install", "user")):
+            code, result = self.call("install", "user")
+            self.assertEqual(code, 2, result)
+            self.assertIn("linked path is unsafe", result["error"])
+            self.assertEqual(before, entries())
+        with self.subTest(command=("install", "project")):
+            # Project scope never writes the Claude home, so the home's dangling link does not block it.
+            outside = lambda found: {path: data for path, data in found.items() if not path.is_relative_to(self.project)}
+            self.apply("install", "project")
+            self.assertTrue((self.project / ".claude" / "agents" / "scout.md").exists())
+            self.assertEqual(self.call("check")[0], 0)
+            self.apply("remove", "project")
+            self.assertEqual(outside(before), outside(entries()))
         self.assertFalse(os.path.exists(base / "dangling"))
+
+    def test_dangling_claude_home_link_to_the_project_claude_directory_is_the_user_configuration(self):
+        base = self.use_link_base()
+        target = self.project / ".claude"
+        target.mkdir()
+        make_directory_link(base / "dangling", target)
+        target.rmdir()
+        # The unresolvable home is compared at its supplied path, which still leads to the project's .claude.
+        self.home = base / "dangling"
+        code, result = self.call("install", "project")
+        self.assertEqual(code, 2, result)
+        self.assertIn("project scope here would write the user configuration", result["error"])
+        self.assertFalse(os.path.lexists(target))
 
     def test_linked_project_reading_different_agents_files_requires_a_choice(self):
         base = self.use_link_base()
@@ -1960,6 +2105,30 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertTrue(self.call("show")[1]["guidance_choice_required"])
         self.apply("install", "project", "--guidance", "claude")
         self.assertTrue((Path(real_project) / "CLAUDE.md").read_text(encoding="utf-8").startswith(config.BEGIN))
+
+    def test_linked_project_choice_offers_agents_only_with_a_project_agents_file(self):
+        base = self.use_link_base()
+        found = [directory / name for directory in base.parents for name in
+                 ("CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".claude/AGENTS.md")
+                 if (directory / name).exists()]
+        if found:
+            self.skipTest(f"an ancestor instruction file changes this layout: {found[0]}")
+        (base / "outer").mkdir()
+        (base / "target" / "proj").mkdir(parents=True)
+        make_directory_link(base / "outer" / "link", base / "target")
+        (base / "outer" / "AGENTS.md").write_text("Outer rules\n", encoding="utf-8")
+        self.project = base / "outer" / "link" / "proj"
+        for own, offered in ((False, False), (True, True)):
+            with self.subTest(own=own):
+                if own:
+                    (base / "target" / "proj" / "AGENTS.md").write_text("Team rules\n", encoding="utf-8")
+                before = self.files()
+                code, result = self.call("install")
+                self.assertEqual(code, 2, result)
+                self.assertIn("Claude reads different instruction files through each", result["error"])
+                self.assertIn("--guidance claude", result["error"])
+                self.assertEqual("--guidance agents" in result["error"], offered, result["error"])
+                self.assertEqual(before, self.files())
 
 
 if __name__ == "__main__":

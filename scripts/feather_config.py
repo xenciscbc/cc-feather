@@ -178,7 +178,14 @@ def _roots(args: argparse.Namespace) -> tuple[Path, Path]:
         raise ConfigError("--project must be absolute without '..'")
     project_root, project_trusted = _resolve_project(project)
     home = _claude_home(args)
-    home_root, home_trusted = _resolve_home(home)
+    try:
+        home_root, home_trusted = _resolve_home(home)
+    except (ConfigError, OSError):
+        if args.scope != "project":
+            raise
+        # Project scope never writes the Claude home: an unresolvable one, such as a dangling link in
+        # a home that does not exist yet, stays untrusted at its supplied path for comparison and reads.
+        home_root, home_trusted = Path(os.path.abspath(home)), False
     key = (str(project), str(home))
     cached = _ROOTS.get(key)
     if cached is None:
@@ -289,9 +296,7 @@ def _instruction_files(args: argparse.Namespace) -> tuple[list[Path], list[Path]
 
     conflict = (f"the project path {supplied} resolves to {project}, and Claude reads different instruction files "
                 f"through each ({describe(supplied, other_counting, other_agents)}; "
-                f"{describe(project, counting, agents)}); rerun with --guidance claude to create CLAUDE.md "
-                f"importing the AGENTS files read through {project}, or --guidance agents to write into the "
-                "project's own AGENTS.md")
+                f"{describe(project, counting, agents)})")
     return counting or other_counting, agents, conflict
 
 
@@ -317,23 +322,34 @@ def _resolve_guidance(args: argparse.Namespace, state: dict[str, Any] | None) ->
     else:
         existing = next((rel for rel in GUIDANCE_FILES[:2] if _exists(project / rel)), None)
         _, agents, conflict = ([], [], None) if existing else _instruction_files(args)
+        # The project's own AGENTS file for --guidance agents; when the two chains differ, it is in
+        # effect through at least one.
+        own = next((rel for rel in GUIDANCE_FILES[2:]
+                    if (_exists(project / rel) if conflict else project / rel in agents)), None)
         if not agents and conflict is None:
             if choice:
                 raise ConfigError("--guidance applies only when AGENTS.md is the project's instruction file")
             rel = existing or "CLAUDE.md"
             result = {"rel": rel, "path": project / rel, "imports": [], "choice_required": False}
         elif choice == "agents":
-            # When the two chains differ, the project's own AGENTS file is in effect through at least one.
-            rel = next((rel for rel in GUIDANCE_FILES[2:]
-                        if (_exists(project / rel) if conflict else project / rel in agents)), None)
-            if rel is None:
+            if own is None:
                 raise ConfigError("--guidance agents needs an AGENTS.md in the project itself; only ancestor AGENTS.md files are in effect")
-            result = {"rel": rel, "path": project / rel, "imports": [], "choice_required": False}
+            result = {"rel": own, "path": project / own, "imports": [], "choice_required": False}
         else:
             result = {"rel": "CLAUDE.md", "path": project / "CLAUDE.md", "choice_required": choice is None,
                       "imports": [_import_line(path, project) for path in agents]}
+            # The choice offers --guidance agents only when the project has its own AGENTS file to write into.
             if conflict is not None:
-                result["choice_reason"] = conflict
+                reason = f"{conflict}; rerun with --guidance claude to create CLAUDE.md importing the AGENTS files read through {project}"
+                agents_option = ", or --guidance agents to write into the project's own AGENTS.md"
+            elif own:
+                reason = "AGENTS.md is the project's instruction file; rerun with --guidance claude to create CLAUDE.md importing it"
+                agents_option = ", or --guidance agents to write into it"
+            else:
+                reason = ("AGENTS.md files in ancestor directories are the project's instructions, and the project has "
+                          "none of its own; rerun with --guidance claude to create CLAUDE.md importing them")
+                agents_option = ""
+            result["choice_reason"] = reason + (agents_option if own else "")
     _safe_path(result["path"])
     return result
 
@@ -527,12 +543,23 @@ def _render(role: str, choice: dict[str, str], prefix: str = "") -> bytes:
 
 
 def _agent_name(path: Path) -> str | None:
+    data = read(path) or b""
     try:
-        text = (read(path) or b"").decode("utf-8")
+        text = data.decode("utf-8")
     except UnicodeDecodeError:
-        # Not readable as an agent definition: reported rather than blocking setup.
-        _AGENT_WARNINGS[f"Skipped agent file that is not UTF-8: {path}; any agent name it declares was not checked."] = None
-        return None
+        # A file that is not UTF-8 still goes through the same parser, so a native name it declares gets
+        # the normal collision handling and its syntax errors block. UTF-16 with a byte order mark is
+        # decoded as such; other bytes keep replacement characters.
+        encoding = "utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8"
+        name = _declared_agent_name(data.decode(encoding, errors="replace"), path)
+        if name not in {_role_name(role, prefix) for role in ROLES for prefix in ("", ROLE_PREFIX)}:
+            _AGENT_WARNINGS[f"Agent file is not UTF-8: {path}; its name was read with replacement characters."] = None
+        return name
+    return _declared_agent_name(text, path)
+
+
+def _declared_agent_name(text: str, path: Path) -> str | None:
+    """The agent name a definition's frontmatter declares, or None; unclear syntax is an inspection error."""
     text = text.removeprefix("\ufeff").replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return None
@@ -639,6 +666,20 @@ def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: st
             raise ConfigError("installed guidance is from an older template; run setup update first")
         result = current.replace(line, f"Automatic plan review mode: {new}", 1)
     return result.replace("\n", "\r\n") if "\r\n" in block else result
+
+
+def _older_template(block: str, record: dict[str, Any], scope: str) -> bool:
+    """Whether a delegation block is neither the current rendering nor an accepted older one for its saved mode.
+
+    The accepted older rendering is a project installed off before the off line existed, which
+    has the user-scope rendering. An unreadable template reports nothing here; install and update report it.
+    """
+    mode, prefix = record["review_mode"], record.get("role_prefix", "")
+    try:
+        accepted = {_policy(mode, prefix, scope=scope), _policy(mode, prefix, scope="user")}
+    except ConfigError:
+        return False
+    return block.replace("\r\n", "\n") not in accepted
 
 
 def _snapshot(paths: list[Path]) -> dict[str, bytes | None]:
@@ -785,9 +826,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     state = _load_state(state_path, args.scope, defaults)
     target = _resolve_guidance(args, state)
     if target["choice_required"] and args.command == "install":
-        raise ConfigError("guidance target choice required: " + target.get("choice_reason", (
-            "AGENTS.md is the project's instruction file; "
-            "rerun with --guidance claude to create CLAUDE.md importing it, or --guidance agents to write into it")))
+        raise ConfigError("guidance target choice required: " + target["choice_reason"])
     guidance = target["path"]
     records = {k: dict(v) for k, v in _components(state).items()}
     legacy_schema = state is not None and state["version"] in (1, 2)
@@ -1170,6 +1209,9 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             if record:
                 if parts is None or digest(parts[1].encode("utf-8")) != record["block_hash"]:
                     issues.append(f"managed {name} guidance block changed or missing: {guidance}")
+                elif name == "delegation" and _older_template(parts[1], record, args.scope):
+                    # Not a conflict: the block is intact and owned, only rendered by an earlier template.
+                    guidance_warnings.append("delegation guidance is from an older template; run setup update")
             elif parts is not None:
                 issues.append(f"unowned {name} guidance block already exists: {guidance}")
         except ConfigError as exc:

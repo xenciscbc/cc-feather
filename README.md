@@ -175,7 +175,7 @@ Claude and Codex must use the same project directory and coordinate one writer. 
 
 ## Updates and validation
 
-Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. Until then, installations from earlier versions keep their older guidance format. Removing the plugin alone leaves native roles/guidance. Remove selected setup scopes first if those should go too; handoff data remains. Modified owned files are preserved as conflicts.
+Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. Until then, installations from earlier versions keep their older guidance format, and check warns that delegation guidance is from an older template. Removing the plugin alone leaves native roles/guidance. Remove selected setup scopes first if those should go too; handoff data remains. Modified owned files are preserved as conflicts.
 
 ```text
 /cc-feather:setup Update this project's installed roles and guidance, retaining models and review mode
