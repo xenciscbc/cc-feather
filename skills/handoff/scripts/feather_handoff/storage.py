@@ -15,10 +15,16 @@ class HandoffError(ValueError):
 
 
 def git_environment() -> dict[str, str]:
-    """Keep a parent Git process from redirecting the explicitly selected project."""
+    """Keep a parent Git process from redirecting the explicitly selected project or the captured output.
+
+    User configuration variables (GIT_CONFIG_PARAMETERS, GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG_GLOBAL/SYSTEM,
+    HOME, ...) stay: they cannot select another repository and keep ignore and trust decisions the user's own."""
     environment = dict(os.environ)
     for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
-                "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE"):
+                "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
+                "GIT_IMPLICIT_WORK_TREE", "GIT_PREFIX", "GIT_GRAFT_FILE", "GIT_NO_REPLACE_OBJECTS",
+                "GIT_REPLACE_REF_BASE", "GIT_SHALLOW_FILE", "GIT_CONFIG",
+                "GIT_REDIRECT_STDIN", "GIT_REDIRECT_STDOUT", "GIT_REDIRECT_STDERR"):
         environment.pop(key, None)
     environment.update(GIT_OPTIONAL_LOCKS="0", LC_ALL="C")
     return environment
@@ -77,6 +83,15 @@ def _discover(path: Path) -> subprocess.CompletedProcess:
                           encoding="utf-8", errors="replace", timeout=5, env=git_environment())
 
 
+NO_TOP_LEVEL = "Git root discovery succeeded without reporting an absolute top-level path"
+
+
+def _top_level(result: subprocess.CompletedProcess) -> str | None:
+    """The reported top level; empty or relative output must never fall back to the working directory."""
+    top = result.stdout.strip()
+    return top if Path(top).is_absolute() else None
+
+
 def _non_git(result: subprocess.CompletedProcess, path: Path) -> bool:
     if "not a git repository" not in result.stderr.lower():
         return False
@@ -102,7 +117,10 @@ def _unresolved_root(requested: str, exact: bool) -> dict:
     try:
         result = _discover(path)
         if result.returncode == 0:
-            path = Path(result.stdout.strip())
+            top = _top_level(result)
+            if top is None:
+                return {**info, "reason": NO_TOP_LEVEL}
+            path = Path(top)
             check_path(path)
             if not path.is_dir():
                 raise HandoffError("project", f"Git root is not a directory: {path}")
@@ -134,7 +152,10 @@ def _resolve_root(value: str, exact: bool) -> tuple[dict, bool]:
     try:
         result = _discover(path)
         if result.returncode == 0:
-            top = os.path.realpath(result.stdout.strip(), strict=True)
+            top = _top_level(result)
+            if top is None:
+                return {**info, "reason": NO_TOP_LEVEL}, True
+            top = os.path.realpath(top, strict=True)
             if not os.path.isdir(top):
                 raise HandoffError("project", f"Git root is not a directory: {top}")
             root = next((item for item in [path, *path.parents] if _same(item, top)), None)

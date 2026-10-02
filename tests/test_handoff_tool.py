@@ -1,5 +1,6 @@
 """Public handoff commands against real, isolated project files."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -18,7 +19,7 @@ class HandoffToolTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.project = Path(self.temp.name)
+        self.project = Path(os.path.realpath(self.temp.name))
         self.directory = self.project / ".feather/handoffs"
 
     def run_tool(self, *args, payload=None, expected=0):

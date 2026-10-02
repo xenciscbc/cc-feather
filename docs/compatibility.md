@@ -113,3 +113,15 @@ The link tests in `tests/test_handoff_links.py` run under `FEATHER_LINK_TEST_DIR
 $env:FEATHER_LINK_TEST_DIR = 'D:/path/on/an/NTFS/volume'
 python -B -m unittest discover -s tests -t . -v
 ```
+
+## Follow-up fixes pending upstream
+
+These further local divergences are recorded in the `adaptations` entries for `storage.py`, `writing.py` and `cli.py`. The on-disk record, history and baseline formats are unchanged.
+
+- `storage.py`: Git runs without the inherited variables that select another repository or redirect its output. Besides `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES` and `GIT_NAMESPACE`, this now covers the rest of Git's local repository list (`GIT_IMPLICIT_WORK_TREE`, `GIT_PREFIX`, `GIT_GRAFT_FILE`, `GIT_NO_REPLACE_OBJECTS`, `GIT_REPLACE_REF_BASE`, `GIT_SHALLOW_FILE`, `GIT_CONFIG`) and Git for Windows' `GIT_REDIRECT_STDIN`, `GIT_REDIRECT_STDOUT` and `GIT_REDIRECT_STDERR`. User configuration variables stay on purpose (`GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM`, `HOME`, `XDG_CONFIG_HOME`, `USERPROFILE`, `GIT_CEILING_DIRECTORIES`, `GIT_DISCOVERY_ACROSS_FILESYSTEM`): they cannot select another repository, and removing them would break `safe.directory` and make ignore decisions differ from the user's own Git. A successful root discovery whose output is empty or not an absolute path is `uncertain` instead of falling back to the current directory.
+- `writing.py`: the details-update check compares the following level-1/2 headings together with their offsets inside the verbatim tail, so a fence change that hides those headings and exposes identical example lines is still refused with `details-format`.
+- `cli.py`: a missing file is `not-found` only when it lies inside the selected project (or, when the error names no file, for `read`, `archive` or `compare` of a named work); any other missing file is `io`.
+
+The `observations.py` entry now also records its earlier change: source change detection ignores `st_ctime`, as `read_file` does.
+
+Test adaptations: `tests/test_handoff_archive.py`, `tests/test_handoff_storage.py`, `tests/test_handoff_tool.py` (whose setup the roots and snapshots tests share), `ObservationUnitTest` in `tests/test_handoff_snapshots.py` and the local `tests/test_handoff_local_fixes.py` build their temporary projects from `os.path.realpath(...)`, so the suite also passes when the system temporary directory is reached through a junction or symlink. The in-process `Store` tests in `tests/test_handoff_storage.py` and `tests/test_handoff_roots.py` reset the root registry. In `tests/test_handoff_links.py` the mock-based fallback test (`UnsupportedStrictRealpathTest`) and the empty-output discovery test no longer need strict realpath support from the volume; only the latter's strict-realpath subtest still skips with "strict realpath unsupported".

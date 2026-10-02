@@ -4,6 +4,7 @@ import errno
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -41,7 +42,7 @@ class LocalFixesBase(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.project = Path(self.temp.name)
+        self.project = Path(os.path.realpath(self.temp.name))
         self.directory = self.project / ".feather/handoffs"
         self.directory.mkdir(parents=True)
         self.history = self.directory / "history.md"
@@ -179,6 +180,15 @@ class CliContractTest(LocalFixesBase):
         self.assertEqual((result["status"], result["code"]), ("error", "internal"))
         self.assertEqual(result["message"], "RuntimeError: boom")
 
+    def test_missing_file_outside_the_project_is_an_io_error(self):
+        # HF5: only the project's own missing files are not-found.
+        outside = self.project.parent / f"{self.project.name}-outside" / "absent.md"
+        for filename, expected in ((outside, "io"), (self.directory / "gone.md", "not-found")):
+            with self.subTest(expected):
+                with mock.patch.object(cli, "list_work", side_effect=FileNotFoundError(2, "No such file", str(filename))):
+                    code, result = self.invoke("list")
+                self.assertEqual((code, result["status"], result["code"]), (2, "error", expected))
+
 
 class LineEndingTest(LocalFixesBase):
     def test_update_details_follow_the_file_newline(self):
@@ -308,6 +318,17 @@ class DetailsSectionsTest(LocalFixesBase):
         self.assertEqual(updated["preserved_sections"], ["## 附錄"])
         self.assertEqual(len(updated["warnings"]), 1)
 
+    def test_open_fence_that_shifts_repeated_sibling_headings_is_refused(self):
+        # HF3: equal heading texts at other positions still mean the tail was re-interpreted.
+        tail = "## Notes\nKEEP\n## Appendix\n```\n## Notes\n## Appendix\n```\n"
+        data = record(status="進行中") + tail.encode("utf-8")
+        path = self.put("a.md", data)
+        result = self.run_tool("update", "--work", "a.md", expected=2,
+                               payload={"version": sha(data), "details": "example\n```text"})
+        self.assertEqual(result["code"], "details-format")
+        self.assertIn("## Notes, ## Appendix", result["message"])
+        self.assertEqual(path.read_bytes(), data)
+
 
 class CompletionArchiveFailureTest(LocalFixesBase):
     """H2: an archival failure after the completed work was saved is a partial result."""
@@ -383,6 +404,63 @@ class TrackingMarkerTest(LocalFixesBase):
         self.assertEqual(self.ignore.read_bytes(), f".feather/\n{MARKER}\n".encode())
         self.assertTrue((self.directory / "a.md").is_file())
         self.assertEqual(self.index(), b"")
+
+
+class GitEnvironmentTest(LocalFixesBase):
+    """HF2: inherited Git variables cannot redirect the root or output; user configuration still applies."""
+
+    DROPPED = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+               "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_IMPLICIT_WORK_TREE", "GIT_PREFIX",
+               "GIT_GRAFT_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_SHALLOW_FILE", "GIT_CONFIG",
+               "GIT_REDIRECT_STDIN", "GIT_REDIRECT_STDOUT", "GIT_REDIRECT_STDERR")
+    KEPT = {"GIT_CONFIG_PARAMETERS": "'core.excludesfile'='user-excludes'", "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.excludesFile", "GIT_CONFIG_VALUE_0": "user-excludes",
+            "GIT_CONFIG_GLOBAL": "user-global", "GIT_CONFIG_SYSTEM": "user-system", "GIT_CONFIG_NOSYSTEM": "1",
+            "HOME": "user-home", "XDG_CONFIG_HOME": "user-xdg", "USERPROFILE": "user-profile",
+            "GIT_CEILING_DIRECTORIES": "user-ceiling", "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1"}
+
+    def test_git_environment_drops_routing_and_redirection_and_keeps_user_configuration(self):
+        with mock.patch.dict(os.environ, {**dict.fromkeys(self.DROPPED, "inherited"), **self.KEPT}):
+            environment = storage.git_environment()
+        self.assertEqual([key for key in self.DROPPED if key in environment], [])
+        self.assertEqual({key: environment.get(key) for key in self.KEPT}, self.KEPT)
+        self.assertEqual((environment["GIT_OPTIONAL_LOCKS"], environment["LC_ALL"]), ("0", "C"))
+
+    @unittest.skipUnless(os.name == "nt", "GIT_REDIRECT_STDOUT is a Git for Windows feature")
+    def test_inherited_output_redirection_cannot_select_the_working_directory_as_root(self):
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        nested = self.project / "nested"
+        nested.mkdir()
+        redirected = self.directory / "redirected.txt"
+        previous = os.getcwd()
+        os.chdir(nested)
+        self.addCleanup(os.chdir, previous)
+        self.addCleanup(storage.reset_roots)
+        with mock.patch.dict(os.environ, {"GIT_REDIRECT_STDOUT": str(redirected)}):
+            store = storage.Store(str(nested))
+        self.assertEqual((store.root["state"], store.project), ("git", self.project))
+        self.assertFalse(redirected.exists())
+
+    def test_user_git_configuration_variables_still_decide_default_tracking(self):
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        config = tempfile.TemporaryDirectory()
+        self.addCleanup(config.cleanup)
+        home = Path(os.path.realpath(config.name))
+        (home / "global").write_bytes(b"")
+        excludes = home / "excludes"
+        excludes.write_bytes(b"/.feather/\n")
+        # Isolate global, system and XDG ignore files so only the variables below can ignore the handoffs.
+        isolated = {"GIT_CONFIG_GLOBAL": str(home / "global"), "GIT_CONFIG_NOSYSTEM": "1", "XDG_CONFIG_HOME": str(home)}
+        user = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.excludesFile",
+                "GIT_CONFIG_VALUE_0": excludes.as_posix()}
+        self.addCleanup(storage.reset_roots)
+        store = storage.Store(str(self.project))
+        with mock.patch.dict(os.environ, {**isolated, **user}):
+            self.assertEqual(tracking.ensure_tracking(store, "a.md", "default"), "existing-rule")
+        self.assertFalse((self.project / ".gitignore").exists())
+        with mock.patch.dict(os.environ, isolated):
+            self.assertEqual(tracking.ensure_tracking(store, "a.md", "default"), "ignored")
+        self.assertEqual((self.project / ".gitignore").read_bytes(), b"/.feather/handoffs/\n")
 
 
 class PendingUnknownTest(LocalFixesBase):

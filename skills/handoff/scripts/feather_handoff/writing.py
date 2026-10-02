@@ -44,9 +44,15 @@ def validated_fields(payload: dict, create: bool) -> dict[str, str]:
     return fields
 
 
+def placed_sections(text: str, start: int = 0) -> list[tuple[int, str]]:
+    """Fence-aware level-1/2 headings at or after start, with offsets relative to start."""
+    return [(offset - start, line) for offset, _, line in baseline.headings(text)
+            if offset >= start and re.match(r"^#{1,2} ", line)]
+
+
 def sections(text: str, start: int = 0) -> list[str]:
     """Fence-aware level-1/2 headings at or after start; each one ends a managed section."""
-    return [line for offset, _, line in baseline.headings(text) if offset >= start and re.match(r"^#{1,2} ", line)]
+    return [line for _, line in placed_sections(text, start)]
 
 
 def details_warnings(details: str) -> list[str]:
@@ -155,10 +161,12 @@ def update_work(store: Store, name: str, raw: object) -> dict:
                 if not prefix.endswith("\n"):
                     prefix += newline
                 # Sibling sections after the managed span must survive unchanged (and stay visible).
-                siblings = sections(content, details_span[2])
+                # The tail is copied verbatim, so each heading keeps its offset within it; a fence
+                # change that re-interprets the tail moves them even when the heading texts repeat.
+                siblings = placed_sections(content, details_span[2])
                 inserted = prefix + details.rstrip("\r\n") + newline
                 content = inserted + content[details_span[2]:]
-                visible = sections(content, len(inserted))
+                visible = placed_sections(content, len(inserted))
             else:
                 content = content.rstrip("\r\n") + newline * 2 + "## 詳細紀錄" + newline + details.rstrip("\r\n") + newline
         if "snapshot" in payload:
@@ -192,14 +200,14 @@ def update_work(store: Store, name: str, raw: object) -> dict:
         check_archivable(Snapshot(original.path, data))
     if siblings is not None and visible != siblings:
         raise HandoffError("details-format", f"this details text would hide or change existing sections "
-                           f"({', '.join(siblings)}); close the code fence or use ### headings")
+                           f"({', '.join(line for _, line in siblings)}); close the code fence or use ### headings")
     tracking = payload.get("tracking", "default")
     if not isinstance(tracking, str) or tracking not in {"default", "track"}:
         raise HandoffError("input", "tracking must be default or track")
     replace_file(original, data)
     result = finish_save(store, name, tracking, payload)
     if siblings is not None:
-        result["preserved_sections"] = siblings
+        result["preserved_sections"] = [line for _, line in siblings]
     if warnings:
         result["warnings"] = warnings
     return result

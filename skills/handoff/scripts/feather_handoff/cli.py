@@ -1,11 +1,26 @@
 """Stable JSON output around the public command boundary."""
 import argparse
 import json
+import os
+from pathlib import Path
 import sys
 
 from .records import list_work, read_work
 from .storage import HandoffError, Store
 from .baseline import unique_object
+
+
+def error_code(error: Exception, store: Store | None, command: str | None) -> str:
+    """A missing file is not-found only within the selected project; any other missing file is an I/O failure."""
+    if not isinstance(error, FileNotFoundError):
+        return getattr(error, "code", "io")
+    name = error.filename
+    if name is None:
+        return "not-found" if command in {"read", "archive", "compare"} else "io"
+    if store is None or not isinstance(name, (str, bytes, os.PathLike)):
+        return "io"
+    target = Path(os.path.normcase(os.path.abspath(os.fsdecode(name))))
+    return "not-found" if target.is_relative_to(os.path.normcase(str(store.project))) else "io"
 
 
 def input_payload():
@@ -82,7 +97,7 @@ def main() -> int:
         else:
             result = list_work(store) if args.command == "list" else read_work(store, args.work)
     except (OSError, UnicodeError, ValueError) as error:
-        code = "not-found" if isinstance(error, FileNotFoundError) else getattr(error, "code", "io")
+        code = error_code(error, store, getattr(args, "command", None))
         result = {"status": "error", "complete": False, "code": code, "message": str(error)}
     except Exception as error:
         result = {"status": "error", "complete": False, "code": "internal",

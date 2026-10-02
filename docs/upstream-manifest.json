@@ -6,23 +6,23 @@
     "skills/handoff/scripts/feather_handoff/__init__.py": "734d59568233868e61dffbbad4cbc721b40a94d169cf965221d51f534e5470d2",
     "skills/handoff/scripts/feather_handoff/archiving.py": "2a431e176950dea9901fa622525fe6ddbe3d6b96c6383ea63a9ee37a442a582a",
     "skills/handoff/scripts/feather_handoff/baseline.py": "726edc300cc0460a3f02e4c7a12f542cb038d131ddf4ed28da0032097b99b062",
-    "skills/handoff/scripts/feather_handoff/cli.py": "b4b2f8d40c5a61a6664a3b2df600c2b76a1fa0c9bcb4a9f2a24a18ebec722214",
+    "skills/handoff/scripts/feather_handoff/cli.py": "887cb097a952e84804fcb75e6b0a90cb2d74e13998bfc8d7ab83f55094eae07a",
     "skills/handoff/scripts/feather_handoff/history.py": "238153ce6c6d0d728591b6fa622d06b0d3c137ff0d843c3386741107297d855d",
     "skills/handoff/scripts/feather_handoff/history_mutations.py": "45f06711df9939ecd939c17616a4e05c3f475e4df406e57ad0089b72de7df1d8",
     "skills/handoff/scripts/feather_handoff/observations.py": "43a09d92e6f95ebd17c36849889f86c1894b4a1096a9960b4d9be9180374e478",
     "skills/handoff/scripts/feather_handoff/records.py": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
-    "skills/handoff/scripts/feather_handoff/storage.py": "a8212e384adefaca43127af9312cd219756db7ab6f5903904685d2a02b970835",
+    "skills/handoff/scripts/feather_handoff/storage.py": "ecc5cc8c26454c54c8c2c47bc8b3713e8acb4be8c59fa7fde651dd10f2713ff7",
     "skills/handoff/scripts/feather_handoff/tracking.py": "54324573f51d43b8465212b11a0449857989a570cd14dda0f345d97ac6048ed5",
-    "skills/handoff/scripts/feather_handoff/writing.py": "ee771b2303ea09f9561fb7b3d4477c899bd71aa0042c7306dc4b6cc646a7a19a",
+    "skills/handoff/scripts/feather_handoff/writing.py": "18a29f159eefffb01a00933a50a5904af7e4046a37ac2876476eb6fa1d4b4158",
     "skills/handoff/scripts/handoff.py": "cb18fa4a4d3c350e1cba2f13162a5d03d87262651c6be5ae09e3d3abaeeeb491",
-    "tests/test_handoff_archive.py": "513ea9d51e86f3503fc612838a63c297e16c612dc13b7ba5faac9eba6e9e8319",
+    "tests/test_handoff_archive.py": "1d80fbc62eb437343b8d1696affafeb511d60cf796c9d866701b51e576040f38",
     "tests/test_handoff_baseline.py": "5a2704812a91efa1a7bcf1526568cd1c257a89d3521c8ca3152edbc47423bc1a",
     "tests/test_handoff_history.py": "547a0a45ab3b143a6a28b6264caa743196b703fc0faa1dc86bd9293f2864b2c0",
     "tests/test_handoff_mutations.py": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
-    "tests/test_handoff_roots.py": "12f1ef8a824dad2e0e544f878a71a230d69d0cbfac0108819680ec89d1a0a560",
-    "tests/test_handoff_snapshots.py": "a0398f42e457f2f431bb6aa4667674a5d59ff81c9635acb7815bcf756fca4bb8",
-    "tests/test_handoff_storage.py": "5705c621589f0f9542067eb381672759a6d43ff6e12e8f05bafa9f4a410a728e",
-    "tests/test_handoff_tool.py": "b021e1aaf2c62ee1aaa6ce4a6f42fd3a8aafaea7a6511a66bb42e79bad8e18cc"
+    "tests/test_handoff_roots.py": "0169e6d0e9497b9f31bb56f7f4dac8fc642fbd9e80dd9d7a7db12401c1fb6384",
+    "tests/test_handoff_snapshots.py": "ddc69458e6c1c3eace598f683837b060a3f54532c5b7900a9d7af62c8a31ffb4",
+    "tests/test_handoff_storage.py": "63bbe65b8a21a0cb5fa50b6e083e302ca9cb95d709c516881223388b58b9cbea",
+    "tests/test_handoff_tool.py": "968ca3f4fd6e138f196f3be7119b83108e702cc575c92d2a37929ffff9e2151e"
   },
   "upstream_paths": {
     "skills/handoff/scripts/feather_handoff/__init__.py": "skills/feather-handoff/scripts/feather_handoff/__init__.py",
@@ -49,7 +49,7 @@
   "adaptations": {
     "tests/test_handoff_archive.py": {
       "source_sha256": "76d0fb3113127d5fb27a3081c9720b338b86ef6e80079afd03a216049dd6fc08",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. setUp builds the temporary project from os.path.realpath so a linked temporary directory does not change path assertions."
     },
     "tests/test_handoff_baseline.py": {
       "source_sha256": "a6ed503215bcb38ab5db935d9e2336ccbbe78e4d0f071113ca3e2b7ffda447ce",
@@ -65,19 +65,19 @@
     },
     "tests/test_handoff_roots.py": {
       "source_sha256": "a8df63d727f74b9ed0c94c80a73c92b831945ca5d72a3a26997651a484b04d4f",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Imports test_handoff_tool through the tests package; in-process invocations reset the root registry via addCleanup."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Imports test_handoff_tool through the tests package; in-process invocations and the direct Store test reset the root registry via addCleanup."
     },
     "tests/test_handoff_snapshots.py": {
       "source_sha256": "fe01504c901c07b74773d5bc9d7237ef97120ea781a1cdea85e3d26dc93b7be5",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added the st_ctime stat/fstat skew test. Imports its fixtures through the tests package; tests that build a Store in-process reset the root registry via addCleanup."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added the st_ctime stat/fstat skew test. Imports its fixtures through the tests package; tests that build a Store in-process reset the root registry via addCleanup. ObservationUnitTest builds its temporary project from os.path.realpath."
     },
     "tests/test_handoff_storage.py": {
       "source_sha256": "b16da7a53f6b47248a5df87c169b8cf1392543ec748eba6db896964ddf021c4b",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added skewed_fstat and the st_ctime stat/fstat skew test."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added skewed_fstat and the st_ctime stat/fstat skew test. setUp builds the temporary directory from os.path.realpath; the inherited Git routing test resets the root registry via addCleanup."
     },
     "tests/test_handoff_tool.py": {
       "source_sha256": "4fc44d45642d3450e4c8af9f134a4b5dc8aef91227536fe3a880cd0d46cd54f3",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. The tracking test expects the '# cc-feather: track /.feather/handoffs/' marker after tracking: track."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. The tracking test expects the '# cc-feather: track /.feather/handoffs/' marker after tracking: track. setUp (shared by the roots and snapshots tests) builds the temporary project from os.path.realpath."
     },
     "skills/handoff/scripts/feather_handoff/history.py": {
       "source_sha256": "7e68a3b831d0694f2048a79e373982bd272457b63530c86656aad25e746e4fc9",
@@ -93,19 +93,19 @@
     },
     "skills/handoff/scripts/feather_handoff/writing.py": {
       "source_sha256": "b4b618b8c5ad98e35520c5ae3c9d6e1421117e07b55b12c8a450a063427aed07",
-      "change": "Local fix pending upstream: create/update refuse a 完成 save whose body would not archive; a completed work accepts one reviewed replacement keeping title, 更新 and 狀態：完成 when history lacks that identity; update details follow the file newline. A details update that would hide or change the level-1/2 sections after the managed details is refused with details-format; create/update results add warnings for level-1/2 headings inside details and update results add preserved_sections. An archival failure after a completed save returns partial archive-failed with cause_code and recovery retry-archive."
+      "change": "Local fix pending upstream: create/update refuse a 完成 save whose body would not archive; a completed work accepts one reviewed replacement keeping title, 更新 and 狀態：完成 when history lacks that identity; update details follow the file newline. A details update that would hide or change the level-1/2 sections after the managed details is refused with details-format; create/update results add warnings for level-1/2 headings inside details and update results add preserved_sections. An archival failure after a completed save returns partial archive-failed with cause_code and recovery retry-archive. The details-update sibling check compares headings together with their offsets inside the verbatim tail."
     },
     "skills/handoff/scripts/feather_handoff/cli.py": {
       "source_sha256": "65899a4918521baae30e6dc2401545088d6dfd35bc1bd3833f2f82c5aa22a22e",
-      "change": "Local fix pending upstream: invalid JSON, non-UTF-8 or too deeply nested stdin is an input error, and any unexpected exception becomes a JSON internal error with exit 2. Usage errors use the JSON envelope with code usage and a missing selected file is not-found (exit 2); --help stays plain text."
+      "change": "Local fix pending upstream: invalid JSON, non-UTF-8 or too deeply nested stdin is an input error, and any unexpected exception becomes a JSON internal error with exit 2. Usage errors use the JSON envelope with code usage and a missing selected file is not-found (exit 2); --help stays plain text. A FileNotFoundError is not-found only for a file inside the selected project (or, without a file name, for read/archive/compare of a named work); otherwise io."
     },
     "skills/handoff/scripts/feather_handoff/storage.py": {
       "source_sha256": "30273a1d110fbf60b56574435c11eecbd0d7985be9b4f8182cbed4c0027a9af5",
-      "change": "Local fix pending upstream: superscript COM and LPT names are reserved. read_file change detection ignores st_ctime (stat and fstat disagree on Windows with Python 3.12+). A linked --project path or ancestor above the project is resolved once with a strict realpath and registered as the trusted root; check_path stops at that root after confirming it still resolves to itself. The Git root is the resolved path or its nearest ancestor that is the Git top level; a path crossing a link below the repository root is uncertain. Volumes without strict realpath keep the previous full-ancestor link checks. create_file removes the partial file it created when writing fails (same st_dev/st_ino) and re-raises the original error."
+      "change": "Local fix pending upstream: superscript COM and LPT names are reserved. read_file change detection ignores st_ctime (stat and fstat disagree on Windows with Python 3.12+). A linked --project path or ancestor above the project is resolved once with a strict realpath and registered as the trusted root; check_path stops at that root after confirming it still resolves to itself. The Git root is the resolved path or its nearest ancestor that is the Git top level; a path crossing a link below the repository root is uncertain. Volumes without strict realpath keep the previous full-ancestor link checks. create_file removes the partial file it created when writing fails (same st_dev/st_ino) and re-raises the original error. git_environment also removes Git's remaining local repository variables (GIT_IMPLICIT_WORK_TREE, GIT_PREFIX, GIT_GRAFT_FILE, GIT_NO_REPLACE_OBJECTS, GIT_REPLACE_REF_BASE, GIT_SHALLOW_FILE, GIT_CONFIG) and GIT_REDIRECT_STDIN/STDOUT/STDERR while keeping user configuration variables; a successful root discovery with empty or non-absolute output is uncertain instead of the current directory."
     },
     "skills/handoff/scripts/feather_handoff/observations.py": {
       "source_sha256": "b3376cbbd0a0a50d52c3dc36ea36f051ec95a9060a7ca4b1a7f8813be99d4c7c",
-      "change": "Local fix pending upstream: duplicate-source detection uses the resolved path when st_ino is unavailable."
+      "change": "Local fix pending upstream: source change detection ignores st_ctime (stat and fstat disagree on Windows with Python 3.12+). Duplicate-source detection uses the resolved path when st_ino is unavailable."
     },
     "skills/handoff/scripts/feather_handoff/tracking.py": {
       "source_sha256": "5f9eb71dfc4a18cc31489ab979d9492c5865f494891b75d7c700af8ef5988797",

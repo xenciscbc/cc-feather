@@ -70,6 +70,7 @@ class HandoffRootTest(unittest.TestCase):
             self.assertEqual(before, self.tree())
 
     def test_direct_mutation_cannot_bypass_root_guard(self):
+        self.addCleanup(storage.reset_roots)
         with patch.object(storage.subprocess, "run", return_value=self.denied()):
             store = storage.Store(str(self.project))
         with self.assertRaises(storage.HandoffError) as caught:

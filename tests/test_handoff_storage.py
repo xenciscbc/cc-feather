@@ -26,7 +26,7 @@ class HandoffStorageTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / "work.md"
+        self.path = Path(os.path.realpath(self.temp.name)) / "work.md"
         self.path.write_bytes(b"original")
         self.original = storage.read_file(self.path)
 
@@ -47,6 +47,7 @@ class HandoffStorageTest(unittest.TestCase):
             project.mkdir()
             subprocess.run(["git", "-C", str(project), "init", "--quiet"], check=True, capture_output=True)
             (project / "source.txt").write_text(project.name, encoding="utf-8")
+        self.addCleanup(storage.reset_roots)
         with patch.dict(os.environ, {"GIT_DIR": str(redirected / ".git"), "GIT_WORK_TREE": str(redirected)}):
             store = storage.Store(str(asked))
             self.assertEqual(store.project, asked.resolve())

@@ -230,7 +230,7 @@ class ObservationUnitTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.project = Path(self.temp.name)
+        self.project = Path(os.path.realpath(self.temp.name))
         self.store = SimpleNamespace(project=self.project)
 
     def test_full_observation_matrix(self):
