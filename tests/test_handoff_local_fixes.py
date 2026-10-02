@@ -627,6 +627,29 @@ class CliUsageTest(LocalFixesBase):
         self.assertEqual(result.returncode, 0)
         self.assertTrue(result.stdout.startswith(b"usage:"))
 
+    def run_bare(self, *args, expected=0) -> dict:
+        result = subprocess.run([sys.executable, "-B", str(TOOL), *args], input=b"", capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+        return json.loads(result.stdout.decode("utf-8"))
+
+    def test_root_options_are_accepted_after_the_command(self):
+        self.put("work.md", "# work\n更新：2026-09-11T10:00:00+08:00\n狀態：進行中\n\n目標：g\n進度：p\n下一步：n\n".encode("utf-8"))
+        project = str(self.project)
+        before = self.run_bare("--project", project, "--exact-root", "list")
+        for args in (("list", "--project", project, "--exact-root"),
+                     ("--exact-root", "list", "--project", project),
+                     ("--project", project, "list", "--exact-root")):
+            with self.subTest(args=args):
+                self.assertEqual(self.run_bare(*args), before)
+        read = self.run_bare("read", "--work", "work.md", "--project", project, "--exact-root")
+        self.assertEqual((read["status"], read["root"]["state"]), ("ok", "explicit"))
+        self.assertEqual(before["root"]["state"], "explicit")
+        for args in (("list",), ("list", "--exact-root")):
+            with self.subTest(args=args):
+                result = self.run_bare(*args, expected=2)
+                self.assertEqual(result["code"], "usage")
+                self.assertIn("--project", result["message"])
+
 
 class FailingWrite:
     def __init__(self, handle):
