@@ -18,7 +18,7 @@ In auto mode, every piece of Plan-driven work goes through the same Automatic fl
 
 Code review is done by a new `reviewer` role that reads the diff itself, separates Blocking findings from Non-blocking findings, and answers APPROVED or CHANGES_REQUESTED within a two-call automatic budget. Blocking findings are fixed or rejected with evidence; Non-blocking findings become follow-up work. A Claim whose Code review runs out of calls without APPROVED is an Unreviewed claim and is not complete.
 
-When an active handoff exists, the main agent updates it before stopping to wait for the user during the Implementation phase, and review state is kept in the handoff in a fixed field so a new session does not reset any budget.
+When an active handoff exists, the main agent updates it before stopping to wait for the user during the Implementation phase, and unresolved review verdicts are recorded in the handoff as plain text (amended by ADR 0002: counts are per session).
 
 ## User Stories
 
@@ -70,8 +70,8 @@ When an active handoff exists, the main agent updates it before stopping to wait
 46. As a user, I want that update to be light — current conclusion, the pending question and the next step — and skipped when nothing changed, so that it costs little.
 47. As a user, I want no such updates during discussion or planning, so that the handoff is not churned by conversation.
 48. As a user without delegation installed, I want this handoff rule to apply anyway, so that cache expiry is handled regardless of review settings.
-49. As a user, I want review counts, verdicts and open findings kept in a fixed handoff field, so that a new session continues the budgets instead of resetting them.
-50. As a user sharing handoff records with codex-feather, I want that field to need no runtime change, so that both tools keep reading the same records.
+49. As a user, I want unresolved review verdicts and what they block kept in an active handoff, so that a resumed session does not commit or report an unresolved claim. (Amended by ADR 0002; counts are per session.)
+50. As a user sharing handoff records with codex-feather, I want that note to need no runtime change, so that both tools keep reading the same records. (Amended by ADR 0002.)
 51. As a user, I want a dedicated reviewer role, so that analyst keeps its tool-enforced read-only guarantee.
 52. As a user, I want to set the reviewer's model and effort like other roles, so that I can trade review depth for cost.
 53. As a user, I want the reviewer to default to opus with high effort, so that review is as rigorous as verification out of the box.
@@ -85,9 +85,9 @@ When an active handoff exists, the main agent updates it before stopping to wait
 
 ## Implementation Decisions
 
-- **Trigger model.** Review mode keeps the values `auto` and `off`, and the managed line that stores it keeps its exact wording, so saved modes and existing installations stay valid. Only the meaning of `auto` changes, from risk-triggered to Plan-driven.
+- **Trigger model.** Review mode keeps the values `auto` and `off`, so saved modes stay valid. (Amended by 53fe8ba: the automatic rules are a paragraph present only in auto; installations from earlier templates keep their mode line until setup update.) Only the meaning of `auto` changes, from risk-triggered to Plan-driven.
 - **Automatic flow order.** Plan review, then implementation, then the primary acceptance run by main, then Code review, then main's acceptance rerun after any fix, then Outcome verification. The APPROVED prerequisite for verification applies only to the Automatic flow.
-- **Budgets.** Plan review: two automatic calls per Plan. Code review: two per Claim. Outcome verification: two per Claim. Failed, interrupted and protocol-failure calls count, and changing reviewer, model, wording or session never resets a count. A verdict grants no authority beyond what the user already gave.
+- **Budgets.** Plan review: two automatic calls per Plan. Code review: two per Claim. Outcome verification: two per Claim. Failed, interrupted and protocol-failure calls count, and changing reviewer, model or wording never resets a count within a session (amended by ADR 0002: a resumed session starts a new count). A verdict grants no authority beyond what the user already gave.
 - **Claims.** A Plan declares its Claims and their acceptance. Plan review checks that each Claim can be verified independently and is not cut too finely. A Plan without listed Claims is one Claim.
 - **Deviation.** Revisions inside the approved outcome, scope and acceptance continue without new approval; a material Deviation needs re-review within the Plan's budget and the user's approval.
 - **New role `reviewer`.** It is a leaf role with Read, Glob, Grep and Bash, default model opus and effort high. Its brief contains the Claim, the Plan, a base revision, the file scope including untracked files, the acceptance results and, for security-boundary Claims, the trust boundaries to check. It may use read-only git commands and static checks that do not modify files; it does not run tests and never edits. It answers APPROVED or CHANGES_REQUESTED; each Blocking finding carries file and line evidence, why it blocks, the minimum correction and a closure check, and Non-blocking findings are listed separately. On a second call it checks only the closure of earlier findings, regressions from the fixes and main's rejection evidence. Main compares the workspace before and after each call.
@@ -95,7 +95,7 @@ When an active handoff exists, the main agent updates it before stopping to wait
 - **Installer.** `reviewer` joins the managed role set and the list of roles that an existing installation may lack. No state schema version change. Check and show report that an update is required while the role is missing; update adds it from package defaults and keeps saved choices. Name collisions use the existing cc- prefix migration. Model changes and session export cover the new role.
 - **Delegation workflow.** Gains a Code review procedure and a reviewer row in its role table. Explicit verification requests route to the Outcome verification procedure without Code review; explicit Code review requests route to the Code review procedure without starting verification.
 - **Managed delegation policy.** States the Plan-driven trigger, the risky Unplanned work rule, Explicit requests in either mode, and the auto-only statement before implementing.
-- **Handoff maintenance policy and handoff skill.** During the Implementation phase, before stopping to wait for the user, an active handoff gets a light update (current conclusion, pending question, next step), skipped when nothing changed. No handoff is created only for this. The skill documents a fixed `審查：` segment at the start of the existing `注意：` field holding, per Plan and per Claim, the call count, last verdict and open findings; the handoff tool accepts only its existing single-line fields, so a separate field would need a runtime change. The handoff runtime and record schema do not change.
+- **Handoff maintenance policy and handoff skill.** During the Implementation phase, before stopping to wait for the user, an active handoff gets a light update (current conclusion, pending question, next step), skipped when nothing changed. No handoff is created only for this. Unresolved review verdicts and what they block are recorded as plain text in the record and removed once resolved (amended by ADR 0002; the fixed `審查：` segment was dropped). The handoff runtime and record schema do not change.
 - **Follow-ups.** Non-blocking findings go in the final report; with an active handoff they become a separate follow-up work item under the handoff skill's existing separable-item rule.
 - **Release.** Everything ships together as 0.9.0. The analyst code review mode in the working tree is never released.
 

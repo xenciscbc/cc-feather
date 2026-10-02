@@ -48,8 +48,8 @@ When the user asks for a "review" without naming one, review the plan if the wor
 
 ## Plan review
 
-When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode and session changes. In auto, plan-driven work also needs code review and then outcome verification once implemented; in off, an explicit plan-review request does not imply them. For a request to turn automatic review on or off, follow [the toggle procedure](../setup/references/auto-review.md).
+When the installed policy or an explicit user request requires plan review, read and follow [the plan-review procedure](references/plan-review.md) before dispatch, revision or resuming the reviewed plan. Keep the review count and unresolved verdicts across mode changes within a session; a resumed session starts a new count, while unresolved verdicts recorded in an active handoff still apply. In auto, plan-driven work also needs code review and then outcome verification once implemented; in off, an explicit plan-review request does not imply them. For a request to turn automatic review on or off, follow [the toggle procedure](../setup/references/auto-review.md).
 
 ## Code review
 
-When the installed policy or an explicit user request requires code review, read and follow [the code-review procedure](references/code-review.md) after the primary acceptance passes and before outcome verification. Keep its call count and open findings across mode and session changes.
+When the installed policy or an explicit user request requires code review, read and follow [the code-review procedure](references/code-review.md) after the primary acceptance passes and before outcome verification. Keep its call count and open findings across mode changes within a session.

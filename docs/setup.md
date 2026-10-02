@@ -68,7 +68,7 @@ Backups and conflict checks protect managed writes. Serialize setup/model operat
 
 Project scope writes versionable project files but does not stage or commit them or add ignore rules. Decide whether to share `.claude/agents`, CLAUDE.md and managed configuration according to project policy; backup directories should remain local and may contain prior CLAUDE.md text. Setup does not modify Git rules automatically.
 
-The policy's two-call automatic limits for plan review, code review and outcome verification are agent instructions, not a hook-enforced counter. Preserve it in an active handoff across sessions; an explicit user request can authorize another review. Security/plan analysts have a read-only tool allowlist. Verifier's and reviewer's allowlists add Bash so they can run checks and read history; they have no edit tools, but Bash can still write, so their no-edit rule is an instruction. Executors have Bash and write capabilities under normal Claude permission controls; no additional sandbox is created by this plugin.
+The policy's two-call automatic limits for plan review, code review and outcome verification are agent instructions, not a hook-enforced counter. Counts are per session; an active handoff keeps unresolved verdicts and what they block until resolved, and an explicit user request can authorize another review. Security/plan analysts have a read-only tool allowlist. Verifier's and reviewer's allowlists add Bash so they can run checks and read history; they have no edit tools, but Bash can still write, so their no-edit rule is an instruction. Executors have Bash and write capabilities under normal Claude permission controls; no additional sandbox is created by this plugin.
 
 ## Automatic review switch
 
