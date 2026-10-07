@@ -2602,11 +2602,67 @@ class FeatherConfigTests(unittest.TestCase):
             ("plan-review.md", "If the in-session state is unknown"),
             ("code-review.md", "Its count continues from where it stands"),
             ("code-review.md", "do not commit it or report it complete"),
-            ("outcome-verification.md", "an explicit verification does not complete a claim of plan-driven work"),
+            ("outcome-verification.md", "made before the automatic flow reached verification does not complete a claim of plan-driven work"),
         )
         for name, phrase in rules:
             with self.subTest(reference=name, phrase=phrase):
                 self.assertIn(phrase, (references / name).read_text(encoding="utf-8"))
+
+    def test_stops_recovery_and_counting_follow_the_review_state_rules(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        expected = {
+            references / "review-state.md": (
+                "clears the stop and leaves the count unchanged",
+                "needs the user's explicit request",
+                "a pass resets the count and a non-pass stops the step again",
+                "does not count as that step's pass",
+                "automatic if the flow is due to run that step",
+                "State the classification before dispatching",
+                "including a generic retry after a temporary failure",
+                "never dispatched again as a retry",
+                "treat the step as stopped and ask the user",
+                "does not start a new session",
+                "State the current count with each review result",
+                "gains no new automatic calls",
+                "does not clear the inherited stop",
+                "receives the inherited findings with their dispositions",
+                "Independent new work is counted on its own",
+                "counts of different plans are not added",
+                "precondition failure, not a call",
+                "not part of the request",
+                "in auto the automatic flow continues to the next step",
+                "explicit if the step has stopped or the request is outside the flow",
+                "including a call the user requests for a step the flow is due to run",
+            ),
+            references / "plan-review.md": ("treat the step as stopped and ask the user",
+                                            "its count and stop for them",
+                                            "an explicit READY clears the stop"),
+            references / "outcome-verification.md": ("made before the automatic flow reached verification",
+                                                     "An explicit CONFIRMED that clears a verification step",
+                                                     "makes the step stopped until the user decides"),
+            references / "code-review.md": ("the automatic flow resumes",
+                                            "after an explicit review outside a stopped automatic step",
+                                            "makes the step stopped until the user decides",
+                                            "a retry counts as a call"),
+            config.ROOT / "skills" / "delegation" / "SKILL.md": ("the automatic flow resumes",
+                                                                 "is never used on a stopped step"),
+            config.ROOT / "CONTEXT.md": ("clears the stop without resetting the count",
+                                         "the Automatic flow resumes from there",
+                                         "is an automatic call, not an Explicit request"),
+            config.ROOT / "README.md": ("the automatic flow resumes from there",
+                                        "in auto the automatic flow continues to the next step"),
+            config.ROOT / "README.zh-TW.md": ("自動流程會從那裡接續", "在 auto 下自動流程接著進入下一步"),
+        }
+        for path, phrases in expected.items():
+            text = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertIn(phrase, text)
+        # The 0.13.2 recovery rule let main guess at a lost state; it must not come back.
+        for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
+            with self.subTest(reference=name):
+                self.assertNotIn("before another automatic call",
+                                 (references / name).read_text(encoding="utf-8"))
 
     # Each README bullet maps English label -> (Traditional Chinese label, English phrase, Chinese phrase,
     # procedure file, procedure phrase); every bold-label bullet of the two lists must have an entry.
@@ -2625,6 +2681,14 @@ class FeatherConfigTests(unittest.TestCase):
                       "plan-review.md", "READY grants no new authority"),
         "Explicit requests": ("明確要求", "do not use the automatic budget", "不佔自動次數",
                               "plan-review.md", "Explicit calls do not count toward the automatic budget below"),
+        "After a stop": ("停下之後", "it clears the stop and leaves the count unchanged", "次數維持在停下時的數字",
+                         "review-state.md", "clears the stop and leaves the count unchanged"),
+        "Asking for a review": ("要求審查時", "main states which before dispatching", "主 Agent 派出前會先說明是哪一種",
+                                "review-state.md", "State the classification before dispatching"),
+        "Retries": ("重試", "including a generic retry after a temporary failure", "包括暫時失敗後的一般重試",
+                    "review-state.md", "including a generic retry after a temporary failure"),
+        "Lost state": ("狀態不明", "main treats the step as stopped and asks you", "主 Agent 會視為已停下並問你",
+                       "review-state.md", "treat the step as stopped and ask the user"),
         "Cost": ("成本", "a claim makes at most six", "每個 claim 最多六次",
                  "preview.md", "at most six automatic calls per Claim"),
         "Independence": ("獨立性", "each review runs in a fresh context", "每次審查都在新的 context",

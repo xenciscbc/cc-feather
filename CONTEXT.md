@@ -49,7 +49,7 @@ The sequence plan review, then code review, then outcome verification that auto 
 _Avoid_: three-layer protection, pipeline
 
 **Explicit request**:
-A user's direct request for one specific review or verification. It runs in either Review mode and runs only what was requested.
+A user's direct request for one specific review or verification. It runs in either Review mode and runs only what was requested. In auto, a request for a step the Automatic flow is due to run is an automatic call, not an Explicit request. In auto, when it passes a step the Automatic flow had stopped, it clears the stop without resetting the count, and the Automatic flow resumes from there.
 _Avoid_: manual review
 
 **Plan review**:
