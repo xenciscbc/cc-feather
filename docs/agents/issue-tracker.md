@@ -7,7 +7,7 @@ Specs and tickets for this repo are markdown files; GitHub Issues are not used.
 - Specs live in `docs/specs/<feature-slug>.md` and are committed.
 - Tickets live one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` — never a single combined tickets file. `.scratch/` is gitignored, so tickets exist only in the working copy where they were written.
 - Each ticket starts with a `Spec: docs/specs/<feature-slug>.md` line linking it to its spec. A spec may also list its claims in a Claims table; its tickets then mirror that table.
-- Triage state is a `Status:` line near the top of each ticket (see `triage-labels.md`).
+- Triage state is a `Status:` line near the top of each ticket (see `triage-labels.md`). Completion values: `resolved` means the ticket was implemented and accepted (reviewed, verified and committed), with a `## Comments` note naming the version or commit; `wontfix` means it will not be done. Any other status, such as `ready-for-agent`, means the ticket is unfinished.
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading.
 
 ## When a skill says "publish to the issue tracker"
