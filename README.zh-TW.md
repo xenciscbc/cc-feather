@@ -157,7 +157,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 - **部分重疊：**新計畫若與這個 session 既有的計畫部分重疊，重疊的 ticket 會承接既有計畫尚未解決的結論與阻擋事項。
 - **恢復的 session：**進行中的交接若記錄了某份 spec 計畫尚未解決的結論，之後指名該 spec 的 ticket 時仍然適用；反過來，記錄在某張 ticket 計畫上的結論，之後指名整份 spec 時仍會限制那張 ticket。這兩種限制都會持續到之後的審查通過或你作出決定。
 - **沒有剩餘工作：**指名範圍內的 ticket 都已完成時，主 Agent 會回報沒有剩下要實作的部分。
-- **辨識 ticket：**主 Agent 依明確連結（例如 `Spec:` 行或 parent 參照）、同一個功能目錄，或你直接指名，來辨識 spec 的 ticket。你指名的內容對不上任何計畫或對上多份時會詢問，並說明實際採用了哪些 ticket。spec 的 ticket 不在這個 session 手上時，改用 spec 自己列的 claim，沒列就算一個 claim，前提是 spec 有自己的驗收條件；預覽會標示提到自己的 ticket 或 claim 卻找不到的計畫。
+- **辨識 ticket：**主 Agent 依明確連結（例如 `Spec:` 行或 parent 參照）、同一個功能目錄，或你直接指名，來辨識 spec 的 ticket。主 Agent 會先看專案指示（CLAUDE.md 或 AGENTS.md，以及它們指向的檔案）有沒有寫 ticket 放在哪裡。沒有寫就自己找；全 repo 搜尋可能跳過版本控制忽略的檔案和隱藏目錄，所以搜不到不代表沒有，還會直接查看可能放 ticket 的被忽略或隱藏目錄。你指名的內容對不上任何計畫或對上多份時會詢問，並說明實際採用了哪些 ticket。仍然找不到 spec 的 ticket 時：spec 自己列了 claim 就沿用那份清單；spec 提到自己的 ticket 或 claim 卻沒列出 claim，主 Agent 會在計畫審查或實作前問你，要指出它們的位置，還是當成一個 claim；沒提到這些的 spec 算一個 claim，前提是它有自己的驗收條件。預覽會標示提到自己的 ticket 或 claim 卻找不到的計畫。
 - **不一致：**spec 自己列了 claim 又有 ticket 時，列出的 claim 必須與它所有的 ticket（不論是否完成）一致；不一致會列為阻擋事項，由你決定。
 - **不改文件：**主 Agent 不會為了補 claim 而修改 spec 或 ticket。
 - **還不算計畫：**既沒有 ticket、也沒有自己範圍與驗收條件的 spec（例如沒有驗收段落的 spec 範本）還不算計畫；主 Agent 會先補齊，並請你確認補齊後的版本。

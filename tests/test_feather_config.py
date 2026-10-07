@@ -2561,6 +2561,23 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
+    def test_tickets_are_looked_for_where_they_live_and_unresolved_references_are_asked(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        plan_review = (references / "plan-review.md").read_text(encoding="utf-8")
+        for phrase in ("the project's instructions, such as CLAUDE.md or AGENTS.md",
+                       "an empty result is not evidence that none exist",
+                       "can skip files that version control ignores",
+                       "both ignored and hidden files included",
+                       "keeps that list without asking",
+                       "Unless the spec lists its own claims",
+                       "before plan review or implementation whether to point to them"):
+            with self.subTest(reference="plan-review.md", phrase=phrase):
+                self.assertIn(phrase, plan_review)
+        preview = (references / "preview.md").read_text(encoding="utf-8")
+        for phrase in ("ignored directories included", "will ask before plan review or implementation"):
+            with self.subTest(reference="preview.md", phrase=phrase):
+                self.assertIn(phrase, preview)
+
     # Delegation preview: an explicit command whose rules sit beside the delegation procedures.
 
     def test_delegation_preview_is_an_explicit_command_listed_in_the_manifest(self):

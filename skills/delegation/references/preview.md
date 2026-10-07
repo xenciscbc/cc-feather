@@ -8,7 +8,7 @@ Main produces the preview alone. It may read the Plans, the relevant code and th
 
 ## Inputs
 
-Take one or more Plans or tickets, or a description of Unplanned work. With no argument, preview the Plan currently under discussion; ask when there is none or several are candidates. Identify each Plan and its Claims as [plan review](plan-review.md) does, including a spec's tickets in the named scope, and list the tickets used; a Plan that lists none is one Claim. Do not re-cut, merge or resize Claims.
+Take one or more Plans or tickets, or a description of Unplanned work. With no argument, preview the Plan currently under discussion; ask when there is none or several are candidates. Identify each Plan and its Claims as [plan review](plan-review.md) does, including a spec's tickets in the named scope searched as plan review does, ignored directories included and hidden ones too, and list the tickets used; a Plan that lists none is one Claim. Do not re-cut, merge or resize Claims.
 
 ## Values
 
@@ -35,7 +35,7 @@ Mark each affected row or Plan:
 - a role that is not installed, shown with its package default;
 - an external Explore, whose model and effort are unknown;
 - an input that is not yet a Plan because it lacks scope or acceptance;
-- a Plan whose text refers to its own tickets or Claims that cannot be found, or whose listed Claims disagree with its tickets;
+- a Plan whose text refers to its own tickets or Claims that cannot be found, or whose listed Claims disagree with its tickets; when it lists no Claims, show the one-Claim reading and note that main will ask before plan review or implementation;
 - a Claim without its own verifiable acceptance;
 - in auto, Unplanned work that changes a security boundary, migrates data or is irreversible, which needs a reviewed Plan the user approves first; in off, note it only;
 - work that needs exploration before it can be judged.
