@@ -2508,6 +2508,24 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("an explicit call is outside the count",
                       (references / "plan-review.md").read_text(encoding="utf-8"))
 
+    def test_every_step_counts_consecutive_failures_and_a_pass_resets(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
+            text = (references / name).read_text(encoding="utf-8")
+            for phrase in ("Count consecutive automatic calls without a pass", "resets the count to zero"):
+                with self.subTest(reference=name, phrase=phrase):
+                    self.assertIn(phrase, text)
+
+    def test_a_fix_after_refuted_is_code_reviewed_before_the_recheck(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        review = (references / "code-review.md").read_text(encoding="utf-8")
+        verification = (references / "outcome-verification.md").read_text(encoding="utf-8")
+        for text in (review, verification):
+            self.assertNotIn("without another code review", text)
+            self.assertNotIn("not code-reviewed", text)
+        self.assertIn("A fix goes to [code review](code-review.md) first", verification)
+        self.assertIn("resets only on CONFIRMED", verification)
+
     # Delegation preview: an explicit command whose rules sit beside the delegation procedures.
 
     def test_delegation_preview_is_an_explicit_command_listed_in_the_manifest(self):

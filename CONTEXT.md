@@ -71,5 +71,5 @@ A Code review finding that does not hold completion: style, naming, a refactorin
 _Avoid_: nit, minor issue
 
 **Unreviewed claim**:
-A Claim whose Code review ended without APPROVED after its automatic calls were used up. It is not complete.
+A Claim whose Code review stopped after two consecutive automatic calls without APPROVED. It is not complete.
 _Avoid_: failed review, skipped review

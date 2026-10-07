@@ -32,7 +32,7 @@ When implementation follows, main dispatches according to the preview and report
 12. As a user, I want a reason shown only when a routing choice is not obvious, such as a security-boundary change going to security-executor or tightly coupled work staying with main, so that the preview stays short.
 13. As a user, I want a short note on which Assignments can run in parallel and which must wait for another or share files, so that I understand the order of work.
 14. As a user, I want plan review, code review and outcome verification roles listed once at the end with their model and effort, so that the same three rows are not repeated under every Claim.
-15. As a user, I want that final section to state how many Plans and Claims will be reviewed and that each step has at most two automatic calls, so that I can estimate the maximum review cost.
+15. As a user, I want that final section to state how many Plans and Claims will be reviewed and that each step has at most two automatic calls, so that I can estimate the maximum review cost. (Amended by ADR 0004: each step stops after two consecutive calls without a pass, and a Claim makes at most six automatic calls.)
 16. As a user in off mode, I want the final section to say the Automatic flow will not run and that I can still make Explicit requests, so that I do not expect reviews that will not happen.
 17. As a user, I want Unplanned work marked as outside the Automatic flow, so that I know it will not be reviewed automatically.
 18. As a user, I want Unplanned work that changes a security boundary, migrates data or is irreversible flagged as needing a reviewed Plan first in auto mode, so that I know it cannot start as it is.
@@ -69,7 +69,7 @@ When implementation follows, main dispatches according to the preview and report
 - **Output.**
   1. Per Plan, per Claim: rows of `work | role | model | effort | source`, with main-kept work as role `main`. A reason is given only when the routing is not obvious.
   2. A one-line parallel and dependency note, including file-ownership conflicts.
-  3. One final review section: plan review by analyst, code review by reviewer and outcome verification by verifier, each with model and effort, plus Plan and Claim counts and the two-call limit per step. Off mode shows that the flow will not run and that Explicit requests remain available; Unplanned work is shown as outside it.
+  3. One final review section: plan review by analyst, code review by reviewer and outcome verification by verifier, each with model and effort, plus Plan and Claim counts and the two-call limit per step (amended by ADR 0004: two consecutive calls without a pass, at most six per Claim). Off mode shows that the flow will not run and that Explicit requests remain available; Unplanned work is shown as outside it.
 - **Flags.** Not installed (with package default), external Explore with unknown settings, input not yet a Plan, Claim without its own acceptance, Unplanned security-boundary, data-migration or irreversible work needing a reviewed Plan first (in auto; in off only noted, since off mode does not enforce it), and work needing exploration before it can be judged. No Claim is re-cut.
 - **Relation to dispatch.** The preview is main's dispatch basis. Actual dispatch may differ when new facts appear, and main reports the differences.
 - **Installed policy unchanged.** The managed delegation policy block is not edited, so existing installations get the command from the plugin update without setup update.
