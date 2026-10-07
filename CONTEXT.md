@@ -28,6 +28,16 @@ _Avoid_: execution, build phase
 A difference between implemented work and its Plan. It is material when it changes the Plan's outcome, scope or acceptance.
 _Avoid_: scope creep, drift
 
+## Delegation
+
+**Assignment**:
+A bounded piece of work main hands to one native role, with its own brief. Only main creates Assignments; a role completes its Assignment itself and never splits it into further Assignments. One Claim may need several Assignments, and some work stays with main.
+_Avoid_: subtask, job
+
+**Delegation preview**:
+Main's forecast of how it would carry out one or more Plans, or Unplanned work: each Claim's Assignments and the work main keeps, with the role, model and effort of each, followed once by the roles that perform the Automatic flow. Main produces it alone; it dispatches nothing, starts no review and writes nothing. Actual dispatch may differ from it, and main reports the differences.
+_Avoid_: dry run, delegation plan
+
 ## Review
 
 **Review mode**:

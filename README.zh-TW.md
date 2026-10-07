@@ -25,6 +25,7 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 | `/cc-feather:handoff-resume [工作]` | 接續指定工作或唯一未完成的工作；有多項時詢問 |
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
+| `/cc-feather:delegation-preview [計畫、ticket 或工作]` | 預覽工作會如何分派，不實際派工；見[分派預覽](#分派預覽) |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
 | `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查與結果驗證 |
 | `/cc-feather:auto-off` | 關閉自動審查 |
@@ -170,6 +171,18 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 Claude 設定目錄預設是 `~/.claude`，可由 `CLAUDE_CONFIG_DIR` 指定。`auto` 時分派區塊包含自動審查規則，`off` 時整段移除，主 Agent 與子 Agent 都不會載入。專案範圍的 `off` 會保留一行「此專案關閉自動計畫審查」的說明，因此覆蓋使用者範圍的 `auto`：任務／session 選擇優先，其次是專案指示，最後是使用者指示。較早版本以 `off` 安裝的專案，要到下次執行 review 或 setup update 才加入這一行。較早版本的安裝保留 `Automatic plan review mode:` 那行，執行 setup update 後改為新格式。永久開關需要先安裝該範圍的 agent 分派；只有 handoff 規則不夠；新 session 載入已儲存模式。
 
 project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.md`。Claude Code 只在沒有任何 CLAUDE 檔時才讀 AGENTS.md，所以專案若依賴 AGENTS.md，setup 會先詢問：直接寫進 AGENTS 檔，或建立一個 import 它的 CLAUDE.md，讓 Claude 繼續讀到它。選擇會記錄下來，之後沿用。詳見[專案指示檔](docs/setup.md#project-instruction-file)。
+
+### 分派預覽
+
+```text
+/cc-feather:delegation-preview docs/specs/my-feature.md
+/cc-feather:delegation-preview TICKET-12 TICKET-13
+/cc-feather:delegation-preview
+```
+
+開始實作前，先看主 Agent 會如何拆分一個或多個計畫、ticket，或一段沒有計畫的工作描述：每個 claim 底下列出每一項派工與主 Agent 自己保留的部分，附上角色、model、effort 與值的來源（任務、session、已儲存或預設）。一段簡短說明哪些可平行、哪些要等待。計畫審查、程式碼審查與結果驗證的角色只在最後列一次，附上計畫數、claim 數與自動呼叫上限；沒有計畫的工作會標示不在這個流程內；`off` 時會註明不執行自動流程，但仍可明確要求審查。也會標示未安裝的角色、cc-feather 看不到設定的自備 Explore、還不算計畫的輸入、沒有自己驗收條件的 claim、在 `auto` 下需要先有審查過計畫的未計畫安全邊界變更、資料遷移或不可逆操作，以及需要先探索才能判斷的工作。不帶參數時預覽目前討論中的計畫；沒有或有多個候選時會詢問。
+
+預覽是唯讀的：由主 Agent 自己產生，不派出任何子 Agent、不啟動審查、不佔審查次數、不寫入任何檔案。只能透過這個指令執行，在對話中提出要求不會觸發。它顯示目前已生效的設定，包含 session 的 `auto-on`／`auto-off`；想試別的 model 或 effort，請先用 `/cc-feather:model` 設定再重新預覽。接著實作時，主 Agent 會依預覽派工，並回報任何差異。model 與 effort 顯示的是設定值，不代表已確認的實際執行。這個指令隨 plugin 提供，plugin 更新後只要開新 session，不需要執行 setup update。詳見[預覽流程](skills/delegation/references/preview.md)。
 
 ### Explore 的成本控制
 

@@ -2508,6 +2508,31 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("an explicit call is outside the count",
                       (references / "plan-review.md").read_text(encoding="utf-8"))
 
+    # Delegation preview: an explicit command whose rules sit beside the delegation procedures.
+
+    def test_delegation_preview_is_an_explicit_command_listed_in_the_manifest(self):
+        manifest = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertIn("./skills/delegation-preview", manifest["skills"])
+        command = (config.ROOT / "skills" / "delegation-preview" / "SKILL.md").read_text(encoding="utf-8")
+        frontmatter = command.split("---")[1]
+        self.assertIn("name: delegation-preview", frontmatter)
+        self.assertIn("disable-model-invocation: true", frontmatter)
+        self.assertIn("argument-hint:", frontmatter)
+        self.assertIn("(../delegation/references/preview.md)", command)
+
+    def test_delegation_skill_never_offers_a_preview(self):
+        text = (config.ROOT / "skills" / "delegation" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("preview", text.lower())
+
+    def test_delegation_preview_is_read_only_and_reuses_dispatch_rules(self):
+        text = (config.ROOT / "skills" / "delegation" / "references" / "preview.md").read_text(encoding="utf-8")
+        for phrase in ("(../SKILL.md)", "(../../model/SKILL.md)", "(plan-review.md)",
+                       "dispatches no child", "starts no review", "writes no file",
+                       "listed once", "is not applied",
+                       "A session choice takes precedence over the saved mode"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
     # DX7: a state from before created_guidance cannot claim the instruction file it leaves empty.
 
     def test_remove_keeps_and_reports_a_file_a_pre_flag_state_leaves_empty(self):

@@ -23,6 +23,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:handoff-resume [work]`: resume the named work, or the sole unfinished one; asks when several remain.
 - `/cc-feather:setup`: inspect status first, then independently manage handoff maintenance rules, delegation policy plus native agents, or both.
 - `/cc-feather:delegation`: load the main-agent workflow for dispatch, review, acceptance and recovery when needed.
+- `/cc-feather:delegation-preview [plans, tickets or work]`: preview how the work would be delegated, without dispatching anything; see [Delegation preview](#delegation-preview).
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
 - `/cc-feather:auto-on`: enable automatic plan review, code review and outcome verification of plan-driven work.
 - `/cc-feather:auto-off`: disable automatic review.
@@ -164,6 +165,18 @@ Permanent modes are stored below. Use the commands to change them: manually edit
 The Claude config directory defaults to `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. In `auto`, the delegation block contains the automatic review rules; in `off`, they are removed, so neither main nor subagents load them. A project-scope `off` keeps one line stating that automatic plan review is off in this project, so it overrides a user-scope `auto`: a task/session choice wins, then project guidance, then user guidance. A project installed `off` by an earlier version gets that line on its next review or setup update. Installations from earlier versions keep an `Automatic plan review mode:` line until setup update. Persistent toggles require the delegation component in that scope; handoff-only setup is insufficient. Fresh sessions load the saved mode.
 
 In project scope, setup writes into an existing CLAUDE.md, else `.claude/CLAUDE.md`. Claude Code reads AGENTS.md only while no CLAUDE file exists, so in a project that relies on AGENTS.md setup asks first: write into the AGENTS file, or create a CLAUDE.md that imports it so Claude keeps reading it. The choice is saved and reused. See [project instruction file](docs/setup.md#project-instruction-file).
+
+### Delegation preview
+
+```text
+/cc-feather:delegation-preview docs/specs/my-feature.md
+/cc-feather:delegation-preview TICKET-12 TICKET-13
+/cc-feather:delegation-preview
+```
+
+Before implementing, see how main would split one or more plans or tickets, or a description of unplanned work: for each claim, every assignment and every part main keeps, with the role, model, effort and where each value comes from (task, session, saved or default). A short note says what can run in parallel and what must wait. The plan review, code review and outcome verification roles are listed once at the end, with the number of plans and claims and the maximum automatic calls; unplanned work is marked as outside that flow, and in `off` the preview says the flow will not run while explicit review requests remain available. It also flags roles that are not installed, an Explore of your own whose settings cc-feather cannot see, inputs that are not yet plans, claims without their own acceptance, unplanned security-boundary, data-migration or irreversible work that in `auto` needs a reviewed plan first, and work that needs exploration first. Without an argument it previews the plan under discussion, and asks when there is none or several.
+
+The preview is read-only: main produces it alone, dispatches no subagent, starts no review, uses no review budget and writes no file. It runs only through this command; asking in conversation does not trigger it. It shows the settings already in effect, including a session `auto-on`/`auto-off`; to try another model or effort, change it with `/cc-feather:model` and preview again. When implementation follows, main dispatches according to the preview and reports any difference. Model and effort values are configured, not confirmed at execution. The command ships with the plugin, so after a plugin update it needs only a fresh session, not a setup update. See [the preview procedure](skills/delegation/references/preview.md).
 
 ### Explore
 
