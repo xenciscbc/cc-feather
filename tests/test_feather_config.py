@@ -2534,6 +2534,33 @@ class FeatherConfigTests(unittest.TestCase):
                 with self.subTest(reference=name, phrase=phrase):
                     self.assertIn(phrase, text)
 
+    def test_the_named_document_is_the_plan_and_its_tickets_are_its_claims(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        plan_review = (references / "plan-review.md").read_text(encoding="utf-8")
+        for phrase in ("The plan is what the user names",
+                       "each unfinished ticket in the named scope is one claim",
+                       "no plan in this session already covers the named work",
+                       "keeps its count, verdicts and blockers",
+                       "applies to that spec's tickets when they are named",
+                       "Main does not edit a spec or ticket to add claims"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, plan_review)
+        for name in ("code-review.md", "outcome-verification.md"):
+            with self.subTest(reference=name):
+                self.assertIn("as identified for the plan", (references / name).read_text(encoding="utf-8"))
+
+    def test_a_plan_listing_no_claims_is_still_one_claim(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        for name, phrase in (("plan-review.md", "lists none is one claim"), ("preview.md", "lists none is one Claim")):
+            with self.subTest(reference=name):
+                self.assertIn(phrase, (references / name).read_text(encoding="utf-8"))
+
+    def test_a_preview_binds_only_its_session_and_flags_missing_parts(self):
+        text = (config.ROOT / "skills" / "delegation" / "references" / "preview.md").read_text(encoding="utf-8")
+        for phrase in ("only in the session that made it", "refers to its own tickets or Claims that cannot be found"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
     # Delegation preview: an explicit command whose rules sit beside the delegation procedures.
 
     def test_delegation_preview_is_an_explicit_command_listed_in_the_manifest(self):

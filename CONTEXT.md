@@ -17,8 +17,8 @@ Work started without a Plan. Unplanned work that changes a security boundary, mi
 _Avoid_: ad-hoc edit, small fix
 
 **Claim**:
-One independently verifiable outcome listed in a Plan, with its own acceptance. Code review and outcome verification each judge one Claim.
-_Avoid_: ticket, change, slice
+One independently verifiable outcome with its own acceptance, listed in a Plan or written as an unfinished ticket in the Plan's named scope. Code review and outcome verification each judge one Claim. A ticket is one place a Claim may be written, not a synonym for it; a ticket being "claimed" in a ticket workflow means someone took it and is unrelated.
+_Avoid_: change, slice
 
 **Implementation phase**:
 The span from the user's authorization to implement until completion is reported, including code review and outcome verification. Discussion and planning before that authorization are outside it.
@@ -35,7 +35,7 @@ A bounded piece of work main hands to one native role, with its own brief. Only 
 _Avoid_: subtask, job
 
 **Delegation preview**:
-Main's forecast of how it would carry out one or more Plans, or Unplanned work: each Claim's Assignments and the work main keeps, with the role, model and effort of each, followed once by the roles that perform the Automatic flow. Main produces it alone; it dispatches nothing, starts no review and writes nothing. Actual dispatch may differ from it, and main reports the differences.
+Main's forecast of how it would carry out one or more Plans, or Unplanned work: each Claim's Assignments and the work main keeps, with the role, model and effort of each, followed once by the roles that perform the Automatic flow. Main produces it alone; it dispatches nothing, starts no review and writes nothing. It is the dispatch basis only in the session that made it: dispatch there may differ from it, and main reports the differences.
 _Avoid_: dry run, delegation plan
 
 ## Review

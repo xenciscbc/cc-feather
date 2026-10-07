@@ -138,14 +138,31 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 結果驗證 | APPROVED 之後 | verifier | CONFIRMED |
 
 - **沒有計畫的工作**不自動審查；但改動安全邊界、遷移資料或不可逆操作，須先寫出計畫、通過審查並經你同意才施工。
-- **次數上限：**每個步驟計算連續沒通過的自動呼叫次數：計畫審查以計畫計，程式碼審查與驗證以 claim 計。自動呼叫通過就歸零；連續兩次沒通過，該步驟停下，不等於通過，工作會等你決定。失敗、中斷或協定錯誤的呼叫也算一次；同一 session 內改名、換 reviewer 或換模型都不會歸零；恢復的 session 重新計數。
+- **次數上限：**每個步驟計算連續沒通過的自動呼叫次數：計畫審查以計畫計，程式碼審查與驗證以 claim 計。自動呼叫通過就歸零；連續兩次沒通過，該步驟停下，不等於通過，工作會等你決定。失敗、中斷或回覆不合格式的呼叫也算一次；同一 session 內改名、換 reviewer 或換模型都不會歸零；恢復的 session 重新計數。
 - **施工中的重審：**只有重大偏離，也就是改變計畫的結果、範圍或驗收條件，才會重審計畫。受影響的後續工作會停下，修訂後的計畫要通過計畫審查並經你同意才繼續。措辭調整或在已同意的結果、範圍與驗收條件內的修改，不會重審計畫；相關程式碼仍隨所屬 claim 經過程式碼審查與驗證。
 - **問題分級：**阻擋性問題（正確性、安全、資料遺失、regression、偏離計畫）必須修正或附證據駁回；非阻擋問題列在最終回報，有進行中的交接時另建獨立的後續工作。
 - **未通過：**沒拿到 APPROVED 的 claim 視為未審查，不回報完成、不 commit。REFUTED 後的修正會先再經過程式碼審查，才交給 verifier 複驗。驗證次數跨修正累計，只有 CONFIRMED 才歸零，所以連續兩次 REFUTED 的 claim 在一輪修正複驗後就會停下。有進行中的交接時，會記下尚未解決的結論，解決後移除。
 - **授權：**通過不代表新的授權；READY 且原本已有授權的工作直接繼續，不固定再問一次。
-- **明確要求**計畫審查、程式碼審查或驗證時不受開關限制，只執行你要求的那一項，也不佔自動次數。
+- **明確要求**計畫審查、程式碼審查或驗證時不受開關限制，只執行你要求的那一項，也不佔自動次數；其結論也不會讓任何步驟的次數歸零。
 - **成本：**一份有 N 個 claim 的計畫，在一個 session 內至少自動呼叫 1 + 2N 次，最多約 2 + 6N 次：每個 claim 最多六次（修正前後各兩次程式碼審查、兩次驗證），另加每次經你同意的重大偏離最多兩次計畫審查，以及它重新打開的 claim 所需的呼叫；預設角色都是 opus/high。要降低成本，用 `/cc-feather:model` 調整角色，例如 `verifier.effort=medium`；package 預設不變。計畫要切成多細的 claim，由寫計畫的地方決定（例如 spec、規劃或切票的 skill），不是 cc-feather。
 - **獨立性：**每次審查都在新的 context 中自行取得證據，但通常和主 Agent 用同一個模型。想要模型多樣性，可用 `/cc-feather:model` 把 analyst 或 reviewer 設成其他模型。cc-feather 看不到也無法保證主 Agent 的模型；換角色模型不會讓該步驟的次數歸零。若你有其他廠商的模型，可另外明確要求第二意見，它不屬於這個流程。
+
+**哪份文件是計畫。**計畫就是你要求主 Agent 實作時指名的那份文件；指名即代表你同意它。
+
+- **一份 spec，或其中幾張 ticket：**該 spec 連同這些 ticket 是一份計畫，只做一次計畫審查。範圍內每張未完成的 ticket 是一個 claim，它的 `Blocked by` 行就是相依關係。
+- **單一 ticket：**該 ticket 就是計畫，其 spec 作為背景提供給計畫審查、程式碼審查與結果驗證。
+- **不屬於任何 spec 的 ticket** 自成一份計畫。**沒有 ticket 的 spec** 沿用它列出的 claim；沒有列出時整份是一個 claim。
+- **例子：**`docs/specs/login.md` 有尚未完成的 ticket 01、02、03，且 03 `Blocked by` 02。「實作 login spec」是一份有三個 claim 的計畫：計畫審查一次，03 等 02 完成。在新 session 中「實作 ticket 02」，則 ticket 02 是計畫，`login.md` 作為背景。
+- **已涵蓋：**若這個 session 已有計畫涵蓋你指名的工作，就沿用該計畫，不重做計畫審查，保留它的次數、結論與阻擋事項。指名單一 ticket 既不會重複審查，也無法繞過已停下的審查。
+- **部分重疊：**新計畫若與這個 session 既有的計畫部分重疊，重疊的 ticket 會承接既有計畫尚未解決的結論與阻擋事項。
+- **恢復的 session：**進行中的交接若記錄了某份 spec 計畫尚未解決的結論，之後指名該 spec 的 ticket 時仍然適用；反過來，記錄在某張 ticket 計畫上的結論，之後指名整份 spec 時仍會限制那張 ticket。這兩種限制都會持續到之後的審查通過或你作出決定。
+- **沒有剩餘工作：**指名範圍內的 ticket 都已完成時，主 Agent 會回報沒有剩下要實作的部分。
+- **辨識 ticket：**主 Agent 依明確連結（例如 `Spec:` 行或 parent 參照）、同一個功能目錄，或你直接指名，來辨識 spec 的 ticket。你指名的內容對不上任何計畫或對上多份時會詢問，並說明實際採用了哪些 ticket。spec 的 ticket 不在這個 session 手上時，改用 spec 自己列的 claim，沒列就算一個 claim，前提是 spec 有自己的驗收條件；預覽會標示提到自己的 ticket 或 claim 卻找不到的計畫。
+- **不一致：**spec 自己列了 claim 又有 ticket 時，列出的 claim 必須與它所有的 ticket（不論是否完成）一致；不一致會列為阻擋事項，由你決定。
+- **不改文件：**主 Agent 不會為了補 claim 而修改 spec 或 ticket。
+- **還不算計畫：**既沒有 ticket、也沒有自己範圍與驗收條件的 spec（例如沒有驗收段落的 spec 範本）還不算計畫；主 Agent 會先補齊，並請你確認補齊後的版本。
+- **plan mode 與對話中的計畫：**它們的 claim 只存在於該計畫的文字中，其他 session 看不到；這是已接受的限制。
+- **檔案位置：**spec 放在哪裡、ticket 是否 commit，不由 cc-feather 決定；它使用實作的 session 手上有的檔案。
 
 完整規則見[計畫審查](skills/delegation/references/plan-review.md)、[程式碼審查](skills/delegation/references/code-review.md)與[結果驗證](skills/delegation/references/outcome-verification.md)程序；用語定義見 [CONTEXT.md](CONTEXT.md)。
 
@@ -181,9 +198,9 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 /cc-feather:delegation-preview
 ```
 
-開始實作前，先看主 Agent 會如何拆分一個或多個計畫、ticket，或一段沒有計畫的工作描述：每個 claim 底下列出每一項派工與主 Agent 自己保留的部分，附上角色、model、effort 與值的來源（任務、session、已儲存或預設）。一段簡短說明哪些可平行、哪些要等待。計畫審查、程式碼審查與結果驗證的角色只在最後列一次，附上計畫數、claim 數與各步驟何時停下（連續兩次自動呼叫沒通過，每個 claim 最多六次）；沒有計畫的工作會標示不在這個流程內；`off` 時會註明不執行自動流程，但仍可明確要求審查。也會標示未安裝的角色、cc-feather 看不到設定的自備 Explore、還不算計畫的輸入、沒有自己驗收條件的 claim、在 `auto` 下需要先有審查過計畫的未計畫安全邊界變更、資料遷移或不可逆操作，以及需要先探索才能判斷的工作。不帶參數時預覽目前討論中的計畫；沒有或有多個候選時會詢問。
+開始實作前，先看主 Agent 會如何拆分一個或多個計畫、ticket，或一段沒有計畫的工作描述：每個 claim 底下列出每一項派工與主 Agent 自己保留的部分，附上角色、model、effort 與值的來源（任務、session、已儲存或預設）。計畫與 claim 依[上方規則](#分派與預設模型)辨識，預覽會列出採用的 ticket。一段簡短說明哪些可平行、哪些要等待。計畫審查、程式碼審查與結果驗證的角色只在最後列一次，附上計畫數、claim 數與各步驟何時停下（連續兩次自動呼叫沒通過，每個 claim 最多六次）；沒有計畫的工作會標示不在這個流程內；`off` 時會註明不執行自動流程，但仍可明確要求審查。也會標示未安裝的角色、cc-feather 看不到設定的自備 Explore、還不算計畫的輸入、提到自己的 ticket 或 claim 卻找不到，或列出的 claim 與 ticket 不一致的計畫、沒有自己驗收條件的 claim、在 `auto` 下需要先有審查過計畫的未計畫安全邊界變更、資料遷移或不可逆操作，以及需要先探索才能判斷的工作。不帶參數時預覽目前討論中的計畫；沒有或有多個候選時會詢問。
 
-預覽是唯讀的：由主 Agent 自己產生，不派出任何子 Agent、不啟動審查、不佔審查次數、不寫入任何檔案。只能透過這個指令執行，在對話中提出要求不會觸發。它顯示目前已生效的設定，包含 session 的 `auto-on`／`auto-off`；想試別的 model 或 effort，請先用 `/cc-feather:model` 設定再重新預覽。接著實作時，主 Agent 會依預覽派工，並回報任何差異。model 與 effort 顯示的是設定值，不代表已確認的實際執行。這個指令隨 plugin 提供，plugin 更新後只要開新 session，不需要執行 setup update。詳見[預覽流程](skills/delegation/references/preview.md)。
+預覽是唯讀的：由主 Agent 自己產生，不派出任何子 Agent、不啟動審查、不佔審查次數、不寫入任何檔案。只能透過這個指令執行，在對話中提出要求不會觸發。它顯示目前已生效的設定，包含 session 的 `auto-on`／`auto-off`；想試別的 model 或 effort，請先用 `/cc-feather:model` 設定再重新預覽。預覽只在產生它的 session 中作為派工依據：在該 session 接著實作時，主 Agent 依預覽派工，並逐項回報差異與原因。其他 session 產生的預覽只供參考；在那裡派工可以與它不同，不會當作差異回報。model 與 effort 顯示的是設定值，不代表已確認的實際執行。這個指令隨 plugin 提供，plugin 更新後只要開新 session，不需要執行 setup update。詳見[預覽流程](skills/delegation/references/preview.md)。
 
 ### Explore 的成本控制
 
