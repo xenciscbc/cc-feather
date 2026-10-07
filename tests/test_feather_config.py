@@ -2578,6 +2578,145 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(reference="preview.md", phrase=phrase):
                 self.assertIn(phrase, preview)
 
+    # Review state: one shared model, load-bearing rules, and documents that agree with the procedures.
+
+    def test_review_procedures_cite_one_shared_state_model(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        state = (references / "review-state.md").read_text(encoding="utf-8")
+        for phrase in ("Work identity", "Reviewed content", "Call source", "Consecutive non-pass count",
+                       "Valid verdict", "Blockers"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, state)
+        for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
+            with self.subTest(reference=name):
+                self.assertIn("(review-state.md)", (references / name).read_text(encoding="utf-8"))
+
+    def test_load_bearing_review_rules_stay_in_their_procedures(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        rules = (
+            ("plan-review.md", "partly overlaps one inherits its unresolved verdicts and blockers"),
+            ("plan-review.md", "When every ticket in the named scope is finished, report that nothing is left to implement"),
+            ("plan-review.md", "must agree with all of them"),
+            ("plan-review.md", "a spec that refers to none is one claim without asking"),
+            ("plan-review.md", "Main never approves such a plan itself"),
+            ("plan-review.md", "If the in-session state is unknown"),
+            ("code-review.md", "Its count continues from where it stands"),
+            ("code-review.md", "do not commit it or report it complete"),
+            ("outcome-verification.md", "an explicit verification does not complete a claim of plan-driven work"),
+        )
+        for name, phrase in rules:
+            with self.subTest(reference=name, phrase=phrase):
+                self.assertIn(phrase, (references / name).read_text(encoding="utf-8"))
+
+    # Each README bullet maps English label -> (Traditional Chinese label, English phrase, Chinese phrase,
+    # procedure file, procedure phrase); every bold-label bullet of the two lists must have an entry.
+    README_RULES = {
+        "Unplanned work": ("沒有計畫的工作", "first needs a written plan", "須先寫出計畫",
+                           "plan-review.md", "must not start without one"),
+        "Budget": ("次數上限", "each step counts consecutive automatic calls", "每個步驟計算連續沒通過的自動呼叫次數",
+                   "plan-review.md", "Count consecutive automatic calls without a pass"),
+        "Re-review during implementation": ("施工中的重審", "a plan is reviewed again only after a material deviation",
+                                            "只有重大偏離", "plan-review.md", "a material deviation stops dependent work"),
+        "Findings": ("問題分級", "Non-blocking ones are listed in the final report", "非阻擋問題列在最終回報",
+                     "code-review.md", "List them in the final report"),
+        "Not passed": ("未通過", "it is not reported complete or committed", "不回報完成、不 commit",
+                       "code-review.md", "do not commit it or report it complete"),
+        "Authority": ("授權", "a pass grants no new authority", "通過不代表新的授權",
+                      "plan-review.md", "READY grants no new authority"),
+        "Explicit requests": ("明確要求", "do not use the automatic budget", "不佔自動次數",
+                              "plan-review.md", "Explicit calls do not count toward the automatic budget below"),
+        "Cost": ("成本", "a claim makes at most six", "每個 claim 最多六次",
+                 "preview.md", "at most six automatic calls per Claim"),
+        "Independence": ("獨立性", "each review runs in a fresh context", "每次審查都在新的 context",
+                         "plan-review.md", "in fresh native context"),
+        "A spec, or some of its tickets": ("一份 spec，或其中幾張 ticket", "Each unfinished ticket in that scope is one claim",
+                                           "範圍內每張未完成的 ticket 是一個 claim", "plan-review.md",
+                                           "each unfinished ticket in the named scope is one claim"),
+        "A single ticket": ("單一 ticket", "with its spec given as context", "其 spec 作為背景",
+                            "plan-review.md", "A single named ticket is the plan"),
+        "A ticket that belongs to no spec": ("不屬於任何 spec 的 ticket", "is its own plan", "自成一份計畫",
+                                             "plan-review.md", "A ticket that belongs to no spec is its own plan"),
+        "Example": ("例子", "makes one plan with three claims", "是一份有三個 claim 的計畫",
+                    "plan-review.md", "The plan is what the user names"),
+        "Already covered": ("已涵蓋", "that plan continues with no new plan review", "不重做計畫審查",
+                            "plan-review.md", "otherwise that plan continues with no new plan review"),
+        "Partial overlap": ("部分重疊", "inherits its unresolved verdicts and blockers", "尚未解決的結論與阻擋事項",
+                            "plan-review.md", "partly overlaps one inherits its unresolved verdicts and blockers"),
+        "Resumed session": ("恢復的 session", "an unresolved verdict that an active handoff records", "進行中的交接若記錄了",
+                            "plan-review.md", "an unresolved verdict that an active handoff records for a spec's plan"),
+        "Nothing left": ("沒有剩餘工作", "nothing is left to implement", "沒有剩下要實作",
+                         "plan-review.md", "report that nothing is left to implement"),
+        "Finding the tickets": ("辨識 ticket", "an empty result does not count as none", "搜不到不代表沒有",
+                                "plan-review.md", "an empty result is not evidence that none exist"),
+        "Telling main where tickets live": ("告訴主 Agent ticket 放在哪裡", "add a line to your project's CLAUDE.md or AGENTS.md",
+                                            "在專案的 CLAUDE.md 或 AGENTS.md", "plan-review.md",
+                                            "Look first at the project's instructions"),
+        "Disagreement": ("不一致", "a mismatch is a blocker for you to settle", "不一致會列為阻擋事項",
+                         "plan-review.md", "report a mismatch as a blocker for the user to settle"),
+        "No edits": ("不改文件", "main never edits a spec or ticket to add claims", "不會為了補 claim 而修改 spec 或 ticket",
+                     "plan-review.md", "Main does not edit a spec or ticket to add claims"),
+        "Not yet a plan": ("還不算計畫", "is not yet a plan", "主 Agent 會先補齊",
+                           "plan-review.md", "A document without scope or acceptance is not yet a plan"),
+        "Plan-mode and conversation plans": ("plan mode 與對話中的計畫", "another session cannot see them", "其他 session 看不到",
+                                             "plan-review.md", "a plan proposed in conversation and approved by the user"),
+        "Where files live": ("檔案位置", "cc-feather does not decide where specs live", "不由 cc-feather 決定",
+                             "plan-review.md", "Where specs live and whether tickets are committed are the project's choice"),
+    }
+
+    # Glossary term -> (phrase in its CONTEXT.md entry, procedure file, procedure phrase).
+    GLOSSARY_RULES = {
+        "Plan": ("a document lacking scope or acceptance is not yet a Plan",
+                 "plan-review.md", "A document without scope or acceptance is not yet a plan"),
+        "Claim": ("One independently verifiable outcome with its own acceptance",
+                  "plan-review.md", "each an independently verifiable outcome with its own acceptance"),
+        "Unplanned work": ("must first become Plan-driven work", "plan-review.md", "must not start without one"),
+        "Explicit request": ("runs only what was requested",
+                             "code-review.md", "applies in either mode and does not start verification"),
+        "Unreviewed claim": ("stopped after two consecutive automatic calls without APPROVED",
+                             "code-review.md", "After two consecutive automatic calls without APPROVED"),
+        "Delegation preview": ("the dispatch basis only in the session that made it",
+                               "preview.md", "only in the session that made it"),
+    }
+
+    @staticmethod
+    def readme_rule_bullets(text: str, start: str, end: str) -> list[tuple[str, str]]:
+        # (first bold label, text after it): phrases are checked against the text, never the label.
+        section = text.split(start, 1)[1].split(end, 1)[0]
+        return [(label.rstrip(":："), body) for label, body in
+                (line[4:].split("**", 1) for line in section.splitlines() if line.startswith("- **"))]
+
+    @staticmethod
+    def glossary_entries(text: str) -> dict[str, str]:
+        return {term: body.split("\n\n", 1)[0] for term, body in re.findall(r"^\*\*([^\n*]+)\*\*:\n(.*?)(?=^\*\*|\Z)", text,
+                                                                              re.M | re.S)}
+
+    def test_readme_review_rules_match_the_procedures_in_both_languages(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        english_bullets = self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                                   "## Roles and routing", "### Automatic review switch")
+        chinese_bullets = self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                                   "## 分派與預設模型", "### 自動審查開關")
+        english, chinese = dict(english_bullets), dict(chinese_bullets)
+        self.assertEqual(len(english), len(english_bullets), "English rule bullet labels must be unique")
+        self.assertEqual(len(chinese), len(chinese_bullets), "Traditional Chinese rule bullet labels must be unique")
+        self.assertEqual(set(english), set(self.README_RULES), "every English rule bullet needs exactly one mapping")
+        self.assertEqual(set(chinese), {entry[0] for entry in self.README_RULES.values()},
+                         "every Traditional Chinese rule bullet must pair with an English one")
+        for label, (zh_label, en_phrase, zh_phrase, procedure, rule) in self.README_RULES.items():
+            with self.subTest(label=label):
+                self.assertIn(en_phrase, english[label])
+                self.assertIn(zh_phrase, chinese[zh_label])
+                self.assertIn(rule, (references / procedure).read_text(encoding="utf-8"))
+
+    def test_glossary_entries_match_the_procedures(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        for term, (definition, procedure, rule) in self.GLOSSARY_RULES.items():
+            with self.subTest(term=term):
+                self.assertIn(term, entries)
+                self.assertIn(definition, entries[term])
+                self.assertIn(rule, (references / procedure).read_text(encoding="utf-8"))
+
     # Delegation preview: an explicit command whose rules sit beside the delegation procedures.
 
     def test_delegation_preview_is_an_explicit_command_listed_in_the_manifest(self):

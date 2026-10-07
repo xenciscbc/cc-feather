@@ -1,6 +1,6 @@
 # Outcome verification
 
-This procedure governs main's orchestration. Verifier's role definition governs how it checks a claim and reports CONFIRMED, REFUTED or INCONCLUSIVE.
+This procedure governs main's orchestration. Verifier's role definition governs how it checks a claim and reports CONFIRMED, REFUTED or INCONCLUSIVE. The state each review step keeps is named in [review state](review-state.md).
 
 Resolve the active review mode as in [plan review](plan-review.md). In auto, plan-driven work gets outcome verification before main reports it complete, and only after [code review](code-review.md) returns APPROVED. In off, only an explicit verification request runs it; an explicit plan-review or code-review request alone does not. An explicit user request for verification applies in either mode and does not require code review first. Explicit calls do not count toward the automatic budget below. In auto, an explicit verification does not complete a claim of plan-driven work: that claim is complete only after the automatic flow, including code review, has finished. Plan review checks the plan before work starts, code review checks the code, and outcome verification checks the result, so none replaces another.
 

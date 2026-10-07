@@ -1,6 +1,6 @@
 # Plan review
 
-This procedure governs main's orchestration. Analyst's role definition governs review criteria and its READY/REVISE report.
+This procedure governs main's orchestration. Analyst's role definition governs review criteria and its READY/REVISE report. The state each review step keeps is named in [review state](review-state.md).
 
 Resolve the active review mode in this order: a task/session choice, then project guidance, then user guidance. Project guidance that states automatic plan review is off in this project makes it off even while user-scope guidance states it is on. Otherwise the mode is auto while the delegation guidance states that automatic plan review is on, and off when it does not. Explicit plan-review requests apply in either mode. Explicit calls do not count toward the automatic budget below.
 

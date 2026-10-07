@@ -1,6 +1,6 @@
 # Code review
 
-This procedure governs main's orchestration. Reviewer's role definition governs review criteria and its APPROVED/CHANGES_REQUESTED report.
+This procedure governs main's orchestration. Reviewer's role definition governs review criteria and its APPROVED/CHANGES_REQUESTED report. The state each review step keeps is named in [review state](review-state.md).
 
 Resolve the active review mode as in [plan review](plan-review.md). In auto, each claim of plan-driven work gets code review after implementation and before [outcome verification](outcome-verification.md). An explicit user request for code review applies in either mode and does not start verification. Explicit calls do not count toward the automatic budget below, and the unreviewed rule in step 6 applies only to the automatic flow; after an explicit review, report its verdict and findings and leave the next step to the user. Code review checks the code itself; outcome verification checks that the claim holds, so one does not replace the other.
 
