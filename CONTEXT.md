@@ -5,7 +5,7 @@ cc-feather lets a main Claude agent hand work to managed native roles and keeps 
 ## Work and plans
 
 **Plan**:
-An implementation basis with stated scope, claims and acceptance criteria that the user agreed to: a plan file, spec, ticket, plan-mode plan or a plan approved in conversation. Telling the agent to implement a given plan or ticket counts as agreement; a document lacking scope or acceptance is not yet a Plan.
+An implementation basis with stated scope and acceptance criteria that the user agreed to, with its claims listed, its unfinished tickets in the named scope as claims, or else one claim: a plan file, spec, ticket, plan-mode plan or a plan approved in conversation. Telling the agent to implement a given plan or ticket counts as agreement; a document lacking scope or acceptance is not yet a Plan.
 _Avoid_: task list, todo
 
 **Plan-driven work**:
@@ -13,7 +13,7 @@ Work carried out to implement a Plan. In auto mode it is the only work that gets
 _Avoid_: planned task, ticket work
 
 **Unplanned work**:
-Work started without a Plan. Unplanned work that changes a security boundary, migrates data or is irreversible must first become Plan-driven work.
+Work started without a Plan. In auto, Unplanned work that changes a security boundary, migrates data or is irreversible must first become Plan-driven work.
 _Avoid_: ad-hoc edit, small fix
 
 **Claim**:

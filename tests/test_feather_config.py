@@ -2722,7 +2722,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "leaves their status alone",
                 "equals one of the completion values that convention defines",
                 "Re-review is another call, classified as above",
-                "Deferral keeps the work and its blockers waiting",
+                "Deferral keeps the work, its blockers and any handoff note waiting",
                 "Cancellation drops the work and its open findings",
                 "Changed acceptance replaces the claim's acceptance and reopens its review and verification",
                 "in the report and in any active handoff",
@@ -2737,15 +2737,91 @@ class FeatherConfigTests(unittest.TestCase):
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("update its ticket as [review state]",),
             config.ROOT / "README.md": ("never counts as APPROVED or CONFIRMED", "does not accept a known defect",
                                         "or you say it is done", "one of the convention's completion values",
-                                        "a waived claim is committed only as a work-in-progress commit you allow"),
+                                        "a waived claim the commit rule covers is committed only as a work-in-progress commit you allow"),
             config.ROOT / "README.zh-TW.md": ("絕不記為 APPROVED 或 CONFIRMED", "不代表接受已知的缺陷", "或你說它已完成",
-                                              "慣例定義的任一完成值", "被豁免的 claim 只能在你允許下做工作中途的 commit"),
+                                              "慣例定義的任一完成值", "受 commit 條件約束的 claim 被豁免後，只能在你允許下做工作中途的 commit"),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
             for phrase in phrases:
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertIn(phrase, text)
+
+    def test_resumed_sessions_and_plan_changes_follow_the_review_state_rules(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        expected = {
+            references / "review-state.md": (
+                "Counts and passing verdicts do not cross sessions",
+                "reviews an unfinished plan again before implementing it",
+                "does not redo tickets that are finished",
+                "still restricts that ticket when the whole spec is named",
+                "without an active handoff record, nothing carries into a resumed session",
+                "needs claims added, split or changed",
+                "the user or the planning step decides",
+                "only after the user authorises it",
+                "keeping a mapping from old claims to new ones",
+                "only from its original text, an available record of it or a version the user confirms",
+                "without reverting changes already made",
+                "keeps the work, its blockers and any handoff note waiting",
+                "a waiver kept in that handoff counts as that record for the rule",
+                "the unresolved blockers each carries",
+                "Where a procedure waits for the user to decide",
+                "A waiver accepts a named open finding or missing pass",
+                "until a later pass",
+                "for done work",
+            ),
+            references / "plan-review.md": (
+                "Passing verdicts do not cross sessions either",
+                "still restricts that ticket when the whole spec is named",
+                "without such a record nothing carries over",
+                "unless the user authorises a claim change",
+                "or when the user asks",
+                "is identified only from its original text, an available record or a version the user confirms",
+                "is reported for the user or the planning step to decide",
+                "or the user says it is done; without a defined value, ask",
+                "unless the decision is a deferral",
+                "or the user decides other than to defer it",
+            ),
+            references / "code-review.md": ("unless the decision is a deferral",),
+            references / "outcome-verification.md": ("unless the decision is a deferral",),
+            config.ROOT / "README.md": (
+                "Counts and passing verdicts do not carry over",
+                "Without an active handoff record, nothing carries over",
+                "unless you authorise it",
+                "keeping a mapping from old claims to new ones",
+                "from its original text, an available record or a version you confirm",
+                "until a later pass",
+                "a waiver stays recorded",
+                "for done work",
+                "with its scope",
+                "and their unresolved blockers",
+                "or you decide other than to defer it",
+                "a deferral keeps it recorded",
+            ),
+            config.ROOT / "README.zh-TW.md": (
+                "次數與通過的結論不會帶到新的 session",
+                "沒有進行中的交接記錄時，什麼都不會帶過去",
+                "除非你授權",
+                "保留新舊 claim 的對應",
+                "依它的原文、現有紀錄或你確認過的版本",
+                "直到之後的審查或驗證通過",
+                "豁免會繼續保留",
+                "表示已完成的完成值",
+                "並註明範圍",
+                "與尚未解決的阻擋事項",
+                "或你作出延後以外的決定",
+                "延後時記錄保留",
+            ),
+        }
+        for path, phrases in expected.items():
+            text = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertIn(phrase, text)
+        entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        self.assertIn("with its claims listed, its unfinished tickets in the named scope as claims, or else one claim",
+                      entries["Plan"])
+        self.assertIn("In auto, Unplanned work", entries["Unplanned work"])
 
     def test_six_calls_are_described_as_one_uninterrupted_attempt(self):
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
