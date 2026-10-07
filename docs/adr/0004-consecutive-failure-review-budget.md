@@ -14,4 +14,6 @@ The other non-reset rules stay: failed, interrupted and protocol-failure calls c
 
 A Claim makes at most six automatic calls: code review twice before the fix and twice after it, and verification twice. A Plan with N Claims makes about 2 + 6N, plus up to two plan reviews for each Material deviation the user approves and the calls for any Claims such a deviation reopens. Every pass still needs a fresh-context call, and the user still approves every Material deviation, so a reset never lets the agent widen the work alone.
 
+(Amended by ADR 0006: six is the bound of one uninterrupted completion attempt per Claim; reopened Claims and Material deviations add calls.)
+
 This amends ADR 0002's consequence that a resume may run up to two more automatic calls for the same Plan or Claim: a resume now starts a fresh consecutive count, and the rest of ADR 0002 is unchanged. It also amends ADR 0003's wording that switching a role's model never resets a step's two-call budget: switching still never resets the count of consecutive calls without a pass. The setup skill's statement that toggling never resets any two-call automatic budget stays true when the two calls are read as the stopping threshold. Earlier specs carry amendment notes where they state the old budget.

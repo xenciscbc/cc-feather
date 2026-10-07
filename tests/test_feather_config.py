@@ -2823,6 +2823,46 @@ class FeatherConfigTests(unittest.TestCase):
                       entries["Plan"])
         self.assertIn("In auto, Unplanned work", entries["Unplanned work"])
 
+    def test_adr_0006_records_the_review_state_decisions_and_amends_earlier_adrs(self):
+        adr = config.ROOT / "docs" / "adr"
+        decision = (adr / "0006-review-state-validity-and-completion.md").read_text(encoding="utf-8")
+        for phrase in (
+            "one state model", "without resetting its count", "states which before dispatching",
+            "a generic retry included", "Unknown state is treated as stopped", "keeps its count and stop",
+            "A pass covers only the content it judged", "labelled unaccepted", "as one of its postconditions",
+            "completion value", "a waiver is never a pass", "Counts and passing verdicts do not cross sessions",
+            "keeping the old-to-new mapping", "only from its original text",
+            "only after the user authorises it", "without a defined value it reports instead",
+            "where the project defines a completion value", "is not that step's pass",
+            "does not accept a known defect", "never reported complete without a valid APPROVED and CONFIRMED",
+            "the unresolved blockers each Claim carries",
+            # Rejected options.
+            "Fixed totals per Plan or Claim", "Reset the count on an explicit pass", "Trust passes across sessions",
+            "Treat a generic retry as free", "Rebuild a conversation Plan from memory",
+            "Widen automatic review to all unplanned work",
+            # What it amends.
+            "This amends ADR 0004's consequence", "this amends ADR 0005's statement",
+            "ADR 0005's consequence that another checkout",
+        ):
+            with self.subTest(adr="0006", phrase=phrase):
+                self.assertIn(phrase, decision)
+        # Earlier ADRs keep their original text and gain a note pointing to the current rule.
+        earlier = {
+            "0004-consecutive-failure-review-budget.md": (
+                "A Claim makes at most six automatic calls", "(Amended by ADR 0006:"),
+            "0005-the-named-plan-and-its-tickets.md": (
+                "never edits a spec or ticket to add Claims",
+                "Another checkout without the tickets falls back to the spec's listed Claims or one Claim",
+                "(Amended by ADR 0006: main edits a spec or ticket",
+                "only after the user authorises it", "where the project defines a completion value",
+                "(Amended by ADR 0006: another checkout"),
+        }
+        for name, phrases in earlier.items():
+            text = (adr / name).read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(adr=name, phrase=phrase):
+                    self.assertIn(phrase, text)
+
     def test_six_calls_are_described_as_one_uninterrupted_attempt(self):
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
         readme = (config.ROOT / "README.md").read_text(encoding="utf-8")
