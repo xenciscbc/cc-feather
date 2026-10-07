@@ -46,7 +46,7 @@ Legacy installations had handoff and delegation in one block. Preserve the exist
 
 ## Models and review
 
-Use cc-feather:model for model/effort changes in the delegation component. Automatic review defaults off. Dedicated auto-on/auto-off follow [the toggle procedure](references/auto-review.md): no argument/session is a conversation preference, while project/user persists only when delegation is installed. Never install delegation just because a review toggle was requested. Explicit plan review, code review and verification requests still work when automatic review is off; changing the mode does not reset any two-call automatic budget.
+Use cc-feather:model for model/effort changes in the delegation component. Automatic review defaults off. Dedicated auto-on/auto-off follow [the toggle procedure](references/auto-review.md): no argument/session is a conversation preference, while project/user persists only when delegation is installed. Never install delegation just because a review toggle was requested. Explicit plan review, code review and verification requests still work when automatic review is off; changing the mode does not reset any automatic review count.
 
 Use fresh sessions to load installed guidance and roles reliably. When available, /tasks provides native evidence of actual model/effort; CLI/managed/nested definitions, force-model settings and provider restrictions may affect selection. Setup checks and policy instructions are not live dispatch verification or hook-enforced gates.
 

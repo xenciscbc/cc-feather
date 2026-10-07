@@ -2526,6 +2526,14 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("A fix goes to [code review](code-review.md) first", verification)
         self.assertIn("resets only on CONFIRMED", verification)
 
+    def test_an_explicit_verdict_never_changes_the_automatic_count(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
+            text = (references / name).read_text(encoding="utf-8")
+            for phrase in ("an explicit call's verdict", "does not change it"):
+                with self.subTest(reference=name, phrase=phrase):
+                    self.assertIn(phrase, text)
+
     # Delegation preview: an explicit command whose rules sit beside the delegation procedures.
 
     def test_delegation_preview_is_an_explicit_command_listed_in_the_manifest(self):
