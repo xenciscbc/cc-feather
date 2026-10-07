@@ -2705,6 +2705,48 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertIn("Unverified claim", entries)
         self.assertIn("no currently valid CONFIRMED", entries["Unverified claim"])
 
+    def test_ticket_status_and_user_decisions_follow_the_review_state_rules(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        expected = {
+            references / "review-state.md": (
+                "sets its ticket's status to the completion value",
+                "with a note naming the version or commit",
+                "reports which tickets it considers done",
+                "or the user says it is done",
+                "without a defined value, main asks",
+                "re-review, deferral, cancellation, changed acceptance or waiver",
+                "with its scope",
+                "stays visible with its remaining risk",
+                "never recorded as APPROVED or CONFIRMED",
+                "does not accept a known defect",
+                "leaves their status alone",
+                "equals one of the completion values that convention defines",
+                "Re-review is another call, classified as above",
+                "Deferral keeps the work and its blockers waiting",
+                "Cancellation drops the work and its open findings",
+                "Changed acceptance replaces the claim's acceptance and reopens its review and verification",
+                "in the report and in any active handoff",
+                "A waiver does not complete a claim the commit rule covers",
+            ),
+            references / "plan-review.md": ("status equals a completion value the project's tracker convention defines",
+                                            "as [review state](review-state.md) records it",
+                                            "keeping any waiver visible"),
+            references / "code-review.md": ("as [review state](review-state.md) records it", "keeping any waiver visible"),
+            references / "outcome-verification.md": ("as [review state](review-state.md) records it",
+                                                     "keeping any waiver visible"),
+            config.ROOT / "skills" / "delegation" / "SKILL.md": ("update its ticket as [review state]",),
+            config.ROOT / "README.md": ("never counts as APPROVED or CONFIRMED", "does not accept a known defect",
+                                        "or you say it is done", "one of the convention's completion values",
+                                        "a waived claim is committed only as a work-in-progress commit you allow"),
+            config.ROOT / "README.zh-TW.md": ("絕不記為 APPROVED 或 CONFIRMED", "不代表接受已知的缺陷", "或你說它已完成",
+                                              "慣例定義的任一完成值", "被豁免的 claim 只能在你允許下做工作中途的 commit"),
+        }
+        for path, phrases in expected.items():
+            text = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertIn(phrase, text)
+
     def test_six_calls_are_described_as_one_uninterrupted_attempt(self):
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
         readme = (config.ROOT / "README.md").read_text(encoding="utf-8")
@@ -2782,6 +2824,11 @@ class FeatherConfigTests(unittest.TestCase):
                    "review-state.md", "only with a valid APPROVED and a valid CONFIRMED"),
         "Release checks": ("事後檢查", "is checked and reported by main after the operation", "在操作後檢查並回報",
                            "review-state.md", "checks and reports it after the operation"),
+        "Your decisions": ("你的決定", "re-review, deferral, cancellation, changed acceptance or waiver",
+                           "重審、延後、取消、修改驗收或豁免",
+                           "review-state.md", "re-review, deferral, cancellation, changed acceptance or waiver"),
+        "Ticket status": ("Ticket 狀態", "noting the version or commit", "並註明版本或 commit",
+                          "review-state.md", "with a note naming the version or commit"),
         "Resumed session": ("恢復的 session", "an unresolved verdict that an active handoff records", "進行中的交接若記錄了",
                             "plan-review.md", "an unresolved verdict that an active handoff records for a spec's plan"),
         "Nothing left": ("沒有剩餘工作", "nothing is left to implement", "沒有剩下要實作",
