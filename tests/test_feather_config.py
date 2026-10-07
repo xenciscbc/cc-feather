@@ -2524,7 +2524,7 @@ class FeatherConfigTests(unittest.TestCase):
             self.assertNotIn("without another code review", text)
             self.assertNotIn("not code-reviewed", text)
         self.assertIn("A fix goes to [code review](code-review.md) first", verification)
-        self.assertIn("resets only on CONFIRMED", verification)
+        self.assertIn("resets only on an automatic CONFIRMED", verification)
 
     def test_an_explicit_verdict_never_changes_the_automatic_count(self):
         references = config.ROOT / "skills" / "delegation" / "references"
@@ -2664,6 +2664,76 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertNotIn("before another automatic call",
                                  (references / name).read_text(encoding="utf-8"))
 
+    def test_passes_stay_valid_only_for_what_they_judged_and_gate_completion(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        expected = {
+            references / "review-state.md": (
+                "A pass covers the work identity, its acceptance and the reviewed content",
+                "reopens code review and outcome verification",
+                "reopens outcome verification only",
+                "states why it does not affect the pass",
+                "Updating a ticket's status is not a relevant change",
+                "continues the step's count from where it stands",
+                "a reopened automatic call needs the user's explicit request",
+                "an active handoff records as unreviewed or unverified",
+                "only with a valid APPROVED and a valid CONFIRMED",
+                "needs the user's explicit permission",
+                "labelled unaccepted",
+                "Off mode otherwise keeps its behaviour",
+                "is a postcondition",
+                "checks and reports it after the operation",
+                "in a step whose stop was cleared, a later call that step needs",
+            ),
+            references / "plan-review.md": ("after an explicit READY that cleared a stop", "never assume a count of zero"),
+            references / "code-review.md": ("a reopened automatic call needs the user's explicit request",
+                                            "In off, an explicit APPROVED is reported like any explicit review"),
+            references / "outcome-verification.md": ("do not commit it or report it complete",
+                                                     "must not be committed or reported complete",
+                                                     "checks and reports it after the operation"),
+            config.ROOT / "skills" / "delegation" / "SKILL.md": ("Reuse a verdict only while it is valid",
+                                                                 "classify it as [review state]"),
+            config.ROOT / "README.md": ("needs your request again", "does not count as that step's pass",
+                                        "a pass resets the count and a non-pass stops the step again"),
+            config.ROOT / "README.zh-TW.md": ("都需要你要求", "不算該步驟的通過", "仍需要你再要求"),
+        }
+        for path, phrases in expected.items():
+            text = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertIn(phrase, text)
+        entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        self.assertIn("Unverified claim", entries)
+        self.assertIn("no currently valid CONFIRMED", entries["Unverified claim"])
+
+    def test_six_calls_are_described_as_one_uninterrupted_attempt(self):
+        # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
+        readme = (config.ROOT / "README.md").read_text(encoding="utf-8")
+        readme_zh = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
+        sources = {
+            "preview.md": ((config.ROOT / "skills" / "delegation" / "references" / "preview.md")
+                           .read_text(encoding="utf-8"), "six", "uninterrupted", r"[.;:] "),
+            "README cost": (readme.split("- **Cost:**", 1)[1].split("\n", 1)[0], "six", "uninterrupted", r"[.;:] "),
+            "README preview": (readme.split("### Delegation preview", 1)[1].split("\n### ", 1)[0],
+                               "six", "uninterrupted", r"[.;:] "),
+            "README.zh-TW cost": (readme_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "六", "不中斷", "[。；：]"),
+            "README.zh-TW preview": (readme_zh.split("### 分派預覽", 1)[1].split("\n### ", 1)[0],
+                                     "六", "不中斷", "[。；：]"),
+        }
+        for name, (text, figure, qualifier, stop) in sources.items():
+            sentences = [clause for clause in re.split(stop, text) if figure in clause]
+            with self.subTest(source=name):
+                self.assertTrue(sentences)
+                for sentence in sentences:
+                    self.assertIn(qualifier, sentence)
+        # Every place that states the bound also says what adds to it.
+        for name, text in (("preview.md", sources["preview.md"][0]), ("README cost", sources["README cost"][0]),
+                           ("README preview", sources["README preview"][0])):
+            with self.subTest(adds=name):
+                self.assertIn("reopened", text)
+        for name in ("README.zh-TW cost", "README.zh-TW preview"):
+            with self.subTest(adds=name):
+                self.assertIn("重新打開", sources[name][0])
+
     # Each README bullet maps English label -> (Traditional Chinese label, English phrase, Chinese phrase,
     # procedure file, procedure phrase); every bold-label bullet of the two lists must have an entry.
     README_RULES = {
@@ -2704,8 +2774,14 @@ class FeatherConfigTests(unittest.TestCase):
                     "plan-review.md", "The plan is what the user names"),
         "Already covered": ("已涵蓋", "that plan continues with no new plan review", "不重做計畫審查",
                             "plan-review.md", "otherwise that plan continues with no new plan review"),
-        "Partial overlap": ("部分重疊", "inherits its unresolved verdicts and blockers", "尚未解決的結論與阻擋事項",
-                            "plan-review.md", "partly overlaps one inherits its unresolved verdicts and blockers"),
+        "Partial overlap": ("部分重疊", "gains no new automatic calls", "不會多出新的自動呼叫",
+                            "review-state.md", "gains no new automatic calls"),
+        "Validity": ("有效範圍", "a pass holds only for what it judged", "通過只對它審過的內容有效",
+                     "review-state.md", "A pass covers the work identity, its acceptance and the reviewed content"),
+        "Commit": ("Commit 條件", "only with a valid APPROVED and CONFIRMED", "都仍有效時才會 commit",
+                   "review-state.md", "only with a valid APPROVED and a valid CONFIRMED"),
+        "Release checks": ("事後檢查", "is checked and reported by main after the operation", "在操作後檢查並回報",
+                           "review-state.md", "checks and reports it after the operation"),
         "Resumed session": ("恢復的 session", "an unresolved verdict that an active handoff records", "進行中的交接若記錄了",
                             "plan-review.md", "an unresolved verdict that an active handoff records for a spec's plan"),
         "Nothing left": ("沒有剩餘工作", "nothing is left to implement", "沒有剩下要實作",
@@ -2738,6 +2814,7 @@ class FeatherConfigTests(unittest.TestCase):
                              "code-review.md", "applies in either mode and does not start verification"),
         "Unreviewed claim": ("stopped after two consecutive automatic calls without APPROVED",
                              "code-review.md", "After two consecutive automatic calls without APPROVED"),
+        "Unverified claim": ("no currently valid CONFIRMED", "outcome-verification.md", "report the claim as unverified"),
         "Delegation preview": ("the dispatch basis only in the session that made it",
                                "preview.md", "only in the session that made it"),
     }

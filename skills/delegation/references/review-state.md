@@ -6,9 +6,9 @@ Plan review, code review and outcome verification keep the same kind of state fo
 | --- | --- |
 | Work identity | What the step judges: the logical plan for plan review, one claim for code review and for outcome verification, identified as in [plan review](plan-review.md). |
 | Reviewed content | What a call actually judged: the plan text supplied, or the claim's change from its base revision and the acceptance checks supplied. |
-| Call source | Automatic, when the call belongs to the automatic flow, including a call the user requests for a step the flow is due to run or after a stop was cleared; explicit, when the user asks for a step that has stopped or a review outside the flow. Explicit calls are outside the automatic budget. |
+| Call source | Automatic, when the call belongs to the automatic flow, including a call the user requests for a step the flow is due to run or, in a step whose stop was cleared, a later call that step needs; explicit, when the user asks for a step that has stopped or a review outside the flow. Explicit calls are outside the automatic budget. |
 | Consecutive non-pass count | Automatic calls in a row that did not pass, including failed, interrupted and protocol-failure calls. Two in a row stop the step. |
-| Valid verdict | The last pass for the work: READY, APPROVED or CONFIRMED. |
+| Valid verdict | The last pass for the work, READY, APPROVED or CONFIRMED, while it stays valid as described under Validity and completion. |
 | Blockers | Unresolved findings and verdicts, with what each one blocks. |
 
 State lives in the current session's task. Counts are per session; an unresolved verdict reaches a resumed session only through an active handoff record. Each procedure's step 1 or step 3 says how to recover this state before another automatic call.
@@ -22,3 +22,10 @@ State lives in the current session's task. Counts are per session; an unresolved
 - **What counts as a call.** Every attempted call counts, including a generic retry after a temporary failure, and a stopped step is never dispatched again as a retry. A missing role or fresh context found before dispatch is a precondition failure, not a call.
 - **Unknown state.** When the count, verdicts or blockers cannot be established in this session, for example after context compaction, which does not start a new session, treat the step as stopped and ask the user. State the current count with each review result.
 - **Overlap.** Work that overlaps a stopped plan keeps that plan's count and stop and gains no new automatic calls: an automatic READY of the widened plan does not clear the inherited stop for the overlapping work, while an explicit pass covering it does. The first review of the new plan receives the inherited findings with their dispositions. Independent new work is counted on its own, and counts of different plans are not added.
+
+## Validity and completion
+
+- **What a pass covers.** A pass covers the work identity, its acceptance and the reviewed content it judged. A later change to a claim's files or to what they depend on reopens code review and outcome verification for that claim; a change only to the environment, such as installed tools or external state, reopens outcome verification only. For any other later change, main states why it does not affect the pass. Updating a ticket's status is not a relevant change. A plan's READY is reopened by a material deviation, as [plan review](plan-review.md) step 5 describes.
+- **Reopened calls.** A reopened call continues the step's count from where it stands, which is zero after an automatic pass. After an explicit pass that cleared a stop the count is unchanged, so a reopened automatic call needs the user's explicit request.
+- **Commit and completion.** For a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main commits the claim or reports it complete only with a valid APPROVED and a valid CONFIRMED. A work-in-progress commit of such a claim needs the user's explicit permission and is labelled unaccepted in its message. Off mode otherwise keeps its behaviour.
+- **Postconditions.** An acceptance item that can exist only after an authorised operation, such as a release tag after its commit, is a postcondition: outcome verification covers the rest of the claim before the operation, and main checks and reports it after the operation. A postcondition that does not hold leaves the claim incomplete.
