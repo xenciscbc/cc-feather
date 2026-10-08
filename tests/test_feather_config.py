@@ -2666,7 +2666,7 @@ class FeatherConfigTests(unittest.TestCase):
             ("plan-review.md", "Main never approves such a plan itself"),
             ("plan-review.md", "If the in-session state is unknown"),
             ("code-review.md", "Its count continues from where it stands"),
-            ("code-review.md", "do not commit it or report it complete"),
+            ("code-review.md", "do not land it on the default branch, release it or report it complete"),
             ("outcome-verification.md", "made before the automatic flow reached verification does not complete a claim of plan-driven work"),
         )
         for name, phrase in rules:
@@ -2742,8 +2742,8 @@ class FeatherConfigTests(unittest.TestCase):
                 "a reopened automatic call needs the user's explicit request",
                 "an active handoff records as unreviewed or unverified",
                 "only with a valid APPROVED and a valid CONFIRMED",
-                "needs the user's explicit permission",
-                "labelled unaccepted",
+                "push it to any branch other than a default branch, without the user's permission",
+                "labels each commit made before both passes unaccepted",
                 "Off mode otherwise keeps its behaviour",
                 "is a postcondition",
                 "checks and reports it after the operation",
@@ -2752,8 +2752,8 @@ class FeatherConfigTests(unittest.TestCase):
             references / "plan-review.md": ("after an explicit READY that cleared a stop", "never assume a count of zero"),
             references / "code-review.md": ("a reopened automatic call needs the user's explicit request",
                                             "In off, an explicit APPROVED is reported like any explicit review"),
-            references / "outcome-verification.md": ("do not commit it or report it complete",
-                                                     "must not be committed or reported complete",
+            references / "outcome-verification.md": ("do not land it on the default branch, release it or report it complete",
+                                                     "must not be landed on the default branch, released or reported complete",
                                                      "checks and reports it after the operation"),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("Reuse a verdict only while it is valid",
                                                                  "classify it as [review state]"),
@@ -2791,7 +2791,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "Cancellation drops the work and its open findings",
                 "Changed acceptance replaces the claim's acceptance and reopens its review and verification",
                 "in the report and in any active handoff",
-                "A waiver does not complete a claim the commit rule covers",
+                "A waiver does not complete a claim the acceptance gate covers",
                 "which is zero after an automatic pass",
             ),
             references / "plan-review.md": ("status equals a completion value the project's tracker convention defines",
@@ -2803,9 +2803,9 @@ class FeatherConfigTests(unittest.TestCase):
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("update its ticket as [review state]",),
             config.ROOT / "README.md": ("never counts as READY, APPROVED or CONFIRMED", "does not accept a known defect",
                                         "or you say it is done", "one of the convention's completion values",
-                                        "a waived claim the commit rule covers is committed only as a work-in-progress commit you allow"),
+                                        "a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass"),
             config.ROOT / "README.zh-TW.md": ("絕不記為 READY、APPROVED 或 CONFIRMED", "不代表接受已知的缺陷", "或你說它已完成",
-                                              "慣例定義的任一完成值", "受 commit 條件約束的 claim 被豁免後，只能在你允許下做工作中途的 commit"),
+                                              "慣例定義的任一完成值", "受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過"),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -2829,11 +2829,11 @@ class FeatherConfigTests(unittest.TestCase):
                 "only from its original text, an available record of it or a version the user confirms",
                 "without reverting changes already made",
                 "keeps the work, its blockers and any handoff note waiting",
-                "a waiver kept in that handoff counts as that record for the rule",
+                "a waiver kept in that handoff counts as that record for the gate",
                 "the unresolved blockers each carries",
                 "Where a procedure waits for the user to decide",
                 "A waiver accepts a named open finding or missing pass",
-                "until a later pass",
+                "only after a later pass",
                 "for done work",
             ),
             references / "plan-review.md": (
@@ -2856,7 +2856,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "unless you authorise it",
                 "keeping a mapping from old claims to new ones",
                 "from its original text, an available record or a version you confirm",
-                "until a later pass",
+                "only after a later pass",
                 "a waiver stays recorded",
                 "for done work",
                 "with its scope",
@@ -2870,7 +2870,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "除非你授權",
                 "保留新舊 claim 的對應",
                 "依它的原文、現有紀錄或你確認過的版本",
-                "直到之後的審查或驗證通過",
+                "才會進入預設 branch、release 或回報完成",
                 "豁免會繼續保留",
                 "表示已完成的完成值",
                 "並註明範圍",
@@ -2943,6 +2943,171 @@ class FeatherConfigTests(unittest.TestCase):
                             ("ADR 0006 consequences", consequences)):
             with self.subTest(place=place):
                 self.assertIn("only after the user authorises it", text)
+
+    # Whole sentences, so that removing or rewording any clause of the acceptance gate fails the suite.
+    ACCEPTANCE_GATE_SENTENCES = {
+        'review-state.md': (
+            'For a claim the acceptance gate covers, that change is the commit named in the brief, judged with a clean workspace, as What a gated pass judged describes.',
+            "- **Commit and completion.** For a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main lands the claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releases or tags it, reports it complete or sets its ticket to a completion value only with a valid APPROVED and a valid CONFIRMED. This is the acceptance gate. Landing a branch lands every claim on it, so it waits for every gated claim there; a cancelled claim's commits stay on the branch until the user decides otherwise. The default branch is the branch the `origin` remote's HEAD names, or the only remote's HEAD when there is no `origin`; with no remote, several remotes and no `origin`, or no HEAD, main asks. A protected or shared branch the user names counts as a default branch.",
+            "- **Commits before the passes.** Before its passes, main may commit such a claim on any branch and push it to any branch other than a default branch, without the user's permission. It may open a pull request whose description lists the claims still unaccepted, and keeps that list current as claims pass. It never rewrites pushed history, so a fix is a new commit. On a default branch, main labels each commit made before both passes unaccepted in its message when it creates it; the label records the commit's state then and stays in history. Commits on other branches carry no label. It pushes such commits to the remote default branch only after both passes, or as a work-in-progress push the user explicitly allows, and while they stay unpushed it says a reclaimed environment would lose them. Off mode otherwise keeps its behaviour.",
+            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review or outcome verification only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. The pass covers that commit, and a second review receives the range from the previously judged commit to the new one. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, and main does not commit that work to review it.",
+            '- **Existing handoff notes.** An active handoff\'s record that a claim is unreviewed or unverified restricts it under the acceptance gate whatever its wording, such as "must not be committed"; main updates the wording at the next handoff maintenance.',
+            'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass, or pushed to the default branch as a work-in-progress push the user allows with its commits labelled as under Commits before the passes; for a claim an active handoff recorded as unreviewed or unverified, a waiver kept in that handoff counts as that record for the gate.',
+            'Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, counted as usual; a claim whose ticket is finished is not redone and counts as accepted for landing and release.',
+        ),
+        'code-review.md': (
+            "while [review state](review-state.md)'s acceptance gate still covers, in either mode, a claim an active handoff records as unreviewed or unverified;",
+            'For a claim the acceptance gate covers, also name the commit under review and dispatch only with a clean workspace at that commit, as [review state](review-state.md) describes.',
+            'and, for a claim the acceptance gate covers, the range from the previously reviewed commit to the new one.',
+            'do not land it on the default branch, release it or report it complete, report its open findings',
+            'record as plain text that the claim is unreviewed, its open findings and that it must not be landed on the default branch, released or reported complete.',
+        ),
+        'outcome-verification.md': (
+            'For a claim the acceptance gate covers, also name the base revision and the commit under verification, and dispatch only with a clean workspace at that commit, as [review state](review-state.md) describes.',
+            'do not land it on the default branch, release it or report it complete, and require',
+            'record as plain text that the claim is unverified, its open findings and that it must not be landed on the default branch, released or reported complete.',
+        ),
+    }
+    ACCEPTANCE_GATE_README = {
+        ('en', 'Commit', "in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main may commit a claim before its passes and push it to any branch other than the default branch, and may open a pull request that lists the claims still unaccepted; it lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED. Pushed history is never rewritten, so a fix is a new commit, and landing a branch lands every claim on it. Each review and verification of such a claim judges a named commit with a clean workspace. The default branch is the one the remote's HEAD names, or a protected or shared branch you name. On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes or with your explicit permission; until then main reminds you that a reclaimed environment would lose them. In `off`, nothing else changes."),
+        ('en', 'Not passed', 'a claim without APPROVED is unreviewed: it is not landed on the default branch, released or reported complete.'),
+        ('en', 'Not passed', 'A claim without a valid CONFIRMED is unverified and is not landed, released or reported complete either.'),
+        ('en', 'Your decisions', 'so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass, or pushed to the default branch as a work-in-progress push you allow;'),
+        ('en', 'Resumed session', 'Before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, unless its ticket is finished.'),
+        ('zh', 'Commit 條件', '在自動流程中，以及進行中的交接記錄為未審查或未驗證的 claim，主 Agent 可以在通過前先 commit，並推到預設 branch 以外的 branch，也可以開 PR 並列出尚未驗收的 claim；但只有在 APPROVED 與 CONFIRMED 都仍有效時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。'),
+        ('zh', '未通過', '沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成。'),
+        ('zh', '未通過', '沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成。'),
+        ('zh', '你的決定', '所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，才會進入預設 branch、release 或回報完成，或在你允許下把工作中途的 commit 推到預設 branch；'),
+        ('zh', '恢復的 session', '在進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證，除非它的 ticket 已完成。'),
+    }
+
+    def test_acceptance_gate_sentences_are_stated_whole(self):
+        references = config.ROOT / "skills" / "delegation" / "references"
+        for name, sentences in self.ACCEPTANCE_GATE_SENTENCES.items():
+            text = (references / name).read_text(encoding="utf-8")
+            for sentence in sentences:
+                with self.subTest(path=name, sentence=sentence[:60]):
+                    self.assertIn(sentence, text)
+        bullets = {
+            "en": dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                              "## Roles and routing", "### Automatic review switch")),
+            "zh": dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                              "## 分派與預設模型", "### 自動審查開關")),
+        }
+        for language, label, sentence in self.ACCEPTANCE_GATE_README:
+            with self.subTest(language=language, bullet=label, sentence=sentence[:60]):
+                self.assertIn(sentence, bullets[language][label])
+        adr = config.ROOT / "docs" / "adr"
+        for name, note in (("0002-session-scoped-review-counts.md", '(Amended by ADR 0007: the restriction now applies to landing on the default branch, release and reporting complete rather than to committing; a restricted claim may be committed before its passes.)'),
+                           ("0006-review-state-validity-and-completion.md", '(Amended by ADR 0007: the commit gate moved to landing on the remote default branch, release, reporting complete and ticket completion; claims may be committed before their passes, and a claim that passed in an earlier session is reviewed and verified again before a gated operation unless its ticket is finished.)')):
+            with self.subTest(adr=name):
+                self.assertIn(note, (adr / name).read_text(encoding="utf-8").splitlines())
+
+    def test_acceptance_gates_landing_release_and_completion_not_commits(self):
+        # ADR 0007: claims may be committed before their passes; what the passes gate is reaching the default branch.
+        references = config.ROOT / "skills" / "delegation" / "references"
+        expected = {
+            references / "review-state.md": (
+                "judged with a clean workspace, as What a gated pass judged describes",
+                "main lands the claim on the remote default branch (by pushing it there or merging it",
+                "This is the acceptance gate",
+                "releases or tags it, reports it complete or sets its ticket to a completion value only with a valid APPROVED",
+                "Commits on other branches carry no label",
+                "Before a gated operation, a claim needs valid passes from this session",
+                "is reviewed and verified again, counted as usual",
+                "or pushed to the default branch as a work-in-progress push the user allows with its commits labelled",
+                "Landing a branch lands every claim on it",
+                "a cancelled claim's commits stay on the branch",
+                "the branch the `origin` remote's HEAD names",
+                "or the only remote's HEAD when there is no `origin`",
+                "with no remote, several remotes and no `origin`, or no HEAD, main asks",
+                "A protected or shared branch the user names counts as a default branch",
+                "lists the claims still unaccepted, and keeps that list current",
+                "It never rewrites pushed history, so a fix is a new commit",
+                "the label records the commit's state then and stays in history",
+                "only after both passes, or as a work-in-progress push the user explicitly allows",
+                "a reclaimed environment would lose them",
+                "dispatches a code review or outcome verification only when the workspace equals the commit it names",
+                "HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change",
+                "and nothing changes the workspace during the call",
+                "a second review receives the range from the previously judged commit",
+                "A call for work the gate does not cover",
+                "main does not commit that work to review it",
+                "restricts it under the acceptance gate whatever its wording",
+                "main updates the wording at the next handoff maintenance",
+                "a claim that passed in an earlier session is reviewed and verified again",
+                "a claim whose ticket is finished is not redone and counts as accepted for landing and release",
+            ),
+            references / "code-review.md": (
+                "acceptance gate still covers, in either mode",
+                "also name the commit under review and dispatch only with a clean workspace at that commit",
+                "the range from the previously reviewed commit to the new one",
+                "must not be landed on the default branch, released or reported complete"),
+            references / "outcome-verification.md": (
+                "also name the base revision and the commit under verification, and dispatch only with a clean workspace",
+                "do not land it on the default branch, release it or report it complete",
+                "must not be landed on the default branch, released or reported complete"),
+        }
+        for path, phrases in expected.items():
+            text = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertIn(phrase, text)
+        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                                "## Roles and routing", "### Automatic review switch"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 分派與預設模型", "### 自動審查開關"))
+        for bullets, label, phrase in (
+                (english, "Commit", "may commit a claim before its passes and push it to any branch other than the default branch"),
+                (english, "Commit", "may open a pull request that lists the claims still unaccepted"),
+                (english, "Commit", "judges a named commit with a clean workspace"),
+                (english, "Not passed", "it is not landed on the default branch, released or reported complete"),
+                (english, "Not passed", "is unverified and is not landed, released or reported complete either"),
+                (chinese, "未通過", "沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成"),
+                (chinese, "未通過", "沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成"),
+                (english, "Commit", "it lands the claim on the remote default branch, releases it, reports it complete or marks its "
+                                    "ticket done only with a valid APPROVED and CONFIRMED"),
+                (english, "Commit", "Pushed history is never rewritten, so a fix is a new commit"),
+                (english, "Commit", "landing a branch lands every claim on it"),
+                (english, "Commit", "or a protected or shared branch you name"),
+                (english, "Commit", "a reclaimed environment would lose them"),
+                (english, "Your decisions", "or pushed to the default branch as a work-in-progress push you allow"),
+                (english, "Commit", "labelled unaccepted and pushed only after both passes or with your explicit permission"),
+                (english, "Resumed session", "a claim that passed in an earlier session is reviewed and verified again, "
+                                             "unless its ticket is finished"),
+                (chinese, "Commit 條件", "可以在通過前先 commit，並推到預設 branch 以外的 branch"),
+                (chinese, "Commit 條件", "也可以開 PR 並列出尚未驗收的 claim"),
+                (chinese, "Commit 條件", "都針對指名的 commit，且工作區乾淨"),
+                (chinese, "Commit 條件", "才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成"),
+                (chinese, "Commit 條件", "已推送的歷史不會改寫，修正一律加新 commit"),
+                (chinese, "Commit 條件", "合併一個 branch 就等於合併上面所有 claim"),
+                (chinese, "Commit 條件", "或你指定為受保護或共用的 branch"),
+                (chinese, "Commit 條件", "環境回收時這些 commit 會遺失"),
+                (chinese, "你的決定", "或在你允許下把工作中途的 commit 推到預設 branch"),
+                (chinese, "Commit 條件", "通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送"),
+                (chinese, "恢復的 session", "之前 session 通過的 claim 要重新審查與驗證，除非它的 ticket 已完成")):
+            with self.subTest(bullet=label, phrase=phrase):
+                self.assertIn(phrase, bullets[label])
+        entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        for term in ("Unreviewed claim", "Unverified claim"):
+            with self.subTest(term=term):
+                self.assertIn("It is not landed on the default branch, released or reported complete.", entries[term])
+        adr = config.ROOT / "docs" / "adr"
+        decision = (adr / "0007-commit-before-acceptance.md").read_text(encoding="utf-8")
+        for phrase in ("The acceptance gate now covers landing a Claim on the remote default branch",
+                       "push it to any branch other than a default branch without the user's permission",
+                       "Pushed history is never rewritten", "labels each such commit unaccepted when it creates it",
+                       "judges a named commit with a clean workspace",
+                       "a Claim that passed in an earlier session is reviewed and verified again, unless its ticket is finished",
+                       "restricts it under the new gate", "Keep the commit gate", "Commit locally only, push after acceptance",
+                       "Label every early commit on a working branch", "Trust passes across sessions by commit",
+                       "amends ADR 0006's commit rule and ADR 0002's statement"):
+            with self.subTest(adr="0007", phrase=phrase):
+                self.assertIn(phrase, decision)
+        for name, phrase in (("0002-session-scoped-review-counts.md", "(Amended by ADR 0007: the restriction now applies"),
+                             ("0006-review-state-validity-and-completion.md", "(Amended by ADR 0007: the commit gate moved")):
+            with self.subTest(adr=name):
+                self.assertIn(phrase, (adr / name).read_text(encoding="utf-8"))
 
     def test_implemented_work_without_plan_review_state_asks_the_user_first(self):
         # A plan implemented elsewhere, or while review was off, has no plan-review state here; main asks first.
@@ -3088,8 +3253,8 @@ class FeatherConfigTests(unittest.TestCase):
                                             "只有重大偏離", "plan-review.md", "a material deviation stops dependent work"),
         "Findings": ("問題分級", "Non-blocking ones are listed in the final report", "非阻擋問題列在最終回報",
                      "code-review.md", "List them in the final report"),
-        "Not passed": ("未通過", "it is not reported complete or committed", "不回報完成、不 commit",
-                       "code-review.md", "do not commit it or report it complete"),
+        "Not passed": ("未通過", "it is not landed on the default branch, released or reported complete", "不進入預設 branch、不 release、不回報完成",
+                       "code-review.md", "do not land it on the default branch, release it or report it complete"),
         "Authority": ("授權", "a pass grants no new authority", "通過不代表新的授權",
                       "plan-review.md", "READY grants no new authority"),
         "Explicit requests": ("明確要求", "do not use the automatic budget", "不佔自動次數",
@@ -3124,7 +3289,7 @@ class FeatherConfigTests(unittest.TestCase):
                             "review-state.md", "gains no new automatic calls"),
         "Validity": ("有效範圍", "a pass holds only for what it judged", "通過只對它審過的內容有效",
                      "review-state.md", "A pass covers the work identity, its acceptance and the reviewed content"),
-        "Commit": ("Commit 條件", "only with a valid APPROVED and CONFIRMED", "都仍有效時才會 commit",
+        "Commit": ("Commit 條件", "only with a valid APPROVED and CONFIRMED", "都仍有效時，才會讓 claim 進入遠端的預設 branch",
                    "review-state.md", "only with a valid APPROVED and a valid CONFIRMED"),
         "Release checks": ("事後檢查", "is checked and reported by main after the operation", "在操作後檢查並回報",
                            "review-state.md", "checks and reports it after the operation"),

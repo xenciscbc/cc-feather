@@ -71,9 +71,9 @@ A Code review finding that does not hold completion: style, naming, a refactorin
 _Avoid_: nit, minor issue
 
 **Unreviewed claim**:
-A Claim whose Code review stopped after two consecutive automatic calls without APPROVED. It is not complete.
+A Claim whose Code review stopped after two consecutive automatic calls without APPROVED. It is not complete. It is not landed on the default branch, released or reported complete.
 _Avoid_: failed review, skipped review
 
 **Unverified claim**:
-A Claim that needs Outcome verification but has no currently valid CONFIRMED, for example because its Outcome verification has not run yet, was refuted, ended INCONCLUSIVE or stopped, or its CONFIRMED expired after a relevant change. It is not complete.
+A Claim that needs Outcome verification but has no currently valid CONFIRMED, for example because its Outcome verification has not run yet, was refuted, ended INCONCLUSIVE or stopped, or its CONFIRMED expired after a relevant change. It is not complete. It is not landed on the default branch, released or reported complete.
 _Avoid_: failed verification

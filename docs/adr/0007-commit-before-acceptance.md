@@ -1,0 +1,16 @@
+# Claims may be committed before acceptance; landing, release and completion are gated
+
+A Claim in the Automatic flow could be committed only with a valid APPROVED and CONFIRMED (ADR 0006), so it stayed uncommitted through every review round. In an ephemeral cloud session that work was lost if the environment was reclaimed, a review judged a moving working tree rather than a fixed revision, and a second review had to reconstruct what a fix changed. What the gate protects is that unaccepted work does not reach the default branch, a release, a completion report or a finished ticket; committing itself does not.
+
+The acceptance gate now covers landing a Claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releasing or tagging it, reporting it complete and setting its ticket to a completion value. Before its passes, main may commit a Claim on any branch, push it to any branch other than a default branch without the user's permission, and open a pull request that lists the Claims still unaccepted. Pushed history is never rewritten, so a fix is a new commit. A default branch is the remote HEAD's branch or a protected or shared branch the user names; there main may commit before the passes, labels each such commit unaccepted when it creates it, and pushes them only after both passes or as a work-in-progress push the user allows. For a gated Claim, each Code review and Outcome verification judges a named commit with a clean workspace, and a second review receives the range from the previously judged commit. Passing verdicts still do not cross sessions: before a gated operation, a Claim that passed in an earlier session is reviewed and verified again, unless its ticket is finished. An existing handoff note that says a Claim must not be committed restricts it under the new gate.
+
+## Considered Options
+
+- **Keep the commit gate**: protects the default branch only indirectly, and leaves work uncommitted and unreviewable as a fixed revision for every review round.
+- **Commit locally only, push after acceptance**: keeps unaccepted work off every remote, but an unpushed commit is lost with a cloud environment, which is the main failure this decision addresses.
+- **Label every early commit on a working branch**: marks state the review record already holds; the label is kept only on a default branch, where others may pull the commit.
+- **Trust passes across sessions by commit**: a commit hash pins the content, but trusting a pass from another session reverses ADR 0006's rejection, and a finished ticket already carries accepted work across sessions.
+
+## Consequences
+
+The acceptance gate amends ADR 0006's commit rule and ADR 0002's statement that a restricted Claim is not committed after a resume. Review counts, verdicts, the state model, the waiver and postcondition rules and the release order are otherwise unchanged; a waived Claim the gate covers reaches the default branch only after a later pass or as a work-in-progress push the user allows. Installed role definitions, the policy and the setup flow are unchanged, so no setup update is needed. A session that lands work it did not review pays for the review again.

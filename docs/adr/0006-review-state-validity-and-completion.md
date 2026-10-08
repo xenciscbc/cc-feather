@@ -6,6 +6,8 @@ An explicitly requested pass clears a stopped step without resetting its count, 
 
 (Amended in 0.15.0 by the [review follow-ups spec](../specs/review-followups-0-15-0.md): a Claim with postconditions has its ticket set to the completion value only after they hold; a postcondition that does not hold leaves the ticket unfinished.)
 
+(Amended by ADR 0007: the commit gate moved to landing on the remote default branch, release, reporting complete and ticket completion; claims may be committed before their passes, and a claim that passed in an earlier session is reviewed and verified again before a gated operation unless its ticket is finished.)
+
 ## Considered Options
 
 - **Fixed totals per Plan or Claim**: rejected again (ADR 0004); a total cannot follow reopened work without either stranding it or hiding its cost.
