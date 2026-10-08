@@ -1261,8 +1261,6 @@ class FeatherConfigTests(unittest.TestCase):
         guidance = (self.project / "CLAUDE.md").read_bytes()
         fixture = self.root / "package"
         shutil.copytree(config.ROOT / "templates", fixture / "templates")
-        role_template = fixture / "templates" / "agents" / "Explore.md"
-        role_template.write_text(role_template.read_text(encoding="utf-8") + "\nUPGRADED TEMPLATE", encoding="utf-8")
         policy_template = fixture / "templates" / "CLAUDE.md"
         policy_template.write_text(policy_template.read_text(encoding="utf-8").replace(config.END, "UPGRADED POLICY\n" + config.END), encoding="utf-8")
         with mock.patch.object(config, "ROOT", fixture):
@@ -1270,13 +1268,268 @@ class FeatherConfigTests(unittest.TestCase):
             code, session = self.call("session")
             self.assertEqual(code, 0)
             self.assertEqual(session["Explore"]["model"], "opus")
-            self.assertNotIn("UPGRADED TEMPLATE", session["Explore"]["prompt"])
             self.assertEqual(scout.read_bytes(), original_scout)
             self.assertEqual((self.project / "CLAUDE.md").read_bytes(), guidance)
-            self.assertNotIn(b"UPGRADED TEMPLATE", explore.read_bytes())
             self.assertEqual(explore.read_bytes().replace(b"model: opus", b"model: sonnet"), original_explore)
             self.apply("update")
+            self.assertIn(b"UPGRADED POLICY", (self.project / "CLAUDE.md").read_bytes())
+
+    def test_role_template_change_blocks_model_review_and_session_until_update(self):
+        self.apply("install")
+        explore = self.project / ".claude" / "agents" / "Explore.md"
+        original_explore = explore.read_bytes()
+        fixture = self.root / "package"
+        shutil.copytree(config.ROOT / "templates", fixture / "templates")
+        role_template = fixture / "templates" / "agents" / "Explore.md"
+        role_template.write_text(role_template.read_text(encoding="utf-8") + "\nUPGRADED TEMPLATE", encoding="utf-8")
+        with mock.patch.object(config, "ROOT", fixture):
+            for command, extra in (("model", ("--set", "Explore.model=opus")), ("review", ("--review-mode", "auto")),
+                                   ("session", ())):
+                with self.subTest(command=command):
+                    code, error = self.call(command, "project", *extra)
+                    self.assertEqual(code, 2, error)
+                    self.assertIn("run setup update first", error["error"])
+            self.assertEqual(explore.read_bytes(), original_explore)
+            self.apply("update")
             self.assertIn(b"UPGRADED TEMPLATE", explore.read_bytes())
+            self.apply("model", "project", "--set", "Explore.model=opus")
+            code, session = self.call("session")
+            self.assertEqual(code, 0, session)
+            self.assertIn("UPGRADED TEMPLATE", session["Explore"]["prompt"])
+            self.assertEqual(session["Explore"]["model"], "opus")
+
+    ANALYST_0_16_0 = (
+        '- Plan review: review the supplied stable plan in a fresh context. Check outcome, scope/non-goals, '
+        'ownership, dependencies, acceptance proving the outcome, and rollback where relevant. Check that '
+        'each claim can be verified independently with its own acceptance. Return READY when no material '
+        'blocker remains, with brief checked scope and non-blocking advice separately; otherwise REVISE with '
+        'every known blocker, evidence, minimum revision and observable closure check. Style preferences and '
+        'speculative improvements do not block. Never rewrite or implement the plan. On a second review, '
+        'verify resolved blockers and material regressions introduced by the revision without expanding into '
+        'unrelated work. Judge each blocker main rejected on its evidence: withdraw it when the evidence '
+        'holds, otherwise uphold it with the specific reason. Report missing essential evidence as a blocker,'
+        ' not assumed readiness.')
+    REVIEWER_0_16_0 = (
+        'On a second review, check only whether the earlier findings are closed and whether the fixes '
+        'introduced regressions; do not expand into unrelated work. When the main Agent rejects an earlier '
+        'finding, it supplies evidence. Judge that evidence on its merits: withdraw the finding when the '
+        'evidence holds, otherwise uphold it with the specific reason.')
+    REVIEW_AUTO_0_16_0 = (
+        'Automatic plan review is on. Use cc-feather:delegation so that work done from a plan, spec or ticket'
+        ' the user agreed to gets plan review before implementation, then code review, then outcome '
+        'verification before it is reported complete. Unplanned work that changes a security boundary, '
+        'migrates data or performs an irreversible operation first needs a written, reviewed plan the user '
+        'approves; other unplanned edits get no automatic review. Before implementing, state whether the work'
+        ' is plan-driven and therefore reviewed, with a one-line reason. A task or session choice to turn '
+        'automatic review off, or project guidance stating that automatic plan review is off in this project,'
+        ' overrides this.')
+
+    def templates_0_16_0(self):
+        """The packaged templates with the analyst, reviewer and automatic review texts 0.16.0 installed."""
+        fixture = self.root / "package-0.16.0"
+        if fixture.exists():
+            return fixture
+        shutil.copytree(config.ROOT / "templates", fixture / "templates")
+        for name, marker, text in (("analyst.md", "- Plan review:", self.ANALYST_0_16_0),
+                                   ("reviewer.md", "the previous call for this claim", self.REVIEWER_0_16_0)):
+            path = fixture / "templates" / "agents" / name
+            lines = path.read_text(encoding="utf-8").split("\n")
+            found = [index for index, line in enumerate(lines) if marker in line]
+            self.assertEqual(len(found), 1, name)
+            self.assertNotEqual(lines[found[0]], text, name)
+            lines[found[0]] = text
+            path.write_bytes("\n".join(lines).encode("utf-8"))
+        (fixture / "templates" / "review-auto.md").write_bytes(self.REVIEW_AUTO_0_16_0.encode("utf-8") + b"\n")
+        return fixture
+
+    def use_fresh_roots(self, name):
+        self.project = self.root / name / "project"
+        self.home = self.root / name / "claude-home"
+        self.project.mkdir(parents=True)
+        self.home.mkdir()
+
+    def install_0_16_0(self, scope="project", mode="auto", prefixed=False):
+        """Install delegation as 0.16.0 rendered it, with a model choice the upgrade must keep."""
+        agents = (self.project / ".claude" if scope == "project" else self.home) / "agents"
+        if prefixed:
+            agents.mkdir(parents=True, exist_ok=True)
+            (agents / "custom.md").write_text("---\nname: scout\n---\nThe user's own scout\n", encoding="utf-8")
+        with mock.patch.object(config, "ROOT", self.templates_0_16_0()):
+            self.apply("install", scope, "--review-mode", mode)
+            self.apply("model", scope, "--set", "analyst.model=sonnet")
+        prefix = config.ROLE_PREFIX if prefixed else ""
+        self.assertIn("On a second review", (agents / f"{prefix}reviewer.md").read_text(encoding="utf-8"))
+        return agents, prefix
+
+    @staticmethod
+    def stale_warnings(shown):
+        return [warning for warning in shown["warnings"] if warning.startswith("role ") and "older template" in warning]
+
+    def stale_warning(self, agents, prefix, role):
+        return f"role {prefix}{role} is from an older template ({agents / f'{prefix}{role}.md'}); run setup update"
+
+    def test_0_16_0_role_templates_are_stale_until_setup_update(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                for prefixed in (False, True):
+                    with self.subTest(scope=scope, mode=mode, prefixed=prefixed):
+                        self.use_fresh_roots(f"{scope}-{mode}-{prefixed}")
+                        agents, prefix = self.install_0_16_0(scope, mode, prefixed)
+                        guidance = (self.project if scope == "project" else self.home) / "CLAUDE.md"
+                        for command in ("check", "show"):
+                            code, shown = self.call(command, scope)
+                            self.assertEqual(code, 0, shown)
+                            self.assertEqual((shown["status"], shown["components"]["delegation"]["status"]), ("ok", "ok"))
+                            self.assertEqual(shown["issues"], [])
+                            self.assertTrue(shown["role_update_required"])
+                            self.assertEqual(self.stale_warnings(shown), [self.stale_warning(agents, prefix, role)
+                                                                          for role in ("analyst", "reviewer")])
+                        before = {path: path.read_bytes() for path in (*agents.glob("*.md"), guidance)}
+                        other = "off" if mode == "auto" else "auto"
+                        for command, extra in (("model", ("--set", "scout.effort=low")), ("review", ("--review-mode", other)),
+                                               ("session", ())):
+                            code, error = self.call(command, scope, *extra)
+                            self.assertEqual(code, 2, error)
+                            self.assertIn("run setup update first", error["error"])
+                        self.assertEqual(before, {path: path.read_bytes() for path in before})
+                        self.apply("update", scope)
+                        code, shown = self.call("check", scope)
+                        self.assertEqual(code, 0, shown)
+                        self.assertFalse(shown["role_update_required"])
+                        self.assertEqual([w for w in shown["warnings"] if "older template" in w], [])
+                        self.assertEqual(shown["review_mode"], mode)
+                        self.assertEqual(shown["role_prefix"], prefix)
+                        self.assertEqual(shown["choices"]["analyst"], {"model": "sonnet", "effort": "high"})
+                        reviewer = (agents / f"{prefix}reviewer.md").read_text(encoding="utf-8")
+                        analyst = (agents / f"{prefix}analyst.md").read_text(encoding="utf-8")
+                        self.assertIn("When the brief says the previous call for this claim completed", reviewer)
+                        self.assertIn("When the brief says the previous call for this plan completed", analyst)
+                        self.assertIn("\nmodel: sonnet\n", analyst)
+                        disclosure = "In auto, before the passes of a claim of plan-driven work main may, without asking"
+                        self.assertNotIn(disclosure, before[guidance].decode("utf-8"))
+                        self.assertEqual(disclosure in guidance.read_text(encoding="utf-8"), mode == "auto")
+                        self.apply("model", scope, "--set", "scout.effort=low")
+                        code, exported = self.call("session", scope)
+                        self.assertEqual(code, 0, exported)
+                        self.assertIn("previous call for this claim completed", exported[f"{prefix}reviewer"]["prompt"])
+
+    def test_edited_0_16_0_role_is_a_conflict_not_stale(self):
+        agents, prefix = self.install_0_16_0()
+        analyst = agents / "analyst.md"
+        analyst.write_bytes(analyst.read_bytes() + b"\nUser changes\n")
+        code, shown = self.call("check")
+        self.assertEqual(code, 2, shown)
+        self.assertEqual(shown["components"]["delegation"]["issues"], [f"managed role changed or missing: {analyst}"])
+        self.assertTrue(shown["role_update_required"])
+        self.assertEqual(self.stale_warnings(shown), [self.stale_warning(agents, prefix, "reviewer")])
+
+    def test_role_differing_only_in_line_endings_is_stale(self):
+        self.apply("install")
+        reviewer = self.project / ".claude" / "agents" / "reviewer.md"
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = json.loads(state_path.read_bytes())
+        reviewer.write_bytes(reviewer.read_bytes().replace(b"\n", b"\r\n"))
+        state["components"]["delegation"]["hashes"]["reviewer"] = config.digest(reviewer.read_bytes())
+        state_path.write_bytes(config.canonical(state) + b"\n")
+        code, shown = self.call("check")
+        self.assertEqual(code, 0, shown)
+        self.assertEqual(shown["status"], "ok")
+        self.assertTrue(shown["role_update_required"])
+        self.assertEqual(self.stale_warnings(shown), [self.stale_warning(reviewer.parent, "", "reviewer")])
+        self.apply("update")
+        self.assertNotIn(b"\r\n", reviewer.read_bytes())
+        self.assertFalse(self.call("check")[1]["role_update_required"])
+
+    def test_legacy_name_installation_is_not_compared_with_current_templates(self):
+        self.apply("install")
+        agents = self.project / ".claude" / "agents"
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = json.loads(state_path.read_bytes())
+        record = state["components"]["delegation"]
+        for role in config.ROLES:
+            if role == "Explore":
+                continue
+            path = agents / f"{role}.md"
+            data = path.read_bytes().replace(f"name: {role}\n".encode(), f"name: feather-{role}\n".encode(), 1)
+            path.unlink()
+            (agents / f"feather-{role}.md").write_bytes(data)
+            record["hashes"][role] = config.digest(data)
+        record["legacy_names"] = True
+        state_path.write_bytes(config.canonical(state) + b"\n")
+        code, shown = self.call("check")
+        self.assertEqual(code, 0, shown)
+        self.assertTrue(shown["role_migration_required"])
+        self.assertFalse(shown["role_update_required"])
+        self.assertEqual(self.stale_warnings(shown), [])
+
+    def test_role_whose_rendering_fails_is_not_reported_stale(self):
+        agents, prefix = self.install_0_16_0()
+        broken = self.root / "broken"
+        shutil.copytree(config.ROOT / "templates", broken / "templates")
+        reviewer = broken / "templates" / "agents" / "reviewer.md"
+        reviewer.write_text(reviewer.read_text(encoding="utf-8").replace("{{effort}}", "high"), encoding="utf-8")
+        with mock.patch.object(config, "ROOT", broken):
+            code, shown = self.call("check")
+            self.assertEqual(code, 0, shown)
+            self.assertTrue(shown["role_update_required"])
+            self.assertEqual(self.stale_warnings(shown), [self.stale_warning(agents, prefix, "analyst")])
+            analyst = broken / "templates" / "agents" / "analyst.md"
+            analyst.write_text(analyst.read_text(encoding="utf-8").replace("{{model}}", "opus"), encoding="utf-8")
+            code, shown = self.call("check")
+            self.assertEqual(code, 0, shown)
+            self.assertFalse(shown["role_update_required"])
+            self.assertEqual(self.stale_warnings(shown), [])
+
+    def test_current_installation_reports_no_stale_roles(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                with self.subTest(scope=scope, mode=mode):
+                    self.use_fresh_roots(f"current-{scope}-{mode}")
+                    self.apply("install", scope, "--review-mode", mode)
+                    self.apply("model", scope, "--set", "analyst.model=sonnet", "--set", "reviewer.effort=medium")
+                    code, shown = self.call("check", scope)
+                    self.assertEqual(code, 0, shown)
+                    self.assertFalse(shown["role_update_required"])
+                    self.assertEqual([w for w in shown["warnings"] if "older template" in w], [])
+
+    def test_rejected_saved_model_in_stale_installation_names_remove_and_reinstall(self):
+        self.install_0_16_0()
+        self.save_model_choices({"scout": "abc:"})
+        code, checked = self.call("check")
+        self.assertEqual(code, 2, checked)
+        self.assertTrue(checked["role_update_required"])
+        reported = [issue for issue in checked["issues"] if "saved model for scout" in issue]
+        self.assertEqual(len(reported), 1, checked["issues"])
+        self.assertIn("remove and reinstall", reported[0])
+        self.assertIn("--review-mode", reported[0])
+        self.assertNotIn("model --set", reported[0])
+        code, error = self.call("model", "project", "--set", "scout.model=sonnet")
+        self.assertEqual(code, 2)
+        self.assertIn("run setup update first", error["error"])
+        code, error = self.call("update")
+        self.assertEqual(code, 2)
+        self.assertIn("saved model is no longer accepted", error["error"])
+        self.apply("remove")
+        self.apply("install", "project", "--review-mode", "auto")
+        code, checked = self.call("check")
+        self.assertEqual(code, 0, checked)
+        self.assertEqual(checked["review_mode"], "auto")
+        self.assertFalse(checked["role_update_required"])
+
+    def test_install_both_adds_handoff_beside_delegation_with_rejected_saved_model(self):
+        self.apply("install")
+        self.save_model_choices({"analyst": "abc:"})
+        agents = self.project / ".claude" / "agents"
+        roles = {path: path.read_bytes() for path in agents.glob("*.md")}
+        self.apply("install", "project", "--component", "both")
+        shown = self.call("show")[1]
+        self.assertTrue(shown["components"]["handoff"]["installed"])
+        self.assertEqual(roles, {path: path.read_bytes() for path in agents.glob("*.md")})
+        for component in ("both", "delegation"):
+            with self.subTest(component=component):
+                code, error = self.call("update", "project", "--component", component)
+                self.assertEqual(code, 2, error)
+                self.assertIn("saved model is no longer accepted", error["error"])
 
     def test_review_mode_toggle_preserves_roles_and_choices(self):
         self.apply("install", "project", "--review-mode", "off")

@@ -438,12 +438,15 @@ def _unsafe_saved_model(model: object) -> bool:
     return isinstance(model, str) and not MODEL_RE.fullmatch(model) and bool(LEGACY_MODEL_RE.fullmatch(model))
 
 
-def _unsafe_saved_choices(record: dict[str, Any] | None) -> list[str]:
+def _unsafe_saved_choices(record: dict[str, Any] | None, roles_outdated: bool = False) -> list[str]:
     if not record:
         return []
-    return [f"saved model for {role} is no longer accepted: {choice['model']!r}; replace it with "
-            f"model --set {role}.model=<model>" for role, choice in record.get("choices", {}).items()
-            if _unsafe_saved_model(choice.get("model"))]
+    # model refuses until setup update, and update refuses the saved value, so only reinstalling recovers.
+    def recovery(role: str) -> str:
+        return ("remove and reinstall this scope, which resets the saved choices and review mode unless --review-mode "
+                "is given" if roles_outdated else f"replace it with model --set {role}.model=<model>")
+    return [f"saved model for {role} is no longer accepted: {choice['model']!r}; {recovery(role)}"
+            for role, choice in record.get("choices", {}).items() if _unsafe_saved_model(choice.get("model"))]
 
 
 def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> dict[str, Any] | None:
@@ -527,6 +530,27 @@ def _external(record: dict[str, Any] | None) -> set[str]:
 
 def _roles_outdated(record: dict[str, Any] | None) -> bool:
     return record is not None and set(record["choices"]) != set(ROLES) - _external(record)
+
+
+def _stale_roles(record: dict[str, Any], owned: dict[str, Path]) -> list[str]:
+    """Owned roles still as installed whose recorded rendering differs from the current template's.
+
+    An edited or missing file is a conflict, not stale, and a rendering that fails reports nothing here;
+    install and update report it. Line endings count: the recorded hash is of the bytes written.
+    """
+    stale = []
+    for role, path in owned.items():
+        _safe_path(path)
+        data = read(path)
+        if data is None or digest(data) != record["hashes"][role]:
+            continue
+        try:
+            current = digest(_render(role, record["choices"][role], record.get("role_prefix", "")))
+        except (ConfigError, OSError):
+            continue
+        if current != record["hashes"][role]:
+            stale.append(role)
+    return stale
 
 
 def _components(state: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -1006,14 +1030,24 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("legacy role names are out of date; run setup update first")
     if args.command in {"model", "review"} and delegation is None:
         raise ConfigError(f"{args.scope} delegation component is not installed")
-    if args.command in {"model", "review"} and _roles_outdated(delegation):
+    if args.command in {"model", "review"} and (
+            _roles_outdated(delegation) or _stale_roles(delegation, _agent_paths(base, state))):
+        # Roles rendered from an older template change only through update, as check reports.
         raise ConfigError("delegation roles are out of date; run setup update first")
     if (args.command == "install" and args.component == "both" and delegation is not None
             and args.review_mode is not None and args.review_mode != delegation["review_mode"]):
         raise ConfigError("delegation is already installed; use review to change its saved review mode")
     if args.component == "both" and args.command in {"update", "remove"} and not records:
         raise ConfigError(f"{args.scope} scope is not installed")
-    if delegation is not None and "delegation" in selected and args.command in {"install", "update", "model"}:
+
+    def operates(name: str) -> bool:
+        if name not in selected:
+            return False
+        if args.component != "both":
+            return True
+        return (name not in records) if args.command == "install" else (name in records)
+
+    if delegation is not None and operates("delegation") and args.command in {"install", "update", "model"}:
         # Checked before role files are read or rendered: a saved "---" also breaks their frontmatter.
         replaced = {role for role, fields in _overrides(args.set).items() if "model" in fields}
         unsafe = [f"{role} ({choice['model']!r})" for role, choice in delegation["choices"].items()
@@ -1021,12 +1055,6 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         if unsafe:
             raise ConfigError("saved model is no longer accepted for " + ", ".join(unsafe) +
                               "; replace it with model --set ROLE.model=<model>, or remove and reinstall")
-    def operates(name: str) -> bool:
-        if name not in selected:
-            return False
-        if args.component != "both":
-            return True
-        return (name not in records) if args.command == "install" else (name in records)
 
     owned = _agent_paths(base, state) if delegation is not None else {}
     active_delegation = operates("delegation") and (delegation is not None or args.command == "install")
@@ -1382,6 +1410,8 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     component_info: dict[str, dict[str, Any]] = {}
     pending_prefix = pending_external = None
     external_warnings: list[str] = []
+    stale_roles: list[str] = []
+    stale_warnings: list[str] = []
     reported_agents = agents
     for name in ("handoff", "delegation"):
         record = records.get(name)
@@ -1399,7 +1429,6 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
         except ConfigError as exc:
             issues.append(str(exc))
         if name == "delegation":
-            issues.extend(_unsafe_saved_choices(record))
             try:
                 owned = _release_user_explore(agents, record) if record else {}
                 current = record.get("role_prefix", "") if record else ""
@@ -1426,8 +1455,15 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
                     data = read(path)
                     if data is None or digest(data) != record["hashes"][role]:
                         issues.append(f"managed role changed or missing: {path}")
+                # Names a legacy installation still has to migrate are not compared; update renames and rewrites them.
+                if record and not (state["version"] == 1 or record.get("legacy_names", False)):
+                    stale_roles = _stale_roles(record, owned)
             except (ConfigError, OSError) as exc:
                 issues.append(str(exc))
+            # Not a conflict: the role is intact and owned, only rendered by an earlier template.
+            stale_warnings = [f"role {_role_name(role, record.get('role_prefix', ''))} is from an older template "
+                              f"({owned[role]}); run setup update" for role in stale_roles]
+            issues.extend(_unsafe_saved_choices(record, _roles_outdated(record) or bool(stale_roles)))
             if issues:
                 # A planned layout is only reported when install or update could apply it.
                 pending_prefix = pending_external = None
@@ -1456,7 +1492,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     return {"status": "ok" if not issues else "conflict", "scope": args.scope,
             "installed": bool(records), "components": component_info, "migration_required": migration_required,
             "role_migration_required": role_migration_required,
-            "role_update_required": _roles_outdated(delegation),
+            "role_update_required": _roles_outdated(delegation) or bool(stale_roles),
             "role_prefix": delegation.get("role_prefix", "") if delegation else "",
             # Install or update will adopt this prefix because another agent already uses a role name.
             "pending_role_prefix": pending_prefix,
@@ -1469,7 +1505,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
                       "guidance": str(guidance), "agents": {role: str(path) for role, path in reported_agents.items()}},
             "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
             "guidance_choice_required": target["choice_required"],
-            "issues": issues, "warnings": _warnings(args) + guidance_warnings + external_warnings + list(_AGENT_WARNINGS)}
+            "issues": issues, "warnings": _warnings(args) + guidance_warnings + stale_warnings + external_warnings + list(_AGENT_WARNINGS)}
 
 
 
