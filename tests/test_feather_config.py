@@ -3065,7 +3065,7 @@ class FeatherConfigTests(unittest.TestCase):
             'For a claim the acceptance gate covers, that change is the commit named in the brief, judged with a clean workspace, as What a gated pass judged describes.',
             "- **Commit and completion.** For a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed, unverified or pending acceptance, main lands the claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releases or tags it, reports it complete or sets its ticket to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's accept-and-land decision for it. This is the acceptance gate. It covers the completion value for done work; a value for work that will not be done is set only on the user's recorded cancellation and never counts as acceptance. Landing a branch lands every claim on it, so it waits for every gated claim there. A cancelled claim's commits that remain on a branch are listed as unaccepted, in the report and in any active handoff, until the user decides their disposition: reverted with a new commit, kept off the default branch, or accepted and landed; landing a branch that carries them waits for that decision. The default branch is the branch the `origin` remote's HEAD names, or the only remote's HEAD when there is no `origin`; with no remote, several remotes and no `origin`, or no HEAD, main asks. A protected or shared branch the user names counts as a default branch.",
             "- **Commits before the passes.** Before its passes, main may commit a claim of plan-driven work in the automatic flow on any branch, push it to a branch main created for the current work and open a pull request whose description lists the claims still unaccepted, without the user's permission, and keeps that list current as claims pass or are accepted. Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a resumed session main treats a branch as its own only when an active handoff records that main created it for this work, and otherwise asks. For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks. Before dispatching a gated code review or outcome verification, main ensures the claim's content is committed and the precondition of What a gated pass judged holds; when a commit is needed, the authority above permits it without asking, and an already suitable commit needs no new one. It never rewrites pushed history, so a fix is a new commit. On a default branch, main labels each commit made before both passes unaccepted in its message when it creates it; the label records the commit's state then and stays in history. Commits on other branches carry no label. It pushes such commits to the remote default branch only after both passes or the user's accept-and-land decision for their claim, or as a work-in-progress push the user explicitly allows, and while they stay unpushed it says a reclaimed environment would lose them. Off mode otherwise keeps its behaviour.",
-            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review or outcome verification only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. The pass covers that commit, and a second review receives the range from the previously judged commit to the new one. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, and main does not commit that work to review it.",
+            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review or outcome verification only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, and main does not commit that work to review it.",
             '- **Existing handoff notes.** An active handoff\'s record that a claim is unreviewed, unverified or pending acceptance restricts it under the acceptance gate whatever its wording, such as "must not be committed"; main updates the wording at the next handoff maintenance.',
             'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision.',
             'For a claim an active handoff recorded as unreviewed, unverified or pending acceptance, a waiver kept in that handoff counts as that record for the gate.',
@@ -3075,7 +3075,7 @@ class FeatherConfigTests(unittest.TestCase):
         'code-review.md': (
             "while [review state](review-state.md)'s acceptance gate still covers, in either mode, a claim an active handoff records as unreviewed, unverified or pending acceptance, and the handoff note changes after a pass as [review state](review-state.md)'s Pending acceptance describes in either mode;",
             'For a claim the acceptance gate covers, also name the commit under review and dispatch only with a clean workspace at that commit, as [review state](review-state.md) describes.',
-            'and, for a claim the acceptance gate covers, the range from the previously reviewed commit to the new one.',
+            "and, for a claim the acceptance gate covers, the range from the last commit a completed review judged to the new one; after a call that did not complete, supply the full range from the claim's base revision and any partial findings as evidence.",
             'do not land it on the default branch, release it or report it complete, report its open findings',
             'record as plain text that the claim is unreviewed, its open findings and that it must not be landed on the default branch, released or reported complete.',
         ),
@@ -3147,7 +3147,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "dispatches a code review or outcome verification only when the workspace equals the commit it names",
                 "HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change",
                 "and nothing changes the workspace during the call",
-                "a second review receives the range from the previously judged commit",
+                "a second review after a completed review receives the range from the previously judged commit",
                 "A call for work the gate does not cover",
                 "main does not commit that work to review it",
                 "restricts it under the acceptance gate whatever its wording",
@@ -3158,7 +3158,7 @@ class FeatherConfigTests(unittest.TestCase):
             references / "code-review.md": (
                 "acceptance gate still covers, in either mode",
                 "also name the commit under review and dispatch only with a clean workspace at that commit",
-                "the range from the previously reviewed commit to the new one",
+                "the range from the last commit a completed review judged to the new one",
                 "must not be landed on the default branch, released or reported complete"),
             references / "outcome-verification.md": (
                 "also name the base revision and the commit under verification, and dispatch only with a clean workspace",
@@ -3624,6 +3624,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "CONTEXT.md": config.ROOT / "CONTEXT.md",
             "issue-tracker.md": config.ROOT / "docs" / "agents" / "issue-tracker.md",
             "handoff SKILL.md": config.ROOT / "skills" / "handoff" / "SKILL.md",
+            "reviewer.md": config.ROOT / "templates" / "agents" / "reviewer.md",
+            "analyst.md": config.ROOT / "templates" / "agents" / "analyst.md",
         }
         text = files[path].read_text(encoding="utf-8")
         if not label:
@@ -3636,6 +3638,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             return FeatherConfigTests.glossary_entries(text)[label]
         if path == "auto-review.md":
             return text.split("## " + label, 1)[1]
+        if path == "review-state.md" and label in ("Stop", "What counts as a call"):
+            return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
         if path == "handoff SKILL.md":
             return text.split("## " + label, 1)[1].split("\n## ", 1)[0]
         return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
@@ -3902,9 +3906,87 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
 
+    # C4: review scope follows established coverage, not call count; budgets are unchanged.
+    RETRY_COVERAGE = {
+        "review-state.md#Completed calls and coverage": (
+            "A completed call is one that returned a verdict for the content it judged; a call that failed, was interrupted, broke protocol or returned no verdict did not complete.",
+            "Only a completed review establishes coverage.",
+            "A second review, narrowed to the earlier findings and the fixes, and the range from the previously judged commit follow only a completed review, and that range starts at the last commit a completed review judged.",
+            "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan), carrying any partial findings as evidence, not as coverage.",
+            "Every attempted call still counts as under What counts as a call, and the budgets are unchanged.",
+        ),
+        "review-state.md#What a gated pass judged": (
+            "and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes.",
+        ),
+        "code-review.md": (
+            "On a later call for the same claim, state whether the earlier call completed with a verdict; the reviewer narrows its review only when the brief says it did, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "the range from the last commit a completed review judged to the new one; after a call that did not complete, supply the full range from the claim's base revision and any partial findings as evidence.",
+        ),
+        "plan-review.md": (
+            "On a later call for the same plan, state whether the earlier call completed with a verdict; analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan, as [review state](review-state.md)'s Completed calls and coverage describes.",
+        ),
+        "reviewer.md": ('When the brief says an earlier review of this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because the earlier call failed, was interrupted or returned no verdict, review the full scope from the base revision and treat any partial findings supplied as evidence only.',),
+        "analyst.md": ('When the brief says an earlier review of this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, review the whole plan and treat any partial findings supplied as evidence only.',),
+        # Budgets stay as they were.
+        "review-state.md#Stop": ("Two consecutive automatic calls without a pass stop the step for that work; it waits for the user's explicit request.",),
+        "review-state.md#What counts as a call": ("Every attempted call counts, including a generic retry after a temporary failure, and a stopped step is never dispatched again as a retry.",),
+    }
+
+    RETRY_COVERAGE_REMOVED = {
+        "reviewer.md": ("On a second review, check only whether the earlier findings are closed",),
+        "analyst.md": ("On a second review, verify resolved blockers",),
+        "review-state.md#What a gated pass judged": ("The pass covers that commit, and a second review receives the range",),
+    }
+
+    def test_retry_coverage_is_stated_whole(self):
+        for place, sentences in self.RETRY_COVERAGE.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertIn(sentence, text)
+
+    def test_retry_coverage_wording_from_0_16_0_is_gone(self):
+        for place, phrases in self.RETRY_COVERAGE_REMOVED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def test_installed_reviewer_and_analyst_render_the_coverage_rule(self):
+        choice = {"model": "sonnet", "effort": "high"}
+        for role, sentence in (("reviewer", 'When the brief says an earlier review of this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because the earlier call failed, was interrupted or returned no verdict, review the full scope from the base revision and treat any partial findings supplied as evidence only.'), ("analyst", 'When the brief says an earlier review of this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, review the whole plan and treat any partial findings supplied as evidence only.')):
+            for prefix in ("", "cc-"):
+                with self.subTest(role=role, prefix=prefix):
+                    self.assertIn(sentence, config._render(role, choice, prefix).decode("utf-8"))
+
     # Each scenario names the outcome and the sentences that decide it; a sentence from 0.16.0 that would
     # decide it differently must be gone. Places are '<file>' or '<file>#<bullet label>'.
     TRANSITION_SCENARIOS = (
+        ("a code review call fails before returning a verdict, then the next call",
+         "the next call reviews the full scope from the base revision; the failed call still counts",
+         (("review-state.md#Completed calls and coverage", "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan), carrying any partial findings as evidence, not as coverage."),
+          ("reviewer.md", "When it does not, because the earlier call failed, was interrupted or returned no verdict, review the full scope from the base revision and treat any partial findings supplied as evidence only."),
+          ("review-state.md#What counts as a call", "Every attempted call counts, including a generic retry after a temporary failure,")),
+         (("reviewer.md", "On a second review, check only whether the earlier findings are closed"),)),
+        ("a review is interrupted after reporting partial findings",
+         "the partial findings go to the next call as evidence, not as coverage",
+         (("review-state.md#Completed calls and coverage", "carrying any partial findings as evidence, not as coverage."),
+          ("code-review.md", "after a call that did not complete, supply the full range from the claim's base revision and any partial findings as evidence.")),
+         ()),
+        ("a completed review, then a follow-up call fails, then another call",
+         "coverage runs from the last commit the completed review judged",
+         (("review-state.md#Completed calls and coverage", "and that range starts at the last commit a completed review judged."),),
+         ()),
+        ("a plan review call fails, then the next call",
+         "analyst reviews the whole plan",
+         (("analyst.md", "when it does not, review the whole plan and treat any partial findings supplied as evidence only."),
+          ("plan-review.md", "analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan,")),
+         (("analyst.md", "On a second review, verify resolved blockers"),)),
+        ("two consecutive automatic calls fail (budget exhausted)",
+         "the step stops and waits for the user's explicit request; nothing changes the budget",
+         (("review-state.md#Stop", "Two consecutive automatic calls without a pass stop the step for that work; it waits for the user's explicit request."),
+          ("review-state.md#Completed calls and coverage", "Every attempted call still counts as under What counts as a call, and the budgets are unchanged.")),
+         ()),
         ("off mode, an active handoff records the claim as unreviewed, an explicit code review returns APPROVED",
          "the note becomes pending acceptance and the claim stays gated; no verification starts",
          (("review-state.md#Pending acceptance", "A gated claim stays gated after either single pass."),
