@@ -2730,6 +2730,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "Changed acceptance replaces the claim's acceptance and reopens its review and verification",
                 "in the report and in any active handoff",
                 "A waiver does not complete a claim the commit rule covers",
+                "which is zero after an automatic pass",
             ),
             references / "plan-review.md": ("status equals a completion value the project's tracker convention defines",
                                             "as [review state](review-state.md) records it",
@@ -2852,7 +2853,9 @@ class FeatherConfigTests(unittest.TestCase):
         # Earlier ADRs keep their original text and gain a note pointing to the current rule.
         earlier = {
             "0004-consecutive-failure-review-budget.md": (
-                "A Claim makes at most six automatic calls", "(Amended by ADR 0006:"),
+                "A Claim makes at most six automatic calls",
+                "(Amended by ADR 0006: six is the bound of one uninterrupted completion attempt per Claim; "
+                "reopened Claims and Material deviations add calls.)"),
             "0005-the-named-plan-and-its-tickets.md": (
                 "never edits a spec or ticket to add Claims",
                 "Another checkout without the tickets falls back to the spec's listed Claims or one Claim",
@@ -2865,6 +2868,58 @@ class FeatherConfigTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(adr=name, phrase=phrase):
                     self.assertIn(phrase, text)
+
+    def test_claim_change_authorisation_is_recorded_in_each_adr_place(self):
+        # The authorisation rule must stay in the ADR 0005 note and in both places ADR 0006 states it.
+        adr = config.ROOT / "docs" / "adr"
+        earlier = (adr / "0005-the-named-plan-and-its-tickets.md").read_text(encoding="utf-8")
+        decision = (adr / "0006-review-state-validity-and-completion.md").read_text(encoding="utf-8")
+        note = next(line for line in earlier.splitlines() if line.startswith("(Amended by ADR 0006: main edits"))
+        paragraph = next(block for block in decision.split("\n\n") if "Claim changes a review requires" in block)
+        consequences = decision.split("## Consequences", 1)[1].split("\n## ", 1)[0]
+        for place, text in (("ADR 0005 note", note), ("ADR 0006 decision", paragraph),
+                            ("ADR 0006 consequences", consequences)):
+            with self.subTest(place=place):
+                self.assertIn("only after the user authorises it", text)
+
+    def test_rules_whose_pairings_moved_to_newer_phrases_stay_stated(self):
+        # README_RULES and GLOSSARY_RULES now pair these entries with their 0.14.0 rules; the earlier rules still hold.
+        references = config.ROOT / "skills" / "delegation" / "references"
+        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                                "## Roles and routing", "### Automatic review switch"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 分派與預設模型", "### 自動審查開關"))
+        entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        for place, text, phrase in (
+                ("code-review.md", (references / "code-review.md").read_text(encoding="utf-8"),
+                 "applies in either mode and does not start verification"),
+                ("plan-review.md", (references / "plan-review.md").read_text(encoding="utf-8"),
+                 "a plan proposed in conversation and approved by the user"),
+                ("plan-review.md handoff", (references / "plan-review.md").read_text(encoding="utf-8"),
+                 "an unresolved verdict that an active handoff records for a spec's plan"),
+                ("README Claim changes", english["Claim changes"], "main never edits a spec or ticket to add claims"),
+                ("README 修改 claim", chinese["修改 claim"], "不會為了補 claim 而修改 spec 或 ticket"),
+                ("README Resumed session", english["Resumed session"], "an unresolved verdict that an active handoff records"),
+                ("README 恢復的 session", chinese["恢復的 session"], "進行中的交接若記錄了"),
+                ("README Plan-mode", english["Plan-mode and conversation plans"], "another session cannot see them"),
+                ("README plan mode", chinese["plan mode 與對話中的計畫"], "其他 session 看不到"),
+                ("glossary Plan", entries["Plan"], "a document lacking scope or acceptance is not yet a Plan"),
+                ("glossary Explicit request", entries["Explicit request"], "runs only what was requested")):
+            with self.subTest(place=place):
+                self.assertIn(phrase, text)
+
+    def test_readme_commit_and_not_passed_bullets_state_their_scope(self):
+        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                                "## Roles and routing", "### Automatic review switch"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 分派與預設模型", "### 自動審查開關"))
+        for bullets, label, phrase in (
+                (english, "Commit", "for any claim an active handoff records as unreviewed or unverified"),
+                (chinese, "Commit 條件", "進行中的交接記錄為未審查或未驗證的 claim"),
+                (english, "Not passed", "A claim without a valid CONFIRMED is unverified"),
+                (chinese, "未通過", "沒有有效 CONFIRMED 的 claim 視為未驗證")):
+            with self.subTest(label=label):
+                self.assertIn(phrase, bullets[label])
 
     def test_six_calls_are_described_as_one_uninterrupted_attempt(self):
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
@@ -2880,8 +2935,10 @@ class FeatherConfigTests(unittest.TestCase):
             "README.zh-TW preview": (readme_zh.split("### 分派預覽", 1)[1].split("\n### ", 1)[0],
                                      "六", "不中斷", "[。；：]"),
         }
+        # The bound may also be written as the numeral 6 ("6 calls", 「6 次」), but not as part of "6N".
+        numeral = re.compile(r"(?<![0-9A-Za-z])[6６]\s*(?:calls?|automatic|次)")
         for name, (text, figure, qualifier, stop) in sources.items():
-            sentences = [clause for clause in re.split(stop, text) if figure in clause]
+            sentences = [clause for clause in re.split(stop, text) if figure in clause or numeral.search(clause)]
             with self.subTest(source=name):
                 self.assertTrue(sentences)
                 for sentence in sentences:
@@ -2948,8 +3005,8 @@ class FeatherConfigTests(unittest.TestCase):
                            "review-state.md", "re-review, deferral, cancellation, changed acceptance or waiver"),
         "Ticket status": ("Ticket 狀態", "noting the version or commit", "並註明版本或 commit",
                           "review-state.md", "with a note naming the version or commit"),
-        "Resumed session": ("恢復的 session", "an unresolved verdict that an active handoff records", "進行中的交接若記錄了",
-                            "plan-review.md", "an unresolved verdict that an active handoff records for a spec's plan"),
+        "Resumed session": ("恢復的 session", "an unfinished plan is reviewed again", "未完成的計畫會重新審查",
+                            "review-state.md", "reviews an unfinished plan again before implementing it"),
         "Nothing left": ("沒有剩餘工作", "nothing is left to implement", "沒有剩下要實作",
                          "plan-review.md", "report that nothing is left to implement"),
         "Finding the tickets": ("辨識 ticket", "an empty result does not count as none", "搜不到不代表沒有",
@@ -2959,25 +3016,27 @@ class FeatherConfigTests(unittest.TestCase):
                                             "Look first at the project's instructions"),
         "Disagreement": ("不一致", "a mismatch is a blocker for you to settle", "不一致會列為阻擋事項",
                          "plan-review.md", "report a mismatch as a blocker for the user to settle"),
-        "Claim changes": ("修改 claim", "main never edits a spec or ticket to add claims", "不會為了補 claim 而修改 spec 或 ticket",
-                          "plan-review.md", "Main does not edit a spec or ticket to add claims"),
+        "Claim changes": ("修改 claim", "main edits only after your authorisation", "在你授權後才修改",
+                          "review-state.md", "only after the user authorises it"),
         "Not yet a plan": ("還不算計畫", "is not yet a plan", "主 Agent 會先補齊",
                            "plan-review.md", "A document without scope or acceptance is not yet a plan"),
-        "Plan-mode and conversation plans": ("plan mode 與對話中的計畫", "another session cannot see them", "其他 session 看不到",
-                                             "plan-review.md", "a plan proposed in conversation and approved by the user"),
+        "Plan-mode and conversation plans": ("plan mode 與對話中的計畫",
+                                             "only from its original text, an available record or a version you confirm",
+                                             "依它的原文、現有紀錄或你確認過的版本", "plan-review.md",
+                                             "is identified only from its original text, an available record or a version the user confirms"),
         "Where files live": ("檔案位置", "cc-feather does not decide where specs live", "不由 cc-feather 決定",
                              "plan-review.md", "Where specs live and whether tickets are committed are the project's choice"),
     }
 
     # Glossary term -> (phrase in its CONTEXT.md entry, procedure file, procedure phrase).
     GLOSSARY_RULES = {
-        "Plan": ("a document lacking scope or acceptance is not yet a Plan",
-                 "plan-review.md", "A document without scope or acceptance is not yet a plan"),
+        "Plan": ("its unfinished tickets in the named scope as claims",
+                 "plan-review.md", "each unfinished ticket in the named scope is one claim"),
         "Claim": ("One independently verifiable outcome with its own acceptance",
                   "plan-review.md", "each an independently verifiable outcome with its own acceptance"),
         "Unplanned work": ("must first become Plan-driven work", "plan-review.md", "must not start without one"),
-        "Explicit request": ("runs only what was requested",
-                             "code-review.md", "applies in either mode and does not start verification"),
+        "Explicit request": ("it clears the stop without resetting the count",
+                             "review-state.md", "clears the stop and leaves the count unchanged"),
         "Unreviewed claim": ("stopped after two consecutive automatic calls without APPROVED",
                              "code-review.md", "After two consecutive automatic calls without APPROVED"),
         "Unverified claim": ("no currently valid CONFIRMED", "outcome-verification.md", "report the claim as unverified"),
