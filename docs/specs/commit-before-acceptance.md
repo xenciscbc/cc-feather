@@ -4,7 +4,7 @@ Label: `needs-triage`
 
 Vocabulary follows [CONTEXT.md](../../CONTEXT.md). This spec changes where the review flow's acceptance gate sits, decided in [ADR 0006](../adr/0006-review-state-validity-and-completion.md), and collects the non-blocking follow-ups left open by 0.15.0 ([its spec](review-followups-0-15-0.md) and the 0.15.0 entry in [the validation log](../setup-validation.md)).
 
-Decisions D1–D4 below are open; this spec is not a Plan until the user settles them and agrees to it.
+Decisions D1–D4 were settled on 2026-10-08 (see Decisions). This spec is not a Plan until the user agrees to it.
 
 ## Problem Statement
 
@@ -16,7 +16,7 @@ A claim in the automatic flow may be committed only with a valid APPROVED and CO
 
 Ship 0.16.0 with the Claims below:
 
-- move the acceptance gate from committing to merging, releasing, reporting complete and marking a ticket done, and let main commit and push a claim to a working branch before its passes, with each pass naming the commit it judged;
+- move the acceptance gate from committing to landing on the remote default branch, releasing, reporting complete and marking a ticket done, and let main commit a claim before its passes (and push it to a working branch), with each pass naming the commit it judged;
 - make other model identifiers frontmatter-safe;
 - finish the 0.15.0 wording and test follow-ups;
 - release 0.16.0.
@@ -27,7 +27,7 @@ Claims are committed separately, in the order C1, C2, C3, C4. Every Claim's acce
 
 | Claim | Outcome | Acceptance | Depends on |
 | --- | --- | --- | --- |
-| C1 Commit before acceptance | Main may commit and push a claim to a working branch before its passes; acceptance gates merging, release, reporting complete and ticket completion | [C1](#c1-acceptance) | D1–D3 |
+| C1 Commit before acceptance | Main may commit a claim before its passes and push it to a working branch; acceptance gates landing on the remote default branch, release, reporting complete and ticket completion | [C1](#c1-acceptance) | — |
 | C2 Frontmatter-safe model identifiers | No accepted model value can end role frontmatter early or fail to parse | [C2](#c2-acceptance) | — |
 | C3 0.15.0 wording and test follow-ups | The remaining 0.15.0 wording is precise and its sentences are guarded | [C3](#c3-acceptance) | C1 |
 | C4 Release 0.16.0 | 0.16.0 is validated, recorded and tagged locally | [C4](#c4-acceptance) | C1–C3 |
@@ -36,15 +36,15 @@ Claims are committed separately, in the order C1, C2, C3, C4. Every Claim's acce
 
 Files: `skills/delegation/references/review-state.md`, `code-review.md`, `outcome-verification.md`, `plan-review.md`, `skills/delegation/SKILL.md`, `README.md`, `README.zh-TW.md`, `CONTEXT.md`, a new `docs/adr/0007-*.md`, and the tests that pin the replaced sentences.
 
-1. review-state.md Commit and completion becomes an acceptance gate: for a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main merges the claim into the default branch (directly or by merging a pull request), releases or tags it, reports it complete, or sets its ticket to a completion value only with a valid APPROVED and a valid CONFIRMED.
-2. Before its passes, main may commit such a claim and push it to the working branch (per D1 and D2), without the user's permission and without an "unaccepted" label; it never rewrites pushed history, so a fix is a new commit. Off mode otherwise keeps its behaviour.
+1. review-state.md Commit and completion becomes an acceptance gate: for a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main lands the claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releases or tags it, reports it complete, or sets its ticket to a completion value only with a valid APPROVED and a valid CONFIRMED. The default branch is the one the remote's HEAD names; a protected or shared branch the user names counts as one.
+2. Before its passes, main may commit such a claim on any branch, and push it to any branch other than a default branch, without the user's permission and without an "unaccepted" label (D1, D2). It may open a pull request whose description lists the claims still unaccepted (D4). It never rewrites pushed history, so a fix is a new commit. Off mode otherwise keeps its behaviour.
 3. Each code review and outcome verification names the commit it judged, supplied by main in the brief (the base revision and the reviewed commit); a pass covers that commit's content as review-state's Validity rules already describe, and a second review receives the range from the previously reviewed commit to the new one. The reviewer and verifier role definitions are unchanged (they diff the workspace against the base, which includes commits since the base).
-4. code-review.md and outcome-verification.md step 6 say an unreviewed or unverified claim is not merged, released or reported complete (replacing "do not commit it or report it complete" and the work-in-progress clause), and the handoff note says it "must not be merged, released or reported complete".
-5. review-state.md User decisions: a waived claim the gate covers is merged, released or reported complete only after a later pass (replacing the work-in-progress commit clause).
-6. On the default branch itself (per D3), the old rule stays: commit only with both passes, or a work-in-progress commit the user allows, labelled unaccepted.
+4. code-review.md and outcome-verification.md step 6 say an unreviewed or unverified claim is not landed on the default branch, released or reported complete (replacing "do not commit it or report it complete" and the work-in-progress clause), and the handoff note says it "must not be landed on the default branch, released or reported complete".
+5. review-state.md User decisions: a waived claim the gate covers is landed on the default branch, released or reported complete only after a later pass, or pushed to the default branch as a work-in-progress push the user allows (replacing the work-in-progress commit clause).
+6. Working on the default branch itself (D3): main may commit there before the passes, but pushes those commits to the remote default branch only with both passes, or as a work-in-progress push the user explicitly allows with each unaccepted commit labelled so in its message. When work on the default branch is not pushed, main says that a reclaimed environment would lose it.
 7. README (EN, zh-TW) Commit / Commit 條件, Not passed / 未通過 and Your decisions / 你的決定, and CONTEXT.md Unreviewed claim / Unverified claim say the same; the README_RULES entry for Commit is re-paired with the new procedure phrase.
 8. A new ADR 0007 records the decision and its rejected options (keep the commit gate; commit locally only; label every early commit), and ADR 0006 gains an amendment note pointing to it.
-9. The release flow keeps its order: the release claim is reviewed and verified before the release commit is merged or tagged; the tag stays a postcondition.
+9. The release flow keeps its order: the release claim is reviewed and verified before the release commit lands on the default branch or is tagged; the tag stays a postcondition.
 
 ### C2 acceptance
 
@@ -70,12 +70,14 @@ Files: `docs/setup-validation.md`, `.claude-plugin/plugin.json`.
 2. The manifest version is 0.16.0; the full suite and both `claude plugin validate` commands pass.
 3. The local tag `v0.16.0` matches the manifest and is not pushed without the user's go-ahead.
 
-## Open decisions
+## Decisions
 
-- **D1: Push before acceptance.** (a) Commit and push to the working branch without asking. (b) Commit locally without asking; push only after both passes or with permission. Recommendation: (a). In a cloud session an unpushed commit is lost with the container, and pushing to a working branch is not merging.
-- **D2: Which branches.** (a) Any branch other than the repository's default branch. (b) Only a branch created for the current work. Recommendation: (a), with the default branch named from the remote's HEAD; a protected or shared branch the user names is treated like the default branch.
-- **D3: Working on the default branch.** (a) Keep the current rule there (commit only after both passes, or a labelled work-in-progress commit the user allows). (b) Ask the user once per plan whether to create a working branch. Recommendation: (a), so nothing unaccepted lands on the default branch without the user's word.
-- **D4: Pull requests.** (a) Main may open a pull request before acceptance, listing the claims still unaccepted; merging is gated. (b) Opening a pull request also waits for both passes. Recommendation: (a), since a pull request is where people review, and it is outward-facing work the user already asks for explicitly.
+Settled by the user on 2026-10-08.
+
+- **D1, (a): push before acceptance.** Main commits and pushes a claim to a working branch without asking. Option not taken: commit locally only, push after both passes or with permission. In a cloud session an unpushed commit is lost with the container, and pushing to a working branch is not landing on the default branch.
+- **D2, (a): which branches.** Any branch other than a default branch: the remote HEAD's branch, or a protected or shared branch the user names. Option not taken: only a branch created for the current work.
+- **D3: working on the default branch.** Main may commit there before the passes; pushing to the remote default branch still waits for both passes, or for a labelled work-in-progress push the user allows. Options not taken: keep the commit gate on the default branch; push there freely.
+- **D4, (a): pull requests.** Main may open a pull request before acceptance, listing the claims still unaccepted; merging is gated. Option not taken: wait for both passes before opening one.
 
 ## User Stories
 
@@ -83,7 +85,7 @@ Files: `docs/setup-validation.md`, `.claude-plugin/plugin.json`.
 2. As a user, I want each review to name the commit it judged, so that I can see exactly what passed.
 3. As a user, I want unaccepted work kept out of the default branch, releases and completion reports, so that the gate still protects what matters.
 4. As a reviewer, I want a fix to arrive as a new commit, so that a second review sees exactly what changed.
-5. As a user working directly on the default branch, I want the current rule kept there, so that nothing unaccepted lands on it without my word.
+5. As a user working directly on the default branch, I want to commit freely but keep unaccepted commits off the remote default branch unless I allow it, so that others never pull unaccepted work.
 6. As a user, I want no model value to break a role file, so that a role never loses its tool restrictions.
 7. As a maintainer, I want the 0.15.0 sentences guarded by tests, so that they cannot drift silently.
 
