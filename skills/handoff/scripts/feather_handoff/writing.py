@@ -167,8 +167,7 @@ def update_work(store: Store, name: str, raw: object) -> dict:
             content = content[:title.start(1)] + value + content[title.end(1):]
             title = re.search(r"(?m)^# ([^\r\n]+)", content)
             assert title is not None
-        section = re.search(r"(?m)^#{1,6} ", content[title.end():])
-        end = title.end() + section.start() if section else len(content)
+        end = baseline.header_end(content, title.end())
         header, tail = content[:end], content[end:]
         for key, value in fields.items():
             expression = rf"(?m)^{FIELDS[key]}[：:][^\r\n]*"

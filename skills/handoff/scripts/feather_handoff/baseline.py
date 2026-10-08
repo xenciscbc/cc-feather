@@ -104,6 +104,13 @@ def headings(text: str) -> list[tuple[int, int, str]]:
     return result
 
 
+def header_end(text: str, start: int) -> int:
+    """Where the work header that follows the title (ending at start) ends: the next heading, or the text end.
+
+    Uses the same fence-aware ATX rule as the managed sections, so summaries and header updates agree."""
+    return next((offset for offset, _, _ in headings(text) if offset >= start), len(text))
+
+
 def section(text: str, title: str = HEADING) -> tuple[int, int, int] | None:
     items = headings(text)
     found = [i for i, item in enumerate(items)
