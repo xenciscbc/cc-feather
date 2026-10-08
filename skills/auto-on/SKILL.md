@@ -1,6 +1,6 @@
 ---
 name: auto-on
-description: "Enable automatic plan review, code review and outcome verification of plan-driven work, which lets main commit, push to branches it created and open pull requests before acceptance without asking, for this session, or persist it in an explicitly selected project/user scope."
+description: "Enable automatic plan review, code review and outcome verification of plan-driven work, which lets main commit, push to branches it created and open pull requests before acceptance without asking, while landing, release and completion still wait for both passes, for this session, or persist it in an explicitly selected project/user scope."
 disable-model-invocation: true
 argument-hint: "[session|project|user]"
 ---

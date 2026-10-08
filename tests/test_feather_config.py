@@ -3084,12 +3084,12 @@ class FeatherConfigTests(unittest.TestCase):
         ),
     }
     ACCEPTANCE_GATE_README = {
-        ('en', 'Commit', "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking. It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it. Before a gated review or verification, main commits only when that call needs a commit. Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a review that then lacks its commit is reported blocked. For a claim gated only because an active handoff records it as unreviewed or unverified, main may make the local commit a review needs without asking, and asks before pushes and pull requests, as in `off`. For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED. Pushed history is never rewritten, so a fix is a new commit, and landing a branch lands every claim on it. Each review and verification of such a claim judges a named commit with a clean workspace. The default branch is the one the remote's HEAD names, or a protected or shared branch you name. On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes or with your explicit permission; until then main reminds you that a reclaimed environment would lose them. In `off`, nothing else changes."),
+        ('en', 'Commit', "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking. It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it for this work. Before a gated review or verification, main commits only when that call needs a commit. Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked. For a claim gated only because an active handoff records it as unreviewed or unverified, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`. For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED. Pushed history is never rewritten, so a fix is a new commit, and landing a branch lands every claim on it. Each review and verification of such a claim judges a named commit with a clean workspace. The default branch is the one the remote's HEAD names, or a protected or shared branch you name. On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes or with your explicit permission; until then main reminds you that a reclaimed environment would lose them. In `off`, nothing else changes."),
         ('en', 'Not passed', 'a claim without APPROVED is unreviewed: it is not landed on the default branch, released or reported complete.'),
         ('en', 'Not passed', 'A claim without a valid CONFIRMED is unverified and is not landed, released or reported complete either.'),
         ('en', 'Your decisions', 'so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass, or pushed to the default branch as a work-in-progress push you allow;'),
         ('en', 'Resumed session', 'Before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, unless its ticket is finished.'),
-        ('zh', 'Commit 條件', '在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它建立該 branch，才算它自己的 branch。受把關約束的審查或驗證需要 commit 時，主 Agent 才會先 commit。開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此缺少 commit 的審查會回報為受阻。只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。以上 claim 都只有在 APPROVED 與 CONFIRMED 都仍有效時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。'),
+        ('zh', 'Commit 條件', '在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。受把關約束的審查或驗證需要 commit 時，主 Agent 才會先 commit。開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。以上 claim 都只有在 APPROVED 與 CONFIRMED 都仍有效時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。'),
         ('zh', '未通過', '沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成。'),
         ('zh', '未通過', '沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成。'),
         ('zh', '你的決定', '所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，才會進入預設 branch、release 或回報完成，或在你允許下把工作中途的 commit 推到預設 branch；'),
@@ -3600,7 +3600,6 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(before, self.files())
 
 
-
 class ReviewRulesFollowUpTests(unittest.TestCase):
     """0.17.0 review-rule follow-ups (docs/specs/review-followups-0-16-0.md): whole sentences, absences and scenarios."""
 
@@ -3649,27 +3648,27 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "An explicit user instruction not to commit or not to push overrides this authority within its scope; when it leaves a gated call without the commit it needs, main reports the claim blocked rather than reviewing an uncommitted workspace.",
         ),
         "review-auto.md": (
-            "In auto, before a claim's passes main may, without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims; it asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and a pull request is not permission to merge.",
+            "In auto, before the passes of a claim of plan-driven work main may, without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims; it asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and a pull request is not permission to merge.",
             "Landing on the default branch, release, reporting complete and ticket completion still wait for both passes, as cc-feather:delegation's review state describes.",
         ),
         "auto-review.md#Meaning": (
-            "`auto` also lets main, before a claim's passes and without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims, as [review state](../../delegation/references/review-state.md) describes; main asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and landing on the default branch, release, reporting complete and ticket completion still wait for both passes.",
-            "Beyond that repository authority, turning a mode on/off grants no authority to implement, merge or release,",
+            "`auto` also lets main, before the passes of a claim of plan-driven work and without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims, as [review state](../../delegation/references/review-state.md) describes; main asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and landing on the default branch, release, reporting complete and ticket completion still wait for both passes.",
+            "Beyond that repository authority, turning a mode on or off grants no authority to implement, merge or release,",
         ),
         "auto-on": (
-            "which lets main commit, push to branches it created and open pull requests before acceptance without asking",
+            "which lets main commit, push to branches it created and open pull requests before acceptance without asking, while landing, release and completion still wait for both passes",
         ),
         "README.md#Commit": (
             "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking.",
-            "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it.",
-            "Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a review that then lacks its commit is reported blocked.",
-            "For a claim gated only because an active handoff records it as unreviewed or unverified, main may make the local commit a review needs without asking, and asks before pushes and pull requests, as in `off`.",
+            "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it for this work.",
+            "Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked.",
+            "For a claim gated only because an active handoff records it as unreviewed or unverified, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`.",
         ),
         "README.zh-TW.md#Commit 條件": (
             "在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。",
-            "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它建立該 branch，才算它自己的 branch。",
-            "開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此缺少 commit 的審查會回報為受阻。",
-            "只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。",
+            "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。",
+            "開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。",
+            "只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。",
         ),
         "README.md": (
             "enabled mode `auto` reviews plan-driven work and lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes (see Commit above).",
@@ -3678,8 +3677,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（見上方 Commit 條件）；",
         ),
         "CONTEXT.md#Acceptance gate": (
-            "is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED.",
-            "Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated.",
+            "The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED.",
+            "Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.",
         ),
         "CONTEXT.md#Landing": (
             "Putting a Claim on the remote default branch by pushing it there or merging it, directly or through a pull request.",
@@ -3731,11 +3730,15 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          (("README.md#Commit", "for any claim an active handoff records as unreviewed or unverified, main may commit a claim before its passes and push it"),)),
         ("auto, a push to a remote branch that existed before and that main did not create",
          "main asks first",
-         (("review-state.md#Commits before the passes", "Before pushing to a remote branch that already existed and that main did not create, it asks the user;"),),
+         (("review-state.md#Commits before the passes", "Before pushing to a remote branch that already existed and that main did not create, it asks the user;"),
+          ("README.md#Commit", "It asks before pushing to a branch that already existed and that it did not create;"),
+          ("README.zh-TW.md#Commit 條件", "要推到原本就存在、不是它建立的 branch 前，會先問你；")),
          (("review-state.md#Commits before the passes", "push it to any branch other than a default branch"),)),
         ("the user says not to push or not to commit",
          "the instruction wins; a gated call left without its commit is reported blocked",
-         (("review-state.md#Repository authority", "An explicit user instruction not to commit or not to push overrides this authority within its scope; when it leaves a gated call without the commit it needs, main reports the claim blocked rather than reviewing an uncommitted workspace."),),
+         (("review-state.md#Repository authority", "An explicit user instruction not to commit or not to push overrides this authority within its scope; when it leaves a gated call without the commit it needs, main reports the claim blocked rather than reviewing an uncommitted workspace."),
+          ("README.md#Commit", "your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked."),
+          ("README.zh-TW.md#Commit 條件", "你明確說不要 commit 或不要 push 時，以你的指示為準")),
          ()),
     )
 
@@ -3747,6 +3750,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             for place, sentence in contradicting:
                 with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
                     self.assertNotIn(sentence, self.source(place), outcome)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -79,7 +79,7 @@ A Claim that needs Outcome verification but has no currently valid CONFIRMED, fo
 _Avoid_: failed verification
 
 **Acceptance gate**:
-The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated.
+The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
 _Avoid_: commit gate
 
 **Landing**:
