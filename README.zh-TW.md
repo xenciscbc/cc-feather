@@ -246,7 +246,7 @@ Claude 與 Codex 需使用同一個專案目錄並協調單一寫入者；無跨
 
 ## 更新、移除與驗證
 
-Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入；在這之前，較早版本的安裝仍保留舊的指引格式，check 也會提醒分派指引來自較舊的範本。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
+Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。0.17.0 改了 reviewer 與 analyst 的角色定義和自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報來自較舊範本的角色，`model`、`review` 與 session export 也會要求先做 setup update。此外，較早版本的安裝在更新前仍保留舊的指引格式，check 也會提醒分派指引來自較舊的範本。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
 
 ```text
 /cc-feather:setup 更新目前專案已安裝的角色與指引，保留模型與審查模式

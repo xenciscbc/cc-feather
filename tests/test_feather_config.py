@@ -4210,6 +4210,54 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                 with self.subTest(role=role, prefix=prefix):
                     self.assertIn(sentence, config._render(role, choice, prefix).decode("utf-8"))
 
+    # C8: the 0.17.0 release records its decisions and requires setup update.
+    RELEASE_0_17_0 = {
+        "README.md": (
+            "0.17.0 changes the reviewer and analyst role definitions and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports the roles from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`.",
+        ),
+        "README.zh-TW.md": (
+            "0.17.0 改了 reviewer 與 analyst 的角色定義和自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報來自較舊範本的角色，`model`、`review` 與 session export 也會要求先做 setup update。",
+        ),
+    }
+
+    def test_release_0_17_0_requires_setup_update(self):
+        for place, sentences in self.RELEASE_0_17_0.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertIn(sentence, text)
+        manifest = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual("0.17.0", manifest["version"])
+        entry = (config.ROOT / "docs" / "setup-validation.md").read_text(encoding="utf-8").split("## 0.17.0 ", 1)[1]
+        for sentence in ("**Setup update is required.** Unlike 0.14.0–0.16.0, this release changes the reviewer and analyst role definitions and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
+                         "`v0.16.0` tags da4948c, the clarification commit after the 0.16.0 release commit cd74ac4; this entry does not move it.",
+                         "Live scenarios: none of C1–C4's new rules was exercised by a session running the 0.17.0 rules with installed roles."):
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("no setup update is required", entry)
+
+    def test_adr_0008_records_the_decisions_and_amends_adr_0007(self):
+        adr = config.ROOT / "docs" / "adr"
+        decision = (adr / "0008-repository-authority-acceptance-and-gate-lifetime.md").read_text(encoding="utf-8")
+        for phrase in ("**U1**: in auto, committing before the passes, pushing to working branches and opening pull requests stay on, and are disclosed",
+                       "**U2**: main pushes freely only to a branch it created for the current work and asks before pushing to a pre-existing remote branch it did not create",
+                       "**U3**: a sixth user decision, accept and land, is the only way past the acceptance gate without both passes",
+                       "**U4**: in off mode, a Claim gated only by an active handoff record gets the local commit a gated call needs",
+                       "**U5**: an accept-and-land decision recorded in an active handoff still holds in a resumed session",
+                       "**U6**: when the handoff tool's first Git probe cannot run Git or times out",
+                       "**U7**: the configuration tool reports an unedited managed role rendered from an older template as needing setup update",
+                       "**Gate lifetime.** A gated Claim stays gated after either single pass.",
+                       "**Retry coverage.** Only a completed call establishes coverage.",
+                       "**Completion values.** The gate covers done values;",
+                       "This amends ADR 0007's push rule and its handoff-note lifetime.",
+                       "so every scope where delegation is installed needs setup update and a fresh session"):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, decision)
+        note = ("(Amended by ADR 0008: in auto, main pushes freely only to a branch it created for the current work and asks before pushing to a pre-existing one; "
+                "in off, a Claim gated by a handoff record gets only the local commit a gated call needs; a pass turns the handoff note into a pending-acceptance note "
+                "that stays until the Claim is landed, released or reported complete; the user may accept and land a Claim without both passes.)")
+        self.assertIn(note, (adr / "0007-commit-before-acceptance.md").read_text(encoding="utf-8").splitlines())
+
     # Each scenario names the outcome and the sentences that decide it; a sentence from 0.16.0 that would
     # decide it differently must be gone. Places are '<file>' or '<file>#<bullet label>'.
     TRANSITION_SCENARIOS = (

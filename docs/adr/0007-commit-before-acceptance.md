@@ -14,3 +14,5 @@ The acceptance gate now covers landing a Claim on the remote default branch (by 
 ## Consequences
 
 The acceptance gate amends ADR 0006's commit rule and ADR 0002's statement that a restricted Claim is not committed after a resume. Review counts, verdicts, the state model, the waiver and postcondition rules and the release order are otherwise unchanged; a waived Claim the gate covers reaches the default branch only after a later pass or as a work-in-progress push the user allows. Installed role definitions, the policy and the setup flow are unchanged, so no setup update is needed. A session that lands work it did not review pays for the review again.
+
+(Amended by ADR 0008: in auto, main pushes freely only to a branch it created for the current work and asks before pushing to a pre-existing one; in off, a Claim gated by a handoff record gets only the local commit a gated call needs; a pass turns the handoff note into a pending-acceptance note that stays until the Claim is landed, released or reported complete; the user may accept and land a Claim without both passes.)
