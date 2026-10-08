@@ -3017,6 +3017,42 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(place=place):
                 self.assertIn("only after the user authorises it", text)
 
+    # 0.15.0 sentences that had no guard of their own, pinned whole so no clause can drift silently.
+    FOLLOW_UP_SENTENCES = {
+        'plan-review.md': (
+            'Passing verdicts do not cross sessions either: in auto, a resumed session reviews an unfinished plan again before implementing it; in either mode, finished tickets are not redone, as [review state](review-state.md) describes.',
+            'An unresolved verdict restricts a resumed session only when an active handoff records it; it then applies, in either mode, until a later call passes it or the user cancels the work, changes its acceptance or waives it. A re-review is another call and lifts it only by passing, and a deferral keeps it.',
+            "In auto, a plan that is implemented, in part or whole, and has no plan-review state in this session is handled before any call as [review state](review-state.md)'s Implemented before plan review describes: main asks the user whether to run plan review first or go straight to code review with the missing READY waived.",
+            '4. On REVISE, a blocker that needs claims added, split or changed is reported for the user or the planning step to decide, as [review state](review-state.md) describes; it cannot be dispositioned FIX until the user authorises the claim change.',
+        ),
+        'review-state.md': (
+            "- **Resumed sessions.** Counts and passing verdicts do not cross sessions. In auto, a resumed session reviews an unfinished plan again before implementing it; in either mode it does not redo tickets that are finished. In either mode, an unresolved verdict that an active handoff records for a spec's plan restricts that spec's tickets when they are named, and one recorded for a ticket's plan still restricts that ticket when the whole spec is named; without an active handoff record, no restriction carries into a resumed session. Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, counted as usual; a claim whose ticket is finished is not redone and counts as accepted for landing and release. For a plan with an implemented claim, Implemented before plan review comes first.",
+            "After a claim passes and is committed, and any postcondition holds, main sets its ticket's status to the completion value the project's tracker convention defines for done work, with a note naming the version or commit.",
+            'A postcondition that does not hold leaves the claim incomplete and its ticket unfinished, with the observed state noted.',
+        ),
+        'SKILL.md': (
+            'After a claim passes and is committed, and any postcondition holds, update its ticket as [review state](references/review-state.md) describes.',
+        ),
+    }
+
+    def test_follow_up_sentences_from_0_15_0_are_stated_whole(self):
+        files = {"plan-review.md": config.ROOT / "skills" / "delegation" / "references" / "plan-review.md",
+                 "review-state.md": config.ROOT / "skills" / "delegation" / "references" / "review-state.md",
+                 "SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md"}
+        for name, sentences in self.FOLLOW_UP_SENTENCES.items():
+            text = files[name].read_text(encoding="utf-8")
+            for sentence in sentences:
+                with self.subTest(path=name, sentence=sentence[:60]):
+                    self.assertIn(sentence, text)
+        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                                "## Roles and routing", "### Automatic review switch"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 分派與預設模型", "### 自動審查開關"))
+        self.assertIn('Plan review first is an automatic call that covers the whole plan; going straight to code review records the missing READY as a waiver for the implemented claims.',
+                      english["Implemented before plan review"])
+        self.assertIn('先補計畫審查算一次自動呼叫，審查整份計畫；直接做程式碼審查則把缺少的 READY 記為已實作 claim 的豁免。',
+                      chinese["實作完才做計畫審查"])
+
     # Whole sentences, so that removing or rewording any clause of the acceptance gate fails the suite.
     ACCEPTANCE_GATE_SENTENCES = {
         'review-state.md': (
