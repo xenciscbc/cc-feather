@@ -3019,10 +3019,12 @@ class FeatherConfigTests(unittest.TestCase):
 
     # 0.15.0 sentences that had no guard of their own, pinned whole so no clause can drift silently.
     FOLLOW_UP_SENTENCES = {
-        'plan-review.md': (
+        'plan-review.md step 1': (
             'Passing verdicts do not cross sessions either: in auto, a resumed session reviews an unfinished plan again before implementing it; in either mode, finished tickets are not redone, as [review state](review-state.md) describes.',
             'An unresolved verdict restricts a resumed session only when an active handoff records it; it then applies, in either mode, until a later call passes it or the user cancels the work, changes its acceptance or waives it. A re-review is another call and lifts it only by passing, and a deferral keeps it.',
             "In auto, a plan that is implemented, in part or whole, and has no plan-review state in this session is handled before any call as [review state](review-state.md)'s Implemented before plan review describes: main asks the user whether to run plan review first or go straight to code review with the missing READY waived.",
+        ),
+        'plan-review.md': (
             '4. On REVISE, a blocker that needs claims added, split or changed is reported for the user or the planning step to decide, as [review state](review-state.md) describes; it cannot be dispositioned FIX until the user authorises the claim change.',
         ),
         'review-state.md': (
@@ -3036,11 +3038,15 @@ class FeatherConfigTests(unittest.TestCase):
     }
 
     def test_follow_up_sentences_from_0_15_0_are_stated_whole(self):
-        files = {"plan-review.md": config.ROOT / "skills" / "delegation" / "references" / "plan-review.md",
-                 "review-state.md": config.ROOT / "skills" / "delegation" / "references" / "review-state.md",
-                 "SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md"}
+        references = config.ROOT / "skills" / "delegation" / "references"
+        plan_review = (references / "plan-review.md").read_text(encoding="utf-8")
+        texts = {"plan-review.md step 1": next(line for line in plan_review.splitlines()
+                                               if line.startswith("1. Identify the logical plan")),
+                 "plan-review.md": plan_review,
+                 "review-state.md": (references / "review-state.md").read_text(encoding="utf-8"),
+                 "SKILL.md": (config.ROOT / "skills" / "delegation" / "SKILL.md").read_text(encoding="utf-8")}
         for name, sentences in self.FOLLOW_UP_SENTENCES.items():
-            text = files[name].read_text(encoding="utf-8")
+            text = texts[name]
             for sentence in sentences:
                 with self.subTest(path=name, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
