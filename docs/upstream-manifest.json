@@ -5,15 +5,15 @@
   "files": {
     "skills/handoff/scripts/feather_handoff/__init__.py": "734d59568233868e61dffbbad4cbc721b40a94d169cf965221d51f534e5470d2",
     "skills/handoff/scripts/feather_handoff/archiving.py": "57d78c77ee5085b93b45b8d0a4b6a1787d4af7da939f0642d8bd49b78a0c142c",
-    "skills/handoff/scripts/feather_handoff/baseline.py": "726edc300cc0460a3f02e4c7a12f542cb038d131ddf4ed28da0032097b99b062",
-    "skills/handoff/scripts/feather_handoff/cli.py": "7b34b4cf18de7375ad4c60d16b8d9a75ef6bdeb5d8410a0cd340a2681f4290da",
+    "skills/handoff/scripts/feather_handoff/baseline.py": "1e9aa24b693e0b14008bdff3672a6a07ddd3f8cb2092425f5e2a6e7f9e755dfb",
+    "skills/handoff/scripts/feather_handoff/cli.py": "e17ccffec1f66b83dca99f15d6f1fcd74c052eb96ea23221d2ae9c6047866bfd",
     "skills/handoff/scripts/feather_handoff/history.py": "238153ce6c6d0d728591b6fa622d06b0d3c137ff0d843c3386741107297d855d",
     "skills/handoff/scripts/feather_handoff/history_mutations.py": "da86a9249595192f8c8d22b240c95f1cb529370491c463846ea883b267d03208",
     "skills/handoff/scripts/feather_handoff/observations.py": "43a09d92e6f95ebd17c36849889f86c1894b4a1096a9960b4d9be9180374e478",
-    "skills/handoff/scripts/feather_handoff/records.py": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
+    "skills/handoff/scripts/feather_handoff/records.py": "00caa0a37277ea9a6f7a16f6ac365a416ef69f47da443be66e3fbb414c4cf268",
     "skills/handoff/scripts/feather_handoff/storage.py": "c3bef2ee22ce85d373f5b03f7570874df0f2d06e0a84962a52d38a996f9f2eb0",
-    "skills/handoff/scripts/feather_handoff/tracking.py": "54324573f51d43b8465212b11a0449857989a570cd14dda0f345d97ac6048ed5",
-    "skills/handoff/scripts/feather_handoff/writing.py": "0479b206a50be1e150a2dc0ffa699c82586b7d9d33d168c0ce9a8c699017a5ba",
+    "skills/handoff/scripts/feather_handoff/tracking.py": "538848b441c957adaef558cecdeab9488fc126ff019eeb788014e9935af7e3ca",
+    "skills/handoff/scripts/feather_handoff/writing.py": "dbff6c49a9b6dcdaaf485ea33e3c5d209df4b563386b9d416e627ac2e31e7662",
     "skills/handoff/scripts/handoff.py": "cb18fa4a4d3c350e1cba2f13162a5d03d87262651c6be5ae09e3d3abaeeeb491",
     "tests/test_handoff_archive.py": "1d80fbc62eb437343b8d1696affafeb511d60cf796c9d866701b51e576040f38",
     "tests/test_handoff_baseline.py": "5a2704812a91efa1a7bcf1526568cd1c257a89d3521c8ca3152edbc47423bc1a",
@@ -59,10 +59,6 @@
       "source_sha256": "1293aa24002c698a21921f70016c5deeb1b1b4828531fcb56919eec1405dbc35",
       "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Replaced the legacy-boundary-inside-modern-history expectation with the local boundary rule."
     },
-    "tests/test_handoff_mutations.py": {
-      "source_sha256": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings."
-    },
     "tests/test_handoff_roots.py": {
       "source_sha256": "a8df63d727f74b9ed0c94c80a73c92b831945ca5d72a3a26997651a484b04d4f",
       "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Imports test_handoff_tool through the tests package; in-process invocations and the direct Store test reset the root registry via addCleanup."
@@ -93,11 +89,11 @@
     },
     "skills/handoff/scripts/feather_handoff/writing.py": {
       "source_sha256": "b4b618b8c5ad98e35520c5ae3c9d6e1421117e07b55b12c8a450a063427aed07",
-      "change": "Local fix pending upstream: create/update refuse a 完成 save whose body would not archive; a completed work accepts one reviewed replacement keeping title, 更新 and 狀態：完成 when history lacks that identity; update details follow the file newline. A details update that would hide or change the level-1/2 sections after the managed details is refused with details-format; create/update results add warnings for level-1/2 headings inside details and update results add preserved_sections. An archival failure after a completed save returns partial archive-failed with cause_code and recovery retry-archive. The details-update sibling check compares headings together with their offsets inside the verbatim tail. A completed save whose tracking failed recommends archive with the same tracking choice. A details update is refused with details-format when the old details hide level-1/2 headings in a fence left open at the end or in a fence holding a same-character opener with an info string. Blank optional fields are input errors; create normalizes CRLF and CR in details to LF."
+      "change": "Local fix pending upstream: create/update refuse a 完成 save whose body would not archive; a completed work accepts one reviewed replacement keeping title, 更新 and 狀態：完成 when history lacks that identity; update details follow the file newline. A details update that would hide or change the level-1/2 sections after the managed details is refused with details-format; create/update results add warnings for level-1/2 headings inside details and update results add preserved_sections. An archival failure after a completed save returns partial archive-failed with cause_code and recovery retry-archive. The details-update sibling check compares headings together with their offsets inside the verbatim tail. A completed save whose tracking failed recommends archive with the same tracking choice. A details update is refused with details-format when the old details hide level-1/2 headings in a fence left open at the end or in a fence holding a same-character opener with an info string. Blank optional fields are input errors; create normalizes CRLF and CR in details to LF. Details-update section checks use the CommonMark ATX heading rule (baseline.level). A tracking failure with cause_code git-unavailable keeps the partial tracking-failed result but its recovery says to wait for Git, not to repeat create or update now, and once Git runs to apply tracking once with update (active work) or archive (completed work) using the same tracking choice. Partial header updates end the header at baseline.header_end."
     },
     "skills/handoff/scripts/feather_handoff/cli.py": {
       "source_sha256": "65899a4918521baae30e6dc2401545088d6dfd35bc1bd3833f2f82c5aa22a22e",
-      "change": "Local fix pending upstream: invalid JSON, non-UTF-8 or too deeply nested stdin is an input error, and any unexpected exception becomes a JSON internal error with exit 2. Usage errors use the JSON envelope with code usage and a missing selected file is not-found (exit 2); --help stays plain text. A FileNotFoundError is not-found only for a file inside the selected project (or, without a file name, for read/archive/compare of a named work); otherwise io. A duplicate JSON key on stdin is an input error."
+      "change": "Local fix pending upstream: invalid JSON, non-UTF-8 or too deeply nested stdin is an input error, and any unexpected exception becomes a JSON internal error with exit 2. Usage errors use the JSON envelope with code usage and a missing selected file is not-found (exit 2); --help stays plain text. A FileNotFoundError is not-found only for a file inside the selected project (or, without a file name, for read/archive/compare of a named work); otherwise io. A duplicate JSON key on stdin is an input error. --project and --exact-root are accepted before or after the subcommand."
     },
     "skills/handoff/scripts/feather_handoff/storage.py": {
       "source_sha256": "30273a1d110fbf60b56574435c11eecbd0d7985be9b4f8182cbed4c0027a9af5",
@@ -109,7 +105,15 @@
     },
     "skills/handoff/scripts/feather_handoff/tracking.py": {
       "source_sha256": "5f9eb71dfc4a18cc31489ab979d9492c5865f494891b75d7c700af8ef5988797",
-      "change": "Local fix pending upstream: tracking: track removes only the exact /.feather/handoffs/ rule and records the '# cc-feather: track /.feather/handoffs/' comment marker in one write; a default save with that marker reports existing-rule and writes nothing."
+      "change": "Local fix pending upstream: tracking: track removes only the exact /.feather/handoffs/ rule and records the '# cc-feather: track /.feather/handoffs/' comment marker in one write; a default save with that marker reports existing-rule and writes nothing. .gitignore lines are compared as Git reads them (rule_line): leading whitespace is part of the pattern and trailing spaces are not, so an indented marker does not count and track keeps an indented user rule. A first Git probe that cannot run Git or times out raises git-unavailable instead of returning not-checked, so the save reports partial tracking-failed."
+    },
+    "skills/handoff/scripts/feather_handoff/baseline.py": {
+      "source_sha256": "726edc300cc0460a3f02e4c7a12f542cb038d131ddf4ed28da0032097b99b062",
+      "change": "Local fix pending upstream: headings follow the CommonMark ATX rule (up to three spaces of indent, one to six #, then a space, a tab or the line end) through level(), so indented and tab-separated headings bound the managed sections. header_end finds the end of a work header at the first such heading outside a code fence, splitting lines only at LF; a heading inside a fence does not end the header and an unclosed fence runs it to the end of the text."
+    },
+    "skills/handoff/scripts/feather_handoff/records.py": {
+      "source_sha256": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
+      "change": "Local fix pending upstream: read/list report a whitespace-only work title as a format problem (Work title must not be blank). The summary reads the header up to baseline.header_end, the fence-aware ATX boundary, instead of the first column-0 '#' heading followed by a space."
     }
   }
 }

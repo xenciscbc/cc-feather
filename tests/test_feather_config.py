@@ -4370,5 +4370,37 @@ class InstallDocumentTests(unittest.TestCase):
         self.assertIn("or an unedited role was rendered from an older template", self.text("skills/setup/SKILL.md"))
 
 
+class UpstreamManifestTests(unittest.TestCase):
+    """C7 item 2: the upstream manifest describes the handoff files that ship.
+
+    Hashes are of the bytes as checked out; .gitattributes keeps *.py at LF in every checkout, so a CRLF
+    platform hashes the same bytes.
+    """
+
+    def setUp(self):
+        self.manifest = json.loads((config.ROOT / "docs" / "upstream-manifest.json").read_bytes())
+
+    def test_listed_files_ship_with_their_recorded_hashes(self):
+        files = self.manifest["files"]
+        self.assertTrue(files)
+        self.assertEqual(set(self.manifest["upstream_paths"]), set(files))
+        for name, recorded in files.items():
+            with self.subTest(file=name):
+                path = config.ROOT / name
+                self.assertTrue(path.is_file(), f"listed file does not ship: {name}")
+                self.assertEqual(config.digest(path.read_bytes()), recorded, f"stale manifest hash: {name}")
+
+    def test_adaptations_name_listed_files_that_differ_from_their_source(self):
+        files = self.manifest["files"]
+        for name, entry in self.manifest["adaptations"].items():
+            with self.subTest(file=name):
+                self.assertIn(name, files)
+                self.assertEqual(set(entry), {"source_sha256", "change"})
+                self.assertRegex(entry["source_sha256"], r"^[0-9a-f]{64}$")
+                # An adaptation records changed bytes; a file identical to its source needs no entry.
+                self.assertNotEqual(entry["source_sha256"], files[name])
+                self.assertTrue(entry["change"].strip())
+
+
 if __name__ == "__main__":
     unittest.main()
