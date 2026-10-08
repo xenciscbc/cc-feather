@@ -4228,7 +4228,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                     self.assertIn(sentence, text)
         manifest = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
         self.assertEqual("0.17.0", manifest["version"])
-        entry = (config.ROOT / "docs" / "setup-validation.md").read_text(encoding="utf-8").split("## 0.17.0 ", 1)[1]
+        entry = (config.ROOT / "docs" / "setup-validation.md").read_text(encoding="utf-8").split("## 0.17.0 ", 1)[1].split("\n## ", 1)[0]
         for sentence in ("**Setup update is required.** Unlike 0.14.0–0.16.0, this release changes the reviewer and analyst role definitions and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
                          "`v0.16.0` tags da4948c, the clarification commit after the 0.16.0 release commit cd74ac4; this entry does not move it.",
                          "Live scenarios: none of C1–C4's new rules was exercised by a session running the 0.17.0 rules with installed roles."):
@@ -4249,14 +4249,14 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                        "**Gate lifetime.** A gated Claim stays gated after either single pass.",
                        "**Retry coverage.** Only a completed call establishes coverage.",
                        "**Completion values.** The gate covers done values;",
-                       "This amends ADR 0007's push rule and its handoff-note lifetime.",
+                       "This amends ADR 0007's push rule, its handoff-note lifetime and its rule that a finished ticket counts as accepted: the gate covers done values, finished means not redone, and only a done value set after valid passes or accept and land, with no relevant change since, counts as accepted.",
                        "so every scope where delegation is installed needs setup update and a fresh session"):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, decision)
-        note = ("(Amended by ADR 0008: in auto, main pushes freely only to a branch it created for the current work and asks before pushing to a pre-existing one; "
-                "in off, a Claim gated by a handoff record gets only the local commit a gated call needs; a pass turns the handoff note into a pending-acceptance note "
-                "that stays until the Claim is landed, released or reported complete; the user may accept and land a Claim without both passes.)")
+        note = '(Amended by ADR 0008: in auto, main pushes freely only to a branch it created for the current work and asks before pushing to a pre-existing one; in off, a Claim gated by a handoff record gets only the local commit a gated call needs; a pass turns the handoff note into a pending-acceptance note that stays until the Claim is landed, released or reported complete, or cancelled with its commits disposed of; the user may accept and land a Claim without both passes; the gate covers done values, and a finished ticket counts as accepted only when it was set to a done value after valid passes or accept and land, with no relevant change since.)'
         self.assertIn(note, (adr / "0007-commit-before-acceptance.md").read_text(encoding="utf-8").splitlines())
+        self.assertIn("(Amended by ADR 0008: a finished ticket counts as accepted only when it was set to a done value after valid passes or an accept-and-land decision, with no relevant change since; a won't-do value never counts as acceptance.)",
+                      (adr / "0006-review-state-validity-and-completion.md").read_text(encoding="utf-8").splitlines())
 
     # Each scenario names the outcome and the sentences that decide it; a sentence from 0.16.0 that would
     # decide it differently must be gone. Places are '<file>' or '<file>#<bullet label>'.

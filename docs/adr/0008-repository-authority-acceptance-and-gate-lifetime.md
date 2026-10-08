@@ -29,4 +29,4 @@ The agreed corrections:
 
 ## Consequences
 
-This amends ADR 0007's push rule and its handoff-note lifetime. The reviewer and analyst role definitions and the automatic review guidance change, so every scope where delegation is installed needs setup update and a fresh session; until then `check` reports the stale roles and `model`, `review` and session export ask for the update. These remain model instructions rather than hook-enforced gates.
+This amends ADR 0007's push rule, its handoff-note lifetime and its rule that a finished ticket counts as accepted: the gate covers done values, finished means not redone, and only a done value set after valid passes or accept and land, with no relevant change since, counts as accepted. The reviewer and analyst role definitions and the automatic review guidance change, so every scope where delegation is installed needs setup update and a fresh session; until then `check` reports the stale roles and `model`, `review` and session export ask for the update. These remain model instructions rather than hook-enforced gates.
