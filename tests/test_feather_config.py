@@ -3075,7 +3075,7 @@ class FeatherConfigTests(unittest.TestCase):
         'code-review.md': (
             "while [review state](review-state.md)'s acceptance gate still covers, in either mode, a claim an active handoff records as unreviewed, unverified or pending acceptance, and the handoff note changes after a pass as [review state](review-state.md)'s Pending acceptance describes in either mode;",
             'For a claim the acceptance gate covers, also name the commit under review and dispatch only with a clean workspace at that commit, as [review state](review-state.md) describes.',
-            "and, for a claim the acceptance gate covers, the range from the last commit a completed review judged to the new one; after a call that did not complete, supply the full range from the claim's base revision and any partial findings as evidence.",
+            "and, for a claim the acceptance gate covers, the range from the previously judged commit to the new one; when the previous call did not complete, supply instead the full range from the claim's base revision with earlier and partial findings as evidence.",
             'do not land it on the default branch, release it or report it complete, report its open findings',
             'record as plain text that the claim is unreviewed, its open findings and that it must not be landed on the default branch, released or reported complete.',
         ),
@@ -3158,7 +3158,7 @@ class FeatherConfigTests(unittest.TestCase):
             references / "code-review.md": (
                 "acceptance gate still covers, in either mode",
                 "also name the commit under review and dispatch only with a clean workspace at that commit",
-                "the range from the last commit a completed review judged to the new one",
+                "the range from the previously judged commit to the new one",
                 "must not be landed on the default branch, released or reported complete"),
             references / "outcome-verification.md": (
                 "also name the base revision and the commit under verification, and dispatch only with a clean workspace",
@@ -3638,8 +3638,6 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             return FeatherConfigTests.glossary_entries(text)[label]
         if path == "auto-review.md":
             return text.split("## " + label, 1)[1]
-        if path == "review-state.md" and label in ("Stop", "What counts as a call"):
-            return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
         if path == "handoff SKILL.md":
             return text.split("## " + label, 1)[1].split("\n## ", 1)[0]
         return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
@@ -3911,7 +3909,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "review-state.md#Completed calls and coverage": (
             "A completed call is one that returned a verdict for the content it judged; a call that failed, was interrupted, broke protocol or returned no verdict did not complete.",
             "Only a completed review establishes coverage.",
-            "A second review, narrowed to the earlier findings and the fixes, and the range from the previously judged commit follow only a completed review, and that range starts at the last commit a completed review judged.",
+            "A second review, narrowed to the earlier findings and the fixes, and the range from the previously judged commit follow only when the previous call completed.",
             "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan), carrying any partial findings as evidence, not as coverage.",
             "Every attempted call still counts as under What counts as a call, and the budgets are unchanged.",
         ),
@@ -3919,22 +3917,22 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes.",
         ),
         "code-review.md": (
-            "On a later call for the same claim, state whether the earlier call completed with a verdict; the reviewer narrows its review only when the brief says it did, as [review state](review-state.md)'s Completed calls and coverage describes.",
-            "the range from the last commit a completed review judged to the new one; after a call that did not complete, supply the full range from the claim's base revision and any partial findings as evidence.",
+            "On a later call for the same claim, state whether the previous call completed with a verdict; the reviewer narrows its review only when the brief says it did, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "the range from the previously judged commit to the new one; when the previous call did not complete, supply instead the full range from the claim's base revision with earlier and partial findings as evidence.",
         ),
         "plan-review.md": (
-            "On a later call for the same plan, state whether the earlier call completed with a verdict; analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "On a later call for the same plan, state whether the previous call completed with a verdict; analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan, as [review state](review-state.md)'s Completed calls and coverage describes.",
         ),
-        "reviewer.md": ('When the brief says an earlier review of this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because the earlier call failed, was interrupted or returned no verdict, review the full scope from the base revision and treat any partial findings supplied as evidence only.',),
-        "analyst.md": ('When the brief says an earlier review of this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, review the whole plan and treat any partial findings supplied as evidence only.',),
+        "reviewer.md": ('When the brief says the previous call for this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the full scope from the base revision and treat earlier and partial findings supplied as evidence only.',),
+        "analyst.md": ('When the brief says the previous call for this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only.',),
         # Budgets stay as they were.
         "review-state.md#Stop": ("Two consecutive automatic calls without a pass stop the step for that work; it waits for the user's explicit request.",),
         "review-state.md#What counts as a call": ("Every attempted call counts, including a generic retry after a temporary failure, and a stopped step is never dispatched again as a retry.",),
     }
 
     RETRY_COVERAGE_REMOVED = {
-        "reviewer.md": ("On a second review, check only whether the earlier findings are closed",),
-        "analyst.md": ("On a second review, verify resolved blockers",),
+        "reviewer.md": ("On a second review, check only whether the earlier findings are closed", "an earlier review of this claim completed"),
+        "analyst.md": ("On a second review, verify resolved blockers", "an earlier review of this plan completed"),
         "review-state.md#What a gated pass judged": ("The pass covers that commit, and a second review receives the range",),
     }
 
@@ -3954,7 +3952,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
 
     def test_installed_reviewer_and_analyst_render_the_coverage_rule(self):
         choice = {"model": "sonnet", "effort": "high"}
-        for role, sentence in (("reviewer", 'When the brief says an earlier review of this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because the earlier call failed, was interrupted or returned no verdict, review the full scope from the base revision and treat any partial findings supplied as evidence only.'), ("analyst", 'When the brief says an earlier review of this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, review the whole plan and treat any partial findings supplied as evidence only.')):
+        for role, sentence in (("reviewer", 'When the brief says the previous call for this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the full scope from the base revision and treat earlier and partial findings supplied as evidence only.'), ("analyst", 'When the brief says the previous call for this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only.')):
             for prefix in ("", "cc-"):
                 with self.subTest(role=role, prefix=prefix):
                     self.assertIn(sentence, config._render(role, choice, prefix).decode("utf-8"))
@@ -3965,21 +3963,24 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ("a code review call fails before returning a verdict, then the next call",
          "the next call reviews the full scope from the base revision; the failed call still counts",
          (("review-state.md#Completed calls and coverage", "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan), carrying any partial findings as evidence, not as coverage."),
-          ("reviewer.md", "When it does not, because the earlier call failed, was interrupted or returned no verdict, review the full scope from the base revision and treat any partial findings supplied as evidence only."),
+          ("reviewer.md", "When it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the full scope from the base revision and treat earlier and partial findings supplied as evidence only."),
           ("review-state.md#What counts as a call", "Every attempted call counts, including a generic retry after a temporary failure,")),
          (("reviewer.md", "On a second review, check only whether the earlier findings are closed"),)),
         ("a review is interrupted after reporting partial findings",
          "the partial findings go to the next call as evidence, not as coverage",
          (("review-state.md#Completed calls and coverage", "carrying any partial findings as evidence, not as coverage."),
-          ("code-review.md", "after a call that did not complete, supply the full range from the claim's base revision and any partial findings as evidence.")),
+          ("code-review.md", "when the previous call did not complete, supply instead the full range from the claim's base revision with earlier and partial findings as evidence.")),
          ()),
         ("a completed review, then a follow-up call fails, then another call",
-         "coverage runs from the last commit the completed review judged",
-         (("review-state.md#Completed calls and coverage", "and that range starts at the last commit a completed review judged."),),
-         ()),
+         "the next call reviews the full scope from the base revision; earlier and partial findings are evidence",
+         (("review-state.md#Completed calls and coverage", "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan), carrying any partial findings as evidence, not as coverage."),
+          ("code-review.md", "when the previous call did not complete, supply instead the full range from the claim's base revision with earlier and partial findings as evidence."),
+          ("reviewer.md", "When it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the full scope from the base revision")),
+         (("reviewer.md", "an earlier review of this claim completed"),
+          ("review-state.md#Completed calls and coverage", "and that range starts at the last commit a completed review judged."))),
         ("a plan review call fails, then the next call",
          "analyst reviews the whole plan",
-         (("analyst.md", "when it does not, review the whole plan and treat any partial findings supplied as evidence only."),
+         (("analyst.md", "when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only."),
           ("plan-review.md", "analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan,")),
          (("analyst.md", "On a second review, verify resolved blockers"),)),
         ("two consecutive automatic calls fail (budget exhausted)",
