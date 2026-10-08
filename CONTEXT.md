@@ -87,7 +87,7 @@ A gated Claim whose Active handoff note says it has passed one or both steps, or
 _Avoid_: approved claim, half-passed claim
 
 **Acceptance gate**:
-The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's Accept and land decision. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
+The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed, unverified or pending acceptance, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's Accept and land decision. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
 _Avoid_: commit gate
 
 **Landing**:
