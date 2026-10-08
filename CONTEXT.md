@@ -78,6 +78,14 @@ _Avoid_: failed review, skipped review
 A Claim that needs Outcome verification but has no currently valid CONFIRMED, for example because its Outcome verification has not run yet, was refuted, ended INCONCLUSIVE or stopped, or its CONFIRMED expired after a relevant change. It is not complete. It is not landed on the default branch, released or reported complete. The only exception is the user's Accept and land decision.
 _Avoid_: failed verification
 
+**Active handoff**:
+An unfinished Feather handoff record for the work under the project's `.feather/handoffs/`. It is how unresolved verdicts and gate notes reach a resumed session.
+_Avoid_: handoff file, notes
+
+**Pending-acceptance claim**:
+A gated Claim whose Active handoff note says it has passed one or both steps, or has an Accept and land decision, but is not yet landed, released or reported complete. It stays under the Acceptance gate until then, or until it is cancelled with its commits decided.
+_Avoid_: approved claim, half-passed claim
+
 **Acceptance gate**:
 The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's Accept and land decision. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
 _Avoid_: commit gate
