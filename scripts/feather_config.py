@@ -1013,8 +1013,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("delegation is already installed; use review to change its saved review mode")
     if args.component == "both" and args.command in {"update", "remove"} and not records:
         raise ConfigError(f"{args.scope} scope is not installed")
-    if delegation is not None and args.command != "remove":
-        # Checked before role files are read: a saved "---" also breaks their frontmatter.
+    if delegation is not None and "delegation" in selected and args.command in {"install", "update", "model"}:
+        # Checked before role files are read or rendered: a saved "---" also breaks their frontmatter.
         replaced = {role for role, fields in _overrides(args.set).items() if "model" in fields}
         unsafe = [f"{role} ({choice['model']!r})" for role, choice in delegation["choices"].items()
                   if role not in replaced and _unsafe_saved_model(choice["model"])]
@@ -1120,7 +1120,10 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     for role, fields in _overrides(args.set).items():
         choices[role].update(fields)
     if args.command != "remove":
-        for choice in choices.values():
+        replaced = {role for role, fields in _overrides(args.set).items() if "model" in fields}
+        for role, choice in choices.items():
+            if role not in replaced and _unsafe_saved_model(choice["model"]):
+                continue  # refused above for commands that write role files; reported by inspection
             _validate_choice(choice["model"], choice["effort"])
     review_mode = args.review_mode or (delegation["review_mode"] if delegation else "off")
     for name in active_components:

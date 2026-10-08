@@ -465,7 +465,7 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(model=model[:40]):
                 config._validate_choice(model, "high")
         self.apply("install")
-        for model in ("opus---x", "abc:"):
+        for model in ("opus---x", "a---b[1m]", "abc:", "abc:[1m]"):
             with self.subTest(command="model", model=model):
                 code, error = self.call("model", "project", "--set", f"analyst.model={model}")
                 self.assertEqual(code, 2)
@@ -487,6 +487,9 @@ class FeatherConfigTests(unittest.TestCase):
         code, error = self.call("model", "project", "--set", "analyst.model=sonnet")
         self.assertEqual(code, 2)
         self.assertIn("scout ('a---b')", error["error"])
+        # Operations that write no role file still run: the handoff component and the review mode.
+        self.apply("install", "project", "--component", "handoff")
+        self.apply("review", "project", "--review-mode", "off")
         self.apply("model", "project", "--set", "analyst.model=sonnet", "--set", "scout.model=haiku")
         self.assertEqual(self.call("check")[0], 0)
         self.assertEqual(self.call("show")[1]["choices"]["scout"]["model"], "haiku")
