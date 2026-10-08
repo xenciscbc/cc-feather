@@ -22,12 +22,13 @@ def git(store: Store, *arguments: str) -> subprocess.CompletedProcess:
 def ensure_tracking(store: Store, work: str, choice: str) -> str:
     try:
         probe = git(store, "rev-parse", "--is-inside-work-tree")
-        if probe.returncode and "not a git repository" not in probe.stderr.lower():
-            raise HandoffError("git", probe.stderr.strip() or "Git tracking could not be checked")
-        if probe.stdout.strip() != "true":
-            return "non-git"
-    except (OSError, subprocess.TimeoutExpired):
-        return "not-checked"
+    except (OSError, subprocess.TimeoutExpired) as error:
+        # Without a Git answer the ignore rule cannot be applied; the save reports a partial tracking failure.
+        raise HandoffError("git-unavailable", f"Git could not be run or did not respond: {error}") from None
+    if probe.returncode and "not a git repository" not in probe.stderr.lower():
+        raise HandoffError("git", probe.stderr.strip() or "Git tracking could not be checked")
+    if probe.stdout.strip() != "true":
+        return "non-git"
     relative = f".feather/handoffs/{work}"
     path = store.project / ".gitignore"
     check_path(path)

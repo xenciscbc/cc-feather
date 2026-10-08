@@ -272,7 +272,19 @@ def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
             state = "missing"
         except (OSError, ValueError):
             pass
-        if result["work_status"] == "完成":
+        cause = getattr(error, "code", "io")
+        if cause == "git-unavailable":
+            # Retrying while Git cannot run would loop; wait for Git, then apply tracking once.
+            unavailable = ("tracking was not applied because Git could not be run or did not respond. "
+                           "Do not repeat create or update now. Once Git runs, apply tracking with ")
+            if result["work_status"] == "完成":
+                recovery = ("Completed work was saved but not archived, and " + unavailable + "archive using "
+                            f'{{"version": "<current version>", "tracking": "{tracking}"}}; '
+                            "it archives the work and then applies tracking.")
+            else:
+                recovery = ("Work was saved, but " + unavailable + "update using the current version and "
+                            f'{{"tracking": "{tracking}"}}.')
+        elif result["work_status"] == "完成":
             # A completed work refuses normal updates; archive retries it and applies the same tracking choice.
             recovery = ("Completed work was saved but not archived because tracking failed; inspect the reported "
                         "work and resolve the Git rules, then run archive with "
@@ -282,7 +294,7 @@ def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
             recovery = ("Work was saved before tracking failed; inspect the reported work and Git rules, "
                         "then retry update with the current version. Do not repeat create.")
         return {**observed, "status": "partial", "complete": False, "code": "tracking-failed",
-                "cause_code": getattr(error, "code", "io"), "message": str(error), "state": state,
+                "cause_code": cause, "message": str(error), "state": state,
                 "work": name, "work_path": str(store.directory / name), "saved_version": result["version"],
                 "tracking": "error", "recovery": recovery}
     if result["work_status"] == "完成":
