@@ -79,9 +79,13 @@ A Claim that needs Outcome verification but has no currently valid CONFIRMED, fo
 _Avoid_: failed verification
 
 **Acceptance gate**:
-The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
+The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED, or with the user's Accept and land decision. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
 _Avoid_: commit gate
 
 **Landing**:
 Putting a Claim on the remote default branch by pushing it there or merging it, directly or through a pull request. Opening a pull request is not landing, and permission to open one is not permission to merge it.
 _Avoid_: shipping
+
+**Accept and land**:
+The user's explicit, recorded acceptance of a named gated Claim without one or both passes, with the commit it accepts, the missing passes and the remaining risk. It satisfies the Acceptance gate for that Claim until a relevant change, is never READY, APPROVED or CONFIRMED, and a casual "done" becomes one only after main confirms and records it.
+_Avoid_: sign-off, override

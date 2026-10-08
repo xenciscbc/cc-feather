@@ -2852,7 +2852,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "reports which tickets it considers done",
                 "or the user says it is done",
                 "without a defined value, main asks",
-                "re-review, deferral, cancellation, changed acceptance or waiver",
+                "re-review, deferral, cancellation, changed acceptance, waiver or accept and land",
                 "with its scope",
                 "stays visible with its remaining risk",
                 "never recorded as READY, APPROVED or CONFIRMED",
@@ -3028,8 +3028,8 @@ class FeatherConfigTests(unittest.TestCase):
             '4. On REVISE, a blocker that needs claims added, split or changed is reported for the user or the planning step to decide, as [review state](review-state.md) describes; it cannot be dispositioned FIX until the user authorises the claim change.',
         ),
         'review-state.md': (
-            "- **Resumed sessions.** Counts and passing verdicts do not cross sessions. In auto, a resumed session reviews an unfinished plan again before implementing it; in either mode it does not redo tickets that are finished. In either mode, an unresolved verdict that an active handoff records for a spec's plan restricts that spec's tickets when they are named, and one recorded for a ticket's plan still restricts that ticket when the whole spec is named; without an active handoff record, no restriction carries into a resumed session. Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, counted as usual; a claim whose ticket is finished is not redone and counts as accepted for landing and release. For a plan with an implemented claim, Implemented before plan review comes first.",
-            "After a claim passes and is committed, and any postcondition holds, main sets its ticket's status to the completion value the project's tracker convention defines for done work, with a note naming the version or commit.",
+            "- **Resumed sessions.** Counts and passing verdicts do not cross sessions. In auto, a resumed session reviews an unfinished plan again before implementing it; in either mode it does not redo tickets that are finished. In either mode, an unresolved verdict that an active handoff records for a spec's plan restricts that spec's tickets when they are named, and one recorded for a ticket's plan still restricts that ticket when the whole spec is named; without an active handoff record, no restriction carries into a resumed session. Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, counted as usual. Only a claim whose ticket was set to a done value after valid passes or an accept-and-land decision, with no relevant change since, is exempt and counts as accepted for landing and release; any other finished ticket is only not redone. For a plan with an implemented claim, Implemented before plan review comes first.",
+            "After a claim passes and is committed, and any postcondition holds, main sets its ticket's status to the completion value the project's tracker convention defines for done work, with a note naming the version or commit; after an accept-and-land decision it does the same, and the note also names the decision and its remaining risk.",
             'A postcondition that does not hold leaves the claim incomplete and its ticket unfinished, with the observed state noted.',
         ),
         'SKILL.md': (
@@ -3063,12 +3063,14 @@ class FeatherConfigTests(unittest.TestCase):
     ACCEPTANCE_GATE_SENTENCES = {
         'review-state.md': (
             'For a claim the acceptance gate covers, that change is the commit named in the brief, judged with a clean workspace, as What a gated pass judged describes.',
-            "- **Commit and completion.** For a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main lands the claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releases or tags it, reports it complete or sets its ticket to a completion value only with a valid APPROVED and a valid CONFIRMED. This is the acceptance gate. Landing a branch lands every claim on it, so it waits for every gated claim there; a cancelled claim's commits stay on the branch until the user decides otherwise. The default branch is the branch the `origin` remote's HEAD names, or the only remote's HEAD when there is no `origin`; with no remote, several remotes and no `origin`, or no HEAD, main asks. A protected or shared branch the user names counts as a default branch.",
+            "- **Commit and completion.** For a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main lands the claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releases or tags it, reports it complete or sets its ticket to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's accept-and-land decision for it. This is the acceptance gate. It covers the completion value for done work; a value for work that will not be done is set only on the user's recorded cancellation and never counts as acceptance. Landing a branch lands every claim on it, so it waits for every gated claim there. A cancelled claim's commits that remain on a branch are listed as unaccepted, in the report and in any active handoff, until the user decides their disposition: reverted with a new commit, kept off the default branch, or accepted and landed; landing a branch that carries them waits for that decision. The default branch is the branch the `origin` remote's HEAD names, or the only remote's HEAD when there is no `origin`; with no remote, several remotes and no `origin`, or no HEAD, main asks. A protected or shared branch the user names counts as a default branch.",
             "- **Commits before the passes.** Before its passes, main may commit a claim of plan-driven work in the automatic flow on any branch, push it to a branch main created for the current work and open a pull request whose description lists the claims still unaccepted, without the user's permission, and keeps that list current as claims pass. Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a resumed session main treats a branch as its own only when an active handoff records that main created it for this work, and otherwise asks. For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks. Before dispatching a gated code review or outcome verification, main ensures the claim's content is committed and the precondition of What a gated pass judged holds; when a commit is needed, the authority above permits it without asking, and an already suitable commit needs no new one. It never rewrites pushed history, so a fix is a new commit. On a default branch, main labels each commit made before both passes unaccepted in its message when it creates it; the label records the commit's state then and stays in history. Commits on other branches carry no label. It pushes such commits to the remote default branch only after both passes, or as a work-in-progress push the user explicitly allows, and while they stay unpushed it says a reclaimed environment would lose them. Off mode otherwise keeps its behaviour.",
             "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review or outcome verification only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. The pass covers that commit, and a second review receives the range from the previously judged commit to the new one. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, and main does not commit that work to review it.",
             '- **Existing handoff notes.** An active handoff\'s record that a claim is unreviewed or unverified restricts it under the acceptance gate whatever its wording, such as "must not be committed"; main updates the wording at the next handoff maintenance.',
-            'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass, or pushed to the default branch as a work-in-progress push the user allows with its commits labelled as under Commits before the passes; for a claim an active handoff recorded as unreviewed or unverified, a waiver kept in that handoff counts as that record for the gate.',
-            'Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, counted as usual; a claim whose ticket is finished is not redone and counts as accepted for landing and release.',
+            'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision.',
+            'For a claim an active handoff recorded as unreviewed or unverified, a waiver kept in that handoff counts as that record for the gate.',
+            "Separately, a work-in-progress push the user allows may move a gated claim's commits to the default branch, labelled as under Commits before the passes; it satisfies neither release nor completion.",
+            'Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, counted as usual. Only a claim whose ticket was set to a done value after valid passes or an accept-and-land decision, with no relevant change since, is exempt and counts as accepted for landing and release; any other finished ticket is only not redone.',
         ),
         'code-review.md': (
             "while [review state](review-state.md)'s acceptance gate still covers, in either mode, a claim an active handoff records as unreviewed or unverified;",
@@ -3084,16 +3086,16 @@ class FeatherConfigTests(unittest.TestCase):
         ),
     }
     ACCEPTANCE_GATE_README = {
-        ('en', 'Commit', "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking. It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it for this work. Before a gated review or verification, main commits only when that call needs a commit. Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked. For a claim gated only because an active handoff records it as unreviewed or unverified, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`. For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED. Pushed history is never rewritten, so a fix is a new commit, and landing a branch lands every claim on it. Each review and verification of such a claim judges a named commit with a clean workspace. The default branch is the one the remote's HEAD names, or a protected or shared branch you name. On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes or with your explicit permission; until then main reminds you that a reclaimed environment would lose them. In `off`, nothing else changes."),
+        ('en', 'Commit', "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking. It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it for this work. Before a gated review or verification, main commits only when that call needs a commit. Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked. For a claim gated only because an active handoff records it as unreviewed or unverified, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`. For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED, or with your accept-and-land decision. A cancelled claim's commits left on a branch stay listed as unaccepted until you decide to revert them, keep them off the default branch or accept and land them; a branch carrying them is not landed before that. Pushed history is never rewritten, so a fix is a new commit, and landing a branch lands every claim on it. Each review and verification of such a claim judges a named commit with a clean workspace. The default branch is the one the remote's HEAD names, or a protected or shared branch you name. On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes or with your explicit permission; until then main reminds you that a reclaimed environment would lose them. In `off`, nothing else changes."),
         ('en', 'Not passed', 'a claim without APPROVED is unreviewed: it is not landed on the default branch, released or reported complete.'),
         ('en', 'Not passed', 'A claim without a valid CONFIRMED is unverified and is not landed, released or reported complete either.'),
-        ('en', 'Your decisions', 'so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass, or pushed to the default branch as a work-in-progress push you allow;'),
-        ('en', 'Resumed session', 'Before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, unless its ticket is finished.'),
-        ('zh', 'Commit 條件', '在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。受把關約束的審查或驗證需要 commit 時，主 Agent 才會先 commit。開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。以上 claim 都只有在 APPROVED 與 CONFIRMED 都仍有效時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。'),
+        ('en', 'Your decisions', 'so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass or your accept-and-land decision.'),
+        ('en', 'Resumed session', 'Before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, unless its ticket was set to a done value after both passes or your accept-and-land decision and nothing relevant changed since.'),
+        ('zh', 'Commit 條件', '在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。受把關約束的審查或驗證需要 commit 時，主 Agent 才會先 commit。開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。以上 claim 都只有在 APPROVED 與 CONFIRMED 都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。取消的 claim 留在 branch 上的 commit 會一直列為未驗收，直到你決定用新 commit revert、不讓它進入預設 branch，或接受並合併；在那之前，帶著它們的 branch 不會被合併。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。'),
         ('zh', '未通過', '沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成。'),
         ('zh', '未通過', '沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成。'),
-        ('zh', '你的決定', '所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，才會進入預設 branch、release 或回報完成，或在你允許下把工作中途的 commit 推到預設 branch；'),
-        ('zh', '恢復的 session', '在進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證，除非它的 ticket 已完成。'),
+        ('zh', '你的決定', '所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，或你決定接受並合併，才會進入預設 branch、release 或回報完成。'),
+        ('zh', '恢復的 session', '在進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證；只有 ticket 是在兩關通過或你決定接受並合併之後才設成完成值、且之後沒有相關變更的 claim 例外。'),
     }
 
     def test_acceptance_gate_sentences_are_stated_whole(self):
@@ -3126,13 +3128,13 @@ class FeatherConfigTests(unittest.TestCase):
                 "judged with a clean workspace, as What a gated pass judged describes",
                 "main lands the claim on the remote default branch (by pushing it there or merging it",
                 "This is the acceptance gate",
-                "releases or tags it, reports it complete or sets its ticket to a completion value only with a valid APPROVED",
+                "releases or tags it, reports it complete or sets its ticket to a done value only with a valid APPROVED",
                 "Commits on other branches carry no label",
                 "Before a gated operation, a claim needs valid passes from this session",
                 "is reviewed and verified again, counted as usual",
-                "or pushed to the default branch as a work-in-progress push the user allows with its commits labelled",
+                "a work-in-progress push the user allows may move a gated claim's commits to the default branch, labelled",
                 "Landing a branch lands every claim on it",
-                "a cancelled claim's commits stay on the branch",
+                "A cancelled claim's commits that remain on a branch are listed as unaccepted",
                 "the branch the `origin` remote's HEAD names",
                 "or the only remote's HEAD when there is no `origin`",
                 "with no remote, several remotes and no `origin`, or no HEAD, main asks",
@@ -3151,7 +3153,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "restricts it under the acceptance gate whatever its wording",
                 "main updates the wording at the next handoff maintenance",
                 "a claim that passed in an earlier session is reviewed and verified again",
-                "a claim whose ticket is finished is not redone and counts as accepted for landing and release",
+                "any other finished ticket is only not redone",
             ),
             references / "code-review.md": (
                 "acceptance gate still covers, in either mode",
@@ -3186,10 +3188,10 @@ class FeatherConfigTests(unittest.TestCase):
                 (english, "Commit", "landing a branch lands every claim on it"),
                 (english, "Commit", "or a protected or shared branch you name"),
                 (english, "Commit", "a reclaimed environment would lose them"),
-                (english, "Your decisions", "or pushed to the default branch as a work-in-progress push you allow"),
+                (english, "Your decisions", "A work-in-progress push you allow can move its commits to the default branch, but it is neither a release nor completion"),
                 (english, "Commit", "labelled unaccepted and pushed only after both passes or with your explicit permission"),
                 (english, "Resumed session", "a claim that passed in an earlier session is reviewed and verified again, "
-                                             "unless its ticket is finished"),
+                                             "unless its ticket was set to a done value after both passes or your accept-and-land decision"),
                 (chinese, "Commit 條件", "在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch"),
                 (chinese, "Commit 條件", "並開 PR 列出尚未驗收的 claim"),
                 (chinese, "Commit 條件", "都針對指名的 commit，且工作區乾淨"),
@@ -3198,9 +3200,9 @@ class FeatherConfigTests(unittest.TestCase):
                 (chinese, "Commit 條件", "合併一個 branch 就等於合併上面所有 claim"),
                 (chinese, "Commit 條件", "或你指定為受保護或共用的 branch"),
                 (chinese, "Commit 條件", "環境回收時這些 commit 會遺失"),
-                (chinese, "你的決定", "或在你允許下把工作中途的 commit 推到預設 branch"),
+                (chinese, "你的決定", "你允許的工作中途推送可以把它的 commit 推到預設 branch，但不算 release，也不算完成"),
                 (chinese, "Commit 條件", "通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送"),
-                (chinese, "恢復的 session", "之前 session 通過的 claim 要重新審查與驗證，除非它的 ticket 已完成")):
+                (chinese, "恢復的 session", "之前 session 通過的 claim 要重新審查與驗證；只有 ticket 是在兩關通過或你決定接受並合併之後才設成完成值")):
             with self.subTest(bullet=label, phrase=phrase):
                 self.assertIn(phrase, bullets[label])
         entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
@@ -3404,13 +3406,13 @@ class FeatherConfigTests(unittest.TestCase):
                             "review-state.md", "gains no new automatic calls"),
         "Validity": ("有效範圍", "a pass holds only for what it judged", "通過只對它審過的內容有效",
                      "review-state.md", "A pass covers the work identity, its acceptance and the reviewed content"),
-        "Commit": ("Commit 條件", "only with a valid APPROVED and CONFIRMED", "都仍有效時，才會讓 claim 進入遠端的預設 branch",
+        "Commit": ("Commit 條件", "only with a valid APPROVED and CONFIRMED", "都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch",
                    "review-state.md", "only with a valid APPROVED and a valid CONFIRMED"),
         "Release checks": ("事後檢查", "is checked and reported by main after the operation", "在操作後檢查並回報",
                            "review-state.md", "checks and reports it after the operation"),
-        "Your decisions": ("你的決定", "re-review, deferral, cancellation, changed acceptance or waiver",
-                           "重審、延後、取消、修改驗收或豁免",
-                           "review-state.md", "re-review, deferral, cancellation, changed acceptance or waiver"),
+        "Your decisions": ("你的決定", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land",
+                           "重審、延後、取消、修改驗收、豁免或接受並合併",
+                           "review-state.md", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land"),
         "Ticket status": ("Ticket 狀態", "noting the version or commit", "並註明版本或 commit",
                           "review-state.md", "with a note naming the version or commit"),
         "Resumed session": ("恢復的 session", "an unfinished plan is reviewed again", "未完成的計畫會重新審查",
@@ -3620,6 +3622,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "README.md": config.ROOT / "README.md",
             "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
             "CONTEXT.md": config.ROOT / "CONTEXT.md",
+            "issue-tracker.md": config.ROOT / "docs" / "agents" / "issue-tracker.md",
+            "handoff SKILL.md": config.ROOT / "skills" / "handoff" / "SKILL.md",
         }
         text = files[path].read_text(encoding="utf-8")
         if not label:
@@ -3632,6 +3636,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             return FeatherConfigTests.glossary_entries(text)[label]
         if path == "auto-review.md":
             return text.split("## " + label, 1)[1]
+        if path == "handoff SKILL.md":
+            return text.split("## " + label, 1)[1].split("\n## ", 1)[0]
         return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
 
     # C1: the repository authority auto grants, disclosed where auto is turned on and always loaded.
@@ -3649,10 +3655,10 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ),
         "review-auto.md": (
             "In auto, before the passes of a claim of plan-driven work main may, without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims; it asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and a pull request is not permission to merge.",
-            "Landing on the default branch, release, reporting complete and ticket completion still wait for both passes, as cc-feather:delegation's review state describes.",
+            "Landing on the default branch, release, reporting complete and ticket completion still wait for both passes or the user's explicit accept-and-land decision, as cc-feather:delegation's review state describes.",
         ),
         "auto-review.md#Meaning": (
-            "`auto` also lets main, before the passes of a claim of plan-driven work and without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims, as [review state](../../delegation/references/review-state.md) describes; main asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and landing on the default branch, release, reporting complete and ticket completion still wait for both passes.",
+            "`auto` also lets main, before the passes of a claim of plan-driven work and without asking, commit it, push it to a branch main created for the current work and open a pull request listing the unaccepted claims, as [review state](../../delegation/references/review-state.md) describes; main asks before pushing to a branch it did not create, an explicit instruction not to commit or push wins, and landing on the default branch, release, reporting complete and ticket completion still wait for both passes or the user's explicit accept-and-land decision.",
             "Beyond that repository authority, turning a mode on or off grants no authority to implement, merge or release,",
         ),
         "auto-on": (
@@ -3671,13 +3677,13 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。",
         ),
         "README.md": (
-            "enabled mode `auto` reviews plan-driven work and lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes (see Commit above).",
+            "enabled mode `auto` reviews plan-driven work and lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes or your explicit accept-and-land decision (see Commit and Your decisions above).",
         ),
         "README.zh-TW.md": (
-            "開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（見上方 Commit 條件）；",
+            "開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過，或你明確決定「接受並合併」（見上方 Commit 條件與你的決定）；",
         ),
         "CONTEXT.md#Acceptance gate": (
-            "The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED.",
+            "The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED, or with the user's Accept and land decision.",
             "Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.",
         ),
         "CONTEXT.md#Landing": (
@@ -3720,9 +3726,146 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                     self.assertIn(sentence, rendered)
         self.assertNotIn(disclosure[0], config._policy("off", scope="project"))
 
+    # C2: one explicit way past the gate without both passes; finished is not accepted; won't-do is not acceptance.
+    ACCEPTANCE_AND_COMPLETION = {
+        "review-state.md#Commit and completion": (
+            "reports it complete or sets its ticket to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's accept-and-land decision for it.",
+            "It covers the completion value for done work; a value for work that will not be done is set only on the user's recorded cancellation and never counts as acceptance.",
+            "A cancelled claim's commits that remain on a branch are listed as unaccepted, in the report and in any active handoff, until the user decides their disposition: reverted with a new commit, kept off the default branch, or accepted and landed; landing a branch that carries them waits for that decision.",
+        ),
+        "review-state.md#Ticket status": (
+            "after an accept-and-land decision it does the same, and the note also names the decision and its remaining risk.",
+            "Finished means not redone, not accepted: only a ticket set to a done value after valid passes or an accept-and-land decision counts as accepted for landing and release, and only while no relevant change has reopened its claim.",
+            "A value for work that will not be done never counts as acceptance.",
+        ),
+        "review-state.md#User decisions": (
+            "main records the decision as one of re-review, deferral, cancellation, changed acceptance, waiver or accept and land, with its scope.",
+            "its commits left on a branch stay listed until the user decides their disposition, as under Commit and completion.",
+            "A waiver accepts a named open finding or missing pass and names what it waives; a missing READY can be waived as Implemented before plan review describes.",
+            "A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision.",
+            "Separately, a work-in-progress push the user allows may move a gated claim's commits to the default branch, labelled as under Commits before the passes; it satisfies neither release nor completion.",
+            "Accept and land is the user's explicit acceptance of a named gated claim without one or both passes.",
+            "Main records its scope, the commit it accepts, the missing passes and the remaining risk; it stays visible in the report and in any active handoff, is never recorded as READY, APPROVED or CONFIRMED, and satisfies the acceptance gate for that claim as it stands.",
+            "A later relevant change to the claim ends it, as for a pass.",
+            "Unlike a pass, it is the user's decision, so one recorded in an active handoff still satisfies the gate in a resumed session while no relevant change has followed the commit it names.",
+            "A user statement that work is done counts as acceptance only after main confirms it with the user and records it as accept and land; otherwise it means the work is not to be redone.",
+        ),
+        "review-state.md#Resumed sessions": (
+            "Only a claim whose ticket was set to a done value after valid passes or an accept-and-land decision, with no relevant change since, is exempt and counts as accepted for landing and release; any other finished ticket is only not redone.",
+        ),
+        "review-state.md#Claim changes": ("such as setting a value for work that will not be done after a cancellation.",),
+        "review-auto.md": ("still wait for both passes or the user's explicit accept-and-land decision, as cc-feather:delegation's review state describes.",),
+        "auto-review.md#Meaning": ("still wait for both passes or the user's explicit accept-and-land decision.",),
+        "README.md#Commit": (
+            "main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED, or with your accept-and-land decision.",
+            "A cancelled claim's commits left on a branch stay listed as unaccepted until you decide to revert them, keep them off the default branch or accept and land them; a branch carrying them is not landed before that.",
+        ),
+        "README.md#Your decisions": (
+            "main records what you decide as one of re-review, deferral, cancellation, changed acceptance, waiver or accept and land, with its scope.",
+            "A waiver names the finding or missing pass it waives, stays visible with its remaining risk and never counts as READY, APPROVED or CONFIRMED, so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass or your accept-and-land decision.",
+            "A work-in-progress push you allow can move its commits to the default branch, but it is neither a release nor completion.",
+            "Accept and land is your explicit acceptance of a named claim without one or both passes: main records the commit it accepts, the missing passes and the remaining risk, keeps them visible in reports and any active handoff, and may then land, release or complete that claim; a later relevant change ends it, and one recorded in an active handoff still holds in a resumed session until such a change.",
+            "Saying the work is done counts as acceptance only after main confirms it with you and records it as accept and land;",
+        ),
+        "README.md#Resumed session": (
+            "unless its ticket was set to a done value after both passes or your accept-and-land decision and nothing relevant changed since.",
+        ),
+        "README.md#Ticket status": (
+            "After an accept-and-land decision main does the same and notes the decision and its remaining risk.",
+            "Finished only means it is not redone: a ticket counts as accepted only when it was set to a done value after both passes or your accept-and-land decision and nothing relevant changed since, and a value for work that will not be done, such as `wontfix`, is set only when you cancel and never counts as acceptance.",
+        ),
+        "README.zh-TW.md#Commit 條件": (
+            "以上 claim 都只有在 APPROVED 與 CONFIRMED 都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。",
+            "取消的 claim 留在 branch 上的 commit 會一直列為未驗收，直到你決定用新 commit revert、不讓它進入預設 branch，或接受並合併；在那之前，帶著它們的 branch 不會被合併。",
+        ),
+        "README.zh-TW.md#你的決定": (
+            "主 Agent 會把你的決定記為重審、延後、取消、修改驗收、豁免或接受並合併其中一種，並註明範圍。",
+            "豁免會寫明它豁免的是哪個問題或缺少的哪一關，",
+            "你允許的工作中途推送可以把它的 commit 推到預設 branch，但不算 release，也不算完成。",
+            "接受並合併是你明確接受某個 claim，即使它缺少一關或兩關：主 Agent 會記下所接受的 commit、缺少的關卡與剩餘風險，在回報與進行中的交接中持續列出，之後才可以合併、release 或完成該 claim；之後若有相關變更就失效，記在進行中交接的決定在恢復的 session 仍然有效，直到發生這種變更。",
+            "你說工作已完成，要等主 Agent 向你確認並記為接受並合併，才算驗收；",
+        ),
+        "README.zh-TW.md#恢復的 session": (
+            "之前 session 通過的 claim 要重新審查與驗證；只有 ticket 是在兩關通過或你決定接受並合併之後才設成完成值、且之後沒有相關變更的 claim 例外。",
+        ),
+        "README.zh-TW.md#Ticket 狀態": (
+            "你決定接受並合併後，主 Agent 也會這樣做，並註明這個決定與剩餘風險。",
+            "完成只代表不再重做：ticket 要在兩關通過或你決定接受並合併之後才設成完成值，且之後沒有相關變更，才算已驗收；表示不會做的值（例如 `wontfix`）只在你取消時設定，絕不算驗收。",
+        ),
+        "CONTEXT.md#Accept and land": (
+            "The user's explicit, recorded acceptance of a named gated Claim without one or both passes, with the commit it accepts, the missing passes and the remaining risk.",
+            "It satisfies the Acceptance gate for that Claim until a relevant change, is never READY, APPROVED or CONFIRMED, and a casual \"done\" becomes one only after main confirms and records it.",
+        ),
+        "issue-tracker.md": (
+            "`resolved` means the ticket was implemented and accepted (both passes, or the user's accept-and-land decision) and committed, with a `## Comments` note naming the version or commit and, for accept and land, the decision and its remaining risk;",
+            "`wontfix` means it will not be done, is set only on the user's recorded cancellation and never counts as acceptance.",
+        ),
+        "handoff SKILL.md#Archive completed work": (
+            "A work is complete only after each gated claim it records is accepted (both passes, or the user's accept-and-land decision) or disposed of (cancelled with its commits' disposition decided, or deferred into separate work); closing tickets or ending a session does not make it complete.",
+        ),
+    }
+
+    # 0.16.0 wording that treated any finished ticket as accepted or tied a waiver to a work-in-progress push.
+    # Historical ADR and spec text is not rewritten, so only these places are checked.
+    ACCEPTANCE_AND_COMPLETION_REMOVED = {
+        "review-state.md#Resumed sessions": ("a claim whose ticket is finished is not redone and counts as accepted for landing and release",),
+        "README.md#Resumed session": ("unless its ticket is finished",),
+        "README.zh-TW.md#恢復的 session": ("除非它的 ticket 已完成",),
+        "review-state.md#User decisions": ("or pushed to the default branch as a work-in-progress push the user allows with its commits labelled",
+                                           "re-review, deferral, cancellation, changed acceptance or waiver,"),
+        "README.md#Your decisions": ("or pushed to the default branch as a work-in-progress push you allow",),
+        "README.zh-TW.md#你的決定": ("或在你允許下把工作中途的 commit 推到預設 branch",),
+        "review-state.md#Commit and completion": ("sets its ticket to a completion value only with",),
+    }
+
+    def test_acceptance_and_completion_are_stated_whole(self):
+        for place, sentences in self.ACCEPTANCE_AND_COMPLETION.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertIn(sentence, text)
+
+    def test_acceptance_wording_from_0_16_0_is_gone(self):
+        for place, phrases in self.ACCEPTANCE_AND_COMPLETION_REMOVED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
     # Each scenario names the outcome and the sentences that decide it; a sentence from 0.16.0 that would
     # decide it differently must be gone. Places are '<file>' or '<file>#<bullet label>'.
     TRANSITION_SCENARIOS = (
+        ("the user accepts a gated claim that lacks a pass (accept and land)",
+         "main records the commit, missing passes and risk; the claim may then be landed, released or completed",
+         (("review-state.md#User decisions", "Accept and land is the user's explicit acceptance of a named gated claim without one or both passes."),
+          ("review-state.md#Commit and completion", "or with the user's accept-and-land decision for it."),
+          ("README.zh-TW.md#你的決定", "之後才可以合併、release 或完成該 claim")),
+         (("review-state.md#User decisions", "re-review, deferral, cancellation, changed acceptance or waiver,"),)),
+        ("accept and land recorded in an active handoff, resumed session, no relevant change since",
+         "the decision still satisfies the gate",
+         (("review-state.md#User decisions", "so one recorded in an active handoff still satisfies the gate in a resumed session while no relevant change has followed the commit it names."),
+          ("README.md#Your decisions", "and one recorded in an active handoff still holds in a resumed session until such a change.")),
+         ()),
+        ("accept and land, then a relevant change to the claim",
+         "the decision ends; the claim needs passes or a new decision",
+         (("review-state.md#User decisions", "A later relevant change to the claim ends it, as for a pass."),),
+         ()),
+        ("the user casually says the work is done",
+         "main confirms and records accept and land before it counts; otherwise the work is only not redone",
+         (("review-state.md#User decisions", "A user statement that work is done counts as acceptance only after main confirms it with the user and records it as accept and land; otherwise it means the work is not to be redone."),
+          ("review-state.md#Ticket status", "Finished means not redone, not accepted:")),
+         (("review-state.md#Resumed sessions", "a claim whose ticket is finished is not redone and counts as accepted for landing and release"),)),
+        ("a waiver of a missing pass on a gated claim, then a work-in-progress push the user allows",
+         "the waiver does not complete the claim; the push neither releases nor completes it",
+         (("review-state.md#User decisions", "A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision."),
+          ("review-state.md#User decisions", "it satisfies neither release nor completion.")),
+         (("review-state.md#User decisions", "or pushed to the default branch as a work-in-progress push the user allows with its commits labelled"),)),
+        ("a cancelled claim leaves commits on a branch",
+         "they stay listed as unaccepted until the user decides; the ticket gets a won't-do value, which is not acceptance",
+         (("review-state.md#Commit and completion", "A cancelled claim's commits that remain on a branch are listed as unaccepted, in the report and in any active handoff, until the user decides their disposition:"),
+          ("review-state.md#Commit and completion", "a value for work that will not be done is set only on the user's recorded cancellation and never counts as acceptance."),
+          ("issue-tracker.md", "never counts as acceptance.")),
+         (("review-state.md#Commit and completion", "a cancelled claim's commits stay on the branch until the user decides otherwise"),)),
         ("off mode, a claim an active handoff records as unreviewed, main wants to push or open a pull request",
          "main asks first; the local commit a gated call needs is allowed",
          (("review-state.md#Commits before the passes", "For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks."),
