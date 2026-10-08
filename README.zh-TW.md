@@ -143,7 +143,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 - **問題分級：**阻擋性問題（正確性、安全、資料遺失、regression、偏離計畫）必須修正或附證據駁回；非阻擋問題列在最終回報，有進行中的交接時另建獨立的後續工作。
 - **未通過：**沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成。REFUTED 後的修正會先再經過程式碼審查，才交給 verifier 複驗。沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成。驗證次數跨修正累計，只有自動的 CONFIRMED 才歸零，所以連續兩次 REFUTED 的 claim 在一輪修正複驗後就會停下。有進行中的交接時，會記下尚未解決的結論，解決後移除；延後時記錄保留，豁免會繼續保留。
 - **有效範圍：**通過只對它審過的內容有效。改動 claim 的檔案或其相依項目，會重新打開程式碼審查與驗證；只改環境則只重新打開驗證；其他改動，主 Agent 會說明為什麼通過仍然有效。更新 ticket 狀態不會重新打開任何步驟。重新打開的步驟沿用原本的次數，自動通過後是零；若是明確通過解除了停止，重新打開的呼叫仍需要你再要求。
-- **Commit 條件：**在自動流程中，以及進行中的交接記錄為未審查或未驗證的 claim，主 Agent 可以在通過前先 commit，並推到預設 branch 以外的 branch，也可以開 PR 並列出尚未驗收的 claim；但只有在 APPROVED 與 CONFIRMED 都仍有效時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。
+- **Commit 條件：**在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它建立該 branch，才算它自己的 branch。受把關約束的審查或驗證需要 commit 時，主 Agent 才會先 commit。開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此缺少 commit 的審查會回報為受阻。只因進行中的交接記錄為未審查或未驗證而受把關的 claim，主 Agent 可以不經詢問做審查所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。以上 claim 都只有在 APPROVED 與 CONFIRMED 都仍有效時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查與驗證，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。
 - **事後檢查：**只有在授權操作之後才會存在的驗收項目（例如 commit 之後的 tag），由主 Agent 在操作後檢查並回報；其餘部分在操作前驗證。
 - **你的決定：**步驟等你決定時，主 Agent 會把你的決定記為重審、延後、取消、修改驗收或豁免其中一種，並註明範圍。豁免會連同剩餘風險持續列出，絕不記為 READY、APPROVED 或 CONFIRMED，所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，才會進入預設 branch、release 或回報完成，或在你允許下把工作中途的 commit 推到預設 branch；說「繼續」或關掉 auto，都不代表接受已知的缺陷。
 - **授權：**通過不代表新的授權；READY 且原本已有授權的工作直接繼續，不固定再問一次。
@@ -188,7 +188,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 不帶參數（或加 `session`）只影響目前 session；加 `project` 或 `user` 則永久儲存至該範圍既有的 setup 安裝。保留 Claude plugin 的 `cc-feather:` 命名空間，指令名稱不再重複 `feather-`。
 
-預設 `off` 不自動觸發；開啟後的 `auto` 審查依計畫施工的工作；兩者都接受明確要求的審查。永久設定不會取消另行指定的單次／session 偏好。可用 setup 查詢已儲存模式；更新保留永久選擇，切換不會讓既有計畫或 claim 的各步驟次數歸零。
+預設 `off` 不自動觸發；開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（見上方 Commit 條件）；兩者都接受明確要求的審查。永久設定不會取消另行指定的單次／session 偏好。可用 setup 查詢已儲存模式；更新保留永久選擇，切換不會讓既有計畫或 claim 的各步驟次數歸零。
 
 永久模式儲存位置如下；請透過指令修改，避免手動編輯管理區塊造成擁有權衝突。
 

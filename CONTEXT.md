@@ -77,3 +77,11 @@ _Avoid_: failed review, skipped review
 **Unverified claim**:
 A Claim that needs Outcome verification but has no currently valid CONFIRMED, for example because its Outcome verification has not run yet, was refuted, ended INCONCLUSIVE or stopped, or its CONFIRMED expired after a relevant change. It is not complete. It is not landed on the default branch, released or reported complete.
 _Avoid_: failed verification
+
+**Acceptance gate**:
+The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed or unverified, is landed, released or tagged, reported complete or has its ticket set to a completion value only with a valid APPROVED and a valid CONFIRMED. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated.
+_Avoid_: commit gate
+
+**Landing**:
+Putting a Claim on the remote default branch by pushing it there or merging it, directly or through a pull request. Opening a pull request is not landing, and permission to open one is not permission to merge it.
+_Avoid_: shipping
