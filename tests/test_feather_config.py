@@ -380,6 +380,68 @@ class FeatherConfigTests(unittest.TestCase):
         self.assert_prefixed_roles(agents, extra={"reviewer.md"})
         self.assertEqual(conflict.read_text(encoding="utf-8"), user_role)
 
+    BEDROCK_ARN = "arn:aws:bedrock:us-east-2:123456789012:application-inference-profile/abc123def456"
+
+    def test_bedrock_inference_profile_arn_round_trips_as_a_role_model(self):
+        arn = self.BEDROCK_ARN
+        code, exported = self.call("session", "project", "--set", f"analyst.model={arn}")
+        self.assertEqual(code, 0, exported)  # not installed
+        self.assertEqual(exported["analyst"]["model"], arn)
+        self.apply("install")
+        role = self.project / ".claude" / "agents" / "analyst.md"
+        self.apply("model", "project", "--set", f"analyst.model={arn}")
+        # Written unquoted: the value reads back as the same string.
+        self.assertIn(f"\nmodel: {arn}\n", role.read_text(encoding="utf-8"))
+        self.assertEqual(self.call("show")[1]["choices"]["analyst"]["model"], arn)
+        self.assertEqual(self.call("check")[0], 0)
+        code, exported = self.call("session")
+        self.assertEqual(code, 0, exported)
+        self.assertEqual(exported["analyst"]["model"], arn)
+        self.apply("model", "project", "--set", "analyst.model=sonnet")
+        self.assertIn("\nmodel: sonnet\n", role.read_text(encoding="utf-8"))
+        self.apply("model", "project", "--set", f"analyst.model={arn}")
+        self.apply("update")
+        self.assertIn(f"\nmodel: {arn}\n", role.read_text(encoding="utf-8"))
+        self.assertEqual(self.call("check")[0], 0)
+        try:
+            import yaml
+        except ImportError:
+            return
+        frontmatter = role.read_text(encoding="utf-8").split("---\n")[1]
+        self.assertEqual(yaml.safe_load(frontmatter)["model"], arn)
+
+    def test_bedrock_arn_syntax_is_bounded(self):
+        prefix = "arn:aws:bedrock:us-east-1:123456789012:"
+        accepted = (prefix + "inference-profile/us.anthropic.claude-v1:0",
+                    "arn:aws-us-gov:bedrock:us-gov-west-1:123456789012:inference-profile/us-gov.anthropic.claude-v1",
+                    "arn:aws-cn:bedrock:cn-north-1:123456789012:application-inference-profile/abc123")
+        for model in accepted:
+            with self.subTest(model=model):
+                config._validate_choice(model, "high")
+        long_id = prefix + "inference-profile/" + "a" * (config.MAX_ARN_LENGTH - len(prefix + "inference-profile/"))
+        config._validate_choice(long_id, "high")
+        rejected = (long_id + "a",  # over the length limit
+                    prefix + "inference-profile/abc[1m]",  # no suffix after an ARN
+                    prefix + "inference-profile/abc:",  # a trailing colon is not a plain YAML value
+                    prefix + "foundation-model/anthropic.claude-v1",  # not an inference profile
+                    "arn:aws:bedrock:us-east-1:12345:inference-profile/abc",  # account is twelve digits
+                    prefix + "inference-profile/a b",
+                    prefix + "inference-profile/a---b",  # "---" would close Claude Code's frontmatter early
+                    "arn:aws:bedrock:us---east:123456789012:inference-profile/x",
+                    "arn:aws-iso:bedrock:us-iso-east-1:123456789012:inference-profile/x")  # unlisted partition
+        for model in rejected:
+            with self.subTest(model=model[:80]), self.assertRaisesRegex(config.ConfigError, "invalid model identifier"):
+                config._validate_choice(model, "high")
+        # Other identifiers keep their own syntax and 128-character limit.
+        config._validate_choice("a" * 128, "high")
+        config._validate_choice("a" * 128 + "[1m]", "high")
+        with self.assertRaisesRegex(config.ConfigError, "invalid model identifier"):
+            config._validate_choice("a" * 129, "high")
+        self.apply("install")
+        code, error = self.call("model", "project", "--set", f"analyst.model={prefix}inference-profile/abc:")
+        self.assertEqual(code, 2)
+        self.assertIn("invalid model identifier", error["error"])
+
     def test_reviewer_model_and_session_overrides(self):
         self.apply("install")
         self.apply("model", "project", "--set", "reviewer.effort=medium")

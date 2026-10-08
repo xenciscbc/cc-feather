@@ -29,6 +29,12 @@ ROLE_PREFIX = "cc-"
 # Roles another agent may already provide; cc-feather then installs none of its own.
 EXTERNAL_ROLES = ("Explore",)
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?:\[[0-9]+m\])?$")
+# A Bedrock inference-profile ARN, which Claude Code accepts as a model value. It is written unquoted, so the id ends
+# with a letter or digit (a trailing colon would not read back as a plain YAML value), and it never holds "---", which
+# Claude Code's frontmatter parser takes as the closing line wherever it appears.
+BEDROCK_ARN_RE = re.compile(r"(?!.*---)arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:[0-9]{12}:"
+                            r"(?:application-)?inference-profile/[A-Za-z0-9._:-]*[A-Za-z0-9]")
+MAX_ARN_LENGTH = 2048
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 BEGIN = "<!-- cc-feather:begin -->"
 END = "<!-- cc-feather:end -->"
@@ -416,7 +422,8 @@ def _defaults() -> dict[str, dict[str, str]]:
 
 
 def _validate_choice(model: str, effort: str) -> None:
-    if not isinstance(model, str) or not MODEL_RE.fullmatch(model):
+    if not isinstance(model, str) or not (MODEL_RE.fullmatch(model) or (
+            len(model) <= MAX_ARN_LENGTH and BEDROCK_ARN_RE.fullmatch(model))):
         raise ConfigError(f"invalid model identifier: {model!r}")
     if not isinstance(effort, str) or effort not in EFFORTS:
         raise ConfigError(f"invalid effort: {effort!r}; expected low, medium, high, xhigh, or max")
