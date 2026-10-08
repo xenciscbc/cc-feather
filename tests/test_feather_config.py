@@ -2738,10 +2738,10 @@ class FeatherConfigTests(unittest.TestCase):
             references / "outcome-verification.md": ("as [review state](review-state.md) records it",
                                                      "keeping any waiver visible"),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("update its ticket as [review state]",),
-            config.ROOT / "README.md": ("never counts as APPROVED or CONFIRMED", "does not accept a known defect",
+            config.ROOT / "README.md": ("never counts as READY, APPROVED or CONFIRMED", "does not accept a known defect",
                                         "or you say it is done", "one of the convention's completion values",
                                         "a waived claim the commit rule covers is committed only as a work-in-progress commit you allow"),
-            config.ROOT / "README.zh-TW.md": ("絕不記為 APPROVED 或 CONFIRMED", "不代表接受已知的缺陷", "或你說它已完成",
+            config.ROOT / "README.zh-TW.md": ("絕不記為 READY、APPROVED 或 CONFIRMED", "不代表接受已知的缺陷", "或你說它已完成",
                                               "慣例定義的任一完成值", "受 commit 條件約束的 claim 被豁免後，只能在你允許下做工作中途的 commit"),
         }
         for path, phrases in expected.items():
@@ -2789,7 +2789,7 @@ class FeatherConfigTests(unittest.TestCase):
             references / "outcome-verification.md": ("unless the decision is a deferral",),
             config.ROOT / "README.md": (
                 "Counts and passing verdicts do not carry over",
-                "Without an active handoff record, nothing carries over",
+                "Without an active handoff record, no restriction carries over",
                 "unless you authorise it",
                 "keeping a mapping from old claims to new ones",
                 "from its original text, an available record or a version you confirm",
@@ -2798,12 +2798,12 @@ class FeatherConfigTests(unittest.TestCase):
                 "for done work",
                 "with its scope",
                 "and their unresolved blockers",
-                "or you decide other than to defer it",
+                "or you cancel the work, change its acceptance or waive it",
                 "a deferral keeps it recorded",
             ),
             config.ROOT / "README.zh-TW.md": (
                 "次數與通過的結論不會帶到新的 session",
-                "沒有進行中的交接記錄時，什麼都不會帶過去",
+                "沒有進行中的交接記錄時，不會有任何限制帶過去",
                 "除非你授權",
                 "保留新舊 claim 的對應",
                 "依它的原文、現有紀錄或你確認過的版本",
@@ -2812,7 +2812,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "表示已完成的完成值",
                 "並註明範圍",
                 "與尚未解決的阻擋事項",
-                "或你作出延後以外的決定",
+                "或你取消工作、修改驗收或豁免為止",
                 "延後時記錄保留",
             ),
         }
@@ -2831,7 +2831,7 @@ class FeatherConfigTests(unittest.TestCase):
         decision = (adr / "0006-review-state-validity-and-completion.md").read_text(encoding="utf-8")
         for phrase in (
             "one state model", "without resetting its count", "states which before dispatching",
-            "a generic retry included", "Unknown state is treated as stopped", "keeps its count and stop",
+            "a generic retry included", "Unknown state is treated as stopped", "keeps that Plan's count and stop",
             "A pass covers only the content it judged", "labelled unaccepted", "as one of its postconditions",
             "completion value", "a waiver is never a pass", "Counts and passing verdicts do not cross sessions",
             "keeping the old-to-new mapping", "only from its original text",
@@ -2959,8 +2959,8 @@ class FeatherConfigTests(unittest.TestCase):
                                             "Look first at the project's instructions"),
         "Disagreement": ("不一致", "a mismatch is a blocker for you to settle", "不一致會列為阻擋事項",
                          "plan-review.md", "report a mismatch as a blocker for the user to settle"),
-        "No edits": ("不改文件", "main never edits a spec or ticket to add claims", "不會為了補 claim 而修改 spec 或 ticket",
-                     "plan-review.md", "Main does not edit a spec or ticket to add claims"),
+        "Claim changes": ("修改 claim", "main never edits a spec or ticket to add claims", "不會為了補 claim 而修改 spec 或 ticket",
+                          "plan-review.md", "Main does not edit a spec or ticket to add claims"),
         "Not yet a plan": ("還不算計畫", "is not yet a plan", "主 Agent 會先補齊",
                            "plan-review.md", "A document without scope or acceptance is not yet a plan"),
         "Plan-mode and conversation plans": ("plan mode 與對話中的計畫", "another session cannot see them", "其他 session 看不到",
