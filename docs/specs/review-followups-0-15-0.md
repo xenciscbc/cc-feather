@@ -17,7 +17,7 @@ Ship 0.15.0 with the Claims below, listed in this spec so they are visible witho
 - make the procedure text say exactly what the rules mean (auto-only re-review, release ticket order, authorisation before a claim-changing FIX, re-review not lifting a restriction);
 - align README (EN and zh-TW), glossary and the ADR text written in 0.14.0 with the procedures;
 - close the listed contract-test gaps;
-- when a plan was implemented before any plan review in this session, let the user choose whether to run plan review first;
+- when a plan was implemented and has no plan-review state in this session, let the user choose whether to run plan review first;
 - accept Bedrock inference-profile ARNs as role model values;
 - record the 0.14.0 live scenarios and the branch's earlier fixes, and release 0.15.0.
 
@@ -30,7 +30,7 @@ Each Claim's acceptance is listed under its own heading below the table. Claims 
 | C1 Procedure precision | The delegation procedures state the rules exactly | [C1](#c1-acceptance) | — |
 | C2 Document alignment | README (EN, zh-TW), CONTEXT.md and the 0.14.0 ADR text match the procedures as C1 leaves them | [C2](#c2-acceptance) | C1 |
 | C3 Contract-test gaps | Each listed rule fails the suite when its text is removed | [C3](#c3-acceptance) | C1, C2 |
-| C4 Plan implemented before its plan review | In auto, when review is due for implemented work whose plan this session has not plan-reviewed, main asks the user whether to run plan review first (decision D1, option c) | [C4](#c4-acceptance) | C1, C2 |
+| C4 Plan implemented before its plan review | In auto, when review is due for implemented work whose plan has no plan-review state in this session, main asks the user whether to run plan review first (decision D1, option c) | [C4](#c4-acceptance) | C1, C2 |
 | C5 Bedrock ARN model values | A role model can be a Bedrock inference-profile ARN (decision D2, option A) | [C5](#c5-acceptance) | — |
 | C6 Release 0.15.0 | 0.15.0 is validated, recorded and tagged locally | [C6](#c6-acceptance) | C1–C5 |
 
@@ -77,7 +77,7 @@ Files: `tests/test_feather_config.py` only. Each new assertion passes now and fa
 
 Files: `review-state.md`, `plan-review.md`, `preview.md`, `skills/delegation/SKILL.md`, `README.md`, `README.zh-TW.md`, `tests/test_feather_config.py`.
 
-1. The case: in auto, the user asks for review, or the flow reaches review, for a plan that is implemented in part or whole and has no plan-review state in this session (no automatic plan-review call and no recorded user decision on its plan review), whether it was implemented in another session, outside Claude, or in this session while review was off. An explicit READY given before the flow reached plan review does not count as plan-review state (review-state "What an explicit call runs"); main names it. A plan whose plan review ran in this session, including one that stopped, was cleared by an explicit READY or was decided by the user, follows the existing stop, clearing and decision rules, and main does not ask again.
+1. The case: in auto, the user asks for review, or the flow reaches review, for a plan that is implemented in part or whole and has no plan-review state in this session (no automatic plan-review call and no recorded user decision on its plan review), whether it was implemented in another session, outside Claude, or in this session while review was off. An explicit READY given before the flow reached plan review does not count as plan-review state (review-state "What an explicit call runs"); main names it. A plan whose plan review ran in this session, including one that stopped, was cleared by an explicit READY or was decided by the user, follows the existing stop, clearing and decision rules, and main does not ask again. When plan-review state cannot be established, the Unknown state rule applies, and work overlapping a stopped plan keeps the Overlap rule.
 2. Before any call, main states the case, names any record it found of an earlier plan review (a handoff, ticket comment or validation entry) without treating it as a pass, and asks the user to choose:
    - plan review first: an automatic plan review call of the flow, covering the whole plan, with the implemented claims and their changes as context; a REVISE then follows plan-review steps 4 and 5, and changes needed in already implemented claims are fixes that go through code review;
    - straight to code review: recorded as a waiver of the missing READY for the implemented claims, with its scope, visible in the report and in any active handoff; claims of the plan not yet implemented still get plan review before they are implemented.
