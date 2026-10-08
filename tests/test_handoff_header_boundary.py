@@ -149,5 +149,57 @@ class HeaderBoundaryControlTest(LocalFixesBase):
                 self.assertEqual((self.directory / "a.md").read_bytes(), data)
 
 
+class HeaderLineEndingTest(LocalFixesBase):
+    """Header lines end only at LF (or CRLF): characters str.splitlines breaks on stay inside a field value."""
+
+    VALUES = ("see # 1", "see\x0b# 1", "see\x0c# 1", "see\x1c# 1", "see\x1d# 1", "see\x1e# 1", "see\x85# 1",
+              "see # 1", "see # 1", "x ```", "x\x0c```", "x\x85~~~", "x ```")
+
+    def test_field_values_with_unicode_line_separators_read_and_update_intact(self):
+        for index, value in enumerate(self.VALUES):
+            with self.subTest(value=value):
+                name = f"v{index}.md"
+                created = self.run_tool("create", "--work", name,
+                                        payload={"title": TITLE, "details": "證據",
+                                                 "fields": {"goal": value, "progress": "p", "next": "n"}})
+                self.assertEqual(created["status"], "ok")
+                before = (self.directory / name).read_bytes()
+                read = self.run_tool("read", "--work", name)
+                self.assertEqual((read["status"], read["problems"]), ("ok", []))
+                self.assertEqual((read["goal"], read["progress"], read["next"]), (value, "p", "n"))
+                updated = self.run_tool("update", "--work", name, payload={
+                    "version": read["version"], "fields": {"notes": "z", "updated": read["updated"]}})
+                self.assertEqual((updated["status"], updated["goal"], updated["notes"]), ("ok", value, "z"))
+                self.assertEqual((self.directory / name).read_bytes(),
+                                 before.replace("下一步：n\n".encode(), "下一步：n\n注意：z\n".encode(), 1))
+
+
+class HeaderFenceTest(LocalFixesBase):
+    """A fence in the header hides headings: closed, the header ends at the next real heading; open, at the end."""
+
+    def data(self, closed: bool) -> bytes:
+        return (f"# {TITLE}\n更新：{UPDATED}\n狀態：進行中\n目標：g\n進度：p\n下一步：n\n\n```text\n## not a heading\n"
+                + ("```\n" if closed else "") + "  ## Notes\n注意：after the heading\n\n## 詳細紀錄\n決策：late\n").encode()
+
+    def test_closed_fence_in_the_header_ends_it_at_the_following_heading(self):
+        data = self.put("a.md", self.data(closed=True)).read_bytes()
+        read = self.run_tool("read", "--work", "a.md")
+        self.assertEqual((read["status"], read["problems"], read["notes"], read["decision"]), ("ok", [], "", ""))
+        updated = self.run_tool("update", "--work", "a.md",
+                                payload={"version": sha(data), "fields": {"status": "受阻", "updated": UPDATED}})
+        self.assertEqual(updated["work_status"], "受阻")
+        self.assertEqual((self.directory / "a.md").read_bytes(), data.replace("狀態：進行中".encode(), "狀態：受阻".encode()))
+
+    def test_unclosed_fence_in_the_header_runs_it_to_the_end_of_the_file(self):
+        data = self.put("a.md", self.data(closed=False)).read_bytes()
+        read = self.run_tool("read", "--work", "a.md")
+        self.assertEqual((read["status"], read["problems"]), ("ok", []))
+        self.assertEqual((read["notes"], read["decision"]), ("after the heading", "late"))
+        updated = self.run_tool("update", "--work", "a.md",
+                                payload={"version": sha(data), "fields": {"decision": "now", "updated": UPDATED}})
+        self.assertEqual(updated["decision"], "now")
+        self.assertEqual((self.directory / "a.md").read_bytes(), data.replace("決策：late".encode(), "決策：now".encode()))
+
+
 if __name__ == "__main__":
     unittest.main()
