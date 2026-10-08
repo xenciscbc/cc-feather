@@ -442,6 +442,76 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("invalid model identifier", error["error"])
 
+    def save_model_choices(self, values):
+        """Save model values that an earlier version accepted, in the state and the installed role files alike."""
+        state_path = self.project / ".claude" / "cc-feather" / "state.json"
+        state = json.loads(state_path.read_bytes())
+        record = state["components"]["delegation"]
+        for role, model in values.items():
+            path = self.project / ".claude" / "agents" / f"{role}.md"
+            old = record["choices"][role]["model"]
+            path.write_bytes(path.read_bytes().replace(f"\nmodel: {old}\n".encode(), f"\nmodel: {model}\n".encode(), 1))
+            record["choices"][role]["model"] = model
+            record["hashes"][role] = config.digest(path.read_bytes())
+        state_path.write_bytes(config.canonical(state) + b"\n")
+
+    def test_model_identifiers_never_break_role_frontmatter(self):
+        # Claude Code ends the frontmatter at any "---", and a trailing colon is not a plain YAML value.
+        for model in ("opus---x", "a---b[1m]", "abc:", "abc:[1m]", "---", "a:---"):
+            with self.subTest(model=model), self.assertRaisesRegex(config.ConfigError, "invalid model identifier"):
+                config._validate_choice(model, "high")
+        for model in ("opus", "sonnet", "claude-opus-4-1", "us.anthropic.claude-v1:0", "opus[1m]", "a--b", "a" * 128,
+                      "a" * 127 + "1[1m]"):
+            with self.subTest(model=model[:40]):
+                config._validate_choice(model, "high")
+        self.apply("install")
+        for model in ("opus---x", "abc:"):
+            with self.subTest(command="model", model=model):
+                code, error = self.call("model", "project", "--set", f"analyst.model={model}")
+                self.assertEqual(code, 2)
+                self.assertIn("invalid model identifier", error["error"])
+
+    def test_saved_model_an_earlier_version_accepted_is_reported_and_replaceable(self):
+        self.apply("install")
+        self.save_model_choices({"analyst": "abc:", "scout": "a---b"})
+        code, checked = self.call("check")
+        self.assertEqual(code, 2, checked)
+        text = json.dumps(checked)
+        self.assertIn("saved model for analyst is no longer accepted", text)
+        self.assertIn("saved model for scout is no longer accepted", text)
+        self.assertEqual(self.call("session")[0], 2)
+        code, error = self.call("update")
+        self.assertEqual(code, 2)
+        self.assertIn("saved model is no longer accepted", error["error"])
+        # Replacing only one leaves the other still refused; replacing both repairs the installation.
+        code, error = self.call("model", "project", "--set", "analyst.model=sonnet")
+        self.assertEqual(code, 2)
+        self.assertIn("scout ('a---b')", error["error"])
+        self.apply("model", "project", "--set", "analyst.model=sonnet", "--set", "scout.model=haiku")
+        self.assertEqual(self.call("check")[0], 0)
+        self.assertEqual(self.call("show")[1]["choices"]["scout"]["model"], "haiku")
+
+    def test_saved_model_no_version_accepted_is_still_rejected_on_load(self):
+        self.apply("install")
+        self.save_model_choices({"analyst": "-abc"})
+        code, error = self.call("check")
+        self.assertEqual(code, 2)
+        self.assertIn("invalid model identifier", error["error"])
+
+    def test_saved_unsafe_model_with_outdated_roles_recovers_by_remove_and_reinstall(self):
+        # model refuses until the roles are updated, and update refuses the saved value, so remove and reinstall.
+        self.six_role_install(3)
+        self.save_model_choices({"analyst": "abc:"})
+        code, error = self.call("model", "project", "--set", "analyst.model=sonnet")
+        self.assertEqual(code, 2)
+        self.assertIn("run setup update first", error["error"])
+        code, error = self.call("update")
+        self.assertEqual(code, 2)
+        self.assertIn("saved model is no longer accepted", error["error"])
+        self.apply("remove")
+        self.apply("install")
+        self.assertEqual(self.call("check")[0], 0)
+
     def test_reviewer_model_and_session_overrides(self):
         self.apply("install")
         self.apply("model", "project", "--set", "reviewer.effort=medium")

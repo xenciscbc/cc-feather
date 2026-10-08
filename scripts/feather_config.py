@@ -28,7 +28,11 @@ ADDED_ROLES = ("verifier", "reviewer")
 ROLE_PREFIX = "cc-"
 # Roles another agent may already provide; cc-feather then installs none of its own.
 EXTERNAL_ROLES = ("Explore",)
-MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?:\[[0-9]+m\])?$")
+# Written unquoted into role frontmatter: no "---" (Claude Code ends the frontmatter at any "---") and no colon before the
+# optional suffix (a trailing colon is not a plain YAML value).
+MODEL_RE = re.compile(r"^(?!.*---)[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?<!:)(?:\[[0-9]+m\])?$")
+# What 0.15.0 accepted; a saved value it accepts but MODEL_RE rejects stays readable so `model --set` can replace it.
+LEGACY_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(?:\[[0-9]+m\])?$")
 # A Bedrock inference-profile ARN, which Claude Code accepts as a model value. It is written unquoted, so the id ends
 # with a letter or digit (a trailing colon would not read back as a plain YAML value), and it never holds "---", which
 # Claude Code's frontmatter parser takes as the closing line wherever it appears.
@@ -429,6 +433,19 @@ def _validate_choice(model: str, effort: str) -> None:
         raise ConfigError(f"invalid effort: {effort!r}; expected low, medium, high, xhigh, or max")
 
 
+def _unsafe_saved_model(model: object) -> bool:
+    """A saved model 0.15.0 accepted that would now break role frontmatter."""
+    return isinstance(model, str) and not MODEL_RE.fullmatch(model) and bool(LEGACY_MODEL_RE.fullmatch(model))
+
+
+def _unsafe_saved_choices(record: dict[str, Any] | None) -> list[str]:
+    if not record:
+        return []
+    return [f"saved model for {role} is no longer accepted: {choice['model']!r}; replace it with "
+            f"model --set {role}.model=<model>" for role, choice in record.get("choices", {}).items()
+            if _unsafe_saved_model(choice.get("model"))]
+
+
 def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> dict[str, Any] | None:
     _safe_path(path)
     data = read(path)
@@ -491,7 +508,10 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
                 choice = record["choices"][role]
                 if not isinstance(choice, dict) or set(choice) != {"model", "effort"}:
                     raise ConfigError(f"invalid state choice for {role}")
-                _validate_choice(choice["model"], choice["effort"])
+                if _unsafe_saved_model(choice["model"]):
+                    _validate_choice("opus", choice["effort"])  # reported by inspection; model --set replaces it
+                else:
+                    _validate_choice(choice["model"], choice["effort"])
                 if not isinstance(record["hashes"][role], str) or not re.fullmatch(r"[0-9a-f]{64}", record["hashes"][role]):
                     raise ConfigError("invalid state hash")
     return value
@@ -827,7 +847,10 @@ def _explore_providers(base: Path, owned: dict[str, Path]) -> list[Path]:
     """Files of other agents named Explore; any of them already overrides the built-in Explore."""
     target = base / "agents" / "Explore.md"
     _safe_path(target)
-    found = [path for _, path in _collision_entries(base, {"Explore": target})]
+    # Managed role files only declare their own names, so they are not read as candidates: a saved model that an
+    # earlier version accepted can break their frontmatter until model --set replaces it.
+    managed = {role: path for role, path in owned.items() if role != "Explore"}
+    found = [path for name, path in _collision_entries(base, {**managed, "Explore": target}) if name == "Explore"]
     # A file at the Explore path only provides Explore when it declares that name; any other
     # file there leaves the built-in Explore active and stays an unowned file for the user.
     if owned.get("Explore") != target and read(target) is not None and _agent_name(target) == "Explore":
@@ -990,6 +1013,14 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("delegation is already installed; use review to change its saved review mode")
     if args.component == "both" and args.command in {"update", "remove"} and not records:
         raise ConfigError(f"{args.scope} scope is not installed")
+    if delegation is not None and args.command != "remove":
+        # Checked before role files are read: a saved "---" also breaks their frontmatter.
+        replaced = {role for role, fields in _overrides(args.set).items() if "model" in fields}
+        unsafe = [f"{role} ({choice['model']!r})" for role, choice in delegation["choices"].items()
+                  if role not in replaced and _unsafe_saved_model(choice["model"])]
+        if unsafe:
+            raise ConfigError("saved model is no longer accepted for " + ", ".join(unsafe) +
+                              "; replace it with model --set ROLE.model=<model>, or remove and reinstall")
     def operates(name: str) -> bool:
         if name not in selected:
             return False
@@ -1088,8 +1119,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                for r in ROLES if r not in external} if "delegation" in selected else {}
     for role, fields in _overrides(args.set).items():
         choices[role].update(fields)
-    for choice in choices.values():
-        _validate_choice(choice["model"], choice["effort"])
+    if args.command != "remove":
+        for choice in choices.values():
+            _validate_choice(choice["model"], choice["effort"])
     review_mode = args.review_mode or (delegation["review_mode"] if delegation else "off")
     for name in active_components:
         record = records.get(name)
@@ -1364,6 +1396,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
         except ConfigError as exc:
             issues.append(str(exc))
         if name == "delegation":
+            issues.extend(_unsafe_saved_choices(record))
             try:
                 owned = _release_user_explore(agents, record) if record else {}
                 current = record.get("role_prefix", "") if record else ""
