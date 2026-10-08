@@ -13,8 +13,16 @@ Work carried out to implement a Plan. In auto mode it is the only work that gets
 _Avoid_: planned task, ticket work
 
 **Unplanned work**:
-Work started without a Plan. In auto, Unplanned work that changes a security boundary, migrates data or is irreversible must first become Plan-driven work.
+Work started without a Plan. In auto, Unplanned work that makes a Security-critical change, migrates data or is irreversible must first become Plan-driven work.
 _Avoid_: ad-hoc edit, small fix
+
+**Security-critical change**:
+A change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream. Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list.
+_Avoid_: security boundary change, sensitive change
+
+**Security-critical claim**:
+A Claim whose outcome includes a Security-critical change. It is identified when the Plan is written.
+_Avoid_: security claim
 
 **Claim**:
 One independently verifiable outcome with its own acceptance, listed in a Plan or written as an unfinished ticket in the Plan's named scope. Code review and outcome verification each judge one Claim. A ticket is one place a Claim may be written, not a synonym for it; a ticket being "claimed" in a ticket workflow means someone took it and is unrelated.
