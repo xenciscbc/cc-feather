@@ -71,6 +71,10 @@ _Avoid_: PR review, diff review
 An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLUSIVE.
 _Avoid_: testing, QA
 
+**Adversarial review**:
+An independent attempt to break a Security-critical claim, made after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE. BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; a pre-existing vulnerability becomes separate work and does not change the verdict.
+_Avoid_: pentest, red team, security review
+
 **Blocking finding**:
 A Code review finding that holds completion: a correctness bug, security problem, data loss, regression or deviation from the Plan.
 
