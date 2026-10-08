@@ -2075,11 +2075,14 @@ class FeatherConfigTests(unittest.TestCase):
         self.home = base / "dangling" / "claude"
 
         def entries():
-            # os.walk skips the dangling link that pathlib's rglob would fail to list.
+            # os.walk lists what pathlib's rglob would fail on; POSIX puts a dangling symlink among the files,
+            # so record where a link points instead of reading through it.
             found = {}
             for current, directories, files in os.walk(base):
                 found.update({Path(current) / name: None for name in directories})
-                found.update({Path(current) / name: (Path(current) / name).read_bytes() for name in files})
+                found.update({Path(current) / name: ("link", os.readlink(Path(current) / name))
+                              if os.path.islink(Path(current) / name) else (Path(current) / name).read_bytes()
+                              for name in files})
             return found
 
         before = entries()
