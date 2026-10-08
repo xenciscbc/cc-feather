@@ -1,10 +1,10 @@
 # Commit before acceptance, and the 0.15.0 follow-ups
 
-Label: `needs-triage`
+Label: `ready-for-agent`
 
 Vocabulary follows [CONTEXT.md](../../CONTEXT.md). This spec changes where the review flow's acceptance gate sits, decided in [ADR 0006](../adr/0006-review-state-validity-and-completion.md), and collects the non-blocking follow-ups left open by 0.15.0 ([its spec](review-followups-0-15-0.md) and the 0.15.0 entry in [the validation log](../setup-validation.md)).
 
-Decisions D1–D4 were settled on 2026-10-08 (see Decisions). This spec is not a Plan until the user agrees to it.
+Decisions D1–D4 were settled on 2026-10-08 (see Decisions). The user agreed to this spec on 2026-10-08.
 
 ## Problem Statement
 
