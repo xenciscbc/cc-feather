@@ -4336,5 +4336,39 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                     self.assertNotIn(sentence, self.source(place), outcome)
 
 
+class InstallDocumentTests(unittest.TestCase):
+    """C7 item 3: the documents users follow to install, update and recover are current."""
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    def test_install_and_update_commands_replace_prerelease_wording(self):
+        for name, prerelease in (("README.md", "After publishing this version"),
+                                 ("README.zh-TW.md", "將此版本推送至 GitHub 後")):
+            with self.subTest(readme=name):
+                text = self.text(name)
+                self.assertNotIn(prerelease, text.replace("[GitHub](https://github.com/xenciscbc/cc-feather)", "GitHub"))
+                for command in ("/plugin marketplace add xenciscbc/cc-feather", "/plugin install cc-feather@cc-feather",
+                                "claude plugin update cc-feather@cc-feather"):
+                    self.assertIn(command, text)
+        self.assertNotIn("D:/work_data", self.text("README.zh-TW.md"))
+        self.assertIn("`/plugin marketplace add /absolute/path/to/cc-feather`", self.text("README.zh-TW.md"))
+
+    def test_setup_document_counts_the_packaged_skills(self):
+        skills = json.loads(self.text(".claude-plugin/plugin.json"))["skills"]
+        words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
+        self.assertIn(f"The plugin packages {words[len(skills)]} skills.", self.text("docs/setup.md"))
+
+    def test_setup_documents_describe_both_causes_and_reinstall_reset(self):
+        setup = self.text("docs/setup.md")
+        self.assertIn("Check/show report `role_update_required: true` for two causes.", setup)
+        self.assertIn("rendered from an older role template than the plugin now packages", setup)
+        self.assertIn("remove and reinstall the scope, which resets the saved choices to the defaults and the review "
+                      "mode to off unless install is given `--review-mode auto`.", setup)
+        self.assertNotIn("the installation predates a newly packaged role;", self.text("skills/setup/SKILL.md"))
+        self.assertIn("or an unedited role was rendered from an older template", self.text("skills/setup/SKILL.md"))
+
+
 if __name__ == "__main__":
     unittest.main()

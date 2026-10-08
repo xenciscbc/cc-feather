@@ -6,14 +6,20 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 
 ## 安裝
 
-將此版本推送至 [GitHub](https://github.com/xenciscbc/cc-feather) 後，在 Claude Code 執行：
+從 [GitHub](https://github.com/xenciscbc/cc-feather) 安裝，在 Claude Code 執行：
 
 ```text
 /plugin marketplace add xenciscbc/cc-feather
 /plugin install cc-feather@cc-feather
 ```
 
-本機 checkout 可用 `/plugin marketplace add D:/work_data/project/skill/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。之後更新 plugin 版本時，請對已安裝的項目執行 setup update，再開新 session，詳見[更新、移除與驗證](#更新移除與驗證)。
+更新已安裝的 plugin 時，在 shell 執行下列指令，或在 Claude Code 的 `/plugin` 介面中更新：
+
+```text
+claude plugin update cc-feather@cc-feather
+```
+
+本機 checkout 可用 `/plugin marketplace add /absolute/path/to/cc-feather` 加入，再用相同 install 指令。開發時可用 `claude --plugin-dir /absolute/path/to/cc-feather`。安裝後開新 session；plugin 載入方式見 [Claude 官方文件](https://code.claude.com/docs/en/plugins)。之後更新 plugin 版本時，請對已安裝的項目執行 setup update，再開新 session，詳見[更新、移除與驗證](#更新移除與驗證)。
 
 ## 入口
 
@@ -27,7 +33,7 @@ Claude Code plugin：相容 codex-feather 的交接紀錄，並提供角色分�
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:delegation-preview [計畫、ticket 或工作]` | 預覽工作會如何分派，不實際派工；見[分派預覽](#分派預覽) |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
-| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查與結果驗證 |
+| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查與結果驗證；主 Agent 之後可不經詢問，在通過前 commit 這類工作、推送到它為此工作建立的 branch 並開 pull request，但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過或你的接受並合併決定 |
 | `/cc-feather:auto-off` | 關閉自動審查 |
 
 交接指令在 plugin 安裝後即可使用。Setup 可只裝 handoff 自動維護規則、只裝 agent 分派（規則＋角色），或兩者都裝。例如：

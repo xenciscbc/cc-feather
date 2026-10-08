@@ -6,11 +6,17 @@ A Claude Code plugin for codex-feather-compatible handoffs, scoped delegation, n
 
 ## Install
 
-After publishing this version to [GitHub](https://github.com/xenciscbc/cc-feather):
+Install from [GitHub](https://github.com/xenciscbc/cc-feather) in Claude Code:
 
 ```text
 /plugin marketplace add xenciscbc/cc-feather
 /plugin install cc-feather@cc-feather
+```
+
+Update an installed plugin from a shell, or through the `/plugin` interface in Claude Code:
+
+```text
+claude plugin update cc-feather@cc-feather
 ```
 
 For a local checkout, add its absolute path as the marketplace instead. For development, run `claude --plugin-dir /absolute/path/to/cc-feather`. Start a fresh session after installation. See the [official plugin guide](https://code.claude.com/docs/en/plugins). After a later plugin update, run setup update for the components you installed and then start a fresh session; see [Updates and validation](#updates-and-validation).
@@ -25,7 +31,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:delegation`: load the main-agent workflow for dispatch, review, acceptance and recovery when needed.
 - `/cc-feather:delegation-preview [plans, tickets or work]`: preview how the work would be delegated, without dispatching anything; see [Delegation preview](#delegation-preview).
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
-- `/cc-feather:auto-on`: enable automatic plan review, code review and outcome verification of plan-driven work.
+- `/cc-feather:auto-on`: enable automatic plan review, code review and outcome verification of plan-driven work. Main may then, without asking, commit such work before its passes, push it to branches it created for the work and open pull requests; landing on the default branch, release, reporting complete and ticket completion still wait for both passes or your accept-and-land decision.
 - `/cc-feather:auto-off`: disable automatic review.
 
 Handoff commands work after plugin installation. Setup can install handoff maintenance rules, delegation (policy plus agents), or both. For example:
