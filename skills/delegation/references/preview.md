@@ -37,6 +37,7 @@ Mark each affected row or Plan:
 - an input that is not yet a Plan because it lacks scope or acceptance;
 - a Plan whose text refers to its own tickets or Claims that cannot be found, or whose listed Claims disagree with its tickets; when it lists no Claims, show the one-Claim reading and note that main will ask before plan review or implementation;
 - a Claim without its own verifiable acceptance;
+- in auto, a Plan with implemented Claims and no plan-review state in this session, for which main will ask whether to run plan review first, as [review state](review-state.md)'s Implemented before plan review describes;
 - in auto, Unplanned work that changes a security boundary, migrates data or is irreversible, which needs a reviewed Plan the user approves first; in off, note it only;
 - work that needs exploration before it can be judged.
 

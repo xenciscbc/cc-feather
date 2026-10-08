@@ -44,7 +44,7 @@ Classify a blocker as temporary failure, missing specification, role mismatch or
 
 When the automatic flow requires them, follow [the code-review procedure](references/code-review.md) and then [the outcome-verification procedure](references/outcome-verification.md) before reporting completion. An explicit request runs only what was requested: explicit code review follows the code-review procedure without starting verification, and explicit verification follows the outcome-verification procedure without code review first. In auto, when an explicit pass clears a step the automatic flow had stopped, the automatic flow resumes from there, as [review state](references/review-state.md) describes. After a claim passes and is committed, and any postcondition it has holds, update its ticket as [review state](references/review-state.md) describes. Report the integrated result and remaining limitations. Update an active handoff through cc-feather:handoff when required by its maintenance policy.
 
-When the user asks for a "review" without naming one, review the plan if the work is not yet implemented and review the code if it is. In auto, classify it as [review state](references/review-state.md) describes and state the classification before dispatching.
+When the user asks for a "review" without naming one, review the plan if the work is not yet implemented and review the code if it is; in auto, when implemented work's plan has no plan-review state in this session, first ask as [review state](references/review-state.md)'s Implemented before plan review describes. In auto, classify it as [review state](references/review-state.md) describes and state the classification before dispatching.
 
 ## Plan review
 

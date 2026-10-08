@@ -2882,6 +2882,69 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(place=place):
                 self.assertIn("only after the user authorises it", text)
 
+    def test_implemented_work_without_plan_review_state_asks_the_user_first(self):
+        # A plan implemented elsewhere, or while review was off, has no plan-review state here; main asks first.
+        references = config.ROOT / "skills" / "delegation" / "references"
+        expected = {
+            references / "review-state.md": (
+                "**Implemented before plan review.**",
+                "has no plan-review state in this session (no automatic plan-review call and no recorded user decision",
+                "in another session, outside Claude, or in this session while review was off",
+                "An explicit READY given before the flow reached plan review is not plan-review state",
+                "without treating it as a pass",
+                "plan review first: an automatic call of the flow covering the whole plan",
+                "recorded as a waiver of the missing READY for the implemented claims",
+                "Main dispatches neither call until the user answers",
+                "Claims of the plan not yet implemented still get plan review before they are implemented",
+                "follows the rules above, and main does not ask again",
+                "Implemented before plan review below comes first",
+                "For a plan with an implemented claim, Implemented before plan review comes first",
+                "main names it",
+                "a REVISE then follows [plan review](plan-review.md) steps 4 and 5",
+                "changes needed in implemented claims are fixes that go through code review",
+                "with its scope, visible in the report and in any active handoff",
+                "When plan-review state cannot be established, Unknown state applies",
+                "work overlapping a stopped plan keeps the Overlap rule",
+            ),
+            references / "plan-review.md": ("has no plan-review state in this session is handled before any call",),
+            references / "preview.md": ("a Plan with implemented Claims and no plan-review state in this session",),
+            config.ROOT / "skills" / "delegation" / "SKILL.md": (
+                "when implemented work's plan has no plan-review state in this session, first ask",),
+            config.ROOT / "README.md": ("main first asks as under Implemented before plan review",
+                                        "Claims not yet implemented still get plan review first",
+                                        "names any record of an earlier plan review it found but does not treat it as a pass",
+                                        "a plan with implemented claims and no plan review in this session",
+                                        "records the missing READY as a waiver for the implemented claims",
+                                        "follows the usual rules, without asking again",
+                                        "For a plan with an implemented claim, main first asks as under Implemented before plan review",
+                                        "already reviewed by the automatic flow"),
+            config.ROOT / "README.zh-TW.md": ("主 Agent 會先照「實作完才做計畫審查」問你",
+                                              "尚未實作的 claim 仍會先做計畫審查",
+                                              "它會列出找到的先前計畫審查紀錄，但不把它當成通過",
+                                              "已有 claim 實作但這個 session 沒有計畫審查紀錄的計畫",
+                                              "把缺少的 READY 記為已實作 claim 的豁免",
+                                              "照一般規則處理，不會再問",
+                                              "已有 claim 實作的計畫，主 Agent 會先照「實作完才做計畫審查」問你",
+                                              "自動流程已經審查過"),
+        }
+        for path, phrases in expected.items():
+            text = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertIn(phrase, text)
+        # The same deferral appears in two README bullets, so each is checked within its own bullet.
+        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
+                                                "## Roles and routing", "### Automatic review switch"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 分派與預設模型", "### 自動審查開關"))
+        for bullets, label, phrase in (
+                (english, "Asking for a review", "main first asks as under Implemented before plan review"),
+                (english, "Resumed session", "main first asks as under Implemented before plan review"),
+                (chinese, "要求審查時", "主 Agent 會先照「實作完才做計畫審查」問你"),
+                (chinese, "恢復的 session", "主 Agent 會先照「實作完才做計畫審查」問你")):
+            with self.subTest(bullet=label):
+                self.assertIn(phrase, bullets[label])
+
     def test_rules_whose_pairings_moved_to_newer_phrases_stay_stated(self):
         # README_RULES and GLOSSARY_RULES now pair these entries with their 0.14.0 rules; the earlier rules still hold.
         references = config.ROOT / "skills" / "delegation" / "references"
@@ -2973,6 +3036,9 @@ class FeatherConfigTests(unittest.TestCase):
                          "review-state.md", "clears the stop and leaves the count unchanged"),
         "Asking for a review": ("要求審查時", "main states which before dispatching", "主 Agent 派出前會先說明是哪一種",
                                 "review-state.md", "State the classification before dispatching"),
+        "Implemented before plan review": ("實作完才做計畫審查",
+                                           "main asks before any review whether to run plan review first",
+                                           "主 Agent 會在任何審查前先問你", "review-state.md", "main asks before any call"),
         "Retries": ("重試", "including a generic retry after a temporary failure", "包括暫時失敗後的一般重試",
                     "review-state.md", "including a generic retry after a temporary failure"),
         "Lost state": ("狀態不明", "main treats the step as stopped and asks you", "主 Agent 會視為已停下並問你",
