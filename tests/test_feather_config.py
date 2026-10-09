@@ -4407,8 +4407,6 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(place=place, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
-        manifest = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("0.17.0", manifest["version"])
         entry = (config.ROOT / "docs" / "setup-validation.md").read_text(encoding="utf-8").split("## 0.17.0 ", 1)[1].split("\n## ", 1)[0]
         for sentence in ("**Setup update is required.** Unlike 0.14.0–0.16.0, this release changes the reviewer and analyst role definitions and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
                          "`v0.16.0` tags da4948c, the clarification commit after the 0.16.0 release commit cd74ac4; this entry does not move it.",
@@ -5926,6 +5924,40 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
 
     def test_setup_document_names_the_added_role_and_the_downgrade(self):
         self.assert_pinned(self.SETUP)
+
+
+class SecurityRoutingReleaseTests(unittest.TestCase):
+    """0.18.0 C7 (docs/specs/security-critical-routing.md): the release requires setup update and records its validation."""
+
+    README = {
+        "README.md": "0.18.0 adds the `adversary` role and changes the executor role definition, the delegation guidance and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` (adversary is missing, and the executor role and the delegation guidance are from an older template), `model`, `review` and session export ask for setup update first, in `auto` and in `off`, and a required Adversarial review is blocked because adversary is missing.",
+        "README.zh-TW.md": "0.18.0 新增 `adversary` 角色，並改了 executor 的角色定義、分派指引與自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`（缺少 adversary，executor 角色與分派指引來自較舊的範本），`model`、`review` 與 session export 也會要求先做 setup update，需要的對抗式審查也會因缺少 adversary 而受阻。",
+    }
+
+    ENTRY = (
+        "**Setup update is required.** This release adds the `adversary` role and changes the executor role definition, the delegation guidance and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
+        "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, remove the scope with 0.18.0 first, or restore the files listed in the update's backup manifest.",
+        "the 0.17.0 tool's `check` and `show` both exited 2 with `{\"status\": \"error\", \"error\": \"state role schema mismatch\"}`",
+        "Live scenarios: this release was implemented by a session running the installed 0.17.0 rules and roles.",
+        "`v0.18.0` does not exist when this entry is written; it is created only after both passes on the release commit and the user's go-ahead, and then checked against that commit and this manifest version.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    def test_manifest_and_readmes_require_setup_update(self):
+        self.assertEqual("0.18.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+        for name, sentence in self.README.items():
+            with self.subTest(readme=name):
+                self.assertIn(sentence, self.text(name))
+
+    def test_validation_entry_records_the_update_downgrade_upgrade_and_live_flows(self):
+        entry = self.text("docs/setup-validation.md").split("\n## 0.18.0 security-critical routing\n", 1)[1].split("\n## ", 1)[0]
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("no setup update is required", entry)
 
 
 class InstallDocumentTests(unittest.TestCase):
