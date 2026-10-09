@@ -53,7 +53,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 可選項目 | 安裝內容 | 移除後 |
 | --- | --- | --- |
 | handoff | 指示檔中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
-| agent 分派（delegation） | 獨立分派規則＋八個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
+| agent 分派（delegation） | 獨立分派規則＋九個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
 | 兩者（both） | 上述兩項 | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
 
 可直接指定，不必走逐項詢問：
@@ -117,6 +117,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 安全敏感實作 | security-executor | opus | high |
 | 實作後驗證 | verifier | opus | high |
 | 實作後程式碼審查 | reviewer | opus | high |
+| 對抗式審查（Adversarial review） | adversary | opus | high |
 
 | 角色 | 何時使用 | 產出與權限 |
 | --- | --- | --- |
@@ -128,6 +129,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | security-executor | 影響授權、秘密資料、密碼學或信任邊界的實作 | 可修改指定檔案；驗證正常行為及濫用／拒絕案例 |
 | verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE |
 | reviewer | 獨立審查實作某個 claim 的程式碼 | 自行從 base revision 取得 diff，可跑不改檔的靜態檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED |
+| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，不修改也不修復；回覆 HELD／BROKEN／INCONCLUSIVE。這些安全限制（只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機，不改專案檔）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。 |
 
 主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派，也不維護交接或進度紀錄，改由主 Agent 依其回報記錄。
 
@@ -259,7 +261,7 @@ Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署�
 
 ## Agent 名稱與舊版升級
 
-原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`reviewer`、`Explore`，不再有 `feather-` 前綴。
+原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`reviewer`、`adversary`、`Explore`，不再有 `feather-` 前綴。
 
 若已有其他 agent 使用同樣的名稱（即使位於不同檔名或子目錄），setup 會把 Explore 以外的角色都加上 `cc-` 前綴安裝（例如 `cc-scout`），並在分派規則中列出實際名稱；之後一直沿用前綴。其他 agent 的檔案不會被覆蓋或接管。Explore 維持原名；已有自己的 Explore 時直接沿用你的。`cc-` 名稱本身也衝突時，仍會保留檔案並請使用者決定。跨 user/project 範圍的同名角色依 Claude 優先序生效，需一併核對適用範圍。
 

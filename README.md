@@ -51,7 +51,7 @@ A bare `/cc-feather:setup` first checks project and user installation status, re
 | Component | Installed content | Removal behavior |
 | --- | --- | --- |
 | handoff | An independent maintenance policy in the instruction file | Removes the reminder only; records and the plugin handoff command remain |
-| delegation | A separate delegation policy plus eight native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
+| delegation | A separate delegation policy plus nine native agents; automatic plan review defaults off | Removes intact owned roles and delegation guidance while preserving handoff rules |
 | both | Both components | Applies the selected operation together; preserves records and unrelated settings |
 
 Specify the full request to avoid unnecessary questions:
@@ -115,6 +115,7 @@ A task-specific request takes precedence over session preferences and saved sett
 | Security-sensitive implementation | security-executor | opus | high |
 | Post-implementation verification | verifier | opus | high |
 | Post-implementation code review | reviewer | opus | high |
+| Adversarial review | adversary | opus | high |
 
 | Role | When to use | Deliverable and permissions |
 | --- | --- | --- |
@@ -126,6 +127,7 @@ A task-specific request takes precedence over session preferences and saved sett
 | security-executor | Implementation affecting authorization, secrets, cryptography or trust boundaries | Writes assigned files and verifies both allowed behavior and abuse/denial cases |
 | verifier | Independent check that completed work meets an exact claim | Runs checks and counterexamples without editing; CONFIRMED/REFUTED/INCONCLUSIVE |
 | reviewer | Independent review of the code implementing one claim | Reads the diff itself from a base revision, runs non-modifying static checks, never edits or runs tests; APPROVED/CHANGES_REQUESTED |
+| adversary | Trying to break one Security-critical claim against the disposable targets its brief names | Read, Glob, Grep and Bash only; never edits or fixes; HELD/BROKEN/INCONCLUSIVE. Its safety limits (only disposable targets with synthetic data the brief names, no external hosts, no project edits) are instructions to the model, not a sandbox: Bash can still reach the network and write files, and main compares the workspace before and after each call. |
 
 Main owns understanding, decisions, integration and acceptance. Small or context-coupled tasks stay direct. Independent children have scoped contracts and exclusive write ownership; all are leaves and leave handoff and progress records to main. Read-only security analysis belongs to analyst, while security implementation belongs to security-executor.
 
@@ -253,7 +255,7 @@ See [handoff compatibility](docs/compatibility.md) and [setup validation](docs/s
 
 ## Unprefixed role names and migration
 
-Native names are scout, analyst, mech-executor, executor, security-executor, verifier, reviewer and Explore. When another agent already uses one of these names, setup installs every role except Explore with a `cc-` prefix (for example `cc-scout`) and lists the names in the delegation policy; the prefix then stays. Other agents' files are never adopted or overwritten. Explore keeps its exact name, and your own Explore is used instead of cc-feather's. A conflict on a `cc-` name still stops for your decision. Check applicable user/project precedence when definitions exist in different scopes.
+Native names are scout, analyst, mech-executor, executor, security-executor, verifier, reviewer, adversary and Explore. When another agent already uses one of these names, setup installs every role except Explore with a `cc-` prefix (for example `cc-scout`) and lists the names in the delegation policy; the prefix then stays. Other agents' files are never adopted or overwritten. Explore keeps its exact name, and your own Explore is used instead of cc-feather's. A conflict on a `cc-` name still stops for your decision. Check applicable user/project precedence when definitions exist in different scopes.
 
 For an owned legacy installation, run setup update in its owning scope. It previews migration from feather-* names, retains saved model/effort and review mode, and removes only intact owned legacy files. Occupied target names or modified owned files block migration until resolved by the user. Restart the session afterward. Model/review mutations and session export require migration first; removal of an intact legacy installation remains supported. Use the managed tool for migration, not manual edits to ownership state.
 

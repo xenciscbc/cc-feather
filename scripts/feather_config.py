@@ -21,9 +21,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ROLES = ("scout", "analyst", "mech-executor", "executor", "security-executor", "Explore", "verifier", "reviewer")
+ROLES = ("scout", "analyst", "mech-executor", "executor", "security-executor", "Explore", "verifier", "reviewer", "adversary")
 # Roles introduced after an installation may have been saved; update installs them.
-ADDED_ROLES = ("verifier", "reviewer")
+ADDED_ROLES = ("verifier", "reviewer", "adversary")
 # Prefix for every role except Explore when another agent already uses a role name.
 ROLE_PREFIX = "cc-"
 # Roles another agent may already provide; cc-feather then installs none of its own.

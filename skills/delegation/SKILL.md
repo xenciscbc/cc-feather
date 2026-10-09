@@ -21,6 +21,7 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | security-executor | Authorized Security-critical changes, including the implementation of every Security-critical claim |
 | verifier | Independent verification of a completed implementation claim |
 | reviewer | Independent code review of one implemented claim |
+| adversary | Independent attempt to break one Security-critical claim; reports HELD, BROKEN or INCONCLUSIVE and never fixes |
 
 Route delegated work only to these roles. Built-in general-purpose and Plan agents run on the main model and bypass this routing; use them only when the user asks for them.
 

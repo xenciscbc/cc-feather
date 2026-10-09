@@ -38,5 +38,10 @@
     "name": "reviewer",
     "model": "opus",
     "effort": "high"
+  },
+  "adversary": {
+    "name": "adversary",
+    "model": "opus",
+    "effort": "high"
   }
 }
