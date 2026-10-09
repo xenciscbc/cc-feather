@@ -4572,6 +4572,136 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
                       (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8").splitlines())
 
 
+class PreApprovalSecurityAnalysisTests(unittest.TestCase):
+    """0.18.0 C2 (docs/specs/security-critical-routing.md): security analysis feeds the Plan before plan review and approval."""
+
+    source = SecurityCriticalVocabularyTests.source
+
+    # C2 item 1: the pre-approval sequence, the dispositions into security invariants and the recorded test targets.
+    SEQUENCE = {
+        "plan-review.md": (
+            "In auto, a plan with a Security-critical claim gets a security analysis before its plan review, and the user approves the plan only after both.",
+            "Main has analyst run one security analysis per plan, or one per trust boundary that several Security-critical claims share, as the [delegation skill](../SKILL.md) describes: read-only, reporting findings only.",
+            "Main dispositions every finding into the plan, turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to, and records the disposable test targets: how to start and reset each one outside the project directory, so that a gated call keeps a clean workspace, its synthetic data, its allowed effects and the dependencies it can reach.",
+            "Plan review then receives the revised plan, and the user then approves it; security analysis and plan review stay separate assignments, and neither runs inside the other.",
+        ),
+        "delegation SKILL.md": (
+            "For a plan with a Security-critical claim, the security analysis runs before plan review and its findings become security invariants and test targets in the plan, as [plan review](references/plan-review.md) describes.",
+        ),
+    }
+
+    # C2 item 2: security analysis reopens only on three triggers and covers only what changed.
+    REOPENING = {
+        "plan-review.md": (
+            "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control, and then covers only what changed, before plan review runs again.",
+        ),
+    }
+
+    # C2 item 3: a missing-READY waiver does not waive security analysis for implemented work.
+    IMPLEMENTED = {
+        "review-state.md": (
+            "A waiver of the missing READY does not waive security analysis: before code review of an implemented Security-critical claim, main runs its security analysis and dispositions the findings as [plan review](plan-review.md) describes, or the user explicitly waives them, and main records either, with its scope, in the report and in any active handoff.",
+            "Security invariants added this way change the claim's acceptance and need the user's approval, as a material revision does.",
+        ),
+    }
+
+    # C2 item 4: the review and verification briefs carry the security invariants.
+    BRIEFS = {
+        "code-review.md": (
+            "The brief for a Security-critical claim also carries its security invariants.",
+        ),
+        "outcome-verification.md": (
+            "The brief for a Security-critical claim also carries its security invariants.",
+        ),
+    }
+
+    # C2 item 5: off mode does not force the sequence, while the delegation skill's security-analysis rule still applies.
+    OFF_MODE = {
+        "plan-review.md": (
+            "In off mode this sequence is not forced, but the [delegation skill](../SKILL.md)'s rule that a Security-critical change gets an analyst security analysis still applies.",
+        ),
+        "delegation SKILL.md": (
+            "For requested security analysis or a Security-critical change, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope.",
+        ),
+    }
+
+    assert_pinned = SecurityCriticalVocabularyTests.assert_pinned
+
+    def test_security_analysis_feeds_the_plan_before_plan_review_and_approval(self):
+        self.assert_pinned(self.SEQUENCE)
+
+    def test_security_analysis_reopens_only_on_its_triggers(self):
+        self.assert_pinned(self.REOPENING)
+
+    def test_a_missing_ready_waiver_does_not_waive_security_analysis(self):
+        self.assert_pinned(self.IMPLEMENTED)
+
+    def test_review_and_verification_briefs_carry_the_security_invariants(self):
+        self.assert_pinned(self.BRIEFS)
+        for place in ("code-review.md", "outcome-verification.md"):
+            step = next(line for line in self.source(place).splitlines() if line.startswith("2. "))
+            with self.subTest(place=place):
+                self.assertIn(self.BRIEFS[place][0], step, "the sentence belongs to step 2")
+        code_review_step = next(line for line in self.source("code-review.md").splitlines() if line.startswith("2. "))
+        self.assertIn("for a Security-critical claim, name the trust boundaries to check. The brief for a Security-critical claim also carries its security invariants.",
+                      code_review_step, "the new sentence follows C1's trust-boundary sentence, which stays unchanged")
+
+    def test_off_mode_keeps_the_security_analysis_rule(self):
+        self.assert_pinned(self.OFF_MODE)
+
+    def test_the_sequence_is_stated_in_order_before_the_numbered_steps(self):
+        text = self.source("plan-review.md")
+        positions = [text.index(sentence) for sentence in self.SEQUENCE["plan-review.md"]]
+        positions += [text.index(self.REOPENING["plan-review.md"][0]), text.index(self.OFF_MODE["plan-review.md"][0])]
+        self.assertEqual(positions, sorted(positions))
+        self.assertLess(text.index("Classify every plan's claims by what they change:"), positions[0],
+                        "classification comes first")
+        self.assertLess(positions[-1], text.index("\n1. Identify the logical plan"),
+                        "main reads the sequence before the plan-review steps")
+
+    # Each scenario names the outcome and the sentences that decide it.
+    SCENARIOS = (
+        ("in auto, the user is about to approve a Plan with a Security-critical claim",
+         "security analysis runs first, main turns its findings into invariants and records the targets, plan review gets the revised Plan, then the user approves",
+         (("plan-review.md", "gets a security analysis before its plan review, and the user approves the plan only after both."),
+          ("plan-review.md", "one per trust boundary that several Security-critical claims share,"),
+          ("plan-review.md", "turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to,"),
+          ("plan-review.md", "how to start and reset each one outside the project directory, so that a gated call keeps a clean workspace, its synthetic data, its allowed effects and the dependencies it can reach."),
+          ("plan-review.md", "Plan review then receives the revised plan, and the user then approves it;"),
+          ("plan-review.md", "security analysis and plan review stay separate assignments, and neither runs inside the other."),
+          ("delegation SKILL.md", "Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.")),
+         ()),
+        ("a REVISE leads to a wording fix in a Security-critical claim with no new boundary, attacker capability or control",
+         "security analysis does not reopen; plan review runs again",
+         (("plan-review.md", "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control,"),),
+         ()),
+        ("a revision adds a new trust boundary to the Plan",
+         "security analysis reopens for that boundary only, before plan review runs again",
+         (("plan-review.md", "and then covers only what changed, before plan review runs again."),),
+         ()),
+        ("in auto, implemented Security-critical work reaches review without plan-review state and the user waives the missing READY",
+         "security analysis and its dispositions still run before code review, or the user waives them explicitly; either is recorded, and added invariants need the user's approval",
+         (("review-state.md", "straight to code review: recorded as a waiver of the missing READY for the implemented claims,"),
+          ("review-state.md", "A waiver of the missing READY does not waive security analysis:"),
+          ("review-state.md", "or the user explicitly waives them, and main records either, with its scope, in the report and in any active handoff."),
+          ("review-state.md", "Security invariants added this way change the claim's acceptance and need the user's approval, as a material revision does.")),
+         ()),
+        ("main dispatches code review and outcome verification for a Security-critical claim",
+         "each brief carries the claim's security invariants",
+         (("code-review.md", "The brief for a Security-critical claim also carries its security invariants."),
+          ("outcome-verification.md", "The brief for a Security-critical claim also carries its security invariants.")),
+         ()),
+        ("in off mode, the user asks main to implement a Plan with a Security-critical claim",
+         "the pre-approval sequence is not forced, but the Security-critical change still gets an analyst security analysis",
+         (("plan-review.md", "In off mode this sequence is not forced,"),
+          ("plan-review.md", "rule that a Security-critical change gets an analyst security analysis still applies."),
+          ("delegation SKILL.md", "For requested security analysis or a Security-critical change, give analyst a read-only brief")),
+         ()),
+    )
+
+    test_scenarios_are_decided_by_their_sentences = SecurityCriticalVocabularyTests.test_scenarios_are_decided_by_their_sentences
+
+
 class InstallDocumentTests(unittest.TestCase):
     """C7 item 3: the documents users follow to install, update and recover are current."""
 
