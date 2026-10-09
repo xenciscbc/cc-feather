@@ -115,7 +115,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 分析／安全分析／計畫審查 | analyst | opus | high |
 | 機械式實作 | mech-executor | sonnet | medium |
 | 一般工程實作 | executor | opus | medium |
-| 安全敏感實作 | security-executor | opus | high |
+| 安全關鍵實作 | security-executor | opus | high |
 | 實作後驗證 | verifier | opus | high |
 | 實作後程式碼審查 | reviewer | opus | high |
 | 對抗式審查（Adversarial review） | adversary | opus | high |

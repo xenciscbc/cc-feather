@@ -113,7 +113,7 @@ A task-specific request takes precedence over session preferences and saved sett
 | Analysis, security analysis, plan review | analyst | opus | high |
 | Mechanical implementation | mech-executor | sonnet | medium |
 | General implementation | executor | opus | medium |
-| Security-sensitive implementation | security-executor | opus | high |
+| Security-critical implementation | security-executor | opus | high |
 | Post-implementation verification | verifier | opus | high |
 | Post-implementation code review | reviewer | opus | high |
 | Adversarial review | adversary | opus | high |
@@ -130,7 +130,7 @@ A task-specific request takes precedence over session preferences and saved sett
 | reviewer | Independent review of the code implementing one claim | Reads the diff itself from a base revision, runs non-modifying static checks, never edits or runs tests; APPROVED/CHANGES_REQUESTED |
 | adversary | Trying to break one Security-critical claim against the disposable targets its brief names | Read, Glob, Grep and Bash only; never edits or fixes; HELD/BROKEN/INCONCLUSIVE. Its safety limits (only disposable targets with synthetic data the brief names, no external hosts, no project edits) are instructions to the model, not a sandbox: Bash can still reach the network and write files, and main compares the workspace before and after each call. |
 
-Main owns understanding, decisions, integration and acceptance. Small or context-coupled tasks stay direct. Independent children have scoped contracts and exclusive write ownership; all are leaves and leave handoff and progress records to main. Read-only security analysis belongs to analyst, while security implementation belongs to security-executor.
+Main owns understanding, decisions, integration and acceptance. Small or context-coupled tasks stay direct. Independent children have scoped contracts and exclusive write ownership; all are leaves and leave handoff and progress records to main. Read-only security analysis belongs to analyst, while the implementation of Security-critical changes belongs to security-executor.
 
 Resolve model and effort independently: **explicit task request > applicable session preference > saved role configuration > package default**. “Use Sonnet to review this plan” keeps analyst duties/tools but selects Sonnet, retaining analyst's high effort unless overridden. Apply real native bindings; never silently substitute or pretend prompt text changed the runtime. A task override does not rewrite saved settings.
 

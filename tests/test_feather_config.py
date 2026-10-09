@@ -4649,7 +4649,7 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
             "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically.",
         ),
         "executor.md": (
-            "If the implementation makes a Security-critical change, one to a security guarantee at a trust boundary or to a security control's implementation or configuration, return that routing issue to the main Agent for {{name:security-executor}} ownership; do not silently expand your assignment or delegate yourself.",
+            "If the implementation makes a Security-critical change, one to a security guarantee at a trust boundary or to a security control's implementation or configuration, including where sensitive data goes and how untrusted data is interpreted downstream, return that routing issue to the main Agent for {{name:security-executor}} ownership; do not silently expand your assignment or delegate yourself.",
         ),
         "setup.md": (
             "Unplanned work that makes a Security-critical change, migrates data or is irreversible first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically.",
@@ -4728,27 +4728,48 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
                 with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
                     self.assertNotIn(sentence, self.source(place), outcome)
 
+    # 0.19.0 C1 item 5 (Q16): the paths Git lists as tracked, so an ignored local file is never read.
+    SHIPPED_PATHSPECS = ("skills", "templates", "README.md", "README.zh-TW.md", "docs/setup.md")
+
     def shipped_files(self):
-        # Every file under skills/ and templates/, so a later-added file is covered; bytecode caches are not shipped.
-        files = [path for base in ("skills", "templates") for path in sorted((config.ROOT / base).rglob("*"))
-                 if path.is_file() and "__pycache__" not in path.parts]
-        files += [config.ROOT / "README.md", config.ROOT / "README.zh-TW.md", config.ROOT / "docs" / "setup.md"]
-        return files
+        # core.fsmonitor=false keeps a repository-configured monitor from running; ls-files runs no filters.
+        command = ["git", "-c", "core.fsmonitor=false", "ls-files", "-z", "--", *self.SHIPPED_PATHSPECS]
+        try:
+            listed = subprocess.run(command, cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run, so the shipped files cannot be listed: {error}")
+        stderr = listed.stderr.decode("utf-8", "replace").strip()
+        if listed.returncode != 0 and "not a git repository" in stderr.lower():
+            self.skipTest(f"the checkout is not a Git repository, so the shipped files cannot be listed: {stderr}")
+        self.assertEqual(listed.returncode, 0, stderr)
+        names = sorted(name for name in listed.stdout.decode("utf-8").split("\0") if name)
+        return [config.ROOT / name for name in names if (config.ROOT / name).is_file()]
+
+    # 0.19.0 C1 item 5: "security" and "boundary" separated by whitespace or a hyphen.
+    RETIRED_BOUNDARY = re.compile(r"security[\s-]+boundar", re.I)
 
     def test_no_security_boundary_wording_ships(self):
         # CONTEXT.md's _Avoid_ line is the only allowed use; setup-validation, ADRs and specs are history.
         files = self.shipped_files()
         names = {path.relative_to(config.ROOT).as_posix() for path in files}
         self.assertTrue({"skills/delegation/SKILL.md", "templates/agents/executor.md", "templates/review-auto.md",
-                         "README.zh-TW.md", "docs/setup.md"} <= names, "the walk must reach the shipped files")
-        boundary = re.compile(r"security[ -]boundar", re.I)
+                         "README.md", "README.zh-TW.md", "docs/setup.md"} <= names, "Git must list the shipped files")
         for path in files:
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
-                self.assertIsNone(boundary.search(text))
+                self.assertIsNone(self.RETIRED_BOUNDARY.search(text))
                 self.assertNotIn("安全邊界", text)
-        self.assertIn("_Avoid_: security boundary change, sensitive change",
-                      (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8").splitlines())
+
+    def test_the_glossary_mentions_the_retired_phrase_only_in_its_avoid_line(self):
+        lines = (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8").splitlines()
+        self.assertEqual([line for line in lines if self.RETIRED_BOUNDARY.search(line)],
+                         ["_Avoid_: security boundary change, sensitive change"])
+
+    def test_the_pattern_matches_whitespace_and_hyphen_separators(self):
+        for phrase in ("security boundary", "Security-boundaries", "security\nboundary", "security - boundary"):
+            with self.subTest(phrase=phrase):
+                self.assertIsNotNone(self.RETIRED_BOUNDARY.search(phrase))
+        self.assertIsNone(self.RETIRED_BOUNDARY.search("security of the trust boundary"))
 
 
 class PreApprovalSecurityAnalysisTests(unittest.TestCase):
@@ -5958,6 +5979,83 @@ class SecurityRoutingReleaseTests(unittest.TestCase):
             with self.subTest(entry=sentence[:50]):
                 self.assertIn(sentence, entry)
         self.assertNotIn("no setup update is required", entry)
+
+
+class SecurityCriticalWordingTests(unittest.TestCase):
+    """0.19.0 C1 (docs/specs/review-followups-0-19-0.md): role definitions and READMEs use the Security-critical wording."""
+
+    AGENTS = config.ROOT / "templates" / "agents"
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @classmethod
+    def role_parts(cls, role):
+        """(description line, body) of a role template: the frontmatter description and the text after the frontmatter."""
+        _, frontmatter, body = (cls.AGENTS / f"{role}.md").read_text(encoding="utf-8").split("---\n", 2)
+        description = next(line for line in frontmatter.splitlines() if line.startswith("description: "))
+        return description, body
+
+    @classmethod
+    def readme_section(cls, name, heading):
+        """Lines of one README section, from its '## ' heading to the next one."""
+        return cls.text(name).split(f"\n{heading}\n", 1)[1].split("\n## ", 1)[0].splitlines()
+
+    # C1 item 1: the executor's inline definition matches the delegation skill's.
+    EXECUTOR = (
+        "If the implementation makes a Security-critical change, one to a security guarantee at a trust boundary or to a security control's implementation or configuration, including where sensitive data goes and how untrusted data is interpreted downstream, return that routing issue to the main Agent for {{name:security-executor}} ownership; do not silently expand your assignment or delegate yourself.",
+    )
+    CANONICAL = "including where sensitive data goes and how untrusted data is interpreted downstream."
+
+    # C1 item 2: security-executor's description and scope.
+    SECURITY_EXECUTOR_DESCRIPTION = "Implement scoped Security-critical changes: authorization, secrets, cryptography and trust boundaries."
+    SECURITY_EXECUTOR_SCOPE = "Implement only the authorized Security-critical scope, using supplied findings and dispositions when available."
+
+    # C1 items 2 and 3: the default-model row and the routing sentence, paired, in each README's routing section.
+    README_SECTIONS = ("## Roles and routing", "## 分派與預設模型")
+    README_ROWS = (
+        ("| Security-critical implementation | security-executor | opus | high |",
+         "| 安全關鍵實作 | security-executor | opus | high |"),
+    )
+    README_ROUTING = (
+        ("Read-only security analysis belongs to analyst, while the implementation of Security-critical changes belongs to security-executor.",
+         "安全分析由唯讀 analyst 做；安全關鍵變更（Security-critical change）的實作交給 security-executor。"),
+    )
+
+    def test_executor_definition_matches_the_delegation_skill(self):
+        _, body = self.role_parts("executor")
+        for sentence in self.EXECUTOR:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, body)
+        self.assertIn(self.CANONICAL, self.text("skills/delegation/SKILL.md"))
+
+    def test_security_executor_uses_the_security_critical_term(self):
+        description, body = self.role_parts("security-executor")
+        self.assertIn(self.SECURITY_EXECUTOR_DESCRIPTION, description)
+        self.assertIn(self.SECURITY_EXECUTOR_SCOPE, body)
+
+    def test_readmes_route_security_critical_changes_to_security_executor_in_both_languages(self):
+        english, chinese = (self.readme_section(name, heading)
+                            for name, heading in zip(("README.md", "README.zh-TW.md"), self.README_SECTIONS))
+        for en, zh in self.README_ROWS:
+            with self.subTest(row=en):
+                self.assertIn(en, english)
+                self.assertIn(zh, chinese)
+        for en, zh in self.README_ROUTING:
+            with self.subTest(sentence=en[:60]):
+                self.assertTrue(any(en in line for line in english), en)
+                self.assertTrue(any(zh in line for line in chinese), zh)
+
+    # C1 item 4: the replaced wording is gone from every shipped role template and both READMEs.
+    def test_security_sensitive_wording_is_gone(self):
+        places = sorted(self.AGENTS.glob("*.md")) + [config.ROOT / "README.md", config.ROOT / "README.zh-TW.md"]
+        self.assertIn(self.AGENTS / "security-executor.md", places)
+        for path in places:
+            with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
+                self.assertNotIn("security-sensitive", path.read_text(encoding="utf-8").casefold())
+        self.assertNotIn("安全敏感", self.text("README.zh-TW.md"))
+        self.assertNotIn("security implementation belongs to security-executor", self.text("README.md"))
 
 
 class InstallDocumentTests(unittest.TestCase):
