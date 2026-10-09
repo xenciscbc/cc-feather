@@ -1627,6 +1627,116 @@ class FeatherConfigTests(unittest.TestCase):
                         self.assertEqual(code, 0, exported)
                         self.assertIn("previous call for this claim completed", exported[f"{prefix}reviewer"]["prompt"])
 
+    # 0.19.0 C8 item 2: the role templates v0.18.0 shipped, kept verbatim in a data file copied from
+    # `git show v0.18.0:templates/agents/<role>.md`, never rebuilt from the current templates.
+    TEMPLATES_0_18_0 = Path(__file__).resolve().parent / "role_templates_0_18_0.json"
+    CHANGED_SINCE_0_18_0 = ("executor", "security-executor", "reviewer", "adversary")
+
+    def recorded_0_18_0(self):
+        recorded = json.loads(self.TEMPLATES_0_18_0.read_bytes())
+        self.assertEqual(recorded["tag"], "v0.18.0")
+        self.assertEqual(set(recorded["templates"]), set(self.CHANGED_SINCE_0_18_0))
+        return recorded["templates"]
+
+    def templates_0_18_0(self):
+        """The packaged templates with the four role templates exactly as v0.18.0 shipped them."""
+        fixture = self.root / "package-0.18.0"
+        if fixture.exists():
+            return fixture
+        shutil.copytree(config.ROOT / "templates", fixture / "templates")
+        for role, text in self.recorded_0_18_0().items():
+            path = fixture / "templates" / "agents" / f"{role}.md"
+            self.assertNotEqual(path.read_text(encoding="utf-8"), text, role)
+            path.write_bytes(text.encode("utf-8"))
+        return fixture
+
+    def test_0_18_0_fixture_is_the_tagged_content_of_every_changed_template(self):
+        try:
+            listed = subprocess.run(["git", "ls-tree", "-r", "--name-only", "v0.18.0", "--", "templates"], cwd=config.ROOT,
+                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run, so the v0.18.0 templates cannot be read: {error}")
+        if listed.returncode != 0:
+            self.skipTest(f"no v0.18.0 tag in this checkout: {listed.stderr.decode('utf-8', 'replace').strip()}")
+        changed = {}
+        for name in listed.stdout.decode("utf-8").splitlines():
+            shown = subprocess.run(["git", "show", f"v0.18.0:{name}"], cwd=config.ROOT, stdin=subprocess.DEVNULL,
+                                   capture_output=True, timeout=60, check=True).stdout
+            current = config.ROOT / name
+            if not current.is_file() or current.read_bytes() != shown:
+                changed[name] = shown
+        recorded = self.recorded_0_18_0()
+        self.assertEqual(sorted(changed), sorted(f"templates/agents/{role}.md" for role in recorded))
+        for role, text in recorded.items():
+            with self.subTest(role=role):
+                self.assertEqual(text.encode("utf-8"), changed[f"templates/agents/{role}.md"])
+
+    def test_0_18_0_role_templates_are_stale_until_setup_update(self):
+        stale = [role for role in config.ROLES if role in self.CHANGED_SINCE_0_18_0]
+        self.assertEqual(len(stale), len(self.CHANGED_SINCE_0_18_0))
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                for prefixed in (False, True):
+                    with self.subTest(scope=scope, mode=mode, prefixed=prefixed):
+                        self.use_fresh_roots(f"0.18.0-{scope}-{mode}-{prefixed}")
+                        agents = (self.project / ".claude" if scope == "project" else self.home) / "agents"
+                        if prefixed:
+                            agents.mkdir(parents=True)
+                            (agents / "custom.md").write_text("---\nname: scout\n---\nThe user's own scout\n",
+                                                              encoding="utf-8")
+                        prefix = config.ROLE_PREFIX if prefixed else ""
+                        with mock.patch.object(config, "ROOT", self.templates_0_18_0()):
+                            self.apply("install", scope, "--review-mode", mode)
+                            self.apply("model", scope, "--set", "reviewer.model=sonnet", "--set", "executor.effort=high")
+                            installed = {role: config._render(role, self.call("show", scope)[1]["choices"][role], prefix)
+                                         for role in stale}
+                        for role in stale:
+                            self.assertEqual((agents / f"{prefix}{role}.md").read_bytes(), installed[role], role)
+                        guidance = (self.project if scope == "project" else self.home) / "CLAUDE.md"
+                        for command in ("check", "show"):
+                            code, shown = self.call(command, scope)
+                            self.assertEqual(code, 0, shown)
+                            self.assertEqual((shown["status"], shown["components"]["delegation"]["status"]), ("ok", "ok"))
+                            self.assertEqual(shown["issues"], [])
+                            self.assertTrue(shown["role_update_required"])
+                            self.assertEqual(set(shown["choices"]), set(config.ROLES))
+                            self.assertEqual(self.stale_warnings(shown), [self.stale_warning(agents, prefix, role)
+                                                                          for role in stale])
+                            self.assertNotIn("delegation guidance is from an older template; run setup update",
+                                             shown["warnings"])
+                        before = {path: path.read_bytes() for path in (*agents.glob("*.md"), guidance)}
+                        other = "off" if mode == "auto" else "auto"
+                        for command, extra in (("model", ("--set", "scout.effort=low")), ("review", ("--review-mode", other)),
+                                               ("session", ())):
+                            code, error = self.call(command, scope, *extra)
+                            self.assertEqual(code, 2, error)
+                            self.assertIn("run setup update first", error["error"])
+                        self.assertEqual(before, {path: path.read_bytes() for path in before})
+                        self.apply("update", scope)
+                        code, shown = self.call("check", scope)
+                        self.assertEqual(code, 0, shown)
+                        self.assertFalse(shown["role_update_required"])
+                        self.assertEqual([w for w in shown["warnings"] if "older template" in w], [])
+                        self.assertEqual(shown["review_mode"], mode)
+                        self.assertEqual(shown["role_prefix"], prefix)
+                        self.assertEqual(shown["choices"]["reviewer"], {"model": "sonnet", "effort": "high"})
+                        self.assertEqual(shown["choices"]["executor"], {"model": "opus", "effort": "high"})
+                        for path, data in before.items():
+                            role = path.stem[len(prefix):] if path.stem.startswith(prefix) else path.stem
+                            if path.parent == agents and role in stale:
+                                current = config._render(role, shown["choices"][role], prefix)
+                                self.assertEqual(path.read_bytes(), current, role)
+                                self.assertNotEqual(current, data, role)
+                            else:
+                                self.assertEqual(path.read_bytes(), data, path)
+                        self.apply("model", scope, "--set", "scout.effort=low")
+                        code, exported = self.call("session", scope)
+                        self.assertEqual(code, 0, exported)
+                        self.assertIn("it carries that role's findings with the main Agent's FIX or REJECT disposition",
+                                      exported[f"{prefix}reviewer"]["prompt"])
+                        self.assertIn("The read-only Git commands you may run change no refs",
+                                      exported[f"{prefix}adversary"]["prompt"])
+
     def test_edited_0_16_0_role_is_a_conflict_not_stale(self):
         agents, prefix = self.install_0_16_0()
         analyst = agents / "analyst.md"
@@ -6030,12 +6140,13 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
          "- **明確要求**計畫審查、程式碼審查、驗證或對抗式審查（包括 `/cc-feather:adversarial-review`）時不受開關限制，"),
     )
 
-    # C6 items 4 and 5: the downgrade note and the added-roles sentences.
+    # C6 items 4 and 5: the downgrade note and the added-roles sentences. 0.19.0 C8 item 4 replaced the
+    # adversary-specific downgrade sentence with one instruction per case, pinned in ReviewFollowUpsReleaseTests.
     SETUP = {
         "setup.md": (
             "The installation predates a role the plugin now packages (`verifier` and `reviewer` were such roles, and `adversary` is one for installations from 0.17.0 or earlier),",
             "Until that update, a required code review is blocked because reviewer is missing, and a required Adversarial review is blocked because adversary is missing, so the automatic flow stops instead of skipping it.",
-            "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, remove the scope with 0.18.0 first, or restore the files listed in the update's backup manifest.",
+            "To go back to 0.17.0 or older, which rejects a state that records `adversary`, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
         ),
     }
 
@@ -6101,8 +6212,8 @@ class SecurityRoutingReleaseTests(unittest.TestCase):
     def text(name):
         return (config.ROOT / name).read_text(encoding="utf-8")
 
-    def test_manifest_and_readmes_require_setup_update(self):
-        self.assertEqual("0.18.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    def test_readmes_require_setup_update(self):
+        # The manifest version is pinned by the current release's tests (0.19.0 C8 item 1).
         for name, sentence in self.README.items():
             with self.subTest(readme=name):
                 self.assertIn(sentence, self.text(name))
@@ -7372,6 +7483,75 @@ class PreApprovalApprovalRuleTests(unittest.TestCase):
         decision = self.source("ADR 0009").split(AdversarialReviewRetriesTests.AMENDMENT_HEADING, 1)[0]
         self.assertIn("then plan review judges the revised Plan; then the user approves.", decision,
                       "the decision text is not rewritten")
+
+
+class ReviewFollowUpsReleaseTests(unittest.TestCase):
+    """0.19.0 C8 (docs/specs/review-followups-0-19-0.md): the release requires setup update, merges its rollback
+    instructions and records its validation."""
+
+    # C8 item 3: the Updates sections, paired in both languages.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.19.0 changes the executor, security-executor, adversary and reviewer role definitions, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` with those four roles from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`."),
+        ("## 更新、移除與驗證\n",
+         "0.19.0 改了 executor、security-executor、adversary 與 reviewer 的角色定義，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出這四個角色來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。"),
+    )
+
+    # C8 item 4: one rollback instruction per case, in the setup document's added-roles section.
+    ROLLBACK = (
+        "To go back to 0.18.0, no remove is needed: 0.18.0 reads the state 0.19.0 writes, and its own setup update re-renders its role templates, so run setup update with 0.18.0 in every scope where delegation is installed, then start a fresh session.",
+        "To go back to 0.17.0 or older, which rejects a state that records `adversary`, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
+    )
+    REPLACED_ROLLBACK = (
+        "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, remove the scope with 0.18.0 first, or restore the files listed in the update's backup manifest.",
+        "To go back to such a version, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
+    )
+
+    # C8 items 3, 5 and 6, and the carried-forward follow-ups (Out of Scope).
+    ENTRY = (
+        "**Setup update is required.** This release changes the executor, security-executor, adversary and reviewer role definitions: run setup update in every scope where delegation is installed, then start a fresh session.",
+        "To go back to 0.18.0, no remove is needed: 0.18.0 reads the state 0.19.0 writes, and its own setup update re-renders its role templates.",
+        "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
+        "Live scenarios (Q20): this release's plan reviews, implementation and review round ran with the installed 0.18.0 roles and procedures (user scope, setup update run on 2026-10-09), as the spec's Governance requires;",
+        "No live scenario ran with the 0.19.0 roles or procedures: the changed rules of C2–C6 are proven only as text, by the contract tests, and are listed below as follow-ups to exercise live.",
+        "`v0.19.0` does not exist when this entry is written.",
+        "it is created only after every Claim has a valid APPROVED and CONFIRMED, and C2, C3 and C5 a valid HELD, or the user's accept-and-land decision for the Claim, and only with the user's go-ahead for landing and for the tag; that it names the release commit and matches this manifest version are checked afterwards.",
+        "**Review round: pending when this entry was written.** The review round's results (code review and outcome verification per Claim, and Adversarial review for C2, C3 and C5) are added after the review round, in a commit that only records review history.",
+        "Carried forward from 0.18.0: `check` and `show` do not name a missing role in a warning, only through `role_update_required` and its absence from the choices and agents; and the delegation skill's sentence \"After a claim passes and is committed\" does not name HELD itself.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_19_0(self):
+        self.assertEqual("0.19.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, sentence) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            with self.subTest(readme=name):
+                self.assertIn(sentence, self.section(self.text(name), heading))
+
+    def test_setup_document_gives_one_rollback_instruction_per_case(self):
+        section = self.section(self.text("docs/setup.md"), "## Added roles and incompatible role sets\n")
+        for sentence in self.ROLLBACK:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        setup = self.text("docs/setup.md")
+        for sentence in self.REPLACED_ROLLBACK:
+            with self.subTest(replaced=sentence[:40]):
+                self.assertNotIn(sentence, setup)
+
+    def test_validation_entry_records_the_update_rollback_live_scope_tag_and_review(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.19.0 review follow-ups\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("no setup update is required", entry)
 
 
 class InstallDocumentTests(unittest.TestCase):
