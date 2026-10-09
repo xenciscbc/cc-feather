@@ -18,7 +18,7 @@ Keep small or tightly coupled work with main. Select a bounded independent respo
 | analyst | Causal/impact analysis, security analysis or plan review |
 | mech-executor | Repetition with a complete specification |
 | executor | Scoped implementation requiring engineering judgment |
-| security-executor | Authorized changes to security boundaries |
+| security-executor | Authorized Security-critical changes, including the implementation of every Security-critical claim |
 | verifier | Independent verification of a completed implementation claim |
 | reviewer | Independent code review of one implemented claim |
 
@@ -28,7 +28,9 @@ The table uses role ids. When the installed delegation policy lists native role 
 
 Use configured role models and effort. For task/session overrides, persistent changes or uncertain bindings, read [model](../model/SKILL.md) before dispatch or configuration changes. Main-only preferences do not override children. Distinguish configured settings from native execution evidence; label unseen execution unconfirmed.
 
-For requested security analysis or material security-boundary changes, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope. Evaluate findings before assigning authorized fixes to security-executor. Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.
+A Security-critical change is a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream. Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list; input validation counts where untrusted data crosses a trust boundary. Recognise it by what the change does, not by keywords. A Security-critical claim is a claim whose outcome includes a Security-critical change; classify claims as [plan review](references/plan-review.md) describes, in off mode too, before dispatching their implementation.
+
+For requested security analysis or a Security-critical change, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope. Evaluate findings before assigning authorized fixes to security-executor, and route the implementation of every Security-critical claim to security-executor. Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.
 
 ## Dispatch
 

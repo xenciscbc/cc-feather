@@ -24,7 +24,7 @@ Take one or more Plans or tickets, or a description of Unplanned work. With no a
    | Work | Role | Model | Effort | Source |
    | --- | --- | --- | --- | --- |
 
-   Use `main` as the role for work main keeps. Source is task, session, saved or default. Give a reason only when the routing is not obvious, such as a security-boundary change going to security-executor or tightly coupled work staying with main.
+   Use `main` as the role for work main keeps. Source is task, session, saved or default. Give a reason only when the routing is not obvious, such as a Security-critical claim going to security-executor or tightly coupled work staying with main.
 2. One short note on which Assignments can run in parallel and which wait for another or share files.
 3. One review section, listed once rather than under each Claim: plan review by analyst, code review by reviewer and outcome verification by verifier, each with model, effort and source. State the number of Plans and Claims covered and that each step stops after two consecutive automatic calls without a pass, per Plan for plan review and per Claim for code review and outcome verification, an automatic pass resetting the count; under the [code review](code-review.md) and [outcome verification](outcome-verification.md) procedures this comes to at most six automatic calls per Claim in one uninterrupted attempt, and each reopened Claim or Material deviation adds calls. Note any step that has already stopped in this session. In off mode, state that the Automatic flow will not run and that Explicit requests remain available. Mark Unplanned work as outside the Automatic flow.
 
@@ -38,7 +38,7 @@ Mark each affected row or Plan:
 - a Plan whose text refers to its own tickets or Claims that cannot be found, or whose listed Claims disagree with its tickets; when it lists no Claims, show the one-Claim reading and note that main will ask before plan review or implementation;
 - a Claim without its own verifiable acceptance;
 - in auto, a Plan with implemented Claims and no plan-review state in this session, for which main will ask whether to run plan review first, as [review state](review-state.md)'s Implemented before plan review describes;
-- in auto, Unplanned work that changes a security boundary, migrates data or is irreversible, which needs a reviewed Plan the user approves first; in off, note it only;
+- in auto, Unplanned work that makes a Security-critical change, migrates data or is irreversible, which needs a reviewed Plan the user approves first; in off, note it only;
 - work that needs exploration before it can be judged.
 
 ## After the preview

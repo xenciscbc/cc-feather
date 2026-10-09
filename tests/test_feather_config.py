@@ -1607,7 +1607,7 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertNotIn(warning, self.call("check")[1]["warnings"])
 
     def test_automatic_review_triggers_match_the_plan_review_procedure(self):
-        triggers = "Unplanned work that changes a security boundary, migrates data or performs an irreversible operation"
+        triggers = "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation"
         self.assertIn(triggers, config._auto_review())
         procedure = (config.ROOT / "skills" / "delegation" / "references" / "plan-review.md").read_text(encoding="utf-8")
         self.assertIn(triggers, procedure)
@@ -4382,6 +4382,194 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             for place, sentence in contradicting:
                 with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
                     self.assertNotIn(sentence, self.source(place), outcome)
+
+
+class SecurityCriticalVocabularyTests(unittest.TestCase):
+    """0.18.0 C1 (docs/specs/security-critical-routing.md): the definition, classification, deviation and term alignment."""
+
+    EXTRA = {
+        "delegation SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md",
+        "preview.md": config.ROOT / "skills" / "delegation" / "references" / "preview.md",
+        "executor.md": config.ROOT / "templates" / "agents" / "executor.md",
+        "CLAUDE.md template": config.ROOT / "templates" / "CLAUDE.md",
+        "setup.md": config.ROOT / "docs" / "setup.md",
+    }
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        if name in cls.EXTRA:
+            return cls.EXTRA[name].read_text(encoding="utf-8")
+        return ReviewRulesFollowUpTests.source(name)
+
+    # C1 item 1: the behavioural definition, stated where main routes work.
+    DEFINITION = {
+        "delegation SKILL.md": (
+            "A Security-critical change is a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream.",
+            "Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list; input validation counts where untrusted data crosses a trust boundary.",
+            "Recognise it by what the change does, not by keywords.",
+            "A Security-critical claim is a claim whose outcome includes a Security-critical change; classify claims as [plan review](references/plan-review.md) describes, in off mode too, before dispatching their implementation.",
+        ),
+    }
+
+    # C1 item 2: when and by whom claims are classified, and where the classification is recorded.
+    CLASSIFICATION = {
+        "plan-review.md": (
+            "Classify every plan's claims by what they change: a claim is Security-critical when its outcome includes a Security-critical change as the [delegation skill](../SKILL.md) defines it.",
+            "Main marks each Security-critical claim in a plan it writes.",
+            "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a conversation plan, main classifies its claims before the first plan review of that plan in the session or, for implemented work, before its code review.",
+            "Main records the classification in the plan-review brief, in its report and in any active handoff, and edits a user-written spec or ticket to mark it only with the user's authorisation.",
+            "In off mode, main classifies before dispatching the implementation, so that Security-critical work is routed to security-executor.",
+            "When the classification is unclear, main has analyst gather evidence (the asset, the attacker-controlled input, the boundary and the changed control) and asks the user only about missing requirements.",
+        ),
+        "code-review.md": (
+            "Classify the claim as [plan review](plan-review.md) describes if it is not yet classified; for a Security-critical claim, name the trust boundaries to check.",
+        ),
+        "CONTEXT.md#Security-critical claim": (
+            "A Claim whose outcome includes a Security-critical change. It is identified when the Plan is written or, for a Plan main did not write, before its first review.",
+        ),
+    }
+
+    # C1 item 3: a material deviation keeps its meaning and gains a newly found control or invariant.
+    DEVIATION = {
+        "plan-review.md": (
+            "A deviation is material when it changes the plan's outcome, scope or acceptance; in addition, discovering a security control or invariant the plan lacks is a material deviation.",
+            "Touching boundary code the plan already covers is not one.",
+        ),
+        "CONTEXT.md#Deviation": (
+            "It is material when it changes the Plan's outcome, scope or acceptance; discovering a security control or invariant the Plan lacks is also material, while touching boundary code the Plan already covers is not.",
+        ),
+        "README.md#Re-review during implementation": (
+            "a plan is reviewed again only after a material deviation, a change to its outcome, scope or acceptance, or the discovery of a security control or invariant the plan lacks; touching boundary code the plan already covers is not one.",
+        ),
+        "README.zh-TW.md#施工中的重審": (
+            "只有重大偏離，也就是改變計畫的結果、範圍或驗收條件，或發現計畫缺少的安全控制或不變條件，才會重審計畫；改動計畫已涵蓋的信任邊界程式碼不算。",
+        ),
+    }
+
+    # C1 item 4: every listed shipped sentence uses the glossary term; Security-critical claims go to security-executor.
+    TERM_ALIGNMENT = {
+        "delegation SKILL.md": (
+            "| security-executor | Authorized Security-critical changes, including the implementation of every Security-critical claim |",
+            "For requested security analysis or a Security-critical change, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope.",
+            "Evaluate findings before assigning authorized fixes to security-executor, and route the implementation of every Security-critical claim to security-executor.",
+        ),
+        "plan-review.md": (
+            "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation must not start without one:",
+        ),
+        "preview.md": (
+            "Give a reason only when the routing is not obvious, such as a Security-critical claim going to security-executor or tightly coupled work staying with main.",
+            "- in auto, Unplanned work that makes a Security-critical change, migrates data or is irreversible, which needs a reviewed Plan the user approves first; in off, note it only;",
+        ),
+        "review-auto.md": (
+            "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation first needs a written, reviewed plan the user approves; other unplanned edits get no automatic review.",
+        ),
+        "CLAUDE.md template": (
+            "Also use it for requested security analysis, explicitly requested plan review, code review or outcome verification, requests to turn automatic review on or off, and before implementing a Security-critical change.",
+        ),
+        "auto-review.md#Meaning": (
+            "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically.",
+        ),
+        "executor.md": (
+            "If the implementation makes a Security-critical change, one to a security guarantee at a trust boundary or to a security control's implementation or configuration, return that routing issue to the main Agent for {{name:security-executor}} ownership; do not silently expand your assignment or delegate yourself.",
+        ),
+        "setup.md": (
+            "Unplanned work that makes a Security-critical change, migrates data or is irreversible first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically.",
+        ),
+        "README.md#Unplanned work": (
+            "gets no automatic review, except that a Security-critical change, data migration or irreversible operation first needs a written plan that is reviewed and that you approve.",
+        ),
+        "README.zh-TW.md#沒有計畫的工作": (
+            "不自動審查；但做出安全關鍵變更、遷移資料或不可逆操作，須先寫出計畫、通過審查並經你同意才施工。",
+        ),
+        "README.md": (
+            "unplanned work that makes a Security-critical change, migrates data or is irreversible and that in `auto` needs a reviewed plan first,",
+        ),
+        "README.zh-TW.md": (
+            "安全分析由唯讀 analyst 做；安全關鍵變更（Security-critical change）的實作交給 security-executor。",
+            "在 `auto` 下需要先有審查過計畫的未計畫安全關鍵變更、資料遷移或不可逆操作，",
+        ),
+    }
+
+    def assert_pinned(self, table):
+        for place, sentences in table.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertIn(sentence, text)
+
+    def test_security_critical_change_is_defined_behaviourally(self):
+        self.assert_pinned(self.DEFINITION)
+
+    def test_claims_are_classified_before_review_and_dispatch(self):
+        self.assert_pinned(self.CLASSIFICATION)
+
+    def test_a_newly_found_control_is_a_material_deviation(self):
+        self.assert_pinned(self.DEVIATION)
+
+    def test_shipped_triggers_use_the_glossary_term(self):
+        self.assert_pinned(self.TERM_ALIGNMENT)
+
+    # Each scenario names the outcome and the sentences that decide it; the sentence it replaced must be gone.
+    SCENARIOS = (
+        ("main writes a Plan whose claim changes how sessions are checked",
+         "the claim is classified Security-critical and marked when the Plan is written, and routed to security-executor",
+         (("delegation SKILL.md", "A Security-critical change is a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control,"),
+          ("delegation SKILL.md", "Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list;"),
+          ("plan-review.md", "Main marks each Security-critical claim in a plan it writes."),
+          ("CONTEXT.md#Security-critical claim", "It is identified when the Plan is written"),
+          ("delegation SKILL.md", "route the implementation of every Security-critical claim to security-executor.")),
+         (("delegation SKILL.md", "| security-executor | Authorized changes to security boundaries |"),)),
+        ("implementation discovers that the Plan lacks a security control or invariant it needs",
+         "a material deviation: dependent work stops for another plan review and the user's approval",
+         (("plan-review.md", "in addition, discovering a security control or invariant the plan lacks is a material deviation."),
+          ("plan-review.md", "a material deviation stops dependent work for another review of the revised plan,"),
+          ("CONTEXT.md#Deviation", "discovering a security control or invariant the Plan lacks is also material,"),
+          ("README.md#Re-review during implementation", "or the discovery of a security control or invariant the plan lacks;"),
+          ("README.zh-TW.md#施工中的重審", "或發現計畫缺少的安全控制或不變條件")),
+         ()),
+        ("implementation touches trust-boundary code the Plan already covers",
+         "not a material deviation",
+         (("plan-review.md", "Touching boundary code the plan already covers is not one."),
+          ("CONTEXT.md#Deviation", "while touching boundary code the Plan already covers is not.")),
+         ()),
+        ("an unmarked spec the user wrote reaches its first plan review in this session",
+         "main classifies its claims before that review, records it in the brief, report and any handoff, and edits the spec only with authorisation",
+         (("plan-review.md", "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a conversation plan, main classifies its claims before the first plan review of that plan in the session"),
+          ("plan-review.md", "Main records the classification in the plan-review brief, in its report and in any active handoff, and edits a user-written spec or ticket to mark it only with the user's authorisation."),
+          ("CONTEXT.md#Security-critical claim", "for a Plan main did not write, before its first review.")),
+         ()),
+    )
+
+    def test_scenarios_are_decided_by_their_sentences(self):
+        for scenario, outcome, deciding, contradicting in self.SCENARIOS:
+            for place, sentence in deciding:
+                with self.subTest(scenario=scenario[:50], place=place, sentence=sentence[:50]):
+                    self.assertIn(sentence, self.source(place), outcome)
+            for place, sentence in contradicting:
+                with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
+                    self.assertNotIn(sentence, self.source(place), outcome)
+
+    def shipped_files(self):
+        # Every file under skills/ and templates/, so a later-added file is covered; bytecode caches are not shipped.
+        files = [path for base in ("skills", "templates") for path in sorted((config.ROOT / base).rglob("*"))
+                 if path.is_file() and "__pycache__" not in path.parts]
+        files += [config.ROOT / "README.md", config.ROOT / "README.zh-TW.md", config.ROOT / "docs" / "setup.md"]
+        return files
+
+    def test_no_security_boundary_wording_ships(self):
+        # CONTEXT.md's _Avoid_ line is the only allowed use; setup-validation, ADRs and specs are history.
+        files = self.shipped_files()
+        names = {path.relative_to(config.ROOT).as_posix() for path in files}
+        self.assertTrue({"skills/delegation/SKILL.md", "templates/agents/executor.md", "templates/review-auto.md",
+                         "README.zh-TW.md", "docs/setup.md"} <= names, "the walk must reach the shipped files")
+        boundary = re.compile(r"security[ -]boundar", re.I)
+        for path in files:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
+                self.assertIsNone(boundary.search(text))
+                self.assertNotIn("安全邊界", text)
+        self.assertIn("_Avoid_: security boundary change, sensitive change",
+                      (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8").splitlines())
 
 
 class InstallDocumentTests(unittest.TestCase):

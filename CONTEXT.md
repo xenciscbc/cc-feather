@@ -21,7 +21,7 @@ A change to a security guarantee at a trust boundary, or to the implementation o
 _Avoid_: security boundary change, sensitive change
 
 **Security-critical claim**:
-A Claim whose outcome includes a Security-critical change. It is identified when the Plan is written.
+A Claim whose outcome includes a Security-critical change. It is identified when the Plan is written or, for a Plan main did not write, before its first review.
 _Avoid_: security claim
 
 **Claim**:
@@ -33,7 +33,7 @@ The span from the user's authorization to implement until completion is reported
 _Avoid_: execution, build phase
 
 **Deviation**:
-A difference between implemented work and its Plan. It is material when it changes the Plan's outcome, scope or acceptance.
+A difference between implemented work and its Plan. It is material when it changes the Plan's outcome, scope or acceptance; discovering a security control or invariant the Plan lacks is also material, while touching boundary code the Plan already covers is not.
 _Avoid_: scope creep, drift
 
 ## Delegation
