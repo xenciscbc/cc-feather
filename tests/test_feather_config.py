@@ -915,19 +915,18 @@ class FeatherConfigTests(unittest.TestCase):
 
     # 0.18.0 C3 (docs/specs/security-critical-routing.md): adversary is a managed role like the others.
     ADVERSARY_TOOLS = ["Read", "Glob", "Grep", "Bash"]
-    # Fields its frontmatter must not have: none of them may widen what the role can reach or load.
-    ADVERSARY_FORBIDDEN_FIELDS = ("permissionMode", "hooks", "mcpServers", "skills", "memory", "background",
-                                  "isolation", "disallowedTools")
 
     def assert_adversary_file(self, path, prefix, model="opus", effort="high"):
-        """The installed adversary has exactly name, description, model, effort and the four-tool line."""
+        """The installed adversary has exactly name, description, model, effort and the four-tool line.
+
+        The exact key list also rules out every field that could widen what the role can reach or load,
+        such as permissionMode, hooks, mcpServers, skills, memory, background, isolation or disallowedTools.
+        """
         text = path.read_text(encoding="utf-8")
         self.assertTrue(text.startswith("---\n"), path)
         header = text[4:].split("\n---\n", 1)[0].split("\n")
         keys = [line.split(":", 1)[0] for line in header]
         self.assertEqual(keys, ["name", "description", "model", "effort", "tools"], path)
-        for field in self.ADVERSARY_FORBIDDEN_FIELDS:
-            self.assertNotIn(field, keys)
         self.assertEqual(header[0], f"name: {prefix}adversary")
         self.assertEqual(header[2:], [f"model: {model}", f"effort: {effort}", "tools: Read, Glob, Grep, Bash"])
         self.assertIn(f"Code review belongs to {prefix}reviewer; claim verification to {prefix}verifier.", header[1])
@@ -1092,6 +1091,41 @@ class FeatherConfigTests(unittest.TestCase):
         self.assertEqual(shown["review_mode"], "auto")
         self.assertEqual(shown["choices"]["executor"], {"model": "sonnet", "effort": "medium"})
         self.assertEqual(shown["choices"]["adversary"], {"model": "opus", "effort": "high"})
+
+    def test_update_adds_prefixed_adversary_to_prefixed_installation_without_it(self):
+        # 0.19.0 C7 item 2: a 0.17.0 installation whose roles already use the prefix gains cc-adversary.
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                self.use_fresh_roots(f"prefixed-no-adversary-{scope}")
+                agents = (self.project / ".claude" if scope == "project" else self.home) / "agents"
+                agents.mkdir(parents=True)
+                user_role = "---\nname: scout\n---\nThe user's own scout\n"
+                (agents / "custom.md").write_text(user_role, encoding="utf-8")
+                self.apply("install", scope, "--review-mode", "auto")
+                self.apply("model", scope, "--set", "executor.model=sonnet")
+                self.drop_role(scope, "adversary")
+                self.assertFalse((agents / "cc-adversary.md").exists())
+                code, shown = self.call("check", scope)
+                self.assertEqual(code, 0, shown)
+                self.assertTrue(shown["role_update_required"])
+                self.assertNotIn("adversary", shown["choices"])
+                self.apply("update", scope)
+                self.assert_adversary_file(agents / "cc-adversary.md", config.ROLE_PREFIX)
+                self.assertFalse((agents / "adversary.md").exists())
+                self.assertEqual((agents / "custom.md").read_text(encoding="utf-8"), user_role)
+                code, shown = self.call("check", scope)
+                self.assertEqual(code, 0, shown)
+                self.assertEqual(shown["status"], "ok", shown)
+                self.assertFalse(shown["role_update_required"])
+                self.assertEqual(self.stale_warnings(shown), [])
+                self.assertEqual(shown["review_mode"], "auto")
+                self.assertEqual(shown["choices"]["executor"], {"model": "sonnet", "effort": "medium"})
+                self.assertEqual(shown["choices"]["adversary"], {"model": "opus", "effort": "high"})
+                self.assertEqual(shown["paths"]["agents"]["adversary"], str(agents / "cc-adversary.md"))
+                code, exported = self.call("session", scope)
+                self.assertEqual(code, 0, exported)
+                self.assertNotIn("adversary", exported)
+                self.assertEqual(exported["cc-adversary"]["tools"], self.ADVERSARY_TOOLS)
 
     def files(self, root=None):
         root = root or self.root
@@ -5167,12 +5201,15 @@ class AdversaryRoleTests(unittest.TestCase):
         roles = set(config.ROLES)
         for place, sentences in self.ROLE_LISTS.items():
             for sentence in sentences:
-                if sentence.startswith("|"):
+                # Table rows are pinned whole above, and a sentence that only counts the roles
+                # ("nine" with no parenthesized list) names none; every other sentence names every role.
+                is_table_row = sentence.startswith("|")
+                is_bare_count = "nine" in sentence and "(" not in sentence
+                if is_table_row or is_bare_count:
                     continue
                 named = {role for role in roles if re.search(rf"(?<![\w-]){re.escape(role)}(?![\w-])", sentence)}
                 with self.subTest(place=place, sentence=sentence[:60]):
-                    if "nine" not in sentence or "(" in sentence:
-                        self.assertEqual(named, roles)
+                    self.assertEqual(named, roles)
 
     def test_both_readme_role_and_default_model_tables_cover_every_role(self):
         defaults = config._defaults()
@@ -5832,11 +5869,6 @@ class AdversarialReviewCommandTests(unittest.TestCase):
 
     def test_results_follow_the_procedure(self):
         self.assert_pinned(self.RESULTS)
-
-    # C5 item 4: the packaged skill count (InstallDocumentTests derives the word from the manifest).
-    def test_setup_document_counts_eleven_skills(self):
-        self.assertIn("The plugin packages eleven skills.", self.source("setup.md"))
-        self.assertNotIn("The plugin packages ten skills.", self.source("setup.md"))
 
     SCENARIOS = (
         ("in auto, Adversarial review of a Security-critical claim stopped; the user runs the command with APPROVED and CONFIRMED valid at a clean commit",
@@ -7364,7 +7396,13 @@ class InstallDocumentTests(unittest.TestCase):
     def test_setup_document_counts_the_packaged_skills(self):
         skills = json.loads(self.text(".claude-plugin/plugin.json"))["skills"]
         words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
-        self.assertIn(f"The plugin packages {words[len(skills)]} skills.", self.text("docs/setup.md"))
+        setup = self.text("docs/setup.md")
+        self.assertIn(f"The plugin packages {words[len(skills)]} skills.", setup)
+        # Only the manifest's count is stated: an earlier count left behind would contradict it.
+        for count, word in words.items():
+            if count != len(skills):
+                with self.subTest(stale=word):
+                    self.assertNotIn(f"The plugin packages {word} skills.", setup)
 
     def test_setup_documents_describe_both_causes_and_reinstall_reset(self):
         setup = self.text("docs/setup.md")
