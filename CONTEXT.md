@@ -29,7 +29,7 @@ One independently verifiable outcome with its own acceptance, listed in a Plan o
 _Avoid_: change, slice
 
 **Implementation phase**:
-The span from the user's authorization to implement until completion is reported, including code review and outcome verification. Discussion and planning before that authorization are outside it.
+The span from the user's authorization to implement until completion is reported, including code review, outcome verification and, for a Security-critical claim, Adversarial review. Discussion and planning before that authorization are outside it.
 _Avoid_: execution, build phase
 
 **Deviation**:
@@ -53,7 +53,7 @@ The setting, `auto` or `off`, that decides whether the Automatic flow runs.
 _Avoid_: auto review, review switch
 
 **Automatic flow**:
-The sequence plan review, then code review, then outcome verification that auto mode applies to Plan-driven work.
+The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work.
 _Avoid_: three-layer protection, pipeline
 
 **Explicit request**:
@@ -72,7 +72,7 @@ An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLU
 _Avoid_: testing, QA
 
 **Adversarial review**:
-An independent attempt to break a Security-critical claim, made after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE. BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; a pre-existing vulnerability becomes separate work and does not change the verdict.
+An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE. Outside the flow it needs no prior passes and, with no target, may be static. BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; a pre-existing vulnerability becomes separate work and does not change the verdict.
 _Avoid_: pentest, red team, security review
 
 **Blocking finding**:
@@ -95,11 +95,11 @@ An unfinished Feather handoff record for the work under the project's `.feather/
 _Avoid_: handoff file, notes
 
 **Pending-acceptance claim**:
-A gated Claim whose Active handoff note says it has passed one or both steps, or has an Accept and land decision, but is not yet landed, released or reported complete. It stays under the Acceptance gate until then, or until it is cancelled with its commits decided.
+A gated Claim whose Active handoff note says it has passed one or more of the steps it needs (code review, outcome verification and, for a Security-critical claim, Adversarial review), or has an Accept and land decision, but is not yet landed, released or reported complete. It stays under the Acceptance gate until then, or until it is cancelled with its commits decided.
 _Avoid_: approved claim, half-passed claim
 
 **Acceptance gate**:
-The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed, unverified or pending acceptance, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, or with the user's Accept and land decision. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
+The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed, unverified or pending acceptance, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, and for a Security-critical claim a valid HELD as well, or with the user's Accept and land decision. Committing it, and in auto pushing it to a branch main created and opening a pull request, are not gated; review state's Commits before the passes and Repository authority limit when main may do them.
 _Avoid_: commit gate
 
 **Landing**:
@@ -107,5 +107,5 @@ Putting a Claim on the remote default branch by pushing it there or merging it, 
 _Avoid_: shipping
 
 **Accept and land**:
-The user's explicit, recorded acceptance of a named gated Claim without one or both passes, with the commit it accepts, the missing passes and the remaining risk. It satisfies the Acceptance gate for that Claim until a relevant change, is never READY, APPROVED or CONFIRMED, and a casual "done" becomes one only after main confirms and records it.
+The user's explicit, recorded acceptance of a named gated Claim without one or both passes, or of a Security-critical claim without its HELD, with the commit it accepts, the missing passes and the remaining risk, and for a missing HELD the known vulnerabilities. It satisfies the Acceptance gate for that Claim until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual "done" becomes one only after main confirms and records it.
 _Avoid_: sign-off, override

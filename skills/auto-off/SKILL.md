@@ -1,6 +1,6 @@
 ---
 name: auto-off
-description: "Disable automatic plan review, code review and outcome verification for this session, or persist it in an explicitly selected project/user scope."
+description: "Disable automatic plan review, code review, outcome verification and Adversarial review for this session, or persist it in an explicitly selected project/user scope."
 disable-model-invocation: true
 argument-hint: "[session|project|user]"
 ---
