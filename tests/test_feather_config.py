@@ -5821,7 +5821,7 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
     ENFORCEMENT = {
         "ADR 0009": (
             "The adversary's limits are instructions to the model, and only permission settings (permission mode and allow, ask and deny rules, including managed settings), hooks, the Claude Code sandbox (not available on native Windows) and an external isolated environment such as a container or virtual machine enforce these limits.",
-            "In bypassPermissions mode, or with broad allow rules, its Bash commands can run without any prompt or classifier check, and in auto mode a classifier, not the user, approves them.",
+            "In bypassPermissions mode, or with broad allow rules, its Bash commands can run without any prompt or classifier check, and in Claude Code's auto mode a classifier, not the user, approves them.",
             "official [permission modes documentation](https://code.claude.com/docs/en/permission-modes)",
             "Residual risk: a role loads the project's CLAUDE.md, so a commit under attack that changes it can steer the role. The isolation rule for code the user did not write mitigates this risk but does not remove it.",
         ),
@@ -5849,8 +5849,8 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
          "在 `auto` 下，有安全關鍵 claim 的計畫在你同意前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查；最後才由你同意。"),
         ("Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit, adversary tries to break the claim and answers HELD, BROKEN or INCONCLUSIVE.",
          "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。"),
-        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN and goes back to a fix; a vulnerability that predates the change does not hold the claim and becomes separate work in your tracker, with only a summary in anything public unless you agree.",
-         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作，任何公開的地方只寫摘要，除非你同意。"),
+        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN and goes back to a fix; a vulnerability that predates the change does not block the claim and becomes separate work in your tracker. For a BROKEN or a pre-existing vulnerability alike, exploit details and secrets stay in untracked, non-public records: anything public or possibly public, such as a tracked handoff, a commit message, a pull request or a public tracker, gets only a summary unless you agree, and main asks you before writing to a public tracker.",
+         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作。無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 handoff、commit message、pull request 或公開 tracker，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。"),
         ("There is no separate switch for the third step: to land a Security-critical claim without HELD, make an accept-and-land decision for it.",
          "第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。"),
         ("`/cc-feather:adversarial-review` runs an Adversarial review when you ask, in either mode.",

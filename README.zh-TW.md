@@ -198,7 +198,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 在 `auto` 下，有安全關鍵 claim 的計畫在你同意前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查；最後才由你同意。已實作的工作即使豁免了缺少的 READY，也不會因此豁免安全分析：它會在程式碼審查前執行，除非你也豁免它。
 
-對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作，任何公開的地方只寫摘要，除非你同意。`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。
+對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作。無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 handoff、commit message、pull request 或公開 tracker，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。
 
 `/cc-feather:adversarial-review` 在你要求時執行對抗式審查，兩種模式都可用。它需要攻擊範圍（沒給時主 Agent 會問），可再加上路徑或 commit 範圍與可拋棄目標；參數只當作資料，絕不放寬角色的限制。對驗收把關不涵蓋的工作，它審查工作區變更或該 commit 範圍，不需要先前的通過，也不滿足任何把關；對把關涵蓋的 claim，則和其他步驟的呼叫一樣分類。目標只來自你同意的計畫或你自己的參數；沒有目標時，角色只做靜態分析，需要實際執行的部分回報 INCONCLUSIVE。不是你寫的、也不是這個 session 寫的程式碼（例如在新 session 接續的安全關鍵 claim），要做動態探測，需要你指定的隔離環境；沒有的話只做靜態攻擊。詳見[對抗式審查程序](skills/delegation/references/adversarial-review.md)與[指令說明](skills/adversarial-review/SKILL.md)。
 
