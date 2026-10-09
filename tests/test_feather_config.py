@@ -5325,7 +5325,7 @@ class AdversarialReviewTests(unittest.TestCase):
         ),
         "CONTEXT.md#Adversarial review": (
             "An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE.",
-            "Outside the flow it needs no prior passes and, with no target, may be static.",
+            "For a Claim the Acceptance gate does not require it for, it needs no prior passes and, with no target, may be static.",
         ),
         "README.md": (
             "| Adversarial review | After APPROVED and CONFIRMED at the same commit, for a Security-critical claim | adversary | HELD |",

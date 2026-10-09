@@ -72,7 +72,7 @@ An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLU
 _Avoid_: testing, QA
 
 **Adversarial review**:
-An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE. Outside the flow it needs no prior passes and, with no target, may be static. BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; a pre-existing vulnerability becomes separate work and does not change the verdict.
+An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE. For a Claim the Acceptance gate does not require it for, it needs no prior passes and, with no target, may be static. BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; a pre-existing vulnerability becomes separate work and does not change the verdict.
 _Avoid_: pentest, red team, security review
 
 **Blocking finding**:
