@@ -3498,7 +3498,7 @@ class FeatherConfigTests(unittest.TestCase):
             'For a claim the acceptance gate covers, that change is the commit named in the brief, judged with a clean workspace, as What a gated pass judged describes.',
             "- **Commit and completion.** For a claim of plan-driven work in the automatic flow, and for any claim an active handoff records as unreviewed, unverified or pending acceptance, main lands the claim on the remote default branch (by pushing it there or merging it, directly or through a pull request), releases or tags it, reports it complete or sets its ticket to a done value only with a valid APPROVED and a valid CONFIRMED, and for a Security-critical claim a valid HELD as well, or with the user's accept-and-land decision for it. This is the acceptance gate. It covers the completion value for done work; a value for work that will not be done is set only on the user's recorded cancellation and never counts as acceptance. Landing a branch lands every claim on it, so it waits for every gated claim there. A cancelled claim's commits that remain on a branch are listed as unaccepted, in the report and in any active handoff, until the user decides their disposition: reverted with a new commit, kept off the default branch, or accepted and landed; landing a branch that carries them waits for that decision. The default branch is the branch the `origin` remote's HEAD names, or the only remote's HEAD when there is no `origin`; with no remote, several remotes and no `origin`, or no HEAD, main asks. A protected or shared branch the user names counts as a default branch.",
             "- **Commits before the passes.** Before its passes, main may commit a claim of plan-driven work in the automatic flow on any branch, push it to a branch main created for the current work and open a pull request whose description lists the claims still unaccepted, without the user's permission, and keeps that list current as claims pass or are accepted. Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a resumed session main treats a branch as its own only when an active handoff records that main created it for this work, and otherwise asks. For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks. Before dispatching a gated code review, outcome verification or Adversarial review, main ensures the claim's content is committed and the precondition of What a gated pass judged holds; when a commit is needed, the authority above permits it without asking, and an already suitable commit needs no new one. It never rewrites pushed history, so a fix is a new commit. On a default branch, main labels each commit made before its claim's passes (both passes, plus HELD for a Security-critical claim) unaccepted in its message when it creates it; the label records the commit's state then and stays in history. Commits on other branches carry no label. It pushes such commits to the remote default branch only after both passes, plus a valid HELD for a Security-critical claim, or the user's accept-and-land decision for their claim, or as a work-in-progress push the user explicitly allows, and while they stay unpushed it says a reclaimed environment would lose them. Off mode otherwise keeps its behaviour.",
-            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. An Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, and main does not commit that work to review it.",
+            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. An Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.",
             '- **Existing handoff notes.** An active handoff\'s record that a claim is unreviewed, unverified or pending acceptance restricts it under the acceptance gate whatever its wording, such as "must not be committed"; main updates the wording at the next handoff maintenance.',
             'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision.',
             'For a claim an active handoff recorded as unreviewed, unverified or pending acceptance, a waiver kept in that handoff counts as that record for the gate.',
@@ -4501,7 +4501,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ("negative control: an explicit code review of ungated work in off",
          "it judges the workspace change and starts no verification; nothing is committed for it",
          (("code-review.md", "An explicit user request for code review applies in either mode and does not start verification."),
-          ("review-state.md", "A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, and main does not commit that work to review it.")),
+          ("review-state.md", "A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.")),
          ()),
         ("the user accepts a gated claim that lacks a pass (accept and land)",
          "main records the commit, missing passes and risk; the claim may then be landed, released or completed",
@@ -5571,7 +5571,7 @@ class AdversarialReviewTests(unittest.TestCase):
     SCENARIOS = (
         ("the user asks for an Adversarial review of a gated claim before its APPROVED and CONFIRMED",
          "the call runs against the named commit with a clean workspace but does not count as the step's pass",
-         (("adversarial-review.md", "An explicit call the user requests before those passes still runs, against the commit it names with the workspace equal to that commit, but it does not count as the step's pass."),
+         (("adversarial-review.md", "An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass."),
           ("review-state.md#What a gated pass judged", "an explicit one the user requests before them runs but does not count.")),
          (("adversarial-review.md", "1. Dispatch only for a claim with a valid APPROVED"),
           ("review-state.md", "An Adversarial review also needs a valid APPROVED"))),
@@ -5690,7 +5690,8 @@ class AdversarialReviewCommandTests(unittest.TestCase):
         frontmatter = command.split("---")[1]
         self.assertIn("name: adversarial-review\n", frontmatter)
         self.assertIn("disable-model-invocation: true\n", frontmatter)
-        self.assertIn('argument-hint: "<attack scope> [paths or commit range] [disposable targets]"', frontmatter)
+        # 0.19.0 C5 item 5: the hint summarises the reviewed range and the gated claim's clean commit.
+        self.assertIn('argument-hint: "<attack scope> [commit range, or the uncommitted change when none; paths narrow it; a gated claim uses its clean commit] [disposable targets]"', frontmatter)
         self.assertIn("description:", frontmatter)
         self.assertIn("(../delegation/references/adversarial-review.md)", command)
 
@@ -5708,10 +5709,12 @@ class AdversarialReviewCommandTests(unittest.TestCase):
     # C5 item 2: outside the gate, inside the gate, the early call and off mode; the delegation skill routes explicit calls.
     GATE = {
         "adversarial-review SKILL.md": (
-            "For work whose Adversarial review the acceptance gate does not require, such as unplanned edits, a claim that is not Security-critical, or a Security-critical claim in off that no active handoff records, the call reviews the workspace change from its base revision or the named commit range, needs no prior passes and satisfies no gate.",
-            "For a claim the gate covers, a Security-critical claim in auto or a Security-critical claim an active handoff records in either mode, the call is classified as for the other steps, as [review state](../delegation/references/review-state.md) describes: when the flow is due to run Adversarial review for that claim it is an automatic call, and when the step has stopped, or in off, it is an explicit call.",
+            # 0.19.0 C5 items 1 and 9.1: the Outside the gate bullet is keyed on the gate's coverage, not its requirement.
+            "For work the acceptance gate does not cover, such as unplanned edits or a claim in off that no active handoff records, the call reviews the range that What a call outside the gate reviews defines, needs no prior passes and satisfies no gate.",
+            "For a claim whose Adversarial review the gate requires, a Security-critical claim in auto or a Security-critical claim an active handoff records in either mode, the call is classified as for the other steps, as [review state](../delegation/references/review-state.md) describes: when the flow is due to run Adversarial review for that claim it is an automatic call, and when the step has stopped, or in off, it is an explicit call.",
             "Both must meet the procedure's prerequisites, a valid APPROVED and a valid CONFIRMED at the same commit with a clean workspace, and their HELD counts like any pass of that step, so an explicit HELD clears a stop and, in off, resolves the handoff's missing Adversarial review. The brief uses the claim's commit and base revision; paths or a narrower scope in the arguments only focus the attack and never reduce what a HELD must cover.",
-            "A call in either mode for a Security-critical claim the gate covers that does not yet have a valid APPROVED and a valid CONFIRMED runs as an explicit call against the commit it names, with the workspace equal to that commit, and does not count as the step's pass, as review state's What an explicit call runs says of explicit calls made before the flow reached a step.",
+            # 0.19.0 C5 item 3: the early-call condition shared with the procedure's step 1, and the commit it reviews.
+            "A call in either mode for a Security-critical claim the gate covers that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, and does not count as the step's pass, as review state's What an explicit call runs says of explicit calls made before the flow reached a step.",
             "The brief uses the claim's commit and base revision; paths or a narrower scope in the arguments only focus the attack and never reduce what a HELD must cover.",
             "State the classification before dispatching.",
             "It works in off mode: off starts no automatic Adversarial review, but this command runs one when the user asks.",
@@ -5758,12 +5761,12 @@ class AdversarialReviewCommandTests(unittest.TestCase):
          ()),
         ("in auto, the user runs the command on a Security-critical claim before its code review returned APPROVED",
          "an explicit call that does not count as the step's pass",
-         (("adversarial-review SKILL.md", "that does not yet have a valid APPROVED and a valid CONFIRMED runs as an explicit call against the commit it names, with the workspace equal to that commit, and does not count as the step's pass,"),
+         (("adversarial-review SKILL.md", "that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, and does not count as the step's pass,"),
           ("review-state.md", "An explicit review or verification made before the automatic flow reached that step does not count as that step's pass.")),
          ()),
         ("the user runs the command on unplanned edits, or on a commit range of work no handoff records in off",
-         "it reviews the workspace change or the range, needs no prior passes and satisfies no gate",
-         (("adversarial-review SKILL.md", "the call reviews the workspace change from its base revision or the named commit range, needs no prior passes and satisfies no gate."),),
+         "it reviews the range the command defines, needs no prior passes and satisfies no gate",
+         (("adversarial-review SKILL.md", "the call reviews the range that What a call outside the gate reviews defines, needs no prior passes and satisfies no gate."),),
          ()),
         ("off mode, the user runs the command with a scope",
          "it runs; off only starts no automatic Adversarial review",
@@ -6424,7 +6427,7 @@ class PostFixReviewTests(unittest.TestCase):
         ("an early explicit BROKEN with no preceding code review call, then a fix",
          "the review of the fix covers the claim's full scope from its base revision",
          (("code-review.md#fix", FIX_RULE),
-          ("adversarial-review.md#1", "An explicit call the user requests before those passes still runs,")),
+          ("adversarial-review.md#1", "An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs,")),
          ()),
         ("main rejects a verifier finding with evidence, then the review of the fix",
          "the reviewer does not adjudicate the rejection, which the verifier judges; it still upholds its own findings and reports blocking defects",
@@ -6692,12 +6695,426 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
          "the HELD does not clear the stop and does not count as the step's pass, in auto or off",
          (("review-state.md#Clearing a stop", EARLY_HELD),
           ("review-state.md#What an explicit call runs", EARLY_EITHER_MODE),
-          ("adversarial-review.md#1", "An explicit call the user requests before those passes still runs, against the commit it names with the workspace equal to that commit, but it does not count as the step's pass.")),
+          ("adversarial-review.md#1", "An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass.")),
          ()),
         ("Adversarial review stops with a tracked handoff active",
          "the pending-acceptance note records the open findings only as a summary unless the user agrees",
          (("adversarial-review.md#8", HANDOFF),
           ("adversarial-review.md#10", "an ADR or a validation entry, gets only a summary unless the user agrees,")),
+         ()),
+    )
+
+    def test_scenarios_are_decided_by_their_sentences(self):
+        for scenario, outcome, deciding, contradicting in self.SCENARIOS:
+            for place, sentence in deciding:
+                with self.subTest(scenario=scenario[:50], place=place, sentence=sentence[:50]):
+                    self.assertIn(sentence, self.source(place), outcome)
+            for place, sentence in contradicting:
+                with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
+                    self.assertNotIn(sentence, self.source(place), outcome)
+
+
+class CommandScopeTests(unittest.TestCase):
+    """0.19.0 C5 (docs/specs/review-followups-0-19-0.md): the adversarial-review command's reviewed range for every
+    argument and workspace combination, gated claims that are not Security-critical, early calls, and the security
+    invariants of item 9, across the command, the procedure, review state, both READMEs and ADR 0009."""
+
+    COMMAND = config.ROOT / "skills" / "adversarial-review" / "SKILL.md"
+    README_OPENINGS = {"README.md": "`/cc-feather:adversarial-review` runs an Adversarial review when you ask",
+                       "README.zh-TW.md": "`/cc-feather:adversarial-review` 在你要求時執行對抗式審查"}
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(f"\n## {heading}\n", 1)[1].split("\n## ", 1)[0]
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """Text of one place: 'command', 'command#<bullet label>', 'command#classifying' (the paragraph before the
+        classification bullets), 'command#gated' (the paragraph after them), 'command#ungated' (What a call outside
+        the gate reviews), 'command#results'; '<README>#command' (the command paragraph); 'plan-review.md#5';
+        otherwise as AdversarialReviewRetriesTests.source."""
+        path, _, part = name.partition("#")
+        if path == "command":
+            text = cls.COMMAND.read_text(encoding="utf-8")
+            if not part:
+                return text
+            classifying = cls.section(text, "Classifying the call").strip().split("\n\n")
+            if part == "classifying":
+                return classifying[0]
+            if part == "gated":
+                return next(p for p in classifying if p.startswith("Before any call on a claim the gate covers"))
+            if part == "ungated":
+                return cls.section(text, "What a call outside the gate reviews")
+            if part == "results":
+                return cls.section(text, "Results")
+            return next(line for line in text.splitlines() if line.startswith(f"- **{part}.**"))
+        if part == "command":
+            text = (config.ROOT / path).read_text(encoding="utf-8")
+            return next(line for line in text.splitlines() if line.startswith(cls.README_OPENINGS[path]))
+        if path == "plan-review.md":
+            return PostFixReviewTests.source(name)
+        return AdversarialReviewRetriesTests.source(name)
+
+    assert_whole_sentence = AdversarialReviewRetriesTests.assert_whole_sentence
+    assert_pinned = AdversarialReviewRetriesTests.assert_pinned
+    sentences = staticmethod(PostFixReviewTests.sentences)
+
+    # Item 1 (Q13): the gate's coverage decides the clean commit; its requirement decides prior passes and counting.
+    SEPARATION = (
+        "The command separates two questions.",
+        "Whether the acceptance gate covers the claim decides whether the call needs a clean commit: for any claim the "
+        "gate covers, the workspace equals the commit named in the brief, as [review "
+        "state](../delegation/references/review-state.md)'s What a gated pass judged requires.",
+        "Whether the gate requires Adversarial review for the claim decides whether the call needs a valid APPROVED and a "
+        "valid CONFIRMED and can count as the step's pass: only for a Security-critical claim the gate covers.",
+    )
+    # Item 9.1 (E1): every gated brief needs a clean workspace and lists no fixture.
+    GATED_BRIEF = ("Every brief for a call on a claim the gate covers, whether or not the gate requires Adversarial review "
+                   "for it, states that the call needs a clean workspace and lists no in-project fixture.")
+    # Items 1 and 9.1: the Outside the gate bullet is keyed on the gate's coverage, in those words.
+    OUTSIDE = (
+        "For work the acceptance gate does not cover, such as unplanned edits or a claim in off that no active handoff "
+        "records, the call reviews the range that What a call outside the gate reviews defines, needs no prior passes and "
+        "satisfies no gate.",
+        "Only such a call may list an in-project fixture, as that section describes.",
+    )
+    # Item 1 (B4): a gated claim that is not Security-critical, its commit and base.
+    GATED_NOT_SC = (
+        "For a claim the gate covers that is not Security-critical, the gate does not require Adversarial review, so the "
+        "call needs a clean commit but no prior passes, does not count as any step's pass and satisfies no gate.",
+        "Its brief names the commit the user names, or HEAD when the user names none, with the workspace equal to that "
+        "commit, and the claim's base revision; paths or a narrower scope in the arguments only focus the attack.",
+    )
+    # Item 4 (ar-12): narrowing by the arguments and review state's narrowed second review coexist.
+    NARROWING = (
+        "The brief uses the claim's commit and base revision; paths or a narrower scope in the arguments only focus the "
+        "attack and never reduce what a HELD must cover.",
+        "This coexists with review state's narrowed second review: narrowing to the earlier findings and the fixes, from "
+        "the previously judged commit, follows its Completed calls and coverage rule, and a HELD still covers every "
+        "security invariant and every open gap.",
+    )
+    # Item 3 (ar-7, ar-11): one early-call condition and the commit an early call reviews, in step 1 and the command.
+    EARLY_CONDITION = "that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit"
+    EARLY_COMMIT = "against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit"
+    STEP_1 = ("An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED "
+              "at the same commit still runs, against the commit the user names, or HEAD when the user names none, with "
+              "the workspace equal to that commit, but it does not count as the step's pass.")
+    BEFORE = ("A call in either mode for a Security-critical claim the gate covers that does not yet have a valid APPROVED "
+              "and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD "
+              "when the user names none, with the workspace equal to that commit, and does not count as the step's pass, as "
+              "review state's What an explicit call runs says of explicit calls made before the flow reached a step.")
+    # Items 7, 9.4, 9.5 and 9.8: preparing a gated call without changing the user's Git state.
+    PREPARATION = (
+        "Before any call on a claim the gate covers, main checks that the workspace equals the commit the brief names.",
+        "When the user names no commit and the claim's files have uncommitted changes, main first commits the claim's "
+        "content as review state's Commits before the passes allows, committing only the claim's files and never "
+        "untracked scratch, adversary output or exploit material, and never reviews the dirty workspace.",
+        "When the user has said not to commit, main reports the claim blocked rather than reviewing its dirty workspace.",
+        "When the named commit is not the workspace's content, main does not check out, stash, reset or switch branches "
+        "to make it so; it reports the mismatch and asks the user.",
+        "Before an early explicit call, or a call on a gated claim that is not Security-critical, main checks that the "
+        "range from the claim's base revision to the reviewed commit changes the claim's files; when it does not, main "
+        "asks the user instead of dispatching.",
+    )
+    # Item 2 (Q6): what a call outside the gate reviews.
+    UNGATED = ("For work the gate does not cover, the arguments and the workspace decide the reviewed range, and main does "
+               "not commit that work to review it.")
+    # Items 2.1 and 9.3 (E3, O3): a commit range, compared as commits and never materialised.
+    COMMIT_RANGE = (
+        "With a commit range, the call reviews that range, judged at the range's end commit; uncommitted changes are "
+        "excluded and the report says so.",
+        "Dynamic probing tests only what the brief's targets run; when the range's end is not the workspace's content, the "
+        "report says the targets cannot be shown to run that revision and treats what needs execution as INCONCLUSIVE.",
+        "The role compares commits as its Repository, secrets and effects section describes, for example with "
+        "`--no-ext-diff --no-textconv`, and follows that section for missing objects in a partial clone; it never checks "
+        "out, adds a worktree for or otherwise materialises the range's end to run it, and reports what needs that "
+        "execution as INCONCLUSIVE.",
+        "Main resolves each endpoint of a two-dot range separately with `git rev-parse --verify <endpoint>^{commit}`, and "
+        "asks the user instead of resolving an omitted endpoint, an endpoint that starts with `-` or a symmetric range; it "
+        "passes paths after `--`.",
+    )
+    # Items 2.2 and 9.2 (E2): the uncommitted change, listed by main and read with the file tools.
+    UNCOMMITTED = (
+        "Without a range and with uncommitted changes, the call reviews the change against HEAD, including staged, "
+        "unstaged and in-scope untracked files; committed branch changes are not included, and the report says so.",
+        "Working-tree content is read with the file tools rather than through a Git working-tree diff, so no "
+        "repository-chosen program runs.",
+        "Main lists in the brief the staged, unstaged and in-scope untracked paths, where in-scope untracked means "
+        "untracked, not ignored and within the arguments' paths or attack scope.",
+        "The role reads those paths with the file tools, and staged and HEAD content from Git objects without filters, for "
+        "example with `git cat-file blob :<path>` and `git cat-file blob HEAD:<path>`, and runs no Git command that "
+        "compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE rather than run one.",
+        "Secrets read from untracked files are masked as the role requires.",
+        "These limits apply only to a call under this bullet; elsewhere the role's Repository, secrets and effects section "
+        "alone governs its Git commands.",
+    )
+    # Items 2.3 and 2.4: a clean workspace, and paths with no change.
+    CLEAN = "Without a range and with a clean workspace, main asks the user which range to review."
+    PATHS = (
+        "Paths narrow the commit range or the uncommitted change.",
+        "When the paths have no change in that range, main asks the user instead of reviewing whole files.",
+    )
+    # Item 9.8 (O1): a fixture for an ungated call.
+    FIXTURES = ("A fixture main lists for a call outside the gate has no uncommitted change in the reviewed range, and its "
+                "reset restores its pre-call content.")
+    # The brief carries the role-applicable parts.
+    BRIEF = ("Main's brief carries to the role the parts of these rules that the role applies, such as which paths it reads "
+             "and how, and what its report must state.")
+    # Item 9.4 (E4, O2, O4): what main's result tells the user, and narrowed reports.
+    RESULT = (
+        "Beside the verdict, main's result to the user states the reviewed commit or range and its base, what was "
+        "excluded (uncommitted changes for a commit range, committed branch changes for the uncommitted change, and the "
+        "rest of the range when paths narrow it), and whether the verdict counts as the step's pass.",
+        "For a claim without security invariants, the result says the verdict covers the attack scope the user gave.",
+        "A narrowed call's report says, per security invariant, whether it was checked at the new commit or carried from "
+        "the previous completed call, and every invariant the fix touches is checked again.",
+    )
+    # Item 9.6 (E6, Q21, Q22): a BROKEN outside the requirement is a material deviation whose stop only the user lifts.
+    BROKEN = (
+        "A BROKEN from a call on a gated claim that is not Security-critical means the plan lacks a security control or "
+        "invariant, which [plan review](../delegation/references/plan-review.md) step 5 treats as a material deviation: "
+        "dependent work, including that claim's own landing, stops for another review of the revised plan, counted as "
+        "that step describes, and the user's approval.",
+        "In off, or after plan review has stopped, that review needs the user's explicit request.",
+        "When the revision makes the claim Security-critical, the claim follows the normal flow for one, including its "
+        "security analysis, implementation by security-executor, Adversarial review and a valid HELD.",
+        "Main may disposition the finding REJECT with evidence as the procedure's step 7 describes, but its rejection "
+        "does not lift the stop: main presents the rejection and its evidence to the user.",
+        "Only the user's decision lifts the stop without a revised plan, recorded as a waiver of the finding under review "
+        "state's User decisions when the user accepts the finding's risk, or as the user's approval of the unrevised plan "
+        "when the user agrees with main's rejection.",
+        "Either is recorded with its scope and the rejection evidence in the report and in any active handoff, and neither "
+        "is recorded as a pass.",
+        "The call itself still satisfies no gate, and the procedure's step 10 governs every public or possibly public "
+        "record of the finding.",
+    )
+    # Item 8 (B3): review state's ungated-call sentence gains the command's exception and keeps "main does not commit".
+    REVIEW_STATE = ("A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in "
+                    "off that no active handoff restricts, judges the workspace change from the base revision, except that "
+                    "an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) "
+                    "reviews the range that command defines, and main does not commit that work to review it.")
+    # Items 5 and 9.7 (E7, sw-6): the READMEs' command paragraph, paired.
+    README = (
+        ("For work the acceptance gate does not cover, it needs no prior passes and satisfies no gate: with a commit range "
+         "it reviews that range at its end commit and leaves out uncommitted changes; without a range it reviews your "
+         "uncommitted change against HEAD, including new files, and leaves out committed branch changes; with a clean "
+         "workspace and no range, main asks you what to review.",
+         "對驗收把關不涵蓋的工作，它不需要先前的通過，也不滿足任何把關：給了 commit 範圍就以範圍終點的 commit 審查該範圍，"
+         "不含未 commit 的變更；沒給範圍就審查相對於 HEAD 的未 commit 變更，包括新檔案，不含分支上已 commit 的變更；"
+         "工作區乾淨又沒給範圍時，主 Agent 會問你要審查什麼。"),
+        ("Paths narrow that range and never fall back to whole files: when they have no change in it, main asks you.",
+         "路徑只會縮小這個範圍，絕不改成審查整個檔案：路徑在範圍內沒有變更時，主 Agent 會問你。"),
+        ("A claim the gate covers is reviewed at a clean commit, the one you name or HEAD; when the commit you name is not "
+         "your workspace's content, main asks you instead of checking it out.",
+         "把關涵蓋的 claim 則在乾淨的 commit 上審查，也就是你指定的 commit 或 HEAD；你指定的 commit 不是工作區的內容時，"
+         "主 Agent 會問你，而不是替你 checkout。"),
+        ("For such a claim that is not Security-critical, the call needs no prior passes and satisfies no gate, and a "
+         "BROKEN is a material deviation: dependent work stops until a revised plan is reviewed and you approve it, or you "
+         "decide otherwise.",
+         "這樣的 claim 若不是安全關鍵，這次呼叫不需要先前的通過，也不滿足任何把關，而 BROKEN 算重大偏離：相依的工作會停下，"
+         "直到修訂後的計畫通過審查並經你同意，或由你另行決定。"),
+        ("For a Security-critical claim, the call is classified like a call of the other steps, and an early call made "
+         "before its APPROVED and CONFIRMED does not count.",
+         "安全關鍵 claim 則和其他步驟的呼叫一樣分類，在拿到 APPROVED 與 CONFIRMED 之前的提早呼叫不算通過。"),
+        ("The result names the reviewed commit or range, what it left out and whether the verdict counts.",
+         "結果會說明審查的 commit 或範圍、排除了什麼，以及結論算不算通過。"),
+    )
+    README_TARGETS = ("Targets come only from a plan you approved or from your own arguments; without one, the role "
+                      "analyses statically and reports INCONCLUSIVE for what needs execution.",
+                      "目標只來自你同意的計畫或你自己的參數；沒有目標時，角色只做靜態分析，需要實際執行的部分回報 INCONCLUSIVE。")
+    README_REMOVED = {"README.md#command": ("reviews the workspace change",),
+                      "README.zh-TW.md#command": ("審查工作區變更",)}
+    # Item 6: ADR 0009's amendment note gains the separation.
+    AMENDMENT = (
+        "- **A gated claim's clean commit.** The adversarial-review command separates whether the acceptance gate covers a "
+        "claim from whether the gate requires Adversarial review for it.",
+        "A call on any claim the gate covers reviews a clean commit equal to the workspace, while only a Security-critical "
+        "claim the gate covers needs a valid APPROVED and CONFIRMED first and can count as the step's pass.",
+        "A gated claim that is not Security-critical is therefore reviewed on a clean commit without prior passes and "
+        "satisfies no gate, and the adversary's in-project fixture exception, which applies only outside the gate, never "
+        "reaches a gated call.",
+    )
+    HINT = ('argument-hint: "<attack scope> [commit range, or the uncommitted change when none; paths narrow it; a gated '
+            'claim uses its clean commit] [disposable targets]"')
+
+    def test_gate_coverage_and_gate_requirement_are_separate_questions(self):
+        self.assert_pinned({"command#classifying": (*self.SEPARATION, self.GATED_BRIEF),
+                            "command#Gated, not Security-critical": self.GATED_NOT_SC})
+
+    def test_outside_the_gate_bullet_applies_only_to_work_the_gate_does_not_cover(self):
+        bullet = self.source("command#Outside the gate")
+        self.assertTrue(bullet.startswith("- **Outside the gate.** For work the acceptance gate does not cover,"))
+        self.assert_pinned({"command#Outside the gate": self.OUTSIDE})
+        # Item 9.1: the bullet no longer keys on the gate's requirement or lists a gated claim.
+        self.assertNotIn("does not require", bullet)
+        self.assertNotIn("a claim that is not Security-critical", bullet)
+
+    def test_no_sentence_lets_a_gated_call_list_a_fixture(self):
+        # Abuse check (item 9.1): a fixture appears only for ungated calls, or in the gated brief's prohibition.
+        for label in ("Gated, not Security-critical", "Gated and Security-critical", "Before the passes"):
+            with self.subTest(bullet=label):
+                self.assertNotIn("fixture", self.source(f"command#{label}"))
+        self.assertNotIn("fixture", self.source("command#gated"))
+        allowed = self.source("command#Outside the gate") + self.source("command#ungated")
+        for sentence in self.sentences(self.source("command")):
+            if "fixture" in sentence and sentence not in " ".join(allowed.split()):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn("lists no in-project fixture", sentence)
+
+    def test_the_early_call_condition_and_its_commit_are_shared_with_step_1(self):
+        self.assert_pinned({"adversarial-review.md#1": (self.STEP_1,), "command#Before the passes": (self.BEFORE,)})
+        for place in ("adversarial-review.md#1", "command#Before the passes", "command#Gated, not Security-critical"):
+            with self.subTest(place=place):
+                text = self.source(place)
+                if place != "command#Gated, not Security-critical":
+                    self.assertIn(self.EARLY_CONDITION, text)
+                self.assertIn("the commit the user names, or HEAD when the user names none, with the workspace equal to "
+                              "that commit", text)
+        self.assertIn(self.EARLY_COMMIT, self.source("command#Before the passes"))
+
+    def test_narrowing_and_held_coverage_coexist(self):
+        self.assert_pinned({"command#Gated and Security-critical": self.NARROWING})
+        self.assertIn("A second review, narrowed to the earlier findings and the fixes, and the range from the previously "
+                      "judged commit follow only when the previous call completed.",
+                      self.source("review-state.md#Completed calls and coverage"))
+
+    def test_a_gated_call_is_prepared_without_changing_the_users_git_state(self):
+        self.assert_pinned({"command#gated": self.PREPARATION})
+
+    def test_the_reviewed_range_is_defined_for_every_argument_and_workspace(self):
+        self.assert_pinned({"command#ungated": (self.UNGATED,),
+                            "command#A commit range": self.COMMIT_RANGE,
+                            "command#Uncommitted changes": self.UNCOMMITTED,
+                            "command#A clean workspace": (self.CLEAN,),
+                            "command#Paths": self.PATHS,
+                            "command#Fixtures": (self.FIXTURES,),
+                            "command": (self.BRIEF,)})
+
+    def test_no_sentence_authorises_main_or_the_role_to_change_git_state(self):
+        # Abuse check (items 9.3 and 9.5): every mention of checking out, stashing, switching branches, adding a
+        # worktree or materialising a revision is a prohibition.
+        moves = re.compile(r"check(?:s|ing)? (?:it )?out|checkout|stash|switch(?:es)? branch|worktree|materialis", re.I)
+        texts = (self.source("command"), self.source("README.md#command"))
+        for text in texts:
+            for sentence in self.sentences(text):
+                if moves.search(sentence):
+                    with self.subTest(sentence=sentence[:60]):
+                        self.assertRegex(sentence, r"\b(?:does not|never|instead of)\b")
+        chinese = self.source("README.zh-TW.md#command")
+        for sentence in re.split(r"(?<=。)", chinese):
+            if "checkout" in sentence:
+                with self.subTest(sentence=sentence[:30]):
+                    self.assertIn("而不是", sentence)
+        # The ungated bullet keeps the role off working-tree Git; the limits are scoped to that bullet only.
+        self.assertIn("runs no Git command that compares or refreshes the working tree",
+                      self.source("command#Uncommitted changes"))
+
+    def test_the_result_says_what_was_reviewed_and_whether_it_counts(self):
+        self.assert_pinned({"command#results": self.RESULT})
+
+    def test_a_broken_outside_the_requirement_is_a_material_deviation_only_the_user_lifts(self):
+        self.assert_pinned({"command#results": self.BROKEN})
+        # The command points to plan review step 5; review state gains no landing condition of its own.
+        step_5 = self.source("plan-review.md#5")
+        self.assertIn("in addition, discovering a security control or invariant the plan lacks is a material deviation.", step_5)
+        self.assertIn("a material deviation stops dependent work for another review of the revised plan,", step_5)
+        self.assertNotIn("not Security-critical", self.source("review-state.md"))
+
+    def test_review_state_ungated_sentence_defers_to_the_command(self):
+        self.assert_pinned({"review-state.md#What a gated pass judged": (self.REVIEW_STATE,)})
+        self.assertTrue((ReviewRulesFollowUpTests.REFERENCES / "../../adversarial-review/SKILL.md").resolve().is_file())
+
+    def test_readme_command_paragraph_summarises_the_scope_in_both_languages(self):
+        for english, chinese in (*self.README, self.README_TARGETS):
+            with self.subTest(sentence=english[:60]):
+                self.assert_pinned({"README.md#command": (english,), "README.zh-TW.md#command": (chinese,)})
+        for place, phrases in self.README_REMOVED.items():
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase):
+                    self.assertNotIn(phrase, self.source(place))
+        # Item 9.7: the paragraph claims no enforcement; the separate "instructions to the model" paragraph does that.
+        self.assertNotIn("enforce", self.source("README.md#command"))
+        self.assertNotIn("強制", self.source("README.zh-TW.md#command"))
+
+    def test_argument_hint_summarises_the_range_and_the_clean_commit(self):
+        self.assertIn(self.HINT, self.source("command").split("---")[1])
+
+    def test_adr_0009_amendment_records_the_separation(self):
+        self.assert_pinned({"ADR 0009#amendment": self.AMENDMENT})
+
+    # Item 7: each scenario names the outcome and the sentences that decide it; replaced wording must be gone.
+    SCENARIOS = (
+        ("a gated claim that is not Security-critical has uncommitted changes to its files and the user names no commit",
+         "main first commits only the claim's files, as Commits before the passes allows, and never reviews the dirty workspace",
+         (("command#gated", PREPARATION[1]),
+          ("review-state.md#Commits before the passes", "Before dispatching a gated code review, outcome verification or Adversarial review, main ensures the claim's content is committed and the precondition of What a gated pass judged holds;"),
+          ("command#classifying", SEPARATION[1])),
+         (("command", "a claim that is not Security-critical, or a Security-critical claim in off"),)),
+        ("a gated claim that is not Security-critical, on a clean commit",
+         "the call runs without prior passes, lists no fixture and satisfies no gate",
+         (("command#Gated, not Security-critical", GATED_NOT_SC[0]),
+          ("command#Gated, not Security-critical", GATED_NOT_SC[1]),
+          ("command#classifying", GATED_BRIEF)),
+         (("command#Outside the gate", "a claim that is not Security-critical"),)),
+        ("a commit range with a dirty workspace",
+         "the range is reviewed at its end commit; uncommitted changes are excluded and reported; execution of that revision is INCONCLUSIVE",
+         (("command#A commit range", COMMIT_RANGE[0]),
+          ("command#A commit range", COMMIT_RANGE[1]),
+          ("command#results", RESULT[0])),
+         ()),
+        ("no range with a dirty workspace",
+         "the change against HEAD, including in-scope untracked files, read with the file tools; committed branch changes are excluded and reported",
+         (("command#Uncommitted changes", UNCOMMITTED[0]),
+          ("command#Uncommitted changes", UNCOMMITTED[1]),
+          ("command#Uncommitted changes", UNCOMMITTED[2]),
+          ("command#results", RESULT[0])),
+         (("command", "the call reviews the workspace change from its base revision"),)),
+        ("no range with a clean workspace",
+         "main asks which range to review",
+         (("command#A clean workspace", CLEAN),),
+         ()),
+        ("paths that have no change in the reviewed range",
+         "main asks instead of reviewing whole files",
+         (("command#Paths", PATHS[1]),
+          ("README.md#command", README[1][0]),
+          ("README.zh-TW.md#command", README[1][1])),
+         ()),
+        ("an early explicit call that names no commit",
+         "it reviews HEAD with the workspace equal to it and does not count as the step's pass",
+         (("command#Before the passes", BEFORE),
+          ("adversarial-review.md#1", STEP_1),
+          ("review-state.md#What an explicit call runs", AdversarialReviewRetriesTests.EARLY_EITHER_MODE)),
+         (("adversarial-review.md#1", "against the commit it names with the workspace equal to that commit"),
+          ("command#Before the passes", "against the commit it names,"))),
+        ("the user names a commit that is not the workspace's content",
+         "main does not check out, stash, reset or switch branches; it reports the mismatch and asks",
+         (("command#gated", PREPARATION[3]),
+          ("README.md#command", README[2][0]),
+          ("README.zh-TW.md#command", README[2][1])),
+         ()),
+        ("an early call whose reviewed commit does not change the claim's files",
+         "main asks the user instead of dispatching",
+         (("command#gated", PREPARATION[4]),),
+         ()),
+        ("a BROKEN on a gated claim that is not Security-critical",
+         "a material deviation: dependent work, including the claim's own landing, stops for another plan review and the user's approval",
+         (("command#results", BROKEN[0]),
+          ("command#results", BROKEN[1]),
+          ("plan-review.md#5", "in addition, discovering a security control or invariant the plan lacks is a material deviation."),
+          ("plan-review.md#5", "a material deviation stops dependent work for another review of the revised plan,"),
+          ("README.md#command", README[3][0])),
+         ()),
+        ("main rejects that BROKEN with evidence",
+         "the stop holds until the user waives the finding or approves the unrevised plan; neither is recorded as a pass",
+         (("command#results", BROKEN[3]),
+          ("command#results", BROKEN[4]),
+          ("command#results", BROKEN[5]),
+          ("review-state.md#User decisions", "A waiver accepts a named open finding or missing pass and names what it waives;")),
+         ()),
+        ("the user has said not to commit and a gated call lacks its commit",
+         "the claim is reported blocked; its dirty workspace is not reviewed",
+         (("command#gated", PREPARATION[2]),
+          ("review-state.md#Repository authority", "when it leaves a gated call without the commit it needs, main reports the claim blocked rather than reviewing an uncommitted workspace.")),
          ()),
     )
 
