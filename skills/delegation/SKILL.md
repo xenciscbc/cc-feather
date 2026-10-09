@@ -1,6 +1,6 @@
 ---
 name: delegation
-description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, plan reviews, code reviews or outcome verification, including automatic review of plan-driven work when enabled through saved guidance or a task/session preference."
+description: "Coordinate Feather delegation: dispatch independent work, accept child results, recover blocked assignments, and conduct security analysis, plan reviews, code reviews, outcome verification or Adversarial review, including automatic review of plan-driven work when enabled through saved guidance or a task/session preference."
 ---
 
 # Feather delegation

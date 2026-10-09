@@ -5762,6 +5762,172 @@ class AdversarialReviewCommandTests(unittest.TestCase):
     test_scenarios_are_decided_by_their_sentences = SecurityCriticalVocabularyTests.test_scenarios_are_decided_by_their_sentences
 
 
+class DecisionRecordAndDocumentsTests(unittest.TestCase):
+    """0.18.0 C6 (docs/specs/security-critical-routing.md): ADR 0009, its amendment notes and the documents."""
+
+    ADR = config.ROOT / "docs" / "adr"
+    FILES = {
+        "ADR 0009": ADR / "0009-security-critical-claims-get-an-adversarial-review.md",
+        "README.md": config.ROOT / "README.md",
+        "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+        "setup.md": config.ROOT / "docs" / "setup.md",
+        "delegation SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md",
+    }
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        return cls.FILES[name].read_text(encoding="utf-8")
+
+    assert_pinned = SecurityCriticalVocabularyTests.assert_pinned
+
+    # C6 item 1: the decisions, each with its key rule.
+    DECISIONS = {
+        "ADR 0009": (
+            "# Security-critical claims are analysed before approval, implemented by security-executor and attacked before they land\n",
+            "- **Classification.** A Security-critical change is defined by behaviour: a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream.",
+            "Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are examples, not a closed list.",
+            "- **Two analyst calls before approval.** For a Plan with a Security-critical claim, analyst first runs one read-only security analysis per Plan or per shared trust boundary; main dispositions its findings into the Plan as security invariants in each Security-critical claim's acceptance and records the disposable test targets; then plan review judges the revised Plan; then the user approves.",
+            "- **Implementation.** security-executor implements every Security-critical claim, in off mode too.",
+            "- **A new role.** `adversary` is a managed native role whose tools are Read, Glob, Grep and Bash only, with default model and effort opus/high, configurable like the others.",
+            "- **The third step.** In auto, after a valid APPROVED and a valid CONFIRMED at the same unchanged commit, Adversarial review tries to break the Claim and answers HELD, BROKEN or INCONCLUSIVE.",
+            "The Acceptance gate for a Security-critical claim requires a valid HELD as well.",
+            "- **Own flaws block; pre-existing ones become separate work.** BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; its fix goes through code review, outcome verification and Adversarial review again. A pre-existing vulnerability does not change the verdict and becomes separate work in the project's tracker.",
+            "- **Off mode and accept and land.** Off mode starts no automatic Adversarial review and does not force the pre-approval sequence,",
+            "There is no separate switch for the third step: the user's accept-and-land decision may cover a missing HELD, naming per commit the missing review, the known vulnerabilities and the remaining risk.",
+            "- **Isolation for code the user did not write.**",
+            "Dynamic probing of code not written by the user or in this session, such as a Security-critical claim resumed in a new session, runs only in an isolated environment the user names; otherwise the role analyses statically and reports INCONCLUSIVE for what needs execution.",
+            "- **An explicit command.** `/cc-feather:adversarial-review` is explicit-only",
+        ),
+    }
+
+    # C6 item 1: the options not taken.
+    OPTIONS = {
+        "ADR 0009": (
+            "\n## Considered Options\n",
+            "- **A keyword list as the trigger**:",
+            "- **Security analysis inside plan review, a new pre-approval role, or one analysis per Claim**:",
+            "- **Fold the closing check into the two passes**",
+            "- **Let nothing the closing review finds block**: a flaw the change itself introduced would land.",
+            "- **Block on pre-existing vulnerabilities as well**:",
+            "- **Force the flow in off mode, or add a switch that turns off only the third step**:",
+            "- **Forbid accept and land from covering a missing HELD**:",
+            "- **Localhost alone as the safety limit, or access to staging**:",
+            "- **Restate how each permission mode treats commands**:",
+            "- **Trust HELD across sessions**:",
+        ),
+    }
+
+    # C6 item 3: what enforces the adversary's limits, the warnings, the link, and the CLAUDE.md residual risk.
+    ENFORCEMENT = {
+        "ADR 0009": (
+            "The adversary's limits are instructions to the model, and only permission settings (permission mode and allow, ask and deny rules, including managed settings), hooks, the Claude Code sandbox (not available on native Windows) and an external isolated environment such as a container or virtual machine enforce these limits.",
+            "In bypassPermissions mode, or with broad allow rules, its Bash commands can run without any prompt or classifier check, and in auto mode a classifier, not the user, approves them.",
+            "official [permission modes documentation](https://code.claude.com/docs/en/permission-modes)",
+            "Residual risk: a role loads the project's CLAUDE.md, so a commit under attack that changes it can steer the role. The isolation rule for code the user did not write mitigates this risk but does not remove it.",
+        ),
+    }
+
+    # C6 item 1: each earlier ADR gains a note; notes are whole lines, as for ADR 0007 and ADR 0008.
+    AMENDMENTS = {
+        "0006-review-state-validity-and-completion.md":
+            "(Amended by ADR 0009: a Security-critical claim also needs a valid HELD from Adversarial review, or the user's accept-and-land decision, besides a valid APPROVED and CONFIRMED; HELD, like the other passing verdicts, does not cross sessions.)",
+        "0007-commit-before-acceptance.md":
+            "(Amended by ADR 0009: a Security-critical claim also needs a valid HELD from Adversarial review at the commit that passed, or the user's accept-and-land decision, before it is landed on the remote default branch, released, reported complete or has its ticket set to a done value.)",
+        "0008-repository-authority-acceptance-and-gate-lifetime.md":
+            "(Amended by ADR 0009: a Security-critical claim also needs a valid HELD from Adversarial review, or the user's accept-and-land decision, which may cover the missing HELD and then also names the known vulnerabilities; its pending-acceptance note names a missing Adversarial review.)",
+    }
+
+    # C6 item 2: the classification, the pre-approval sequence, the third step and the command, paired.
+    README_FLOW = (
+        ("A Security-critical claim is one whose outcome includes a Security-critical change: a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream.",
+         "安全關鍵 claim（Security-critical claim）是結果包含安全關鍵變更的 claim：改變信任邊界上的安全保證，或改變安全控制的實作或設定，包括敏感資料流向哪裡、不受信任的資料在下游如何被解讀。"),
+        ("Main marks each Security-critical claim in a plan it writes and classifies the claims of any other plan, such as a spec you wrote, before its first plan review in the session or, for implemented work, before its code review;",
+         "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim；其他計畫（例如你寫的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類；"),
+        ("security-executor implements every Security-critical claim, in `off` too.",
+         "每個安全關鍵 claim 都由 security-executor 實作，`off` 時也一樣。"),
+        ("Before you approve a plan with a Security-critical claim, in `auto`, two separate analyst calls run in order: first a read-only security analysis, one per plan or per trust boundary that several claims share, whose findings main turns into security invariants in the acceptance of each Security-critical claim, recording the disposable test targets with their synthetic data, allowed effects, reachable dependencies and how to start and reset them; then plan review of the revised plan; then your approval.",
+         "在 `auto` 下，有安全關鍵 claim 的計畫在你同意前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查；最後才由你同意。"),
+        ("Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit, adversary tries to break the claim and answers HELD, BROKEN or INCONCLUSIVE.",
+         "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。"),
+        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN and goes back to a fix; a vulnerability that predates the change does not hold the claim and becomes separate work in your tracker, with only a summary in anything public unless you agree.",
+         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作，任何公開的地方只寫摘要，除非你同意。"),
+        ("There is no separate switch for the third step: to land a Security-critical claim without HELD, make an accept-and-land decision for it.",
+         "第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。"),
+        ("`/cc-feather:adversarial-review` runs an Adversarial review when you ask, in either mode.",
+         "`/cc-feather:adversarial-review` 在你要求時執行對抗式審查，兩種模式都可用。"),
+        ("It takes a required attack scope, which main asks for when you give none, and optional paths or a commit range and disposable targets; the arguments are data and never widen the role's limits.",
+         "它需要攻擊範圍（沒給時主 Agent 會問），可再加上路徑或 commit 範圍與可拋棄目標；參數只當作資料，絕不放寬角色的限制。"),
+        ("Dynamic probing of code not written by you or in this session, such as a Security-critical claim resumed in a new session, needs an isolated environment you name; without one the attack stays static.",
+         "不是你寫的、也不是這個 session 寫的程式碼（例如在新 session 接續的安全關鍵 claim），要做動態探測，需要你指定的隔離環境；沒有的話只做靜態攻擊。"),
+        ("- `/cc-feather:adversarial-review <attack scope> [paths or commit range] [disposable targets]`: run an Adversarial review you ask for, in either mode; see [Security-critical work](#security-critical-work).",
+         "| `/cc-feather:adversarial-review <攻擊範圍> [路徑或 commit 範圍] [可拋棄目標]` | 執行你要求的對抗式審查，兩種模式都可用；見[安全關鍵工作](#安全關鍵工作) |"),
+    )
+
+    # C6 item 3: the enforcement statement, a paragraph of its own in each README.
+    README_ENFORCEMENT = (
+        "The adversary's limits are instructions to the model, and only your permission settings (permission mode and allow, ask and deny rules, including managed settings), hooks, the Claude Code sandbox (not available on native Windows) and an external isolated environment such as a container or virtual machine enforce them: in bypassPermissions mode, or with broad allow rules, its Bash commands can run without any prompt or classifier check, and in Claude Code's auto mode a classifier, not you, approves them; see the official [permission modes documentation](https://code.claude.com/docs/en/permission-modes) for how each mode treats commands.",
+        "adversary 的限制是給模型的指示，只有你的權限設定（permission mode 與 allow、ask、deny 規則，包括 managed settings）、hooks、Claude Code sandbox（原生 Windows 不支援）以及外部隔離環境（例如容器或虛擬機）才會實際強制這些限制：在 bypassPermissions 模式下，或有寬鬆的 allow 規則時，它的 Bash 指令可能完全不經提示或分類器檢查就執行，而在 Claude Code 的 auto 模式下是由分類器而不是你核准；各模式如何處理指令，請見官方的 [permission modes 文件](https://code.claude.com/docs/en/permission-modes)。",
+    )
+
+    # C6 item 5: the procedure links and the Explicit requests bullet, paired.
+    README_LINKS = (
+        ("The full rules are in the [plan review](skills/delegation/references/plan-review.md), [code review](skills/delegation/references/code-review.md), [outcome verification](skills/delegation/references/outcome-verification.md) and [adversarial review](skills/delegation/references/adversarial-review.md) procedures; terms are defined in [CONTEXT.md](CONTEXT.md).",
+         "完整規則見[計畫審查](skills/delegation/references/plan-review.md)、[程式碼審查](skills/delegation/references/code-review.md)、[結果驗證](skills/delegation/references/outcome-verification.md)與[對抗式審查](skills/delegation/references/adversarial-review.md)程序；用語定義見 [CONTEXT.md](CONTEXT.md)。"),
+        ("- **Explicit requests** for a plan review, code review, verification or Adversarial review (including `/cc-feather:adversarial-review`) work in either mode,",
+         "- **明確要求**計畫審查、程式碼審查、驗證或對抗式審查（包括 `/cc-feather:adversarial-review`）時不受開關限制，"),
+    )
+
+    # C6 items 4 and 5: the downgrade note and the added-roles sentences.
+    SETUP = {
+        "setup.md": (
+            "The installation predates a role the plugin now packages (`verifier` and `reviewer` were such roles, and `adversary` is one for installations from 0.17.0 or earlier),",
+            "Until that update, a required code review is blocked because reviewer is missing, and a required Adversarial review is blocked because adversary is missing, so the automatic flow stops instead of skipping it.",
+            "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, remove the scope with 0.18.0 first, or restore the files listed in the update's backup manifest.",
+        ),
+    }
+
+    def test_adr_0009_records_the_decisions(self):
+        self.assert_pinned(self.DECISIONS)
+
+    def test_adr_0009_records_the_options_not_taken(self):
+        self.assert_pinned(self.OPTIONS)
+
+    def test_adr_0009_states_what_enforces_the_limits_and_the_residual_risk(self):
+        self.assert_pinned(self.ENFORCEMENT)
+
+    def test_earlier_adrs_gain_amendment_notes(self):
+        for name, note in self.AMENDMENTS.items():
+            with self.subTest(adr=name):
+                self.assertIn(note, (self.ADR / name).read_text(encoding="utf-8").splitlines())
+
+    def test_readmes_describe_the_security_critical_flow_in_both_languages(self):
+        english, chinese = self.source("README.md"), self.source("README.zh-TW.md")
+        for en, zh in self.README_FLOW:
+            with self.subTest(sentence=en[:60]):
+                self.assertIn(en, english)
+                self.assertIn(zh, chinese)
+
+    def test_readmes_state_what_enforces_the_limits_as_a_paragraph_of_its_own(self):
+        for name, paragraph in zip(("README.md", "README.zh-TW.md"), self.README_ENFORCEMENT):
+            with self.subTest(readme=name):
+                self.assertIn(paragraph, self.source(name).splitlines())
+
+    def test_readmes_link_the_procedure_and_cover_explicit_adversarial_review(self):
+        english, chinese = self.source("README.md"), self.source("README.zh-TW.md")
+        for en, zh in self.README_LINKS:
+            with self.subTest(sentence=en[:60]):
+                self.assertIn(en, english)
+                self.assertIn(zh, chinese)
+
+    def test_delegation_skill_description_names_adversarial_review(self):
+        frontmatter = self.source("delegation SKILL.md").split("---")[1]
+        description = next(line for line in frontmatter.splitlines() if line.startswith("description:"))
+        self.assertIn("Adversarial review", description)
+
+    def test_setup_document_names_the_added_role_and_the_downgrade(self):
+        self.assert_pinned(self.SETUP)
+
+
 class InstallDocumentTests(unittest.TestCase):
     """C7 item 3: the documents users follow to install, update and recover are current."""
 

@@ -32,6 +32,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:delegation-preview [計畫、ticket 或工作]` | 預覽工作會如何分派，不實際派工；見[分派預覽](#分派預覽) |
+| `/cc-feather:adversarial-review <攻擊範圍> [路徑或 commit 範圍] [可拋棄目標]` | 執行你要求的對抗式審查，兩種模式都可用；見[安全關鍵工作](#安全關鍵工作) |
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
 | `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；主 Agent 之後可不經詢問，在通過前 commit 這類工作、推送到它為此工作建立的 branch 並開 pull request，但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |
 | `/cc-feather:auto-off` | 關閉自動審查 |
@@ -156,7 +157,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 - **事後檢查：**只有在授權操作之後才會存在的驗收項目（例如 commit 之後的 tag），由主 Agent 在操作後檢查並回報；其餘部分在操作前驗證。
 - **你的決定：**步驟等你決定時，主 Agent 會把你的決定記為重審、延後、取消、修改驗收、豁免或接受並合併其中一種，並註明範圍。豁免會寫明它豁免的是哪個問題或缺少的哪一關，連同剩餘風險持續列出，絕不記為 READY、APPROVED、CONFIRMED 或 HELD，所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，或你決定接受並合併，才會進入預設 branch、release 或回報完成。你允許的工作中途推送可以把它的 commit 推到預設 branch，但不算 release，也不算完成。接受並合併是你明確接受某個 claim，即使它缺少一關或兩關，或安全關鍵 claim 缺少 HELD：主 Agent 會記下所接受的 commit、缺少的關卡與剩餘風險，缺少 HELD 時還會記下已知漏洞，在回報與進行中的交接中持續列出，之後驗收把關就不再擋下該 claim 的合併、release 或完成；之後若有相關變更就失效，記在進行中交接的決定在恢復的 session 仍然有效，直到發生這種變更。你說工作已完成，要等主 Agent 向你確認並記為接受並合併，才算驗收；說「繼續」或關掉 auto，都不代表接受已知的缺陷。
 - **授權：**通過不代表新的授權；READY 且原本已有授權的工作直接繼續，不固定再問一次。
-- **明確要求**計畫審查、程式碼審查或驗證時不受開關限制，只執行你要求的那一項，也不佔自動次數；其結論也不會讓任何步驟的次數歸零。在 auto 下，若它讓自動流程已停下的步驟通過，自動流程會從那裡接續。
+- **明確要求**計畫審查、程式碼審查、驗證或對抗式審查（包括 `/cc-feather:adversarial-review`）時不受開關限制，只執行你要求的那一項，也不佔自動次數；其結論也不會讓任何步驟的次數歸零。在 auto 下，若它讓自動流程已停下的步驟通過，自動流程會從那裡接續。
 - **停下之後：**你明確要求再跑已停下的步驟並通過時，停止狀態解除，次數維持在停下時的數字，在 auto 下自動流程接著進入下一步。因為次數沒有歸零，同一份工作在該步驟之後的自動呼叫（例如修正後的審查）都需要你要求；那次呼叫仍屬於自動流程，通過就歸零，沒通過就再次停下。自動流程還沒走到該步驟前所做的明確審查或驗證，不算該步驟的通過。
 - **要求審查時：**在 auto 下，你要求的審查若正好是流程該跑的步驟，就算自動呼叫；若該步驟已停下或不在流程中，就算明確要求；主 Agent 派出前會先說明是哪一種。已實作但這個 session 沒有計畫審查紀錄的工作，主 Agent 會先照「實作完才做計畫審查」問你。
 - **實作完才做計畫審查：**在 auto 下，工作已經實作，但這個 session 沒有它的計畫審查紀錄（沒有自動計畫審查，你也沒對它做過決定），例如在另一個 session、Claude 以外或 review 為 off 時實作的，主 Agent 會在任何審查前先問你：要先補計畫審查，還是直接做程式碼審查。它會列出找到的先前計畫審查紀錄，但不把它當成通過。先補計畫審查算一次自動呼叫，審查整份計畫；直接做程式碼審查則把缺少的 READY 記為已實作 claim 的豁免。尚未實作的 claim 仍會先做計畫審查。這個 session 自動流程已經審查過、停下或你已決定過的計畫照一般規則處理，不會再問。
@@ -184,7 +185,24 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 - **plan mode 與對話中的計畫：**它們的 claim 只存在於該計畫的文字中，其他 session 看不到；這是已接受的限制。新的 session 只會依它的原文、現有紀錄或你確認過的版本來使用這類計畫。
 - **檔案位置：**spec 放在哪裡、ticket 是否 commit，不由 cc-feather 決定；它使用實作的 session 手上有的檔案。
 
-完整規則見[計畫審查](skills/delegation/references/plan-review.md)、[程式碼審查](skills/delegation/references/code-review.md)與[結果驗證](skills/delegation/references/outcome-verification.md)程序；用語定義見 [CONTEXT.md](CONTEXT.md)。
+完整規則見[計畫審查](skills/delegation/references/plan-review.md)、[程式碼審查](skills/delegation/references/code-review.md)、[結果驗證](skills/delegation/references/outcome-verification.md)與[對抗式審查](skills/delegation/references/adversarial-review.md)程序；用語定義見 [CONTEXT.md](CONTEXT.md)。
+
+### 安全關鍵工作
+
+```text
+/cc-feather:adversarial-review 檢查 src/auth 的 session token 驗證，使用計畫指定的測試伺服器
+/cc-feather:adversarial-review 密碼重設流程 HEAD~3..HEAD
+```
+
+安全關鍵 claim（Security-critical claim）是結果包含安全關鍵變更的 claim：改變信任邊界上的安全保證，或改變安全控制的實作或設定，包括敏感資料流向哪裡、不受信任的資料在下游如何被解讀。身分驗證、授權、session 與 CSRF、憑證、密碼學、輸入驗證與存取控制都是例子，不是完整清單；主 Agent 依變更實際做了什麼來判斷，而不是看關鍵字。主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim；其他計畫（例如你寫的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類；不確定時先由 analyst 收集證據，主 Agent 只就缺少的需求問你。每個安全關鍵 claim 都由 security-executor 實作，`off` 時也一樣。
+
+在 `auto` 下，有安全關鍵 claim 的計畫在你同意前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查；最後才由你同意。已實作的工作即使豁免了缺少的 READY，也不會因此豁免安全分析：它會在程式碼審查前執行，除非你也豁免它。
+
+對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作，任何公開的地方只寫摘要，除非你同意。`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。
+
+`/cc-feather:adversarial-review` 在你要求時執行對抗式審查，兩種模式都可用。它需要攻擊範圍（沒給時主 Agent 會問），可再加上路徑或 commit 範圍與可拋棄目標；參數只當作資料，絕不放寬角色的限制。對驗收把關不涵蓋的工作，它審查工作區變更或該 commit 範圍，不需要先前的通過，也不滿足任何把關；對把關涵蓋的 claim，則和其他步驟的呼叫一樣分類。目標只來自你同意的計畫或你自己的參數；沒有目標時，角色只做靜態分析，需要實際執行的部分回報 INCONCLUSIVE。不是你寫的、也不是這個 session 寫的程式碼（例如在新 session 接續的安全關鍵 claim），要做動態探測，需要你指定的隔離環境；沒有的話只做靜態攻擊。詳見[對抗式審查程序](skills/delegation/references/adversarial-review.md)與[指令說明](skills/adversarial-review/SKILL.md)。
+
+adversary 的限制是給模型的指示，只有你的權限設定（permission mode 與 allow、ask、deny 規則，包括 managed settings）、hooks、Claude Code sandbox（原生 Windows 不支援）以及外部隔離環境（例如容器或虛擬機）才會實際強制這些限制：在 bypassPermissions 模式下，或有寬鬆的 allow 規則時，它的 Bash 指令可能完全不經提示或分類器檢查就執行，而在 Claude Code 的 auto 模式下是由分類器而不是你核准；各模式如何處理指令，請見官方的 [permission modes 文件](https://code.claude.com/docs/en/permission-modes)。
 
 ### 自動審查開關
 
