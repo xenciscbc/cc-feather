@@ -4775,31 +4775,61 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
 class PreApprovalSecurityAnalysisTests(unittest.TestCase):
     """0.18.0 C2 (docs/specs/security-critical-routing.md): security analysis feeds the Plan before plan review and approval."""
 
-    source = SecurityCriticalVocabularyTests.source
+    # 0.19.0 C6 item 5 (docs/specs/review-followups-0-19-0.md): each pre-approval sentence is pinned within its section.
+    SECTION_OPENINGS = {
+        "plan-review.md#security analysis": "In auto, a plan with a Security-critical claim gets a security analysis before its plan review.",
+        "delegation SKILL.md#security analysis": "For requested security analysis or a Security-critical change, give analyst a read-only brief",
+    }
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """Text of one place: 'plan-review.md#security analysis' and 'delegation SKILL.md#security analysis' (the
+        security analysis paragraph), 'plan-review.md#<step number>', 'review-state.md#Implemented before plan review'
+        (the whole bullet with its options and closing paragraph), '<README>#pre-approval' as
+        PreApprovalApprovalRuleTests.source, '<README>#disclosure' and 'ADR 0009#amendment' as
+        AdversarialReviewRetriesTests.source, otherwise as SecurityCriticalVocabularyTests.source."""
+        path, _, part = name.partition("#")
+        if name in cls.SECTION_OPENINGS:
+            text = SecurityCriticalVocabularyTests.source(path)
+            return next(line for line in text.splitlines() if line.startswith(cls.SECTION_OPENINGS[name]))
+        if path == "plan-review.md" and part.isdigit():
+            return PostFixReviewTests.source(name)
+        if name == "review-state.md#Implemented before plan review":
+            lines = SecurityCriticalVocabularyTests.source(path).splitlines()
+            start = next(i for i, line in enumerate(lines) if line.startswith(f"- **{part}.**"))
+            end = next(i for i in range(start + 1, len(lines)) if not lines[i].startswith("  "))
+            return "\n".join(lines[start:end])
+        if part == "pre-approval":
+            return PreApprovalApprovalRuleTests.source(name)
+        if path == "ADR 0009" or part == "disclosure":
+            return AdversarialReviewRetriesTests.source(name)
+        return SecurityCriticalVocabularyTests.source(name)
 
     # C2 item 1: the pre-approval sequence, the dispositions into security invariants and the recorded test targets.
+    # 0.19.0 C6 item 1 replaced both approval formulations ("and the user approves the plan only after both", "and the
+    # user then approves it") with one approval rule, which PreApprovalApprovalRuleTests pins.
     SEQUENCE = {
-        "plan-review.md": (
-            "In auto, a plan with a Security-critical claim gets a security analysis before its plan review, and the user approves the plan only after both.",
+        "plan-review.md#security analysis": (
+            "In auto, a plan with a Security-critical claim gets a security analysis before its plan review.",
             "Main has analyst run one security analysis per plan, or one per trust boundary that several Security-critical claims share, as the [delegation skill](../SKILL.md) describes: read-only, reporting findings only.",
             "Main dispositions every finding into the plan, turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to, and records each disposable test target with its synthetic data, its allowed effects, the dependencies it can reach and how to start and reset it outside the project directory, so that a gated call keeps a clean workspace.",
-            "Plan review then receives the revised plan, and the user then approves it; security analysis and plan review stay separate assignments, and neither runs inside the other.",
+            "Plan review then receives the revised plan; security analysis and plan review stay separate assignments, and neither runs inside the other.",
         ),
-        "delegation SKILL.md": (
+        "delegation SKILL.md#security analysis": (
             "In auto, for a plan with a Security-critical claim, the security analysis runs before plan review and its findings become security invariants and test targets in the plan, as [plan review](references/plan-review.md) describes.",
         ),
     }
 
     # C2 item 2: security analysis reopens only on three triggers and covers only what changed.
     REOPENING = {
-        "plan-review.md": (
+        "plan-review.md#security analysis": (
             "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control, and then covers only what changed, before plan review runs again.",
         ),
     }
 
     # C2 item 3: a missing-READY waiver does not waive security analysis for implemented work.
     IMPLEMENTED = {
-        "review-state.md": (
+        "review-state.md#Implemented before plan review": (
             "A waiver of the missing READY does not waive security analysis: before code review of an implemented Security-critical claim, main runs its security analysis and dispositions the findings as [plan review](plan-review.md) describes, or the user explicitly waives them, and main records either, with its scope, in the report and in any active handoff.",
             "Security invariants added this way change the claim's acceptance and need the user's approval, as a material revision does.",
         ),
@@ -4817,15 +4847,26 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
 
     # C2 item 5: off mode does not force the sequence, while the delegation skill's security-analysis rule still applies.
     OFF_MODE = {
-        "plan-review.md": (
+        "plan-review.md#security analysis": (
             "In off mode this sequence is not forced, but the [delegation skill](../SKILL.md)'s rule that a Security-critical change gets an analyst security analysis still applies.",
         ),
-        "delegation SKILL.md": (
+        "delegation SKILL.md#security analysis": (
             "For requested security analysis or a Security-critical change, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope.",
         ),
     }
 
     assert_pinned = SecurityCriticalVocabularyTests.assert_pinned
+
+    def test_each_pre_approval_section_is_found_once(self):
+        # 0.19.0 C6 item 5: a section pin is only meaningful when its opening names exactly one paragraph.
+        for name, opening in self.SECTION_OPENINGS.items():
+            with self.subTest(place=name):
+                lines = SecurityCriticalVocabularyTests.source(name.partition("#")[0]).splitlines()
+                self.assertEqual(sum(line.startswith(opening) for line in lines), 1)
+        bullet = self.source("review-state.md#Implemented before plan review")
+        self.assertTrue(bullet.startswith("- **Implemented before plan review.**"))
+        self.assertIn("\n  Main dispatches neither call until the user answers.", bullet, "the bullet keeps its closing paragraph")
+        self.assertNotIn("- **Claim changes.**", bullet)
 
     def test_security_analysis_feeds_the_plan_before_plan_review_and_approval(self):
         self.assert_pinned(self.SEQUENCE)
@@ -4851,8 +4892,12 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
 
     def test_the_sequence_is_stated_in_order_before_the_numbered_steps(self):
         text = self.source("plan-review.md")
-        positions = [text.index(sentence) for sentence in self.SEQUENCE["plan-review.md"]]
-        positions += [text.index(self.REOPENING["plan-review.md"][0]), text.index(self.OFF_MODE["plan-review.md"][0])]
+        section = "plan-review.md#security analysis"
+        # 0.19.0 C6: the approval rule follows the sequence; the switch from off to auto follows the off-mode sentence.
+        positions = [text.index(sentence) for sentence in self.SEQUENCE[section]]
+        positions += [text.index(PreApprovalApprovalRuleTests.APPROVAL[0]), text.index(self.REOPENING[section][0]),
+                      text.index(self.OFF_MODE[section][0])]
+        positions += [text.index(sentence) for sentence in PreApprovalApprovalRuleTests.OFF_TO_AUTO]
         self.assertEqual(positions, sorted(positions))
         self.assertLess(text.index("Classify every plan's claims by what they change:"), positions[0],
                         "classification comes first")
@@ -4862,29 +4907,32 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
     # Each scenario names the outcome and the sentences that decide it.
     SCENARIOS = (
         ("in auto, the user is about to approve a Plan with a Security-critical claim",
-         "security analysis runs first, main turns its findings into invariants and records the targets, plan review gets the revised Plan, then the user approves",
-         (("plan-review.md", "gets a security analysis before its plan review, and the user approves the plan only after both."),
-          ("plan-review.md", "one per trust boundary that several Security-critical claims share,"),
-          ("plan-review.md", "turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to,"),
-          ("plan-review.md", "with its synthetic data, its allowed effects, the dependencies it can reach and how to start and reset it outside the project directory, so that a gated call keeps a clean workspace."),
-          ("plan-review.md", "Plan review then receives the revised plan, and the user then approves it;"),
-          ("plan-review.md", "security analysis and plan review stay separate assignments, and neither runs inside the other."),
-          ("delegation SKILL.md", "Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.")),
-         ()),
+         # 0.19.0 C6 item 1: the user's approval now follows plan review step 5; the two old formulations are gone.
+         "security analysis runs first, main turns its findings into invariants and records the targets, plan review gets the revised Plan, then the user's approval follows step 5",
+         (("plan-review.md#security analysis", "gets a security analysis before its plan review."),
+          ("plan-review.md#security analysis", "one per trust boundary that several Security-critical claims share,"),
+          ("plan-review.md#security analysis", "turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to,"),
+          ("plan-review.md#security analysis", "with its synthetic data, its allowed effects, the dependencies it can reach and how to start and reset it outside the project directory, so that a gated call keeps a clean workspace."),
+          ("plan-review.md#security analysis", "Plan review then receives the revised plan;"),
+          ("plan-review.md#security analysis", "security analysis and plan review stay separate assignments, and neither runs inside the other."),
+          ("plan-review.md#security analysis", "The user's approval then follows step 5:"),
+          ("delegation SKILL.md#security analysis", "Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.")),
+         (("plan-review.md", "and the user approves the plan only after both"),
+          ("plan-review.md", "and the user then approves it"))),
         ("a REVISE leads to a wording fix in a Security-critical claim with no new boundary, attacker capability or control",
          "security analysis does not reopen; plan review runs again",
-         (("plan-review.md", "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control,"),),
+         (("plan-review.md#security analysis", "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control,"),),
          ()),
         ("a revision adds a new trust boundary to the Plan",
          "security analysis reopens for that boundary only, before plan review runs again",
-         (("plan-review.md", "and then covers only what changed, before plan review runs again."),),
+         (("plan-review.md#security analysis", "and then covers only what changed, before plan review runs again."),),
          ()),
         ("in auto, implemented Security-critical work reaches review without plan-review state and the user waives the missing READY",
          "security analysis and its dispositions still run before code review, or the user waives them explicitly; either is recorded, and added invariants need the user's approval",
-         (("review-state.md", "straight to code review: recorded as a waiver of the missing READY for the implemented claims,"),
-          ("review-state.md", "A waiver of the missing READY does not waive security analysis:"),
-          ("review-state.md", "or the user explicitly waives them, and main records either, with its scope, in the report and in any active handoff."),
-          ("review-state.md", "Security invariants added this way change the claim's acceptance and need the user's approval, as a material revision does.")),
+         (("review-state.md#Implemented before plan review", "straight to code review: recorded as a waiver of the missing READY for the implemented claims,"),
+          ("review-state.md#Implemented before plan review", "A waiver of the missing READY does not waive security analysis:"),
+          ("review-state.md#Implemented before plan review", "or the user explicitly waives them, and main records either, with its scope, in the report and in any active handoff."),
+          ("review-state.md#Implemented before plan review", "Security invariants added this way change the claim's acceptance and need the user's approval, as a material revision does.")),
          ()),
         ("main dispatches code review and outcome verification for a Security-critical claim",
          "each brief carries the claim's security invariants",
@@ -4893,9 +4941,53 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
          ()),
         ("in off mode, the user asks main to implement a Plan with a Security-critical claim",
          "the pre-approval sequence is not forced, but the Security-critical change still gets an analyst security analysis",
-         (("plan-review.md", "In off mode this sequence is not forced,"),
-          ("plan-review.md", "rule that a Security-critical change gets an analyst security analysis still applies."),
-          ("delegation SKILL.md", "For requested security analysis or a Security-critical change, give analyst a read-only brief")),
+         (("plan-review.md#security analysis", "In off mode this sequence is not forced,"),
+          ("plan-review.md#security analysis", "rule that a Security-critical change gets an analyst security analysis still applies."),
+          ("delegation SKILL.md#security analysis", "For requested security analysis or a Security-critical change, give analyst a read-only brief"),
+          # 0.19.0 C6 item 3 (sw-6): the READMEs say so too.
+          ("README.md#disclosure", "In `off` no Adversarial review starts automatically and the security analysis before approval is not forced."),
+          ("README.zh-TW.md#disclosure", "`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。")),
+         ()),
+        # 0.19.0 C6 item 6 (Q2, Q3): approval after the analysis, and the switch from off to auto.
+        ("in auto, the security analysis adds a security invariant to a Security-critical claim of a Plan the user agreed to",
+         "the claim's acceptance changes, so after plan review the user approves the revised Plan",
+         (("plan-review.md#security analysis", "a disposition that adds a security invariant or otherwise materially changes the plan's outcome, scope or acceptance needs the user's approval of the revised plan,"),
+          ("plan-review.md#5", "one that materially changes any of them needs the user's approval again."),
+          ("README.md#pre-approval", "if the analysis adds a security invariant or otherwise materially changes the plan's outcome, scope or acceptance, you approve the revised plan;"),
+          ("README.zh-TW.md#pre-approval", "安全分析若加入安全不變條件，或以其他方式重大改變計畫的結果、範圍或驗收條件，你要同意修訂後的計畫；"),
+          ("ADR 0009#amendment", "a disposition that adds a security invariant or otherwise materially changes the Plan's outcome, scope or acceptance needs the user's approval of the revised Plan,")),
+         (("plan-review.md", "and the user approves the plan only after both"),)),
+        ("in auto, the security analysis finds nothing that changes the Plan the user agreed to",
+         "the user's earlier agreement stands and no new approval is asked for",
+         (("plan-review.md#security analysis", "while a plan the analysis leaves unchanged keeps the user's earlier agreement."),
+          ("plan-review.md#5", "A revision that stays within the user's approved outcome, scope and acceptance needs no new approval;"),
+          ("README.md#pre-approval", "if it leaves the plan unchanged, your earlier agreement stands."),
+          ("README.zh-TW.md#pre-approval", "若計畫沒有改變，你先前的同意仍然有效。"),
+          ("ADR 0009#amendment", "while a Plan the analysis leaves unchanged keeps the user's earlier agreement.")),
+         (("plan-review.md", "and the user then approves it"),)),
+        ("a Security-critical claim had a security analysis in off, and auto is turned on with its trust boundary, attacker capability and controls unchanged",
+         "the analysis is reused; main dispositions its findings and records the test targets before the automatic plan review, which an explicit READY from off does not replace",
+         (("plan-review.md#security analysis", "When auto is turned on for a plan whose Security-critical claim had a security analysis in off, that analysis is reused while its trust boundary, attacker capability and controls still apply,"),
+          ("plan-review.md#security analysis", "main dispositions its findings and records the test targets as above before the automatic plan review,"),
+          ("plan-review.md#security analysis", "and an explicit READY given in off does not count as that plan review's pass."),
+          ("README.md#pre-approval", "that analysis is reused while its trust boundary, attacker capability and controls still apply,"),
+          ("README.zh-TW.md#pre-approval", "只要它的信任邊界、攻擊者能力與控制仍然適用，就沿用那份分析，")),
+         ()),
+        ("a Security-critical claim had a security analysis in off, and auto is turned on after the plan gained a new trust boundary",
+         "the analysis reopens for the new boundary only, and its findings are dispositioned before the automatic plan review",
+         (("plan-review.md#security analysis", "and otherwise reopens under the triggers above;"),
+          ("plan-review.md#security analysis", "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control, and then covers only what changed, before plan review runs again."),
+          ("plan-review.md#security analysis", "main dispositions its findings and records the test targets as above before the automatic plan review,"),
+          ("README.md#pre-approval", "and otherwise runs again for the new trust boundary, attacker capability or control;"),
+          ("README.zh-TW.md#pre-approval", "否則針對新的信任邊界、攻擊者能力或控制重新分析；")),
+         ()),
+        ("a Security-critical claim was implemented in off, and auto is then turned on",
+         "Implemented before plan review applies first: main asks whether to run plan review or waive the missing READY, and that waiver does not waive the security analysis",
+         (("plan-review.md#security analysis", "Work already implemented in off first follows [review state](review-state.md)'s Implemented before plan review."),
+          ("review-state.md#Implemented before plan review", "This covers work implemented in another session, outside Claude, or in this session while review was off."),
+          ("review-state.md#Implemented before plan review", "A waiver of the missing READY does not waive security analysis:"),
+          ("README.md#pre-approval", "Work already implemented in `off` first goes through Implemented before plan review."),
+          ("README.zh-TW.md#pre-approval", "在 `off` 下已實作的工作，會先依「實作完才做計畫審查」處理。")),
          ()),
     )
 
@@ -5871,8 +5963,10 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
          "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim；其他計畫（例如你寫的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類；"),
         ("security-executor implements every Security-critical claim, in `off` too.",
          "每個安全關鍵 claim 都由 security-executor 實作，`off` 時也一樣。"),
-        ("Before you approve a plan with a Security-critical claim, in `auto`, two separate analyst calls run in order: first a read-only security analysis, one per plan or per trust boundary that several claims share, whose findings main turns into security invariants in the acceptance of each Security-critical claim, recording the disposable test targets with their synthetic data, allowed effects, reachable dependencies and how to start and reset them; then plan review of the revised plan; then your approval.",
-         "在 `auto` 下，有安全關鍵 claim 的計畫在你同意前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查；最後才由你同意。"),
+        # 0.19.0 C6 item 3: the sequence no longer ends with an unconditional approval; PreApprovalApprovalRuleTests pins
+        # the approval rule and the switch from off to auto that follow it.
+        ("In `auto`, a plan with a Security-critical claim gets two separate analyst calls in order before implementation: first a read-only security analysis, one per plan or per trust boundary that several claims share, whose findings main turns into security invariants in the acceptance of each Security-critical claim, recording the disposable test targets with their synthetic data, allowed effects, reachable dependencies and how to start and reset them; then plan review of the revised plan.",
+         "在 `auto` 下，有安全關鍵 claim 的計畫在施工前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查。"),
         ("Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit, adversary tries to break the claim and answers HELD, BROKEN or INCONCLUSIVE.",
          "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。"),
         # 0.19.0 C4 item 7: "stay only in", and an ADR and a validation entry among the public records.
@@ -7126,6 +7220,126 @@ class CommandScopeTests(unittest.TestCase):
             for place, sentence in contradicting:
                 with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
                     self.assertNotIn(sentence, self.source(place), outcome)
+
+
+class PreApprovalApprovalRuleTests(unittest.TestCase):
+    """0.19.0 C6 (docs/specs/review-followups-0-19-0.md): the user's approval after security analysis follows plan
+    review step 5, and the switch from off to auto, in plan review, both READMEs and ADR 0009's amendment note. The
+    scenarios are in PreApprovalSecurityAnalysisTests.SCENARIOS."""
+
+    README_OPENINGS = {"README.md": "In `auto`, a plan with a Security-critical claim gets two separate analyst calls",
+                       "README.zh-TW.md": "在 `auto` 下，有安全關鍵 claim 的計畫在施工前"}
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """Text of one place: '<README>#pre-approval' (the pre-approval paragraph), otherwise as
+        PreApprovalSecurityAnalysisTests.source."""
+        path, _, part = name.partition("#")
+        if part == "pre-approval":
+            text = (config.ROOT / path).read_text(encoding="utf-8")
+            return next(line for line in text.splitlines() if line.startswith(cls.README_OPENINGS[path]))
+        return PreApprovalSecurityAnalysisTests.source(name)
+
+    assert_whole_sentence = AdversarialReviewRetriesTests.assert_whole_sentence
+    assert_pinned = AdversarialReviewRetriesTests.assert_pinned
+
+    # Item 1 (Q2): one approval rule, pointing to step 5.
+    APPROVAL = (
+        "The user's approval then follows step 5: a disposition that adds a security invariant or otherwise materially "
+        "changes the plan's outcome, scope or acceptance needs the user's approval of the revised plan, while a plan the "
+        "analysis leaves unchanged keeps the user's earlier agreement.",
+    )
+    REPLACED = ("and the user approves the plan only after both", "and the user then approves it")
+    STEP_5 = ("A revision that stays within the user's approved outcome, scope and acceptance needs no new approval; one "
+              "that materially changes any of them needs the user's approval again.")
+    UNPLANNED = (
+        "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation must "
+        "not start without one: main writes the plan, gets it reviewed, then presents the reviewed plan and waits for the "
+        "user's explicit approval before implementing.",
+        "Main never approves such a plan itself.",
+    )
+    # Item 2 (Q3): the switch from off to auto.
+    OFF_TO_AUTO = (
+        "When auto is turned on for a plan whose Security-critical claim had a security analysis in off, that analysis is "
+        "reused while its trust boundary, attacker capability and controls still apply, and otherwise reopens under the "
+        "triggers above; main dispositions its findings and records the test targets as above before the automatic plan "
+        "review, and an explicit READY given in off does not count as that plan review's pass.",
+        "Work already implemented in off first follows [review state](review-state.md)'s Implemented before plan review.",
+    )
+    # Item 3: the README pre-approval paragraph states items 1 and 2 and keeps the waiver; the third-step paragraph
+    # keeps off mode (sw-6). Each pair is (English, Chinese).
+    README_RULES = (
+        ("Your approval follows plan review's usual rule: if the analysis adds a security invariant or otherwise materially "
+         "changes the plan's outcome, scope or acceptance, you approve the revised plan; if it leaves the plan unchanged, "
+         "your earlier agreement stands.",
+         "你的同意依照計畫審查的一般規則：安全分析若加入安全不變條件，或以其他方式重大改變計畫的結果、範圍或驗收條件，你要同意修訂後的計畫；"
+         "若計畫沒有改變，你先前的同意仍然有效。"),
+        ("When you turn `auto` on for a plan whose Security-critical claim had a security analysis in `off`, that analysis "
+         "is reused while its trust boundary, attacker capability and controls still apply, and otherwise runs again for "
+         "the new trust boundary, attacker capability or control; main dispositions its findings and records the test "
+         "targets before the automatic plan review, and an explicit READY given in `off` does not count as that plan "
+         "review's pass.",
+         "計畫的安全關鍵 claim 已在 `off` 下做過安全分析，你再開啟 `auto` 時，只要它的信任邊界、攻擊者能力與控制仍然適用，就沿用那份分析，"
+         "否則針對新的信任邊界、攻擊者能力或控制重新分析；主 Agent 會在自動計畫審查前處置它的結果並記下測試目標，而 `off` "
+         "下明確要求得到的 READY 不算那次計畫審查的通過。"),
+        ("Work already implemented in `off` first goes through Implemented before plan review.",
+         "在 `off` 下已實作的工作，會先依「實作完才做計畫審查」處理。"),
+        ("A waiver of a missing READY for implemented work does not waive the security analysis: it runs before code "
+         "review unless you waive it as well.",
+         "已實作的工作即使豁免了缺少的 READY，也不會因此豁免安全分析：它會在程式碼審查前執行，除非你也豁免它。"),
+    )
+    README_OFF_MODE = ("In `off` no Adversarial review starts automatically and the security analysis before approval is "
+                       "not forced.",
+                       "`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。")
+    README_REPLACED = {"README.md#pre-approval": ("then your approval",), "README.zh-TW.md#pre-approval": ("最後才由你同意",)}
+    # Item 4: ADR 0009's amendment note.
+    AMENDMENT = (
+        "- **Approval after security analysis.** The user's approval after a security analysis follows plan review's "
+        "approval rule, so \"then the user approves\" in the two analyst calls above is read this way: a disposition that "
+        "adds a security invariant or otherwise materially changes the Plan's outcome, scope or acceptance needs the "
+        "user's approval of the revised Plan, while a Plan the analysis leaves unchanged keeps the user's earlier "
+        "agreement.",
+    )
+
+    def test_approval_after_security_analysis_follows_step_5(self):
+        self.assert_pinned({"plan-review.md#security analysis": self.APPROVAL, "plan-review.md#5": (self.STEP_5,)})
+        for phrase in self.REPLACED:
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, self.source("plan-review.md"))
+
+    def test_main_still_never_approves_its_own_plan_for_unplanned_risky_work(self):
+        paragraph = next(p for p in self.source("plan-review.md").split("\n\n") if p.startswith("In auto, plan-driven work"))
+        self.assert_pinned({"plan-review.md": self.UNPLANNED})
+        for sentence in self.UNPLANNED:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, paragraph)
+
+    def test_the_switch_from_off_to_auto_follows_the_off_mode_sentence(self):
+        section = "plan-review.md#security analysis"
+        self.assert_pinned({section: self.OFF_TO_AUTO})
+        text = self.source(section)
+        off_mode = PreApprovalSecurityAnalysisTests.OFF_MODE[section][0]
+        self.assertLess(text.index(off_mode), text.index(self.OFF_TO_AUTO[0]))
+        self.assertTrue(text.endswith(self.OFF_TO_AUTO[-1]), "the paragraph ends with the implemented-work sentence")
+
+    def test_readmes_state_the_approval_rule_and_the_switch_in_both_languages(self):
+        for english, chinese in self.README_RULES:
+            with self.subTest(sentence=english[:60]):
+                self.assert_pinned({"README.md#pre-approval": (english,), "README.zh-TW.md#pre-approval": (chinese,)})
+        for place, phrases in self.README_REPLACED.items():
+            for phrase in phrases:
+                with self.subTest(place=place, removed=phrase):
+                    self.assertNotIn(phrase, self.source(place))
+
+    def test_readmes_keep_that_off_mode_does_not_force_the_sequence(self):
+        english, chinese = self.README_OFF_MODE
+        self.assert_pinned({"README.md#disclosure": (english,), "README.zh-TW.md#disclosure": (chinese,)})
+
+    def test_adr_0009_amendment_records_the_approval_rule(self):
+        self.assert_pinned({"ADR 0009#amendment": self.AMENDMENT})
+        decision = self.source("ADR 0009").split(AdversarialReviewRetriesTests.AMENDMENT_HEADING, 1)[0]
+        self.assertIn("then plan review judges the revised Plan; then the user approves.", decision,
+                      "the decision text is not rewritten")
 
 
 class InstallDocumentTests(unittest.TestCase):
