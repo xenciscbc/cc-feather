@@ -63,4 +63,4 @@ For automatic verification of plan-driven work or an explicit verification reque
 
 ## Adversarial review
 
-For automatic Adversarial review of a Security-critical claim, read and follow [the adversarial-review procedure](references/adversarial-review.md).
+For automatic Adversarial review of a Security-critical claim, read and follow [the adversarial-review procedure](references/adversarial-review.md). For an explicit Adversarial review, including `/cc-feather:adversarial-review`, follow the same procedure and classify the call as [the adversarial-review command](../adversarial-review/SKILL.md) describes.

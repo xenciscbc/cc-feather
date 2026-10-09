@@ -20,7 +20,8 @@
     "./skills/delegation-preview",
     "./skills/model",
     "./skills/auto-on",
-    "./skills/auto-off"
+    "./skills/auto-off",
+    "./skills/adversarial-review"
   ],
   "repository": "https://github.com/xenciscbc/cc-feather.git"
 }
