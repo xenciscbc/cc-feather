@@ -7079,8 +7079,13 @@ class CommandScopeTests(unittest.TestCase):
         "Main lists in the brief the staged, unstaged and in-scope untracked paths, where in-scope untracked means "
         "untracked, not ignored and within the arguments' paths or attack scope.",
         "The role reads those paths with the file tools, and staged and HEAD content from Git objects without filters, for "
-        "example with `git cat-file blob :<path>` and `git cat-file blob HEAD:<path>`, and runs no Git command that "
-        "compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE rather than run one.",
+        "example with `git -c core.fsmonitor=false cat-file blob :<path>` and `git cat-file blob HEAD:<path>`, and runs "
+        "no Git command that compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE "
+        "rather than run one.",
+        # Outcome-verification fix (C2 item 5.2): reading the index runs a configured fsmonitor unless it is disabled.
+        "Reading the index can run a configured fsmonitor program, so every Git command the role runs that reads the "
+        "index disables it, as that example does, and reading staged or HEAD content follows the role's Repository, "
+        "secrets and effects section for missing objects in a partial clone.",
         "Secrets read from untracked files are masked as the role requires.",
         "These limits apply only to a call under this bullet; elsewhere the role's Repository, secrets and effects section "
         "alone governs its Git commands.",
@@ -7245,6 +7250,19 @@ class CommandScopeTests(unittest.TestCase):
         # The ungated bullet keeps the role off working-tree Git; the limits are scoped to that bullet only.
         self.assertIn("runs no Git command that compares or refreshes the working tree",
                       self.source("command#Uncommitted changes"))
+
+    def test_every_index_read_the_command_hands_the_role_disables_fsmonitor(self):
+        # Regression (outcome verification of C5, C2 item 5.2): `git cat-file blob :<path>` loads the index, and Git
+        # then runs a configured core.fsmonitor program; observed on Git 2.43.0 and absent with
+        # `-c core.fsmonitor=false` and for `HEAD:<path>`. Every Git example that reads an index path disables it.
+        text = self.source("command")
+        index_reads = [span for span in re.findall(r"`(git [^`]*)`", text) if re.search(r"(?:^|\s):", span)]
+        self.assertTrue(index_reads, "the Uncommitted changes bullet gives an index-read example")
+        for span in index_reads:
+            with self.subTest(span=span):
+                self.assertRegex(span, r"^git -c core\.fsmonitor=false ")
+        self.assertNotIn("`git cat-file blob :<path>`", text)
+        self.assertIn("`git cat-file blob HEAD:<path>`", self.source("command#Uncommitted changes"))
 
     def test_the_result_says_what_was_reviewed_and_whether_it_counts(self):
         self.assert_pinned({"command#results": self.RESULT})
