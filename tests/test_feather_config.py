@@ -4582,11 +4582,11 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
         "plan-review.md": (
             "In auto, a plan with a Security-critical claim gets a security analysis before its plan review, and the user approves the plan only after both.",
             "Main has analyst run one security analysis per plan, or one per trust boundary that several Security-critical claims share, as the [delegation skill](../SKILL.md) describes: read-only, reporting findings only.",
-            "Main dispositions every finding into the plan, turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to, and records the disposable test targets: how to start and reset each one outside the project directory, so that a gated call keeps a clean workspace, its synthetic data, its allowed effects and the dependencies it can reach.",
+            "Main dispositions every finding into the plan, turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to, and records each disposable test target with its synthetic data, its allowed effects, the dependencies it can reach and how to start and reset it outside the project directory, so that a gated call keeps a clean workspace.",
             "Plan review then receives the revised plan, and the user then approves it; security analysis and plan review stay separate assignments, and neither runs inside the other.",
         ),
         "delegation SKILL.md": (
-            "For a plan with a Security-critical claim, the security analysis runs before plan review and its findings become security invariants and test targets in the plan, as [plan review](references/plan-review.md) describes.",
+            "In auto, for a plan with a Security-critical claim, the security analysis runs before plan review and its findings become security invariants and test targets in the plan, as [plan review](references/plan-review.md) describes.",
         ),
     }
 
@@ -4666,7 +4666,7 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
          (("plan-review.md", "gets a security analysis before its plan review, and the user approves the plan only after both."),
           ("plan-review.md", "one per trust boundary that several Security-critical claims share,"),
           ("plan-review.md", "turning each accepted control into a security invariant in the acceptance of each Security-critical claim it applies to,"),
-          ("plan-review.md", "how to start and reset each one outside the project directory, so that a gated call keeps a clean workspace, its synthetic data, its allowed effects and the dependencies it can reach."),
+          ("plan-review.md", "with its synthetic data, its allowed effects, the dependencies it can reach and how to start and reset it outside the project directory, so that a gated call keeps a clean workspace."),
           ("plan-review.md", "Plan review then receives the revised plan, and the user then approves it;"),
           ("plan-review.md", "security analysis and plan review stay separate assignments, and neither runs inside the other."),
           ("delegation SKILL.md", "Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules.")),
