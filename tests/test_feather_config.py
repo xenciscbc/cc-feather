@@ -5097,7 +5097,7 @@ class AdversarialReviewTests(unittest.TestCase):
         "adversarial-review.md": (
             "This procedure governs main's orchestration. Adversary's role definition governs how it attacks a claim, the safety limits it keeps and its HELD, BROKEN or INCONCLUSIVE report.",
             "Use adversary, under its installed native name, in fresh native context.",
-            "Supply the claim as identified for the plan (see [plan review](plan-review.md)), the commit under attack and its base revision, the claim's security invariants, each test target with how to start and reset it, its synthetic data, its allowed effects and the dependencies it can reach, and the gaps earlier calls for this claim left open.",
+            "Supply the claim as identified for the plan (see [plan review](plan-review.md)), the commit under attack and its base revision, the claim's security invariants, each test target with where it runs (host, container or virtual machine), the environment variables it starts with, how to start and reset it, its synthetic data, its allowed effects and the dependencies it can reach, any isolated environment the user named for it, and the gaps earlier calls for this claim left open.",
             "If fresh context or the role is unavailable, report the limitation and keep the affected claim blocked; never substitute another role.",
             "A missing role found before dispatch is a precondition failure, not a call.",
             "Every target in a brief traces to a plan the user approved or to the user's own command arguments.",
@@ -5274,7 +5274,7 @@ class AdversarialReviewTests(unittest.TestCase):
         "preview.md": (
             "3. One review section, listed once rather than under each Claim: plan review by analyst, code review by reviewer and outcome verification by verifier, and, when a Plan has a Security-critical claim, the security analysis by analyst before plan review and Adversarial review by adversary after outcome verification, each with model, effort and source.",
             "State the number of Plans, Claims and Security-critical claims covered, that the security analysis runs once per Plan or per trust boundary that several Security-critical claims share, and that each step stops after two consecutive automatic calls without a pass, per Plan for plan review and per Claim for code review, outcome verification and Adversarial review, an automatic pass resetting the count;",
-            "under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures this comes to at most six automatic calls per Claim, or twelve for a Security-critical claim, in one uninterrupted attempt, and each reopened Claim or Material deviation adds calls.",
+            "under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures this comes to at most six automatic calls per Claim, or fourteen for a Security-critical claim, in one uninterrupted attempt, and each reopened Claim or Material deviation adds calls.",
         ),
         "review-auto.md": (
             "Use cc-feather:delegation so that work done from a plan, spec or ticket the user agreed to gets plan review before implementation, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, before it is reported complete.",
@@ -5334,14 +5334,14 @@ class AdversarialReviewTests(unittest.TestCase):
             "- `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions above).",
-            "The plan review, code review and outcome verification roles, and for a plan with a Security-critical claim the security analysis and Adversarial review roles, are listed once at the end, with the number of plans and claims and when each step stops (two consecutive automatic calls without a pass, at most six calls per claim, or twelve for a Security-critical claim, in one uninterrupted attempt, each reopened claim or approved material deviation adding calls);",
+            "The plan review, code review and outcome verification roles, and for a plan with a Security-critical claim the security analysis and Adversarial review roles, are listed once at the end, with the number of plans, claims and Security-critical claims and when each step stops (two consecutive automatic calls without a pass, at most six calls per claim, or fourteen for a Security-critical claim, in one uninterrupted attempt, each reopened claim or approved material deviation adding calls);",
         ),
         "README.zh-TW.md": (
             "| 對抗式審查 | 安全關鍵 claim 在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |",
             "| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；",
             "但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |",
             "進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見上方 Commit 條件與你的決定）；",
-            "計畫審查、程式碼審查與結果驗證的角色，以及有安全關鍵 claim 的計畫的安全分析與對抗式審查角色，只在最後列一次，附上計畫數、claim 數與各步驟何時停下（連續兩次自動呼叫沒通過，一次不中斷的完成過程中每個 claim 最多六次、安全關鍵 claim 最多十二次，重新打開的 claim 與經你同意的重大偏離會再增加呼叫）；",
+            "計畫審查、程式碼審查與結果驗證的角色，以及有安全關鍵 claim 的計畫的安全分析與對抗式審查角色，只在最後列一次，附上計畫數、claim 數、安全關鍵 claim 數與各步驟何時停下（連續兩次自動呼叫沒通過，一次不中斷的完成過程中每個 claim 最多六次、安全關鍵 claim 最多十四次，重新打開的 claim 與經你同意的重大偏離會再增加呼叫）；",
         ),
         "README.md#Budget": (
             "each step counts consecutive automatic calls that do not pass, per plan for plan review and per claim for code review, verification and Adversarial review.",
@@ -5392,11 +5392,11 @@ class AdversarialReviewTests(unittest.TestCase):
             "ticket 要在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值，",
         ),
         "README.md#Cost": (
-            "in one uninterrupted attempt in a session, a plan with N claims, S of them Security-critical, makes at least 1 + 2N + S automatic calls and up to about 2 + 6N + 6S, since a claim makes at most six (code review twice before and twice after a fix, verification twice) and a Security-critical claim at most twelve (also Adversarial review twice, and code review and verification twice each for the fix after a BROKEN);",
+            "in one uninterrupted attempt in a session, a plan with N claims, S of them Security-critical, makes at least 1 + 2N + S automatic calls and up to about 2 + 6N + 8S, since a claim makes at most six (code review twice before and twice after a fix, verification twice) and a Security-critical claim at most fourteen (also Adversarial review twice, and up to six more code review and verification calls for the fix after a BROKEN, whose counts restart after their passes);",
             "a plan with a Security-critical claim also gets one security analysis by analyst per plan or shared trust boundary before plan review;",
         ),
         "README.zh-TW.md#成本": (
-            "在一個 session 內一次不中斷的完成過程中，一份有 N 個 claim、其中 S 個是安全關鍵 claim 的計畫，至少自動呼叫 1 + 2N + S 次，最多約 2 + 6N + 6S 次，因為每個 claim 最多六次（修正前後各兩次程式碼審查、兩次驗證），安全關鍵 claim 最多十二次（再加上兩次對抗式審查，以及 BROKEN 修正後各兩次程式碼審查與驗證）；",
+            "在一個 session 內一次不中斷的完成過程中，一份有 N 個 claim、其中 S 個是安全關鍵 claim 的計畫，至少自動呼叫 1 + 2N + S 次，最多約 2 + 6N + 8S 次，因為每個 claim 最多六次（修正前後各兩次程式碼審查、兩次驗證），安全關鍵 claim 最多十四次（再加上兩次對抗式審查，以及 BROKEN 修正後最多再六次程式碼審查與驗證，因為兩者通過後次數會歸零）；",
             "有安全關鍵 claim 的計畫，在計畫審查前還會由 analyst 對每份計畫或共用的信任邊界做一次安全分析；",
         ),
     }
@@ -5425,6 +5425,7 @@ class AdversarialReviewTests(unittest.TestCase):
         "outcome-verification.md": ("code review checks the code, and outcome verification checks the result, so none replaces another.",
                                     "With CONFIRMED, continue to completion under the existing authority. "),
         "preview.md": ("at most six automatic calls per Claim in one uninterrupted attempt",
+                       "or twelve for a Security-critical claim",
                        "plan review by analyst, code review by reviewer and outcome verification by verifier, each with model"),
         "review-auto.md": ("then outcome verification before it is reported complete.",
                            "still wait for both passes or the user's explicit accept-and-land decision"),
@@ -5450,10 +5451,12 @@ class AdversarialReviewTests(unittest.TestCase):
         "CONTEXT.md#Accept and land": ("without one or both passes, with the commit", "is never READY, APPROVED or CONFIRMED,"),
         "CONTEXT.md#Adversarial review": ("Security-critical claim, made after it is approved",),
         "README.md": ("at most six calls per claim in one uninterrupted attempt",
+                      "or twelve for a Security-critical claim", "2 + 6N + 6S",
                       "outcome verification of plan-driven work. Main may then",
                       "still wait for both passes or your",
                       "The plan review, code review and outcome verification roles are listed once"),
         "README.zh-TW.md": ("每個 claim 最多六次，重新打開",
+                            "安全關鍵 claim 最多十二次", "2 + 6N + 6S",
                             "開啟依計畫施工的自動計畫審查、程式碼審查與結果驗證；",
                             "仍需兩項通過或你的接受並合併決定",
                             "仍要等兩關都通過，或你明確決定",
