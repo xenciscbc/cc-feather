@@ -118,7 +118,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 安全關鍵實作 | security-executor | opus | high |
 | 實作後驗證 | verifier | opus | high |
 | 實作後程式碼審查 | reviewer | opus | high |
-| 對抗式審查（Adversarial review） | adversary | opus | high |
+| 對抗式審查 | adversary | opus | high |
 
 | 角色 | 何時使用 | 產出與權限 |
 | --- | --- | --- |
@@ -130,7 +130,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | security-executor | 影響授權、秘密資料、密碼學或信任邊界的實作 | 可修改指定檔案；驗證正常行為及濫用／拒絕案例 |
 | verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE |
 | reviewer | 獨立審查實作某個 claim 的程式碼 | 自行從 base revision 取得 diff，可跑不改檔的靜態檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED |
-| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，不修改也不修復；回覆 HELD／BROKEN／INCONCLUSIVE。這些安全限制（只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機，不改專案檔）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。 |
+| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，絕不修復程式碼；回覆 HELD／BROKEN／INCONCLUSIVE。只有 brief 把某個專案檔列為 fixture 並附上重設方式時才會改動它，且絕不在受把關的呼叫中改動。這些安全限制（這條 fixture 規則、只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。 |
 
 主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派，也不維護交接或進度紀錄，改由主 Agent 依其回報記錄。
 

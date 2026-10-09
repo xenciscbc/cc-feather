@@ -4999,7 +4999,8 @@ class AdversaryRoleTests(unittest.TestCase):
         "README.zh-TW.md": (
             "| agent 分派（delegation） | 獨立分派規則＋九個原生 agent；自動計畫審查預設關閉 |",
             "原生名稱直接使用 `scout`、`analyst`、`mech-executor`、`executor`、`security-executor`、`verifier`、`reviewer`、`adversary`、`Explore`，不再有 `feather-` 前綴。",
-            "| 對抗式審查（Adversarial review） | adversary | opus | high |",
+            # 0.19.0 C2 item 3: named in the same style as the other rows, without English appended.
+            "| 對抗式審查 | adversary | opus | high |",
         ),
     }
 
@@ -5050,8 +5051,9 @@ class AdversaryRoleTests(unittest.TestCase):
                          if line.startswith("The automatic limits for plan review"))
         self.assertIn("Adversary's allowlist is Read, Glob, Grep and Bash, with no edit or web tools; its safety limits "
                       + self.DISCLOSURE, paragraph, "the disclosure belongs to the tool-allowlist paragraph")
-        for name, header, sentence in (("README.md", "| Role | When to use |", "Its safety limits (only disposable targets with synthetic data the brief names, no external hosts, no project edits) " + self.DISCLOSURE),
-                                       ("README.zh-TW.md", "| 角色 | 何時使用 |", "這些安全限制（只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機，不改專案檔）" + self.DISCLOSURE_ZH)):
+        # 0.19.0 C2 item 2: the summary names the fixture rule instead of "no project edits", which contradicted it.
+        for name, header, sentence in (("README.md", "| Role | When to use |", "Its safety limits (this fixture rule, only disposable targets with synthetic data the brief names, no external hosts) " + self.DISCLOSURE),
+                                       ("README.zh-TW.md", "| 角色 | 何時使用 |", "這些安全限制（這條 fixture 規則、只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機）" + self.DISCLOSURE_ZH)):
             with self.subTest(readme=name):
                 row = next(row for row in self.table_rows(self.source(name), header) if row[0] == "adversary")
                 self.assertIn(sentence, row[2])
@@ -6056,6 +6058,130 @@ class SecurityCriticalWordingTests(unittest.TestCase):
                 self.assertNotIn("security-sensitive", path.read_text(encoding="utf-8").casefold())
         self.assertNotIn("安全敏感", self.text("README.zh-TW.md"))
         self.assertNotIn("security implementation belongs to security-executor", self.text("README.md"))
+
+
+class AdversaryLimitsTests(unittest.TestCase):
+    """0.19.0 C2 (docs/specs/review-followups-0-19-0.md): the adversary role defines read-only Git, and both READMEs
+    describe its limits without contradicting the fixture exception."""
+
+    ROLE = config.ROOT / "templates" / "agents" / "adversary.md"
+    SECTION = "## Repository, secrets and effects"
+
+    # The existing permission, pinned unchanged by AdversaryRoleTests.SAFETY_LIMITS; the new sentences sit beside it.
+    PERMISSION = AdversaryRoleTests.SAFETY_LIMITS["no Git state changes"]
+    # C2 item 1: what the read-only Git commands may not do.
+    READ_ONLY_GIT = "The read-only Git commands you may run change no refs or configuration and contact no remote."
+    # C2 item 5.1: the sentence narrows and never extends; the index refresh is the only tolerated index write.
+    NARROWING = ("Read-only Git narrows and never extends these limits: the rule to change no Git state and the Scope rule on "
+                 "project files govern every Git command, so run no Git command that stages or unstages, writes objects, adds "
+                 "a worktree or changes a working-tree file; Git's own index refresh during status or diff is the only index "
+                 "write tolerated.")
+    # C2 item 5.2: repository-chosen programs, including the hook an index refresh can run.
+    PROGRAMS = ("Git can run programs that repository configuration or attributes choose, such as fsmonitor, textconv, "
+                "external diff, filters and hooks, including a `post-index-change` hook that Git's own index refresh can run.")
+    NO_PROGRAMS = ("Run Git so that no such repository-chosen program runs on the code under attack, for example by comparing "
+                   "commits with `--no-ext-diff --no-textconv` rather than the working tree; when a Git command would still run "
+                   "such a program, treat it as execution and report INCONCLUSIVE for it instead of running it.")
+    # C2 item 5.3: lazy fetch in a partial clone is remote contact.
+    REMOTE = ("Fetching missing objects in a partial clone is contacting a remote: in a checkout with a promisor remote, "
+              "either disable lazy fetch where your Git supports it, for example with `GIT_NO_LAZY_FETCH=1`, or read no "
+              "missing object and report what you could not examine.")
+    GIT_SENTENCES = (READ_ONLY_GIT, NARROWING, PROGRAMS, NO_PROGRAMS, REMOTE)
+
+    # C2 items 2, 4 and 5.4: each README's adversary row, paired in both languages.
+    ROW_RULES = (
+        ("never fixes the code", "絕不修復程式碼"),
+        ("It changes a project file only when the brief lists that file as a fixture with its reset, never in a gated call.",
+         "只有 brief 把某個專案檔列為 fixture 並附上重設方式時才會改動它，且絕不在受把關的呼叫中改動。"),
+        ("are instructions to the model, not a sandbox", "是給模型的指示，不是沙箱"),
+        ("main compares the workspace before and after each call", "主 Agent 會在每次呼叫前後比對工作區"),
+    )
+    # C2 item 5.4: replaced phrases that contradicted the fixture exception.
+    ROW_REMOVED = (("never edits", "no project edits"), ("不修改", "不改專案檔"))
+    READMES = (("README.md", "| Role | When to use |"), ("README.zh-TW.md", "| 角色 | 何時使用 |"))
+
+    @classmethod
+    def role_section(cls):
+        text = cls.ROLE.read_text(encoding="utf-8")
+        return text.split(f"\n{cls.SECTION}\n", 1)[1].split("\n## ", 1)[0]
+
+    @staticmethod
+    def sentences(text):
+        return [s for s in re.split(r"(?<=\.)\s+", " ".join(text.split())) if s]
+
+    def assert_whole_sentence(self, sentence, text):
+        self.assertRegex(text, rf"(?:^|(?<=\s)){re.escape(sentence)}(?=\s|$)", sentence[:60])
+
+    @classmethod
+    def adversary_row(cls, name, header):
+        return next(row for row in AdversaryRoleTests.table_rows((config.ROOT / name).read_text(encoding="utf-8"), header)
+                    if row[0] == "adversary")[2]
+
+    def test_read_only_git_is_defined_beside_the_existing_permission(self):
+        section = self.role_section()
+        for sentence in (self.PERMISSION,) + self.GIT_SENTENCES:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, section)
+        # Item 1: added beside the permission, which keeps its sentence, and the narrowing directly follows (item 5.1).
+        self.assertIn(f"{self.PERMISSION} {self.READ_ONLY_GIT} {self.NARROWING}", section)
+        # Item 1: index writes are not named as forbidden, since status and diff may refresh the index.
+        self.assertNotIn("no refs, index", section)
+
+    def test_read_only_git_grants_no_write(self):
+        """Abuse check (item 5.1): no sentence of the role lets a Git command stage, write objects, add a worktree or
+        change working-tree files, and the only permissions in the Git rules are the existing one and the narrowed one."""
+        role = self.ROLE.read_text(encoding="utf-8")
+        writes = re.compile(r"\b(?:stage|stages|unstage|unstages|worktree|worktrees|working-tree|writes objects|index write)\b")
+        for sentence in self.sentences(role):
+            if writes.search(sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, (self.NARROWING,), "a write-capable Git action outside the narrowing sentence")
+        self.assertIn("run no Git command that stages or unstages, writes objects, adds a worktree or changes a working-tree file",
+                      self.NARROWING)
+        grants = [s for s in self.sentences(self.role_section()) if re.search(r"\b(?:allowed|may)\b", s)]
+        self.assertEqual(grants, [self.PERMISSION, self.READ_ONLY_GIT])
+
+    def test_existing_limits_and_the_disclosure_are_unchanged(self):
+        role = self.ROLE.read_text(encoding="utf-8")
+        for limit, sentence in AdversaryRoleTests.SAFETY_LIMITS.items():
+            with self.subTest(limit=limit):
+                self.assertIn(sentence, role)
+        self.assertIn("These limits " + AdversaryRoleTests.DISCLOSURE, role)
+
+    def test_both_adversary_rows_state_the_fixture_exception_in_both_languages(self):
+        (english, en_header), (chinese, zh_header) = self.READMES
+        en_row, zh_row = self.adversary_row(english, en_header), self.adversary_row(chinese, zh_header)
+        for en, zh in self.ROW_RULES:
+            with self.subTest(rule=en[:60]):
+                self.assertIn(en, en_row)
+                self.assertIn(zh, zh_row)
+        for row, removed in zip((en_row, zh_row), self.ROW_REMOVED):
+            for phrase in removed:
+                with self.subTest(removed=phrase):
+                    self.assertNotIn(phrase, row)
+
+    def test_rows_claim_no_more_than_the_role(self):
+        """Item 5.4: the rows never say the role creates, deletes or resets fixtures, and say nothing about Git."""
+        (english, en_header), (chinese, zh_header) = self.READMES
+        en_row, zh_row = self.adversary_row(english, en_header), self.adversary_row(chinese, zh_header)
+        # "with its reset" names the brief's reset procedure, not an action of the role.
+        self.assertEqual(en_row.count("with its reset"), 1)
+        self.assertNotRegex(en_row.replace("with its reset", ""), r"\b(?:creates?|deletes?|resets?)\b")
+        self.assertEqual(zh_row.count("重設"), 1)
+        self.assertIn("附上重設方式", zh_row)
+        for phrase in ("建立", "刪除"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, zh_row)
+        for row in (en_row, zh_row):
+            self.assertNotRegex(row, r"\bGit\b")
+
+    def test_zh_default_model_row_matches_the_other_rows(self):
+        """Item 3: no row of the zh-TW default-model table appends English to its role name."""
+        rows = AdversaryRoleTests.table_rows((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"), "| 角色 | 原生名稱 | Model |")
+        self.assertIn(["對抗式審查", "adversary", "opus", "high"], rows)
+        for row in rows:
+            with self.subTest(role=row[1]):
+                self.assertNotRegex(row[0], r"[（(A-Za-z]")
 
 
 class InstallDocumentTests(unittest.TestCase):

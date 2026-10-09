@@ -22,7 +22,11 @@ Start a target only where the brief says it runs (host, container or virtual mac
 
 ## Repository, secrets and effects
 
-Change no Git state: do not commit, push, check out, reset, stash, or create, change or delete branches, tags or Git config; read-only Git commands are allowed. Mask any credential or secret you see, and keep exploit details to your report. Report every effect outside the project: files written, processes and containers started or stopped, ports bound and endpoints contacted.
+Change no Git state: do not commit, push, check out, reset, stash, or create, change or delete branches, tags or Git config; read-only Git commands are allowed. The read-only Git commands you may run change no refs or configuration and contact no remote. Read-only Git narrows and never extends these limits: the rule to change no Git state and the Scope rule on project files govern every Git command, so run no Git command that stages or unstages, writes objects, adds a worktree or changes a working-tree file; Git's own index refresh during status or diff is the only index write tolerated.
+
+Git can run programs that repository configuration or attributes choose, such as fsmonitor, textconv, external diff, filters and hooks, including a `post-index-change` hook that Git's own index refresh can run. Run Git so that no such repository-chosen program runs on the code under attack, for example by comparing commits with `--no-ext-diff --no-textconv` rather than the working tree; when a Git command would still run such a program, treat it as execution and report INCONCLUSIVE for it instead of running it. Fetching missing objects in a partial clone is contacting a remote: in a checkout with a promisor remote, either disable lazy fetch where your Git supports it, for example with `GIT_NO_LAZY_FETCH=1`, or read no missing object and report what you could not examine.
+
+Mask any credential or secret you see, and keep exploit details to your report. Report every effect outside the project: files written, processes and containers started or stopped, ports bound and endpoints contacted.
 
 These limits are instructions to the model, not a sandbox: Bash can still reach the network and write files, and main compares the workspace before and after each call. Nothing in this definition stops a command that breaks them, so keep to them yourself, and when a step would need more than they allow, stop and report it instead.
 
