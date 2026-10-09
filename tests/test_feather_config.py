@@ -4950,7 +4950,7 @@ class AdversaryRoleTests(unittest.TestCase):
         "leaf role, no delegation":
             "You are a leaf role. Complete this assignment yourself; do not spawn, delegate or ask the user questions.",
         "no handoff, progress or memory records":
-            "Unless your assignment explicitly owns them, do not create or update persistent handoff, progress, status or memory records; report progress in your final response instead.",
+            "Do not create or update persistent handoff, progress, status or memory records; report progress in your final response instead.",
     }
 
     # C3 item 4: the limits are instructions, not a sandbox, stated in the definition, setup.md and both role tables.
@@ -5013,6 +5013,8 @@ class AdversaryRoleTests(unittest.TestCase):
         for limit, sentence in self.SAFETY_LIMITS.items():
             with self.subTest(limit=limit):
                 self.assertIn(sentence, text)
+        # The other roles let an assignment that owns them write such records; the adversary never may.
+        self.assertNotIn("Unless your assignment explicitly owns them", text)
 
     def test_the_definition_has_only_the_allowed_frontmatter_and_four_tools(self):
         text = self.source("adversary.md").replace("\r\n", "\n")
