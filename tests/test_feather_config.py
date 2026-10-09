@@ -5168,11 +5168,12 @@ class AdversarialReviewTests(unittest.TestCase):
     }
 
     # C4 item 4: coverage and gaps, the rerun after BROKEN and the condition for a rerun after INCONCLUSIVE.
+    # 0.19.0 C4 item 1 keeps the wait for a missing target, evidence or prerequisite and adds a coverage retry.
     COVERAGE = {
         "adversarial-review.md": (
             "Each call reports the coverage it examined and the gaps it left open.",
             "A call after BROKEN covers the fix and every open gap, and a narrowed follow-up never closes a gap it did not examine.",
-            "After INCONCLUSIVE, the next call runs only once the named missing evidence, target or prerequisite has changed; otherwise report the claim's Adversarial review missing.",
+            "When the call lacked a target, evidence or prerequisite, the next call runs only once that missing evidence, target or prerequisite has changed; otherwise report the claim's Adversarial review missing.",
         ),
     }
 
@@ -5180,7 +5181,8 @@ class AdversarialReviewTests(unittest.TestCase):
     STATE = {
         "adversarial-review.md": (
             "Count consecutive automatic calls without a pass, per claim: failed, interrupted and protocol-failure calls count, an INCONCLUSIVE returned after dispatch counts as a non-pass, and a missing verdict is not HELD.",
-            "An automatic HELD resets the count to zero; an explicit call's verdict does not change it, and changing the adversary's model or the brief's wording never resets it.",
+            # 0.19.0 C4 item 2: only a HELD main accepts under step 6 resets the count.
+            "An automatic HELD that main accepts under step 6 resets the count to zero; an explicit call's verdict does not change it, and changing the adversary's model or the brief's wording never resets it.",
             "Two consecutive automatic calls without HELD stop automatic Adversarial review (step 8).",
             "Explicit and automatic calls are classified as for the other steps, as [review state](review-state.md) describes.",
             "Recover the count, verdicts, coverage and open gaps as in [plan review](plan-review.md) step 1: counts are per session, a resumed session starts a new count, HELD does not cross sessions, an in-session state that cannot be established makes the step stopped until the user decides, and an unresolved verdict restricts a resumed session only when an active handoff records it.",
@@ -5592,10 +5594,10 @@ class AdversarialReviewTests(unittest.TestCase):
          (("adversarial-review.md", "A pre-existing vulnerability does not change the verdict."),
           ("adversarial-review.md", "A pre-existing vulnerability becomes separate work in the project's tracker and does not hold the claim.")),
          ()),
-        ("the call returns INCONCLUSIVE with a gap, then a rerun",
+        ("the call returns INCONCLUSIVE for missing evidence with a gap, then a rerun",
          "the INCONCLUSIVE counts as a non-pass; the rerun waits for the missing evidence and must cover the open gap",
          (("adversarial-review.md", "an INCONCLUSIVE returned after dispatch counts as a non-pass,"),
-          ("adversarial-review.md", "After INCONCLUSIVE, the next call runs only once the named missing evidence, target or prerequisite has changed;"),
+          ("adversarial-review.md", "When the call lacked a target, evidence or prerequisite, the next call runs only once that missing evidence, target or prerequisite has changed;"),
           ("adversarial-review.md", "and the gaps earlier calls for this claim left open."),
           ("adversarial-review.md", "a narrowed follow-up never closes a gap it did not examine.")),
          ()),
@@ -5870,8 +5872,9 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
          "在 `auto` 下，有安全關鍵 claim 的計畫在你同意前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查；最後才由你同意。"),
         ("Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit, adversary tries to break the claim and answers HELD, BROKEN or INCONCLUSIVE.",
          "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。"),
-        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN and goes back to a fix; a vulnerability that predates the change does not block the claim and becomes separate work in your tracker. For a BROKEN or a pre-existing vulnerability alike, exploit details and secrets stay in untracked, non-public records: anything public or possibly public, such as a tracked handoff, a commit message, a pull request or a public tracker, gets only a summary unless you agree, and main asks you before writing to a public tracker.",
-         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作。無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 handoff、commit message、pull request 或公開 tracker，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。"),
+        # 0.19.0 C4 item 7: "stay only in", and an ADR and a validation entry among the public records.
+        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN and goes back to a fix; a vulnerability that predates the change does not block the claim and becomes separate work in your tracker. For a BROKEN or a pre-existing vulnerability alike, exploit details and secrets stay only in untracked, non-public records: anything public or possibly public, such as a tracked handoff, a commit message, a pull request, a public tracker, an ADR or a validation entry, gets only a summary unless you agree, and main asks you before writing to a public tracker.",
+         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作。無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 handoff、commit message、pull request、公開 tracker、ADR 或驗證紀錄，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。"),
         ("There is no separate switch for the third step: to land a Security-critical claim without HELD, make an accept-and-land decision for it.",
          "第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。"),
         ("`/cc-feather:adversarial-review` runs an Adversarial review when you ask, in either mode.",
@@ -6435,6 +6438,267 @@ class PostFixReviewTests(unittest.TestCase):
           ("outcome-verification.md#4", VERIFICATION_STEP_4[1]),
           ("outcome-verification.md#3", "failed, interrupted and protocol-failure calls count,")),
          (("outcome-verification.md", "Use the next call to recheck the original failure plus a bounded regression check, and send it"),)),
+    )
+
+    def test_scenarios_are_decided_by_their_sentences(self):
+        for scenario, outcome, deciding, contradicting in self.SCENARIOS:
+            for place, sentence in deciding:
+                with self.subTest(scenario=scenario[:50], place=place, sentence=sentence[:50]):
+                    self.assertIn(sentence, self.source(place), outcome)
+            for place, sentence in contradicting:
+                with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
+                    self.assertNotIn(sentence, self.source(place), outcome)
+
+
+class AdversarialReviewRetriesTests(unittest.TestCase):
+    """0.19.0 C4 (docs/specs/review-followups-0-19-0.md): Adversarial review retries, the count, HELD reopening, changed
+    acceptance, early explicit HELD and disclosure agree across the procedure, review state, the READMEs and ADR 0009."""
+
+    ADR = config.ROOT / "docs" / "adr" / "0009-security-critical-claims-get-an-adversarial-review.md"
+    AMENDMENT_HEADING = "## Amendment note for 0.19.0"
+    DISCLOSURE_OPENINGS = {"README.md": "Adversarial review is the third step:", "README.zh-TW.md": "對抗式審查是第三步："}
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """Text of one place: 'adversarial-review.md' or '#<step number>'; 'review-state.md' or '#<bullet label>';
+        'README.md#<rule label>' and 'README.zh-TW.md#<rule label>'; '<README>#disclosure' (the third-step paragraph);
+        'ADR 0009', 'ADR 0009#options' (Considered Options) or 'ADR 0009#amendment' (the 0.19.0 amendment note)."""
+        path, _, part = name.partition("#")
+        if path == "ADR 0009":
+            text = cls.ADR.read_text(encoding="utf-8")
+            if part == "options":
+                return text.split("\n## Considered Options\n", 1)[1].split("\n## ", 1)[0]
+            if part == "amendment":
+                return text.split(f"\n{cls.AMENDMENT_HEADING}\n", 1)[1].split("\n## ", 1)[0]
+            return text
+        if path == "adversarial-review.md":
+            return PostFixReviewTests.source(name)
+        if part == "disclosure":
+            text = (config.ROOT / path).read_text(encoding="utf-8")
+            return next(line for line in text.splitlines() if line.startswith(cls.DISCLOSURE_OPENINGS[path]))
+        return ReviewRulesFollowUpTests.source(name)
+
+    def assert_whole_sentence(self, sentence, text):
+        # An English sentence ends at whitespace or the end; a Chinese one ends with its own 。 and may follow one.
+        end = "" if sentence.endswith("。") else r"(?=\s|$)"
+        self.assertRegex(text, rf"(?:^|(?<=[\s。])){re.escape(sentence)}{end}", sentence[:60])
+
+    def assert_pinned(self, pins):
+        for place, sentences in pins.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assert_whole_sentence(sentence, text)
+
+    # Item 1 (Q4): retry by cause, for an INCONCLUSIVE the adversary returned or main derived under step 6.
+    RETRY = (
+        "After any INCONCLUSIVE, whether the adversary returned it or main derived it from a HELD under step 6, the next "
+        "call depends on the cause.",
+        "When the open item is coverage the role could have examined with the targets and evidence it had, the next call "
+        "may run once the brief names each uncovered invariant and gap.",
+        "When the call lacked a target, evidence or prerequisite, the next call runs only once that missing evidence, "
+        "target or prerequisite has changed; otherwise report the claim's Adversarial review missing.",
+        "Either next call counts toward the two-call stop of step 4.",
+    )
+    # Item 2: only an accepted HELD resets the count; a HELD main does not accept is a non-pass.
+    COUNT = (
+        "An automatic HELD that main accepts under step 6 resets the count to zero; an explicit call's verdict does not "
+        "change it, and changing the adversary's model or the brief's wording never resets it.",
+        "A HELD that main does not accept under step 6 counts as a non-pass and never resets the count; explicit calls "
+        "stay outside the count.",
+    )
+    # Step 6, unchanged: where main derives an INCONCLUSIVE from a HELD.
+    DOWNGRADE = ("Before accepting a HELD, main checks it against every security invariant and every earlier open gap; a "
+                 "HELD that leaves one uncovered is not accepted, and main treats the call as INCONCLUSIVE with each "
+                 "uncovered invariant or gap open.")
+    # Item 3 (B1): review state names step 9's exception, limited to the shared-assumptions trigger.
+    REOPENING = (
+        "A Security-critical claim's HELD is reopened by a change to the claim's files or dependencies, to a test "
+        "target's definition, start-up, version or configuration, or by another change that shares its security "
+        "assumptions.",
+        "When that shared change belongs to a new claim and the claim it shares assumptions with is already accepted, the "
+        "new claim owns the composed review and the accepted claim is not reopened, as [adversarial "
+        "review](adversarial-review.md) step 9 describes.",
+        "This exception covers only the shared-assumptions trigger: a change to the accepted claim's own files or "
+        "dependencies, or to a test target, still reopens its HELD.",
+    )
+    STEP_9 = ("When a new change shares assumptions with an already accepted claim, the new claim owns the composed review "
+              "and its count, the accepted claim is not reopened, a break attributed to the new change is the new claim's "
+              "BROKEN, and a break unrelated to it is pre-existing work.")
+    # Item 3: both READMEs' Validity bullets, paired.
+    README_REOPENING = (
+        "When a change sharing those assumptions belongs to a new claim and the claim it shares them with is already "
+        "accepted, the new claim owns the composed review and the accepted claim is not reopened; only that trigger is "
+        "excepted, so a change to the accepted claim's own files or dependencies, or to a test target, still reopens its "
+        "HELD.",
+        "共用這些安全假設的變更若屬於新的 claim，而與它共用假設的 claim 已經驗收，就由新的 claim 負責組合後版本的審查，"
+        "已驗收的 claim 不會重新打開；例外只限這個情況，改動已驗收 claim 本身的檔案或相依項目，或改動測試目標，仍會重新打開它的 HELD。",
+    )
+    # Item 4: changed acceptance reopens HELD too.
+    CHANGED_ACCEPTANCE = ("Changed acceptance replaces the claim's acceptance and reopens its review and verification, and "
+                          "for a Security-critical claim its HELD as well, as under Validity and completion.")
+    # Item 5: an early explicit HELD clears no stop, and the early-call rule holds in either mode.
+    EARLY_HELD = ("An explicit HELD obtained before the claim's valid APPROVED and CONFIRMED does not clear a stop, since it "
+                  "does not count as the step's pass.")
+    EARLY_EITHER_MODE = ("This rule on early explicit calls holds in off as well as in auto: in either mode, an explicit "
+                         "Adversarial review made before the claim's valid APPROVED and CONFIRMED does not count as the "
+                         "step's pass.")
+    # Item 6: the handoff note points to step 10.
+    HANDOFF = ("The note records the open findings as step 10 describes, so a tracked handoff carries only their summary "
+               "unless the user agrees.")
+    # Item 7 (B2): the READMEs' disclosure sentences match step 10, paired.
+    README_DISCLOSURE = (
+        "For a BROKEN or a pre-existing vulnerability alike, exploit details and secrets stay only in untracked, "
+        "non-public records: anything public or possibly public, such as a tracked handoff, a commit message, a pull "
+        "request, a public tracker, an ADR or a validation entry, gets only a summary unless you agree, and main asks you "
+        "before writing to a public tracker.",
+        "無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 "
+        "handoff、commit message、pull request、公開 tracker、ADR 或驗證紀錄，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。",
+    )
+    # Item 8: ADR 0009's 0.19.0 amendment note.
+    AMENDMENT = (
+        "The [0.19.0 review follow-ups spec](../specs/review-followups-0-19-0.md) adds the following to this record "
+        "without rewriting the decision text above.",
+        "- **Composition.** A review of changes that share security assumptions covers their composed revision.",
+        "When a new claim shares assumptions with an already accepted claim, the new claim owns the composed review and "
+        "the accepted claim is not reopened.",
+        "- **When a HELD stops holding.** A HELD stops holding on the reopening triggers review state lists: a change to "
+        "the claim's files or dependencies, to a test target's definition, start-up, version or configuration, or to the "
+        "claim's acceptance, or another change that shares its security assumptions.",
+        "The composition exception covers only the last trigger: a shared change that belongs to a new claim does not "
+        "reopen an accepted claim's HELD, while a change to that claim's own files or dependencies, or to a test target, "
+        "still does.",
+        "- **The reviewer template.** This release changes the reviewer template, which the considered options above kept "
+        "unchanged in 0.18.0, for the rule on the code review of a fix after REFUTED or BROKEN rather than for "
+        "Security-critical work.",
+    )
+    # Item 8: the two considered options not pinned in 0.18.0, as whole lines.
+    OPTIONS = (
+        "- **Enforce the limits with hooks or with role frontmatter such as permissionMode, hooks or isolation**: "
+        "hook-enforced gates are out of scope, and the role's frontmatter has only name, description, model, effort and "
+        "tools; the user's own settings and environment enforce the limits.",
+        "- **Change the reviewer, verifier and analyst templates**: their briefs carry the security invariants, so the "
+        "templates stay unchanged.",
+    )
+    # Wording the claim replaces.
+    REMOVED = {
+        "adversarial-review.md": ("After INCONCLUSIVE, the next call runs only once the named missing evidence",
+                                  "An automatic HELD resets the count to zero"),
+        "README.md": ("secrets stay in untracked", "a pull request or a public tracker, gets only a summary"),
+        "README.zh-TW.md": ("pull request 或公開 tracker，都只寫摘要",),
+    }
+
+    def test_retry_after_inconclusive_depends_on_its_cause(self):
+        self.assert_pinned({"adversarial-review.md#5": self.RETRY, "adversarial-review.md#6": (self.DOWNGRADE,)})
+
+    def test_a_held_main_does_not_accept_never_resets_the_count(self):
+        self.assert_pinned({"adversarial-review.md#4": self.COUNT})
+
+    def test_held_reopening_names_the_composition_exception_once(self):
+        self.assert_pinned({"review-state.md#What a pass covers": self.REOPENING, "adversarial-review.md#9": (self.STEP_9,)})
+        # Stated once in review state: no other bullet restates the exception.
+        bullets = [line for line in self.source("review-state.md").splitlines() if "shared-assumptions trigger" in line]
+        self.assertEqual(len(bullets), 1)
+        self.assertTrue(bullets[0].startswith("- **What a pass covers.**"))
+
+    def test_readme_validity_bullets_state_the_exception_in_both_languages(self):
+        english, chinese = self.README_REOPENING
+        self.assert_pinned({"README.md#Validity": (english,), "README.zh-TW.md#有效範圍": (chinese,)})
+
+    def test_changed_acceptance_reopens_held(self):
+        self.assert_pinned({"review-state.md#User decisions": (self.CHANGED_ACCEPTANCE,)})
+
+    def test_an_early_explicit_held_clears_no_stop_in_either_mode(self):
+        self.assert_pinned({"review-state.md#Clearing a stop": (self.EARLY_HELD,),
+                            "review-state.md#What an explicit call runs": (self.EARLY_EITHER_MODE,)})
+
+    def test_the_handoff_note_points_to_step_10(self):
+        self.assert_pinned({"adversarial-review.md#8": (self.HANDOFF,)})
+        # Step 10 lists the records the READMEs now name.
+        self.assertIn("a public tracker, an ADR or a validation entry, gets only a summary unless the user agrees",
+                      self.source("adversarial-review.md#10"))
+
+    def test_readme_disclosure_matches_step_10_in_both_languages(self):
+        english, chinese = self.README_DISCLOSURE
+        self.assert_pinned({"README.md#disclosure": (english,), "README.zh-TW.md#disclosure": (chinese,)})
+
+    def test_adr_0009_gets_one_amendment_note_after_its_decision_text(self):
+        text = self.source("ADR 0009")
+        self.assertEqual(text.count(self.AMENDMENT_HEADING), 1)
+        self.assertLess(text.index("\n## Consequences\n"), text.index(self.AMENDMENT_HEADING))
+        self.assert_pinned({"ADR 0009#amendment": self.AMENDMENT})
+        # The decision text is not rewritten: the 0.18.0 pins still hold before the note.
+        decision = text.split(self.AMENDMENT_HEADING, 1)[0]
+        for table in (DecisionRecordAndDocumentsTests.DECISIONS, DecisionRecordAndDocumentsTests.OPTIONS,
+                      DecisionRecordAndDocumentsTests.ENFORCEMENT):
+            for sentence in table["ADR 0009"]:
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, decision)
+
+    def test_adr_0009_keeps_its_hook_and_template_options(self):
+        lines = self.source("ADR 0009#options").splitlines()
+        for option in self.OPTIONS:
+            with self.subTest(option=option[:60]):
+                self.assertIn(option, lines)
+
+    def test_replaced_wording_is_gone(self):
+        for place, phrases in self.REMOVED.items():
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, self.source(place))
+
+    # Item 10: each scenario names the outcome and the sentences that decide it; replaced wording must be gone.
+    SCENARIOS = (
+        ("an automatic HELD leaves one security invariant unexamined, then a retry",
+         "main treats it as INCONCLUSIVE; the retry may run once the brief names that invariant, and counts",
+         (("adversarial-review.md#6", DOWNGRADE),
+          ("adversarial-review.md#5", RETRY[0]),
+          ("adversarial-review.md#5", RETRY[1]),
+          ("adversarial-review.md#5", RETRY[3])),
+         (("adversarial-review.md", "After INCONCLUSIVE, the next call runs only once the named missing evidence"),)),
+        ("the adversary returns INCONCLUSIVE because the plan's test target cannot be started",
+         "no retry until the target changes; otherwise the claim's Adversarial review is reported missing",
+         (("adversarial-review.md#5", RETRY[0]),
+          ("adversarial-review.md#5", RETRY[2]),
+          ("adversarial-review.md#3", "A target missing its start and reset, its synthetic data, its allowed effects or its reachable dependencies counts as no target,")),
+         ()),
+        ("main does not accept an automatic HELD, and the next automatic call returns BROKEN",
+         "two consecutive automatic calls without a pass: automatic Adversarial review stops",
+         (("adversarial-review.md#4", COUNT[1]),
+          ("adversarial-review.md#4", "Two consecutive automatic calls without HELD stop automatic Adversarial review (step 8)."),
+          ("adversarial-review.md#8", "After two consecutive automatic calls without HELD, stop automatic Adversarial review,")),
+         (("adversarial-review.md", "An automatic HELD resets the count to zero"),)),
+        ("a new claim shares security assumptions with an already accepted claim",
+         "the new claim owns the composed review; the accepted claim's HELD is not reopened",
+         (("review-state.md#What a pass covers", REOPENING[1]),
+          ("adversarial-review.md#9", STEP_9),
+          ("README.md#Validity", README_REOPENING[0]),
+          ("README.zh-TW.md#有效範圍", README_REOPENING[1]),
+          ("ADR 0009#amendment", AMENDMENT[2])),
+         ()),
+        ("the same new claim also edits a file of the accepted claim",
+         "the accepted claim's HELD reopens; the exception covers only the shared-assumptions trigger",
+         (("review-state.md#What a pass covers", REOPENING[2]),
+          ("README.md#Validity", README_REOPENING[0]),
+          ("ADR 0009#amendment", AMENDMENT[4])),
+         ()),
+        ("the user changes a Security-critical claim's acceptance after its HELD",
+         "its review, verification and HELD reopen",
+         (("review-state.md#User decisions", CHANGED_ACCEPTANCE),
+          ("review-state.md#What a pass covers", "A pass covers the work identity, its acceptance and the reviewed content it judged."),
+          ("ADR 0009#amendment", AMENDMENT[3])),
+         (("review-state.md#User decisions", "reopens its review and verification as under Validity and completion."),)),
+        ("Adversarial review stopped, a fix reopened the passes, and an explicit Adversarial review the user asks for before the new APPROVED and CONFIRMED returns HELD",
+         "the HELD does not clear the stop and does not count as the step's pass, in auto or off",
+         (("review-state.md#Clearing a stop", EARLY_HELD),
+          ("review-state.md#What an explicit call runs", EARLY_EITHER_MODE),
+          ("adversarial-review.md#1", "An explicit call the user requests before those passes still runs, against the commit it names with the workspace equal to that commit, but it does not count as the step's pass.")),
+         ()),
+        ("Adversarial review stops with a tracked handoff active",
+         "the pending-acceptance note records the open findings only as a summary unless the user agrees",
+         (("adversarial-review.md#8", HANDOFF),
+          ("adversarial-review.md#10", "an ADR or a validation entry, gets only a summary unless the user agrees,")),
+         ()),
     )
 
     def test_scenarios_are_decided_by_their_sentences(self):
