@@ -6184,6 +6184,269 @@ class AdversaryLimitsTests(unittest.TestCase):
                 self.assertNotRegex(row[0], r"[（(A-Za-z]")
 
 
+class PostFixReviewTests(unittest.TestCase):
+    """0.19.0 C3 (docs/specs/review-followups-0-19-0.md): one rule for the code review of a fix after REFUTED or
+    BROKEN, the findings its briefs carry at the decided disclosure level, and verification after an incomplete call."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+    AGENTS = config.ROOT / "templates" / "agents"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """Text of one place: '<file>', '<file>#<step number>', 'code-review.md#fix' (the paragraphs after the steps
+        that govern the review of a fix), 'reviewer.md#fix' (the role's fix paragraph) or a review-state bullet."""
+        path, _, part = name.partition("#")
+        if path == "review-state.md":
+            return ReviewRulesFollowUpTests.source(name)
+        folder = cls.AGENTS if path in ("reviewer.md", "verifier.md", "adversary.md") else cls.REFERENCES
+        text = (folder / path).read_text(encoding="utf-8")
+        if not part:
+            return text
+        if part.isdigit():
+            return next(line for line in text.splitlines() if line.startswith(f"{part}. "))
+        opening = {"code-review.md": "A fix made after the verifier refutes the claim",
+                   "reviewer.md": "When the brief is for a fix after"}[path]
+        paragraphs = text.split("\n\n")
+        start = next(index for index, paragraph in enumerate(paragraphs) if paragraph.startswith(opening))
+        return "\n\n".join(paragraphs[start:] if path == "code-review.md" else paragraphs[start:start + 1])
+
+    @staticmethod
+    def sentences(text):
+        return [s for s in re.split(r"(?<=\.)\s+", " ".join(text.split())) if s]
+
+    def assert_whole_sentence(self, sentence, text):
+        self.assertRegex(text, rf"(?:^|(?<=\s)){re.escape(sentence)}(?=\s|$)", sentence[:60])
+
+    def assert_pinned(self, pins):
+        for place, sentences in pins.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assert_whole_sentence(sentence, text)
+
+    # Item 1: the one rule for the review of a fix, stated in code review.
+    FIX_RULE = ("When the immediately preceding code review call for the claim completed, the review of the fix is a "
+                "narrowed second review whose judged range starts at the commit that call judged, with the full diff from "
+                "the claim's base revision supplied as context; when that call did not complete, or when no code review "
+                "call for the claim preceded the fix, as after an early explicit BROKEN, the call reviews the claim's full "
+                "scope from its base revision, as [review state](review-state.md)'s Completed calls and coverage describes.")
+    FIX_ENTRY = ("A fix made after the verifier refutes the claim, or after Adversarial review breaks it, comes back to this "
+                 "procedure before outcome verification checks it again.")
+    # Item 2: the findings in the brief, what the reviewer checks and what it does not adjudicate.
+    FIX_BRIEF = (
+        "The brief carries the verifier's or adversary's findings with main's FIX or REJECT disposition for each.",
+        "The reviewer checks that each FIX finding is addressed in the code and that the fix introduces no regression.",
+        "It does not adjudicate a rejection of a verifier or adversary finding, which stays with that role; it keeps its own "
+        "authority to uphold its own earlier findings and to report any blocking defect it finds in the fix.",
+    )
+    # Item 8.3: REFUTED findings on a Security-critical claim get the same default.
+    REFUTED_DISCLOSURE = ("For a Security-critical claim, the verifier's REFUTED findings, whose evidence may be a reproducing "
+                          "command, are passed to this review with the same disclosure default, masking and limits on added "
+                          "exploit steps that [Adversarial review](adversarial-review.md) step 7 sets for findings after BROKEN.")
+    # Item 8.1 (Q18): every public or possibly public record after a BROKEN follows step 10; reports to main are not.
+    CODE_REVIEW_RECORDS = (
+        "After a BROKEN, every public or possibly public record main writes from the findings or from the reports on the fix "
+        "follows [Adversarial review](adversarial-review.md) step 10 and gets only a summary unless the user agrees: the "
+        "fix's commit messages, the notes of a tracked handoff, follow-up items in a tracked handoff or in a tracked or "
+        "public tracker, such as those steps 5 and 6 write, notes on such a ticket, an ADR and the validation entry's "
+        "review history.",
+        "The reviewer's report to main is not such a record: it may carry the evidence the brief and the reviewer role "
+        "allow, and what main writes from it follows step 10.",
+    )
+
+    # Items 4 and 6: outcome verification states completion in its brief, points to the rule and rechecks in full
+    # after an incomplete call.
+    VERIFICATION_STEP_2 = ("On a later call for the same claim, state whether the previous call for the claim completed with "
+                           "a verdict, as [review state](review-state.md)'s Completed calls and coverage describes.")
+    VERIFICATION_STEP_4 = (
+        "A fix goes to [code review](code-review.md) first, under that procedure's rule for the review of a fix, and "
+        "returns to this recheck only once code review approves it; if that review stops without APPROVED, the claim is "
+        "unreviewed under that procedure.",
+        "When the previous verification call completed, use the next call to recheck the original failure plus a bounded "
+        "regression check; after a verification call that did not complete, the next call verifies the claim's full "
+        "acceptance rather than only the original failure.",
+        "A fix after BROKEN also comes to this procedure once code review approves it, with a brief that carries the "
+        "adversary's findings as [Adversarial review](adversarial-review.md) step 7 describes.",
+        "After a BROKEN, every public or possibly public record main writes from the findings or from the verifier's "
+        "report, such as those [code review](code-review.md) lists for the review of a fix, follows [Adversarial "
+        "review](adversarial-review.md) step 10 and gets only a summary unless the user agrees; the verifier's report to "
+        "main is not such a record.",
+    )
+
+    # Items 4, 5, 8.1 and 8.2: Adversarial review step 7 points to the rule and sets what the briefs after BROKEN carry.
+    STEP_7_POINTER = ("Its code review follows [code review](code-review.md)'s rule for the review of a fix, and the code "
+                      "review and outcome verification briefs after BROKEN carry the adversary's findings with main's FIX "
+                      "or REJECT disposition for each, at the disclosure level the next sentences set.")
+    STEP_7_DISCLOSURE = (
+        "By default, each finding passed to code review or outcome verification carries the violated invariant, the "
+        "location, the root cause and the observed and expected behaviour, without exploit steps.",
+        "Exploit steps are the inputs, payloads, request sequences, commands or code that trigger the violation; observed "
+        "and expected behaviour is stated as outcomes, not as those inputs.",
+        "A brief never carries an unmasked secret, credential or real data, and main masks any it finds in a report before "
+        "passing it.",
+        "Main adds non-public supporting detail when a role needs it to judge the fix.",
+        "Main adds exploit steps only to a role that needs them to judge whether the fix closes the finding, names that "
+        "role and the reason in the brief, and marks the added detail as subject to step 10.",
+        "This default never forbids the verifier's reproduction and counterexample duties, including the command its "
+        "REFUTED gives.",
+    )
+    STEP_7_RECORDS = ("What main writes from these findings, or from the reviewer's and verifier's reports on the fix, into "
+                      "any public or possibly public record follows step 10.")
+
+    # Items 3 and 8.4: the reviewer role.
+    REVIEWER_FIX = (
+        "When the brief is for a fix after {{name:verifier}} refuted the claim or {{name:adversary}} broke it, it carries "
+        "that role's findings with the main Agent's FIX or REJECT disposition for each; whether you narrow the review "
+        "still depends on the brief saying the previous call completed, as above.",
+        "Check that each FIX finding is addressed in the code and that the fix introduces no regression.",
+        "Do not adjudicate the main Agent's rejection of a verifier or adversary finding, which stays with that role; you "
+        "keep your authority to uphold your own earlier findings and to report any blocking defect you find in the fix.",
+    )
+    MASKING = AdversaryRoleTests.SAFETY_LIMITS["secrets masked, exploit details kept to the report"]
+
+    # Wording the rule replaces: a fix review keyed on the approved review, and a recheck that is always narrowed.
+    REMOVED = {
+        "code-review.md": ("what changed since the approved review", "comes back to this procedure before the verifier rechecks it"),
+        "outcome-verification.md": ("Use the next call to recheck the original failure plus a bounded regression check, and send it",),
+    }
+
+    def test_code_review_states_the_fix_rule_once(self):
+        self.assert_pinned({"code-review.md#fix": (self.FIX_ENTRY, self.FIX_RULE)})
+        self.assertIn("Its count continues from where it stands", self.source("code-review.md#fix"))
+        # Stated once: no other procedure or role restates the narrowed range or the no-preceding-review case.
+        for path in sorted(self.REFERENCES.glob("*.md")) + [self.AGENTS / "reviewer.md", self.AGENTS / "verifier.md"]:
+            text = path.read_text(encoding="utf-8")
+            for phrase in ("whose judged range starts at the commit that call judged", "no code review call for the claim preceded the fix"):
+                with self.subTest(path=path.name, phrase=phrase[:40]):
+                    self.assertEqual(text.count(phrase), 1 if path.name == "code-review.md" else 0)
+
+    def test_the_fix_brief_carries_the_findings_and_bounds_the_reviewer(self):
+        self.assert_pinned({"code-review.md#fix": self.FIX_BRIEF})
+
+    def test_the_reviewer_role_states_the_fix_review_and_masks(self):
+        self.assert_pinned({"reviewer.md#fix": self.REVIEWER_FIX, "reviewer.md": (self.MASKING,)})
+        self.assertIn(self.MASKING, self.source("adversary.md"), "the same sentence as the adversary role")
+        reviewer = self.source("reviewer.md")
+        # Item 3: the existing sentence keyed on "the previous call for this claim" stays a single line, which the
+        # 0.16.0 fixture replaces; the new paragraph does not repeat the key.
+        self.assertEqual([line for line in reviewer.split("\n") if "the previous call for this claim" in line],
+                         [line for line in reviewer.split("\n") if line.startswith("When the brief says the previous call for this claim completed")])
+        self.assertEqual(len([line for line in reviewer.split("\n") if "the previous call for this claim" in line]), 1)
+        self.assertIn(ReviewRulesFollowUpTests.RETRY_COVERAGE["reviewer.md"][0], reviewer)
+        for prefix in ("", "cc-"):
+            with self.subTest(prefix=prefix):
+                rendered = config._render("reviewer", {"model": "sonnet", "effort": "high"}, prefix).decode("utf-8")
+                self.assertIn(f"When the brief is for a fix after {prefix}verifier refuted the claim or {prefix}adversary broke it,", rendered)
+                self.assertIn(self.MASKING, rendered)
+
+    def test_the_procedures_point_to_the_rule(self):
+        self.assert_pinned({"outcome-verification.md#4": self.VERIFICATION_STEP_4[:1] + self.VERIFICATION_STEP_4[2:3],
+                            "adversarial-review.md#7": (self.STEP_7_POINTER,)})
+        for place in ("outcome-verification.md#4", "adversarial-review.md#7"):
+            with self.subTest(place=place):
+                self.assertIn("rule for the review of a fix", self.source(place))
+                self.assertNotIn("narrowed second review", self.source(place))
+        # The existing step 7 pin keeps its sentence.
+        self.assertIn(AdversarialReviewTests.FIXES["adversarial-review.md"][1], self.source("adversarial-review.md#7"))
+
+    def test_findings_after_broken_carry_the_minimal_disclosure_default(self):
+        self.assert_pinned({"adversarial-review.md#7": self.STEP_7_DISCLOSURE, "code-review.md#fix": (self.REFUTED_DISCLOSURE,)})
+
+    def test_no_sentence_passes_exploit_steps_outside_the_default(self):
+        """Abuse check (items 5 and 8.2): in the review procedures and the reviewer role, every sentence that mentions
+        exploit steps or details is one of the decided ones, so no brief gets exploit steps by another route."""
+        allowed = {self.STEP_7_DISCLOSURE[0], self.STEP_7_DISCLOSURE[1], self.STEP_7_DISCLOSURE[4], self.REFUTED_DISCLOSURE,
+                   self.MASKING, AdversarialReviewTests.DISCLOSURE["adversarial-review.md"][1]}
+        for place in ("code-review.md", "outcome-verification.md", "adversarial-review.md", "reviewer.md"):
+            for sentence in self.sentences(self.source(place)):
+                if re.search(r"\bexploit (?:steps?|details?)\b", sentence, re.I):
+                    with self.subTest(place=place, sentence=sentence[:60]):
+                        self.assertIn(sentence, allowed)
+
+    def test_the_verifier_keeps_its_reproduction_duties(self):
+        """Item 5: the disclosure default never forbids the verifier's reproduction and counterexample duties, and the
+        verifier role is unchanged (item 6)."""
+        verifier = self.source("verifier.md")
+        for duty in ("REFUTED: a reproduced failure contradicts the claim. Give the command, observed and expected results, and the smallest scope of the failure.",
+                     "then probe counterexamples that could refute the claim:"):
+            with self.subTest(duty=duty[:40]):
+                self.assertIn(duty, verifier)
+        self.assertNotIn("previous call", verifier)
+        self.assertNotIn("exploit", verifier)
+
+    def test_records_after_broken_follow_step_10(self):
+        self.assert_pinned({"code-review.md#fix": self.CODE_REVIEW_RECORDS,
+                            "outcome-verification.md#4": self.VERIFICATION_STEP_4[3:],
+                            "adversarial-review.md#7": (self.STEP_7_RECORDS,)})
+        # Step 10's own text is not rewritten: its pinned sentences stay in step 10.
+        for sentence in AdversarialReviewTests.DISCLOSURE["adversarial-review.md"]:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, self.source("adversarial-review.md#10"))
+
+    def test_verification_after_an_incomplete_call_covers_the_full_acceptance(self):
+        self.assert_pinned({"outcome-verification.md#2": (self.VERIFICATION_STEP_2,),
+                            "outcome-verification.md#4": self.VERIFICATION_STEP_4[1:2]})
+
+    def test_replaced_wording_is_gone(self):
+        for place, phrases in self.REMOVED.items():
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, self.source(place))
+
+    # Item 7: each scenario names the outcome and the sentences that decide it; replaced wording must be gone.
+    SCENARIOS = (
+        ("a fix after REFUTED, whose preceding code review call completed with APPROVED",
+         "a narrowed second review from the commit that call judged, with the full diff from base as context",
+         (("code-review.md#fix", FIX_RULE),
+          ("code-review.md#fix", FIX_BRIEF[0]),
+          ("review-state.md#Completed calls and coverage", "A second review, narrowed to the earlier findings and the fixes, and the range from the previously judged commit follow only when the previous call completed."),
+          ("reviewer.md", "When the brief says the previous call for this claim completed with a verdict,")),
+         (("code-review.md", "what changed since the approved review"),)),
+        ("a fix after BROKEN on a Security-critical claim",
+         "code review, then outcome verification, then Adversarial review again; both briefs carry the findings at the "
+         "minimal-disclosure default, and public records get only a summary",
+         (("adversarial-review.md#7", AdversarialReviewTests.FIXES["adversarial-review.md"][1]),
+          ("adversarial-review.md#7", STEP_7_POINTER),
+          ("adversarial-review.md#7", STEP_7_DISCLOSURE[0]),
+          ("adversarial-review.md#7", STEP_7_DISCLOSURE[4]),
+          ("outcome-verification.md#4", VERIFICATION_STEP_4[2]),
+          ("code-review.md#fix", CODE_REVIEW_RECORDS[0])),
+         ()),
+        ("the code review call of a fix fails, then the next call",
+         "the next call reviews the claim's full scope from its base revision",
+         (("code-review.md#fix", FIX_RULE),
+          ("review-state.md#Completed calls and coverage", "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan), carrying any partial findings as evidence, not as coverage."),
+          ("reviewer.md", ReviewRulesFollowUpTests.RETRY_COVERAGE["reviewer.md"][0])),
+         ()),
+        ("an early explicit BROKEN with no preceding code review call, then a fix",
+         "the review of the fix covers the claim's full scope from its base revision",
+         (("code-review.md#fix", FIX_RULE),
+          ("adversarial-review.md#1", "An explicit call the user requests before those passes still runs,")),
+         ()),
+        ("main rejects a verifier finding with evidence, then the review of the fix",
+         "the reviewer does not adjudicate the rejection, which the verifier judges; it still upholds its own findings and reports blocking defects",
+         (("code-review.md#fix", FIX_BRIEF[2]),
+          ("reviewer.md#fix", REVIEWER_FIX[2]),
+          ("outcome-verification.md#4", "The verifier may uphold a rejection; an upheld finding can be rejected again only with new evidence.")),
+         ()),
+        ("an outcome verification call is interrupted, then the recheck",
+         "the brief says the previous call did not complete and the next call verifies the full acceptance",
+         (("outcome-verification.md#2", VERIFICATION_STEP_2),
+          ("outcome-verification.md#4", VERIFICATION_STEP_4[1]),
+          ("outcome-verification.md#3", "failed, interrupted and protocol-failure calls count,")),
+         (("outcome-verification.md", "Use the next call to recheck the original failure plus a bounded regression check, and send it"),)),
+    )
+
+    def test_scenarios_are_decided_by_their_sentences(self):
+        for scenario, outcome, deciding, contradicting in self.SCENARIOS:
+            for place, sentence in deciding:
+                with self.subTest(scenario=scenario[:50], place=place, sentence=sentence[:50]):
+                    self.assertIn(sentence, self.source(place), outcome)
+            for place, sentence in contradicting:
+                with self.subTest(scenario=scenario[:50], place=place, removed=sentence[:50]):
+                    self.assertNotIn(sentence, self.source(place), outcome)
+
+
 class InstallDocumentTests(unittest.TestCase):
     """C7 item 3: the documents users follow to install, update and recover are current."""
 
