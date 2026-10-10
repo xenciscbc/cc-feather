@@ -4026,7 +4026,7 @@ class FeatherConfigTests(unittest.TestCase):
         "Unplanned work": ("must first become Plan-driven work", "plan-review.md", "must not start without one"),
         "Explicit request": ("it clears the stop without resetting the count",
                              "review-state.md", "clears the stop and leaves the count unchanged"),
-        "Unreviewed claim": ("stopped after two consecutive automatic calls without APPROVED",
+        "Unreviewed claim": ("stopped at its Stop threshold without APPROVED",
                              "code-review.md", "After two consecutive automatic calls without APPROVED"),
         "Unverified claim": ("no currently valid CONFIRMED", "outcome-verification.md", "report the claim as unverified"),
         "Delegation preview": ("the dispatch basis only in the session that made it",
