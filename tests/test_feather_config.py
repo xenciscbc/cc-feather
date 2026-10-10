@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -7078,16 +7079,17 @@ class CommandScopeTests(unittest.TestCase):
         "repository-chosen program runs.",
         "Main lists in the brief the staged, unstaged and in-scope untracked paths, where in-scope untracked means "
         "untracked, not ignored and within the arguments' paths or attack scope.",
-        # Item 9.2 (Q23, F2 and F3): the example disables fsmonitor with an empty value and names stage 0.
+        # Item 9.2 (Q23, F2 and F3): the example disables fsmonitor with an empty value and names stage 0; item 9.10
+        # (Q24, N1): both object reads pass the path as a single-quoted literal.
         "The role reads those paths with the file tools, and staged and HEAD content from Git objects without filters, for "
-        "example with `git -c core.fsmonitor= cat-file blob :0:<path>` and `git cat-file blob HEAD:<path>`, and runs "
-        "no Git command that compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE "
+        "example with `git -c core.fsmonitor= cat-file blob :0:'<path>'` and `git cat-file blob HEAD:'<path>'`, and "
+        "runs no Git command that compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE "
         "rather than run one.",
         # Item 9.2 (Q23): an empty core.fsmonitor value disables it on any Git; an explicit stage keeps a colon path whole.
         "Reading the index can run a configured fsmonitor program, so every Git command the role runs that reads the "
         "index disables it with an empty value, `-c core.fsmonitor=`, which disables it whether the installed Git reads "
         "the setting as a boolean or, before Git 2.36, as a hook path, and every such command that names an index path "
-        "names its stage, `:0:<path>`, so that a path that itself contains a colon is not read as another stage.",
+        "names its stage, `:0:'<path>'`, so that a path that itself contains a colon is not read as another stage.",
         "Reading staged or HEAD content follows the role's Repository, secrets and effects section for missing objects in "
         "a partial clone.",
         "Secrets read from untracked files are masked as the role requires.",
@@ -7110,8 +7112,34 @@ class CommandScopeTests(unittest.TestCase):
         "contains `..`, is absolute, names a drive or contains `:`.",
         "A marked path or one that fails the check is never read through: the role reports the link and its target "
         "string, reads no content through it, and reports INCONCLUSIVE for what that content would need.",
-        "A reparse point of any kind, a cloud-file placeholder included, fails the check.",
+        # Item 9.9 (Q24): a check that cannot run, such as one whose path a shell would not take as a literal, or
+        # whose result is unclear, fails like a link.
+        "A reparse point of any kind, a cloud-file placeholder included, fails the check, and so does a check that "
+        "cannot run or whose result is unclear.",
         "A hard link is project content like any other file.",
+    )
+    # Item 9.10 (Q24, C5's second Adversarial review N1): the 9.9 check runs through a shell, so a name the code under
+    # attack chose must never be interpreted by one: a character allowlist, unsafe names named but never read or put in
+    # a command, attacker-controlled text kept out of commands, single-quoted literals, and argument-only nested
+    # interpreters.
+    NAMES = (
+        "A changed path is safe only when every character of its real name, as Git reports it with `-z`, is an ASCII "
+        "letter or digit, `.`, `_`, `-` or `/`; a name Git would quote is unsafe.",
+        "Main lists only safe paths for reading, names every other changed path in the brief as not read, in the "
+        "C-quoted form Git prints with `-c core.quotePath=true`, and runs no command on it; the role never reads such a "
+        "path or names it in a command, and reports INCONCLUSIVE for it.",
+        "Of the paths in the project and the text the code under attack controls, the role names in a command only a "
+        "listed path or a prefix of one that ends at a `/`, and never an unlisted path, a link target string or other "
+        "text taken from file content or command output; its own scratch paths, options and ref names are not limited "
+        "by this rule.",
+        "Every command main or the role runs on a listed path passes it as a single-quoted literal: after `--`, or as "
+        "`:0:'<path>'` or `HEAD:'<path>'` in an object read, and never inside double quotes, a here-document or a "
+        "command substitution.",
+        "A nested interpreter, such as PowerShell started from Bash, receives a path only as a separate positional "
+        "argument to a script outside the project, run without a profile, never inside code it evaluates, and only "
+        "tools that honour `--` or take the path as such an argument are used for the check of a listed path's "
+        "components.",
+        "These rules constrain changed paths; they do not change how a path the user gives in the arguments is handled.",
     )
     # Item 9.9's fixture rule, which applies to every ungated call and so stands in the Fixtures bullet.
     FIXTURE_LINKS = ("A fixture main lists for a call outside the gate is never a symbolic link, junction or other reparse "
@@ -7295,20 +7323,24 @@ class CommandScopeTests(unittest.TestCase):
                 self.assertRegex(span, r"^git -c core\.fsmonitor= ")
                 for argument in re.findall(r"(?:^|\s)(:\S*)", span):
                     self.assertTrue(argument.startswith(":0:"), f"{argument} names no stage")
-        # The replaced unsafe forms stay gone.
+        # The replaced unsafe forms stay gone, the unquoted 0.19.0 examples included (item 9.10, Q24).
         self.assertNotIn("`git cat-file blob :<path>`", text)
         self.assertNotIn("`git -c core.fsmonitor=false cat-file blob :<path>`", text)
         self.assertNotIn("core.fsmonitor=false", text)
-        self.assertIn("`git cat-file blob HEAD:<path>`", self.source("command#Uncommitted changes"))
+        self.assertNotIn(":0:<path>", text)
+        self.assertNotIn("HEAD:<path>", text)
+        self.assertIn("`git cat-file blob HEAD:'<path>'`", self.source("command#Uncommitted changes"))
 
     def test_the_index_read_example_runs_no_fsmonitor_and_keeps_a_colon_path_whole(self):
         """Regression (item 9.2, F2 and F3): the command's own index-read example, run in a throwaway repository whose
         core.fsmonitor names a program that leaves a marker, runs no such program and reads a listed path `0:foo` as
-        that path, never as the staged `foo`, which the replaced `:<path>` form returned."""
+        that path, never as the staged `foo`, which the replaced `:<path>` form returned. Since item 9.10 (Q24) the
+        example quotes the path, so it is split into words as a POSIX shell would split it, and a name such as `0:foo`
+        is unsafe and never read; the explicit stage still keeps such a name whole."""
         examples = self.index_reads(self.source("command#Uncommitted changes"))
         self.assertEqual(len(examples), 1, examples)
-        example = examples[0].split()
-        self.assertEqual(example[0], "git")
+        example = examples[0]
+        self.assertEqual(shlex.split(example)[0], "git")
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
             root = Path(os.path.realpath(temp))
             repo, marker, monitor, empty = root / "repo", root / "marker", root / "monitor.sh", root / "gitconfig"
@@ -7316,7 +7348,12 @@ class CommandScopeTests(unittest.TestCase):
             empty.write_bytes(b"")
             monitor.write_text(f'#!/bin/sh\necho ran >> "{marker.as_posix()}"\nexit 1\n', encoding="utf-8", newline="\n")
             monitor.chmod(0o755)
-            env = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)}
+            # Inherited GIT_* variables, such as GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE or GIT_CONFIG_PARAMETERS, could
+            # point Git at another repository or inject configuration, so none reaches the throwaway repository.
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+            self.assertEqual(sorted(key for key in env if key.upper().startswith("GIT_")),
+                             ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM"])
 
             def git(*args):
                 try:
@@ -7326,7 +7363,7 @@ class CommandScopeTests(unittest.TestCase):
                     self.skipTest(f"Git cannot be run: {error}")
 
             def run_example(path):
-                return git(*(argument.replace("<path>", path) for argument in example[1:]))
+                return git(*shlex.split(example.replace("<path>", path))[1:])
 
             for args in (("init", "-q", "."), ("config", "core.autocrlf", "false")):
                 self.assertEqual(git(*args).returncode, 0, args)
@@ -7340,6 +7377,14 @@ class CommandScopeTests(unittest.TestCase):
             marker.unlink()
             read = run_example("foo")
             self.assertEqual((read.returncode, read.stdout), (0, b"staged foo\n"), read.stderr)
+            self.assertFalse(marker.exists(), "the index-read example ran the configured fsmonitor program")
+            # Item 9.10: a safe name with every allowed kind of character reads as itself through the quoted form.
+            (repo / "sub").mkdir()
+            (repo / "sub" / "-a_b.9").write_bytes(b"staged nested\n")
+            self.assertEqual(git("-c", "core.fsmonitor=", "add", "--", "sub/-a_b.9").returncode, 0)
+            self.assertFalse(marker.exists(), "staging the nested file ran the configured fsmonitor program")
+            read = run_example("sub/-a_b.9")
+            self.assertEqual((read.returncode, read.stdout), (0, b"staged nested\n"), read.stderr)
             self.assertFalse(marker.exists(), "the index-read example ran the configured fsmonitor program")
             # F3: `0:foo` is not staged, so the example finds nothing; the replaced form returned `foo`'s content.
             self.assertNotEqual(run_example("0:foo").stdout, b"staged foo\n")
@@ -7359,7 +7404,8 @@ class CommandScopeTests(unittest.TestCase):
         # Abuse check (item 9.9): every sentence of the command that names a link, junction or reparse point marks it,
         # refuses it, makes it fail the check, keeps fixtures off it, or names a hard link as plain content.
         links = re.compile(r"\b(?:link|junction|reparse)", re.I)
-        allowed = {*self.LINK_LISTING[1:], *self.LINK_READS[1:], self.FIXTURE_LINKS}
+        # Item 9.10 adds one: the role never names a link target string in a command.
+        allowed = {*self.LINK_LISTING[1:], *self.LINK_READS[1:], self.FIXTURE_LINKS, self.NAMES[2]}
         for sentence in self.sentences(self.source("command")):
             if links.search(sentence):
                 with self.subTest(sentence=sentence[:60]):
@@ -7368,6 +7414,92 @@ class CommandScopeTests(unittest.TestCase):
         directories = [s for s in self.sentences(self.source("command#Uncommitted changes"))
                        if re.search(r"director|\b(?:walk|search|glob|recurs)", s, re.I)]
         self.assertEqual(directories, [self.LINK_LISTING[0], self.LINK_READS[0]])
+
+    def test_changed_names_are_allowlisted_and_passed_only_as_literals(self):
+        # Item 9.10 (Q24, C5's second Adversarial review N1), stated in the bullet before its scope sentence.
+        self.assert_pinned({"command#Uncommitted changes": self.NAMES})
+        bullet = self.sentences(self.source("command#Uncommitted changes"))
+        self.assertLess(max(bullet.index(sentence) for sentence in self.NAMES), bullet.index(self.UNCOMMITTED[-1]))
+
+    def test_every_path_example_is_a_single_quoted_literal(self):
+        # Item 9.10: each path placeholder in the command is single-quoted right after `--`, `:0:` or `HEAD:`, and
+        # never stands bare, in double quotes or in a substitution.
+        text = self.source("command")
+        placeholders = list(re.finditer(r"<path>", text))
+        self.assertGreaterEqual(len(placeholders), 4)
+        for match in placeholders:
+            context = text[max(0, match.start() - 8):match.end() + 1]
+            with self.subTest(context=context):
+                self.assertRegex(context, r"(?:-- |:0:|HEAD:)'<path>'$")
+        for span in re.findall(r"`([^`]*<path>[^`]*)`", text):
+            with self.subTest(span=span):
+                self.assertNotRegex(span, r"[\"$\\]|<<")
+
+    def test_no_sentence_lets_attacker_chosen_text_reach_a_command(self):
+        # Abuse check (item 9.10): every sentence of the bullet that speaks of unsafe or unread names, quoting, link
+        # targets, file content or command output is one of the rules that keep them out of commands, and each of
+        # those that names a command forbids it.
+        risky = re.compile(r"unsafe|not read(?! as)|such a path|quot|target|file content|command output|interpreter", re.I)
+        allowed = {*self.NAMES, self.LINK_READS[2]}
+        for sentence in self.sentences(self.source("command#Uncommitted changes")):
+            if risky.search(sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, allowed)
+        for sentence in self.NAMES[1:5]:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertRegex(sentence, r"\b(?:never|no command|only)\b")
+        self.assertIn("runs no command on it", self.NAMES[1])
+        self.assertIn("never reads such a path or names it in a command", self.NAMES[1])
+        self.assertIn("never an unlisted path, a link target string or other text taken from file content or command "
+                      "output", self.NAMES[2])
+        self.assertIn("never inside double quotes, a here-document or a command substitution", self.NAMES[3])
+        self.assertIn("never inside code it evaluates", self.NAMES[4])
+        # No sentence elsewhere in the command lets main or the role put a listed path into a command another way.
+        for sentence in self.sentences(self.source("command")):
+            if re.search(r"double quote|here-document|substitution|evaluat|nested interpreter", sentence, re.I):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, self.NAMES)
+
+    def test_the_safe_name_allowlist_leaves_nothing_for_a_shell_to_interpret(self):
+        """Regression (item 9.10, N1): a name the code under attack chose reached the role's shell command line. The
+        allowlist the sentence states admits no character a POSIX shell interprets, so a safe name read through the
+        quoted examples is exactly one word, the path itself; a crafted name that breaks out of the quotes, which the
+        quoting alone would let through, fails the allowlist and is never put in a command."""
+        sentence = self.NAMES[0]
+        self.assertIn("is an ASCII letter or digit, `.`, `_`, `-` or `/`;", sentence)
+        listed = sentence.split("is an ASCII letter or digit,", 1)[1].split(";", 1)[0]
+        extra = re.findall(r"`(.)`", listed)
+        self.assertEqual(extra, [".", "_", "-", "/"])
+        allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") | set(extra)
+
+        def safe(name):
+            return bool(name) and all(character in allowed for character in name)
+
+        for character in sorted(allowed):
+            with self.subTest(character=character):
+                self.assertEqual(shlex.quote(character), character, "the shell would interpret an allowed character")
+        for character in "'\"\\$`!*?[]{}~#&|;<>() \t\n\r:%=@,+^":
+            with self.subTest(character=repr(character)):
+                self.assertFalse(safe(f"a{character}b"))
+        examples = re.findall(r"`(git [^`]*<path>[^`]*)`", self.source("command#Uncommitted changes"))
+        self.assertEqual(len(examples), 2, examples)
+        for name in ("skills/adversarial-review/SKILL.md", "sub/-a_b.9", "-n", "Z9"):
+            self.assertTrue(safe(name), name)
+            for example in examples:
+                with self.subTest(name=name, example=example):
+                    expected = [word.replace("<path>", name) for word in shlex.split(example)]
+                    self.assertEqual(shlex.split(example.replace("<path>", name)), expected)
+        # Control: single quotes alone do not hold a crafted name, which closes the quote and leaves a command
+        # substitution or a second word for the shell; the allowlist rejects each before any command is built.
+        for name in ("a'$(touch pwned)'b", "a' 'b", "a'b", "x'`id`'y"):
+            with self.subTest(name=name):
+                self.assertFalse(safe(name))
+                example = examples[0].replace("<path>", name)
+                try:
+                    words = shlex.split(example)
+                except ValueError:
+                    continue
+                self.assertNotEqual(words[-1], ":0:" + name)
 
     def test_link_limits_stay_in_their_bullet_and_the_fixture_rule_covers_every_ungated_call(self):
         # Items 9 and 9.9: the role's 9.2 and 9.9 limits precede the scope sentence that confines them to the
