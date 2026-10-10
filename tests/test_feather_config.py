@@ -7794,9 +7794,6 @@ class ReviewFollowUpsReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_19_0(self):
-        self.assertEqual("0.19.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_require_setup_update_in_both_languages(self):
         for name, (heading, sentence) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
             with self.subTest(readme=name):
@@ -7818,6 +7815,68 @@ class ReviewFollowUpsReleaseTests(unittest.TestCase):
             with self.subTest(entry=sentence[:50]):
                 self.assertIn(sentence, entry)
         self.assertNotIn("no setup update is required", entry)
+
+
+class StopThresholdReleaseTests(unittest.TestCase):
+    """0.20.0 C4 (docs/specs/configurable-stop-threshold.md): the release needs only the plugin update, says how to go
+    back, and records its validation."""
+
+    # C4 item 3: the Updates sections, paired in both languages.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.20.0 adds the Stop threshold and the `/cc-feather:stop-threshold` command and changes no role definition or guidance template, so existing installations need only the plugin update and a fresh session, and their guidance and state stay unchanged until a Stop threshold is saved.",
+         "A 0.19.x or older configuration tool rejects a scope with a saved Stop threshold, so before going back to one, set it to `default` in that scope; a task or session choice needs nothing."),
+        ("## 更新、移除與驗證\n",
+         "0.20.0 新增停止門檻與 `/cc-feather:stop-threshold` 指令，沒有改任何角色定義或指引範本，所以既有安裝只要更新 plugin 再開新 session，在儲存停止門檻之前，指引與 state 都不會改變。",
+         "0.19.x 或更舊的設定工具不接受已儲存停止門檻的範圍，所以要回到這些版本前，先在該範圍把它設回 `default`；task 或 session 的指定不需要處理。"),
+    )
+
+    # C4 item 3: the setup document's added-roles section.
+    SETUP = (
+        "Upgrading to 0.20.0 needs only the plugin update and a fresh session: it changes no role or guidance template, and a scope keeps byte-identical guidance and state until a Stop threshold is saved.",
+        "To go back to 0.19.x or older from 0.20.0, which reject a state that records a Stop threshold, first run `review --stop-threshold default` in every scope that saved one; a scope without one, and a task or session choice, need nothing.",
+    )
+
+    # C4 items 2-4.
+    ENTRY = (
+        "**No setup update is required.** This release changes no role definition and no guidance template: existing installations need only the plugin update and a fresh session, and a scope keeps byte-identical guidance and state until a Stop threshold is saved in it.",
+        "A 0.19.x or older configuration tool rejects a state that records a Stop threshold: to go back to one, first run `review --stop-threshold default` in every scope that saved one; a scope without one, and a task or session choice, need nothing.",
+        "all 22 files of both scopes were byte-identical before and after, and `show` reported the default Stop threshold 2, not set, with no warnings.",
+        "Live scenarios: this release's plan reviews and implementation ran, and its review round runs, with the installed 0.19.0 roles and procedures, under which the Stop threshold is the fixed two.",
+        "No live scenario ran with the 0.20.0 procedures or the `/cc-feather:stop-threshold` command: the rules of C2 and C3 are proven only as text, by the contract tests, and the configuration tool's behaviour of C1 by its command-line tests and the checks above.",
+        "`v0.20.0` does not exist when this entry is written.",
+        "it is created only after every Claim has a valid APPROVED and CONFIRMED, or the user's accept-and-land decision for the Claim, and only with the user's go-ahead for landing and for the tag; that it names the release commit and matches this manifest version are checked afterwards.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_20_0(self):
+        self.assertEqual("0.20.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
+        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertIn(sentence, self.section(self.text(name), heading))
+
+    def test_setup_document_states_the_upgrade_and_the_way_back(self):
+        section = self.section(self.text("docs/setup.md"), "## Added roles and incompatible role sets\n")
+        for sentence in self.SETUP:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+
+    def test_validation_entry_records_the_update_checks_live_scope_and_tag(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.20.0 configurable Stop threshold\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("Setup update is required", entry)
 
 
 class InstallDocumentTests(unittest.TestCase):
