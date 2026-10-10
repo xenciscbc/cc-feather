@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages eleven skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages twelve skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 
@@ -100,6 +100,8 @@ The Stop threshold is the number of consecutive automatic calls without a pass a
 ```text
 python -B scripts/feather_config.py review --project /absolute/project --scope project --stop-threshold 4
 ```
+
+`/cc-feather:stop-threshold <2–10|default> [session|project|user]` is the command for it, and a natural-language request follows the same procedure (`skills/setup/references/stop-threshold.md`). Without a scope, or with `session`, it sets the session choice, writes no file and runs no tool. `project` and `user` run the preview and apply above in an existing delegation installation of that scope, without a routine confirmation, then read show and report the saved value and owning path; they do not install missing roles and never choose user scope unasked. A value outside 2–10, a non-integer or an unknown or conflicting scope is refused or clarified before anything is applied or written.
 
 A scope with a saved value states it in one sentence of its managed delegation block, in auto and in off: user scope says the Stop threshold for automatic review is K, and project scope says the Stop threshold in this project is K and that this overrides broader Feather guidance. That sentence is how main learns a saved value: the procedures read it from the loaded guidance and do not run the configuration tool at each review decision. A scope without a saved value has no such sentence, so its guidance and state stay byte-identical to what 0.19.0 writes. Delegation guidance from a template older than the one the tool can edit is not changed: `--stop-threshold` asks for setup update first.
 

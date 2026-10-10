@@ -36,6 +36,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:model` | 查看、設定角色 model／effort，區分單次、session 與永久選擇 |
 | `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；主 Agent 之後可不經詢問，在通過前 commit 這類工作、推送到它為此工作建立的 branch 並開 pull request，但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |
 | `/cc-feather:auto-off` | 關閉自動審查 |
+| `/cc-feather:stop-threshold <2–10 或 default> [範圍]` | 設定自動審查的[停止門檻](#停止門檻)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
 
 交接指令在 plugin 安裝後即可使用。Setup 可只裝 handoff 自動維護規則、只裝 agent 分派（規則＋角色），或兩者都裝。例如：
 
@@ -231,6 +232,14 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 ### 停止門檻
 
 停止門檻是自動流程的一個步驟連續幾次自動呼叫沒通過就停下：一個 2 到 10 的數字，計畫審查、程式碼審查、結果驗證與對抗式審查都適用同一個值，預設 2。你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](docs/setup.md#stop-threshold)），`default` 會移除已儲存的值。主 Agent 依序採用你的任務或 session 選擇、project 指引寫明的值、user 指引寫明的值，最後才是 2，所以 project 儲存的值優先於你的 user 值。主 Agent 絕不自行更改它，每次要做審查決定時都會說明目前的值與來源；session 選擇不會帶到新的或恢復的 session，也不會寫進交接。指引中不在 2–10 的值會被略過並回報；主 Agent 無法確定你是否做過 session 選擇時（例如 context 壓縮後），會把受影響的步驟視為已停下並問你。
+
+```text
+/cc-feather:stop-threshold 4
+/cc-feather:stop-threshold 4 project
+/cc-feather:stop-threshold default user
+```
+
+用 `/cc-feather:stop-threshold` 設定，或用自己的話請主 Agent 設定，效果相同。不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案，主 Agent 會提醒你新的或恢復的 session 會用已儲存的值，而且 context 壓縮可能讓 session 的值遺失。加 `project` 或 `user` 時，會在預覽後儲存到該範圍既有的 agent 分派安裝，不再另外確認；它絕不會安裝 agent 分派，舊版範本的指引要先執行 setup update。不在 2–10 的值或不明確的範圍，會在套用或寫入任何東西之前被拒絕或先釐清。
 
 變更停止門檻絕不會改變次數。已停下、次數低於新值的步驟會繼續；次數達到或超過新值的步驟立即停下；明確通過已解除停止的步驟仍維持解除；主 Agent 會列出因此繼續或停下的步驟。你在這段對話中儲存到 project 或 user 範圍的值，會取代這段對話先前的任務或 session 選擇，並依已儲存的值重新決定停止門檻，所以這個 session 會用新 session 會用的值；project 已寫明自己的值時，你儲存的 user 值會被回報為被它覆寫。這與審查模式相反：審查模式的已儲存變更會保留另行指定的任務或 session 選擇。較高的值讓流程不問你就能繼續嘗試更久，代價見上方的成本，而且增加得比 K 快。
 

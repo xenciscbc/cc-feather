@@ -34,6 +34,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:model`: inspect or configure model/effort, distinguishing task/session preferences from permanent settings.
 - `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work. Main may then, without asking, commit such work before its passes, push it to branches it created for the work and open pull requests; landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.
 - `/cc-feather:auto-off`: disable automatic review.
+- `/cc-feather:stop-threshold <2–10|default> [session|project|user]`: set the [Stop threshold](#stop-threshold) of automatic review for this session, or save it in project or user scope.
 
 Handoff commands work after plugin installation. Setup can install handoff maintenance rules, delegation (policy plus agents), or both. For example:
 
@@ -225,6 +226,14 @@ In project scope, setup writes into an existing CLAUDE.md, else `.claude/CLAUDE.
 ### Stop threshold
 
 The Stop threshold is how many consecutive automatic calls without a pass stop a step of the automatic flow: one number from 2 to 10 for plan review, code review, outcome verification and Adversarial review alike, 2 by default. Tell main a value for the current task or session, which writes nothing, or save one in project or user scope with the configuration tool's `review --stop-threshold` (see [Stop threshold](docs/setup.md#stop-threshold)), where `default` removes the saved value. Main uses your task or session choice, then the value the project guidance states, then the value the user guidance states, then 2, so a project's saved value overrides your user value. Main never changes it on its own and states it and its source whenever a review decision comes up; a session choice does not carry into a new or resumed session and is not written into a handoff. A guidance value outside 2–10 is skipped and reported; when main cannot tell whether you made a session choice, for example after context compaction, it treats the affected steps as stopped and asks you.
+
+```text
+/cc-feather:stop-threshold 4
+/cc-feather:stop-threshold 4 project
+/cc-feather:stop-threshold default user
+```
+
+`/cc-feather:stop-threshold` sets it, or asking main in your own words does the same. Without a scope (or with `session`) it applies to this session only and writes nothing, and main reminds you that a new or resumed session uses the saved value and that context compaction may drop the session value. `project` or `user` saves it in an existing delegation installation of that scope after a preview, without a further confirmation; it never installs delegation, and guidance from an older template needs setup update first. A value outside 2–10 or an unclear scope is refused or clarified before anything is applied or written.
 
 Changing the Stop threshold never changes a count. A stopped step whose count is now below the new value resumes, a step whose count reaches or exceeds it stops at once, a step an explicit pass had cleared stays cleared, and main lists the steps that resumed or stopped. A value you save in project or user scope in this conversation replaces any earlier task or session choice in this conversation, and the Stop threshold is resolved again from the saved values, so this session uses what a new session would; a user value saved where the project states its own is reported as overridden by it. This is the reverse of the review mode, where a saved change keeps a separate task or session override. A higher value lets the flow keep trying longer without asking you, at the cost under Cost above, which grows faster than K.
 

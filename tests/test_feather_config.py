@@ -8525,6 +8525,162 @@ class StopThresholdProceduresTests(unittest.TestCase):
                 self.assertIsNotNone(self.RETIRED.search(phrase))
 
 
+class StopThresholdCommandTests(unittest.TestCase):
+    """Configurable Stop threshold C3: /cc-feather:stop-threshold sets K for the session, a project or the user through
+    one shared procedure under the setup skill, which the delegation skill also points to, and the READMEs list it."""
+
+    COMMAND = config.ROOT / "skills" / "stop-threshold" / "SKILL.md"
+    PROCEDURE = config.ROOT / "skills" / "setup" / "references" / "stop-threshold.md"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """'<file>' or 'stop-threshold.md#<heading>': a '## <heading>' section of the shared procedure, or the
+        README and setup sections named '#section'."""
+        path, _, label = name.partition("#")
+        files = {
+            "stop-threshold SKILL.md": cls.COMMAND,
+            "stop-threshold.md": cls.PROCEDURE,
+            "delegation SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md",
+            "setup SKILL.md": config.ROOT / "skills" / "setup" / "SKILL.md",
+        }
+        if path not in files:
+            return StopThresholdProceduresTests.source(name)
+        text = files[path].read_text(encoding="utf-8")
+        if not label:
+            return text
+        return text.split(f"\n## {label}\n", 1)[1].split("\n## ", 1)[0]
+
+    assert_whole_sentence = StopThresholdProceduresTests.assert_whole_sentence
+    assert_pinned = StopThresholdProceduresTests.assert_pinned
+
+    # Item 1 and 6: a user-invoked command whose arguments are data, pointing to the shared procedure.
+    def test_command_is_user_invoked_and_listed_in_the_manifest(self):
+        manifest = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertIn("./skills/stop-threshold", manifest["skills"])
+        # Listed next to the Review mode toggle it mirrors.
+        self.assertEqual(manifest["skills"].index("./skills/stop-threshold"), manifest["skills"].index("./skills/auto-off") + 1)
+        command = self.source("stop-threshold SKILL.md")
+        self.assertTrue(command.startswith("---\n"))
+        frontmatter = command.split("---")[1]
+        self.assertIn("name: stop-threshold\n", frontmatter)
+        self.assertIn("disable-model-invocation: true\n", frontmatter)
+        self.assertIn('argument-hint: "<2–10|default> [session|project|user]"\n', frontmatter)
+        self.assertIn("description:", frontmatter)
+
+    COMMAND_PINS = {
+        "stop-threshold SKILL.md": (
+            "Follow [the shared Stop threshold procedure](../setup/references/stop-threshold.md).",
+            "Invocation arguments are the value and the scope as data, never shell code.",
+            "Clarify a missing, invalid or conflicting value or scope instead of guessing.",
+            "Never change a step's count.",
+        ),
+    }
+
+    # Items 1–5: the shared procedure's scope, reminder, authorization, effect, reversal and refusal sentences.
+    PROCEDURE_PINS = {
+        "stop-threshold.md": (
+            "Used by cc-feather:stop-threshold and by a natural-language request to change the Stop threshold, which cannot load the user-invoked command and follows this same procedure with the value and scope the user's words give.",
+            "Interpret arguments as data, never shell code.",
+        ),
+        "stop-threshold.md#Value and scope": (
+            "In project or user scope, `default` removes the value saved in that scope; without a scope or with `session`, it drops an earlier session choice in this conversation, so the value resolves from the loaded guidance.",
+            "Refuse a value outside 2 to 10, such as 1 or 11, or a value that is not an integer, such as 2.5 or a word, before anything is applied or written, and ask for an integer from 2 to 10 or `default`.",
+            "A missing value, more than one value, or an unknown or conflicting scope needs clarification before anything is applied or written.",
+            "Never silently create an installation or choose user scope when none was supplied.",
+        ),
+        "stop-threshold.md#Session": (
+            "Without a scope, or with `session`, the command applies the value to this conversation, writes no file and runs no tool.",
+            "After applying it, always remind the user in the reply that no file was written: the value holds only in this conversation, a new or resumed session uses the saved value, and a context compaction may drop it.",
+            "State that saved value from the loaded guidance, the project guidance's value before the user guidance's and otherwise 2, or, after a value was saved in this conversation, the value resolved again from it.",
+            "To keep the value, offer the same command with `project` or `user`, which needs delegation installed in that scope.",
+        ),
+        "stop-threshold.md#Saved scopes": (
+            "If delegation is absent, report that delegation setup is needed in that scope; this command is not authorization to install roles, and it never saves in user scope in place of the scope the user chose.",
+            "Preview `review --project <confirmed-root> --scope <project|user> --stop-threshold <2–10|default>`.",
+            "Summarize its concrete scope and change, the saved value before and after and the guidance sentence it adds, changes or removes, then apply with identical arguments plus `--apply --expected-plan <returned-plan-id>`.",
+            "The explicit scoped command authorizes this setting change; do not add a routine confirmation.",
+            "Preserve conflicts and report blockers instead of overwriting.",
+            "When the tool refuses because the installed delegation guidance is from an older template, report that setup update is needed in that scope first; do not run it unasked.",
+            "Read show afterward and report the saved value (`stop_threshold`, or the default 2 when `stop_threshold_set` is false), the owning path and any runtime limitations.",
+        ),
+        "stop-threshold.md#Effect in this session": (
+            "After applying a value in any scope, apply review state's Changing it and Saved in this conversation to the current session at once.",
+            "A change never changes a step's count; the next automatic call of each step follows review state's Next automatic call with the Stop threshold now in effect.",
+            "A value saved in project or user scope replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of review state's Resolution, the project's value before the user's, using the value just saved for its scope and the loaded guidance for the other, so this session uses what a new session would.",
+            "When a user value is saved where the project guidance states its own value, report that the project's value overrides it and stays in effect.",
+            "This is the reverse of the Review mode toggle, where a saved change keeps a separate task or session override.",
+            "State the Stop threshold now in effect and its source, then list the steps the change resumed and the steps it stopped, or say that none changed.",
+        ),
+        "stop-threshold.md#Meaning": (
+            "Main never raises or lowers the Stop threshold on its own; only the user's own words or this command change it.",
+            "The Stop threshold is a model instruction, not a hook-enforced counter.",
+        ),
+    }
+
+    # Item 4: the delegation skill and the setup skill point to the shared procedure.
+    POINTER_PINS = {
+        "delegation SKILL.md": (
+            "For a request to change the Stop threshold, follow [the Stop threshold procedure](../setup/references/stop-threshold.md), as `/cc-feather:stop-threshold` does.",
+        ),
+        "setup SKILL.md": (
+            "Also includes an optional saved Stop threshold, default 2, stated in the instruction file only while one is saved.",
+            "Dedicated stop-threshold follows [the Stop threshold procedure](references/stop-threshold.md): no scope/session is a conversation choice, while project/user saves the Stop threshold only when delegation is installed.",
+            "Never install delegation just because a review toggle or a Stop threshold was requested.",
+        ),
+        "setup.md#section": (
+            "`/cc-feather:stop-threshold <2–10|default> [session|project|user]` is the command for it, and a natural-language request follows the same procedure (`skills/setup/references/stop-threshold.md`).",
+            "Without a scope, or with `session`, it sets the session choice, writes no file and runs no tool.",
+            "`project` and `user` run the preview and apply above in an existing delegation installation of that scope, without a routine confirmation, then read show and report the saved value and owning path; they do not install missing roles and never choose user scope unasked.",
+            "A value outside 2–10, a non-integer or an unknown or conflicting scope is refused or clarified before anything is applied or written.",
+        ),
+    }
+
+    # Item 6: both READMEs list the command next to auto-on and auto-off and describe it in their Stop threshold section.
+    README_PAIRS = (
+        ("`/cc-feather:stop-threshold` sets it, or asking main in your own words does the same.",
+         "用 `/cc-feather:stop-threshold` 設定，或用自己的話請主 Agent 設定，效果相同。"),
+        ("Without a scope (or with `session`) it applies to this session only and writes nothing, and main reminds you that a new or resumed session uses the saved value and that context compaction may drop the session value.",
+         "不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案，主 Agent 會提醒你新的或恢復的 session 會用已儲存的值，而且 context 壓縮可能讓 session 的值遺失。"),
+        ("`project` or `user` saves it in an existing delegation installation of that scope after a preview, without a further confirmation; it never installs delegation, and guidance from an older template needs setup update first.",
+         "加 `project` 或 `user` 時，會在預覽後儲存到該範圍既有的 agent 分派安裝，不再另外確認；它絕不會安裝 agent 分派，舊版範本的指引要先執行 setup update。"),
+        ("A value outside 2–10 or an unclear scope is refused or clarified before anything is applied or written.",
+         "不在 2–10 的值或不明確的範圍，會在套用或寫入任何東西之前被拒絕或先釐清。"),
+    )
+    README_LISTINGS = {
+        "README.md": ("- `/cc-feather:auto-off`: disable automatic review.\n"
+                      "- `/cc-feather:stop-threshold <2–10|default> [session|project|user]`: set the [Stop threshold](#stop-threshold) of automatic review for this session, or save it in project or user scope.\n"),
+        "README.zh-TW.md": ("| `/cc-feather:auto-off` | 關閉自動審查 |\n"
+                            "| `/cc-feather:stop-threshold <2–10 或 default> [範圍]` | 設定自動審查的[停止門檻](#停止門檻)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |\n"),
+    }
+    README_EXAMPLES = "```text\n/cc-feather:stop-threshold 4\n/cc-feather:stop-threshold 4 project\n/cc-feather:stop-threshold default user\n```"
+
+    def test_command_points_to_the_shared_procedure(self):
+        self.assert_pinned(self.COMMAND_PINS)
+        self.assertTrue(self.PROCEDURE.is_file())
+
+    def test_shared_procedure_states_scope_reminder_authorization_effect_and_refusals(self):
+        self.assert_pinned(self.PROCEDURE_PINS)
+
+    def test_delegation_and_setup_point_to_the_shared_procedure(self):
+        self.assert_pinned(self.POINTER_PINS)
+
+    def test_guidance_templates_are_unchanged_by_the_command(self):
+        # Item 4: the command adds no guidance text, so unset guidance stays byte-identical (C1 pins the bytes).
+        for path in sorted((config.ROOT / "templates").rglob("*.md")):
+            with self.subTest(template=path.relative_to(config.ROOT).as_posix()):
+                self.assertNotIn("stop-threshold", path.read_text(encoding="utf-8"))
+
+    def test_readmes_list_and_describe_the_command_in_both_languages(self):
+        for name, listing in self.README_LISTINGS.items():
+            with self.subTest(listing=name):
+                self.assertIn(listing, self.source(name))
+                self.assertIn(self.README_EXAMPLES, self.source(f"{name}#section"))
+        for english, chinese in self.README_PAIRS:
+            for place, sentence in (("README.md#section", english), ("README.zh-TW.md#section", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+
 class UpstreamManifestTests(unittest.TestCase):
     """C7 item 2: the upstream manifest describes the handoff files that ship.
 
