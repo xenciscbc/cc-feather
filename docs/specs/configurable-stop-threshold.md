@@ -1,0 +1,148 @@
+# Configurable Stop threshold
+
+Label: `ready-for-agent`
+
+Vocabulary follows [CONTEXT.md](../../CONTEXT.md). The decisions below were settled by the user on 2026-10-10 in two grilling rounds (Q1–Q13) and a confirmation of the conventions that follow from them. This spec changes the number fixed by [ADR 0004](../adr/0004-consecutive-failure-review-budget.md) and the bounds [ADR 0009](../adr/0009-security-critical-claims-get-an-adversarial-review.md) derives from it; it changes nothing else in either decision. The [0.19.0 review follow-ups spec](review-followups-0-19-0.md) listed changing review budgets as out of scope, so this is release 0.20.0.
+
+No Claim is Security-critical. The Stop threshold only decides how many consecutive automatic calls without a pass stop a step: it changes no verdict, no pass requirement, no Acceptance gate condition, no role's tools or limits and no place sensitive data goes. The value written into guidance is an integer the configuration tool validates, never user text.
+
+## Problem Statement
+
+In auto, every step of the Automatic flow stops after two consecutive automatic calls without a pass and waits for the user's explicit request. Two is fixed. A user whose reviews often need a third or fourth round, for example on a large Claim or a Security-critical claim whose Adversarial review is likely to return BROKEN once, has to step in every time, even when they would rather let the flow keep going. A user who wants the flow to keep trying cannot say so, either for one session or as a standing preference for a project or for all their projects.
+
+## Solution
+
+The number becomes the **Stop threshold**, one integer K from 2 to 10 that applies to every step: plan review, code review, outcome verification and Adversarial review. The default stays 2, so an installation where nobody sets it behaves exactly as today.
+
+The user can set K:
+
+- for the current task or session, by saying so or with `/cc-feather:stop-threshold <K>` without a scope; nothing is written;
+- for a project or for their user configuration, with `/cc-feather:stop-threshold <K> project|user`, which saves it through the configuration tool and writes one sentence stating it into the managed delegation guidance; a project's value overrides the user's.
+
+`default` in place of K removes the saved value for that scope. Everything else about counting stays as ADR 0004 and ADR 0002 define it: only an automatic pass resets a count, failed, interrupted and protocol-failure calls count, switching models or renaming never resets, verification's count runs across fixes, counts are per session, and Explicit requests sit outside the count.
+
+## Claims
+
+Each Claim's acceptance is listed under its own heading below the table. Each Claim is a vertical slice: it changes every document that states or summarises its rule (procedure, skill, READMEs, setup document, ADR) together with the tests that pin it.
+
+| Claim | Outcome | Acceptance | Depends on |
+| --- | --- | --- | --- |
+| C1 Saved Stop threshold | The configuration tool saves, validates, shows, preserves and removes K per scope and states a set K in the delegation guidance, and the setup document describes it | [C1](#c1-acceptance) | — |
+| C2 Procedures use the Stop threshold | Every review procedure, review state and the delegation preview stop at K resolved from the session, the guidance or the default, handle a change of K mid-count, and state costs in K; the READMEs, ADR 0010 and the amendment notes describe it | [C2](#c2-acceptance) | C1 |
+| C3 Stop-threshold command | `/cc-feather:stop-threshold` sets K for the session, a project or the user, and the READMEs list it | [C3](#c3-acceptance) | C1, C2 |
+| C4 Release 0.20.0 | 0.20.0 is validated, recorded with its update and downgrade notes and tagged after acceptance | [C4](#c4-acceptance) | C1–C3 |
+
+**Schedule.** Every Claim edits the shared test module and C2 and C3 share the READMEs, so a later Claim's commit is a change to an earlier Claim's files and would reopen its passes under review state. Claims are therefore implemented and committed one at a time in the order C1 to C4, each commit labelled as unaccepted as review state's Commits before the passes describes; C1's base revision is the last commit that changes only this spec, and each later Claim's base revision is the previous Claim's last commit. Once C4 is committed, that commit is the candidate, and each Claim gets code review and then outcome verification in the order C1 to C4 at the candidate: code review judges the Claim's own range, later commits being context only, and verification checks the Claim's full acceptance. A fix is a new commit and a new candidate, and each Claim whose passes it reopens gets its reopened steps again. Nothing is pushed until every Claim is accepted, and the tag follows C4 item 4.
+
+Each commit leaves the full `unittest discover` suite passing; each Claim updates the existing assertions its change affects in the same commit, with the reason in the commit message, and pins its new rules as whole sentences in the document and section that state them, README rules paired in both languages.
+
+### C1 acceptance
+
+1. **Setting.** The configuration tool's `review` command accepts `--stop-threshold` with an integer from 2 to 10 or `default`, in project and user scope, with or without `--review-mode`, through the usual preview and `--apply --expected-plan` steps. It needs the delegation component installed in that scope, like `--review-mode`.
+2. **Validation.** 1, 11, 0, a negative number, a non-integer or any other text is refused with a usage or configuration error before anything is written; so is `--stop-threshold` on a command other than `review` or with delegation absent from the scope.
+3. **State.** The delegation record in the scope's state gains the Stop threshold only when a value is set; `default` removes it, so a scope that never set one, or set it back to default, has a record identical to 0.19.0's. Loading a state whose Stop threshold is outside 2–10 or not an integer is refused like other malformed state.
+4. **Guidance.** A scope with a set K has one sentence in its managed delegation block, separate from the automatic review paragraph and present whether the Review mode is auto or off: in user scope it states that the Stop threshold for automatic review is K; in project scope it states the Stop threshold in this project is K and that this overrides broader Feather guidance. A scope without a set K has no such sentence, and its guidance bytes equal what 0.19.0 writes for the same choices, so no older-template warning appears.
+5. **Show and check.** `show` and `check` report the scope's saved Stop threshold, or the default 2 with an indication that none is set.
+6. **Preservation and removal.** Setup update, `model`, switching `--review-mode` and installing or removing the handoff component keep a set K and its sentence; removing the delegation component removes both. A failed write rolls back the state and guidance as for the other settings.
+7. **Setup document.** The setup document describes the setting, its scopes and default, that the guidance sentence is how main learns a saved value, and that the limit remains an agent instruction rather than a hook-enforced counter.
+8. **Tests.** Tests through the tool's command line cover items 1–6, including byte equality of guidance for a scope without K, the project override sentence, the sentence in off mode, rollback, and preservation across update, `model` and Review mode changes.
+
+### C2 acceptance
+
+1. **Resolution.** Review state defines the Stop threshold in effect for a session as, in order: the user's task or session choice; otherwise the value the loaded project guidance states; otherwise the value the loaded user guidance states; otherwise 2. Main never raises or lowers it on its own; a task or session choice comes only from the user's own words in this conversation.
+2. **Stopping at K.** Review state's Consecutive non-pass count and Stop transition, and the plan review, code review, outcome verification and Adversarial review procedures, stop a step after K consecutive automatic calls without a pass instead of two; every sentence that states the fixed two as the stopping point now refers to the Stop threshold. Sentences about a second call that follows a non-pass keep their meaning.
+3. **Changing K mid-count.** A change of K never changes a count. A stopped step whose count is now below the new K resumes automatically, because the change is the user's own act; a step whose count reaches or exceeds the new K stops at once. Main lists the steps the change resumed or stopped in its reply. A saved change made in this conversation applies to this session at once, as a session choice would.
+4. **Stating K.** Whenever a review decision comes up, main states the Stop threshold in effect and its source (task, session, project, user or default), as it does for the Review mode, so a compacted summary is more likely to keep a session choice; a session choice does not cross sessions and is not written into a handoff.
+5. **Unchanged rules.** The procedures still say that only an automatic pass resets a count; that failed, interrupted and protocol-failure calls count; that mode changes, renamed Plans, cosmetic splits and a different reviewer, model or wording never reset it; that outcome verification's count runs across fixes and resets only on CONFIRMED; that counts are per session; and that Explicit requests sit outside the count. The pre-approval security analysis is not a counted step and K does not apply to it.
+6. **Preview and cost.** The delegation preview states the Stop threshold in effect and its source and gives each stop in terms of K: at most 3K automatic calls per Claim, 7K per Security-critical claim, about K + 3KN + 4KS for a Plan with N Claims of which S are Security-critical, in one uninterrupted attempt, each reopened Claim or approved Material deviation adding calls (up to K plan reviews for each deviation).
+7. **READMEs.** Both READMEs' budget, cost and preview paragraphs state the rule in terms of the Stop threshold, give the numbers for K = 2 (6, 14, 2 + 6N + 8S) and K = 10 (30, 70, 10 + 30N + 40S), say that a higher K costs more calls, and say how to set it.
+8. **Decision record.** ADR 0010 records that the Stop threshold is one user-configurable integer from 2 to 10 with default 2, resolved from task or session, project guidance, user guidance, default; that a change of K resumes or stops steps but never changes a count; why the minimum is 2 (a single non-pass can be a transient interruption or protocol failure, and stopping on it would interrupt the user for noise), why there is no unlimited value (ADR 0004 rejected an unbounded loop), and why one number rather than one per step. Its Considered Options cover a fixed two, per-step values, allowing 1 or unlimited, and main reading the saved value with the tool at each decision. ADR 0004 and ADR 0009 each get an amendment note that their fixed two, six and fourteen are the values at the default Stop threshold; ADR 0003's two-call budget wording gets the same note.
+9. **Retired wording.** Tests assert that no shipped skill file, README or the setup document states two consecutive automatic calls, six calls per Claim or fourteen per Security-critical claim as a fixed limit, except where the text gives the K = 2 example; the pinned whole sentences cover items 1–7.
+
+### C3 acceptance
+
+1. **Command.** `/cc-feather:stop-threshold <2–10|default> [session|project|user]` is a user-invoked skill. Its arguments are data, never shell code. Without a scope, or with `session`, it applies to the conversation, writes nothing and runs no tool, and reminds the user that the value holds only in this conversation, that a new or resumed session uses the saved value (stated from the loaded guidance), and that compaction may drop it, offering the `project` or `user` form to keep it.
+2. **Saved scopes.** With `project` or `user`, it previews the configuration tool's `review --stop-threshold`, summarises the scope and change, applies with identical arguments and the returned plan, then reads `show` and reports the saved value and owning path. The explicit scoped command authorises the change without a routine confirmation; conflicts are preserved and reported. Delegation absent from that scope is reported as needing setup, and the command never installs it or chooses user scope unasked.
+3. **Effect now.** After applying a value in any scope, it applies C2 item 3 to the current session and lists the steps resumed or stopped. Natural-language requests to change the Stop threshold follow the same procedure.
+4. **Refusals.** A value outside 2–10, a non-integer or an unknown or conflicting scope is refused or clarified before anything is applied or written.
+5. **Listing.** Both READMEs list the command next to `auto-on` and `auto-off`, and the setup skill's component and command lists include it.
+6. **Tests.** Tests pin the command's scope, reminder and authorisation sentences and update any test that counts or lists the shipped skills.
+
+### C4 acceptance
+
+1. **Version.** `plugin.json` is 0.20.0 and the release tag will be `v0.20.0`.
+2. **Validation record.** `docs/setup-validation.md` has a 0.20.0 entry recording the full `unittest discover` result at the candidate, the review history of C1–C3, and a check that a 0.19.0 installation updated to 0.20.0 keeps byte-identical guidance and state until a Stop threshold is set.
+3. **Update and downgrade notes.** The entry and the setup document say that existing installations need only the plugin update and a fresh session; that a scope with a set Stop threshold is rejected by a 0.19.x or older configuration tool, so a downgrade first sets it back to `default` in that scope; and that a session or task choice needs nothing.
+4. **Tag.** The tag is created only after C1–C4 are accepted and the user authorises the release, and its version matches `plugin.json` at the tagged commit.
+
+## User Stories
+
+1. As a user in auto, I want to raise the Stop threshold, so that the flow keeps reviewing a hard Claim without asking me after every second failure.
+2. As a user, I want one number to apply to every step, so that I do not have to reason about four separate limits.
+3. As a user, I want the Stop threshold limited to 2–10, so that a typo cannot make the flow stop on one transient failure or loop for a hundred calls.
+4. As a user who never sets it, I want the Stop threshold to stay 2, so that upgrading changes nothing for me.
+5. As a user, I want to set it for this session only without writing any file, so that I can try a higher value on one piece of work.
+6. As a user, I want to save it for a project, so that a repository with large Claims always gets more rounds.
+7. As a user, I want to save it in my user configuration, so that all my projects share my preferred value.
+8. As a user, I want a project's value to override my user value, so that a project can be stricter or looser than my default.
+9. As a user, I want `default` to remove a saved value, so that I can return to the package behaviour without editing files.
+10. As a user, I want the saved value to reach main through the guidance it already loads, so that no extra tool call happens before each review decision.
+11. As a user whose installation has no saved value, I want my guidance to stay byte-identical, so that I see no outdated-template warning.
+12. As a user in off mode, I want a saved value to be kept and written, so that a later session auto-on uses it.
+13. As a user, I want invalid values refused before anything is written, so that a mistake never leaves a half-applied setting.
+14. As a user, I want `show` and `check` to report my Stop threshold per scope, so that I can see what is in force.
+15. As a user, I want setup update, model changes and Review mode switches to keep my Stop threshold, so that I set it once.
+16. As a user, I want removing delegation to remove the Stop threshold with it, so that nothing is left behind.
+17. As a user whose step has stopped, I want raising K above the count to resume it, so that changing the setting is enough to continue.
+18. As a user, I want lowering K to or below the current count to stop that step at once, so that my new limit takes effect immediately.
+19. As a user, I want a change of K never to reset a count, so that changing the setting is not a way to erase failures.
+20. As a user, I want main to list the steps a change resumed or stopped, so that I know what happens next.
+21. As a user, I want a value I save in this conversation to apply to this session too, so that I do not have to set it twice.
+22. As a user, I want main never to change the Stop threshold on its own, so that only I decide how long the flow keeps trying.
+23. As a user, I want main to state the Stop threshold in effect and where it came from at each review decision, so that I can check it and a compacted summary keeps it.
+24. As a user, I want a session choice not to cross sessions, so that a resumed session starts from my saved value as with the Review mode.
+25. As a user, I want every other counting rule unchanged, so that what I know about resets, failed calls and Explicit requests still holds.
+26. As a user, I want the delegation preview to show K, its source and the resulting maximum calls, so that I can see the cost before implementation.
+27. As a user, I want the READMEs to give the cost for K = 2 and K = 10, so that I understand what raising it costs.
+28. As a user reading the Traditional Chinese README, I want the same rules as the English one, so that both audiences are told the same thing.
+29. As a user, I want a `/cc-feather:stop-threshold` command with the same scopes as `auto-on` and `auto-off`, so that the setting works like the one I already know.
+30. As a user, I want the session form of the command to remind me that nothing was written, so that I am not surprised in the next session.
+31. As a user, I want the command to report when delegation is not installed in a scope, so that it never installs anything unasked.
+32. As a user downgrading, I want to be told that a saved Stop threshold blocks an older tool, so that I set it back to default first.
+33. As a maintainer, I want ADR 0010 to record why the minimum is 2, why there is no unlimited value and why there is one number, so that a later reader does not reopen those choices without reason.
+34. As a maintainer, I want ADR 0003, ADR 0004 and ADR 0009 to note that their fixed numbers are the default values, so that the record stays consistent without rewriting decisions.
+35. As a maintainer, I want tests to fail if a shipped document reintroduces a fixed two-call limit, so that the documents cannot drift back.
+
+## Implementation Decisions
+
+- **One integer for every step.** The Stop threshold applies to plan review, code review, outcome verification and Adversarial review alike. Per-step values were rejected for now: no need for them is known and they would turn the cost formula into four variables; a later per-step override could be added without breaking a single saved value.
+- **Range and default.** Integers 2 to 10 inclusive; default 2. Zero is unnecessary because `off` already exists, 1 is excluded so a transient failure never stops a step alone, and there is no unlimited value.
+- **Delivery through guidance.** Plugin skill files are shared by every installation, so a saved value reaches main only through the managed delegation block the configuration tool renders. The procedures read the value the loaded guidance states; they do not run the tool at each decision.
+- **Rendering.** The sentence is rendered only for a scope with a set value, separately from the automatic review paragraph and in both Review modes; the project form adds that it overrides broader Feather guidance, mirroring the existing project off line. This keeps unset installations byte-identical.
+- **State schema.** The delegation record's fixed key set gains one optional key, present only when set. Older tools reject a record that carries it; this is accepted and documented, following the precedent of the adversary role in 0.18.0.
+- **Configuration interface.** The `review` command gains `--stop-threshold`; it combines with `--review-mode` in one plan. No other command accepts it.
+- **Resolution order.** Task or session choice, then project guidance, then user guidance, then 2. A choice comes only from the user's words; main states K and its source with each review decision.
+- **Mid-count changes.** Counts never change with K; a stopped step below the new K resumes, a step at or above it stops. This adds a second way to clear a stop next to an explicit pass, and review state's Clearing a stop names both.
+- **Command.** A new user-invoked skill mirrors the `auto-on` and `auto-off` toggle procedure for scopes, reminders and authorisation.
+- **Not affected.** The pre-approval security analysis, Explicit request rules, the Acceptance gate, handoff records and the handoff runtime, role definitions and their tools.
+
+## Testing Decisions
+
+- One seam: the existing configuration tool test module, which runs the tool through its command line and reads its JSON output, as the existing `--review-mode` tests do. Tests check external behaviour: results, `show` output, the bytes of state and guidance files, and refusals that leave files unchanged.
+- The procedures, skills, READMEs, setup document and ADRs are model instructions without an executable seam. Following the project's existing practice, tests in the same module pin each new rule as a whole sentence in the document and section that states it, README rules paired in both languages, and assert that retired fixed-number wording is gone, like the existing tests for wording retired in 0.16.0 and the shipped-wording scan.
+- Prior art: the `--review-mode` lifecycle and rollback tests, the guidance byte-equality tests, the role-template compatibility data for older versions, the `*_wording_from_0_16_0_is_gone` tests and the shipped-files scan.
+
+## Out of Scope
+
+- Per-step Stop thresholds, or different values for Security-critical claims.
+- Values below 2, above 10 or unlimited.
+- Carrying a session choice across sessions or recording it in a handoff.
+- Hook-enforced counting; the limit stays an agent instruction.
+- Setting the Stop threshold through `install`, `session` export or `/cc-feather:model`.
+- Changing any other counting rule of ADR 0002 or ADR 0004, the Acceptance gate, or how Claims are cut.
+
+## Further Notes
+
+- `CONTEXT.md` defines **Stop threshold** and redefines **Unreviewed claim** in terms of it; that glossary change was made during the grilling and is committed with this spec.
+- Automatic plan review is on, so this spec gets plan review before implementation once the user agrees to it.
+- The handoff `.feather/handoffs/configurable-review-budget.md` records the grilling decisions Q1–Q13.

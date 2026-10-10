@@ -52,6 +52,10 @@ _Avoid_: dry run, delegation plan
 The setting, `auto` or `off`, that decides whether the Automatic flow runs.
 _Avoid_: auto review, review switch
 
+**Stop threshold**:
+The number of consecutive automatic calls without a pass that stops one step of the Automatic flow for a Plan or Claim, after which the step waits for the user's explicit request. The same number applies to every step; the default is 2.
+_Avoid_: budget, retry limit
+
 **Automatic flow**:
 The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work.
 _Avoid_: three-layer protection, pipeline
@@ -83,7 +87,7 @@ A Code review finding that does not hold completion: style, naming, a refactorin
 _Avoid_: nit, minor issue
 
 **Unreviewed claim**:
-A Claim whose Code review stopped after two consecutive automatic calls without APPROVED. It is not complete. It is not landed on the default branch, released or reported complete. The only exception is the user's Accept and land decision.
+A Claim whose Code review stopped at its Stop threshold without APPROVED. It is not complete. It is not landed on the default branch, released or reported complete. The only exception is the user's Accept and land decision.
 _Avoid_: failed review, skipped review
 
 **Unverified claim**:
