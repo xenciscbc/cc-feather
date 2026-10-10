@@ -7859,6 +7859,290 @@ class InstallDocumentTests(unittest.TestCase):
         self.assertIn("or an unedited role was rendered from an older template", self.text("skills/setup/SKILL.md"))
 
 
+class SavedStopThresholdTests(unittest.TestCase):
+    """Configurable Stop threshold C1: the configuration tool saves, states, shows, keeps and removes K per scope."""
+
+    setUp = FeatherConfigTests.setUp
+    call = FeatherConfigTests.call
+    apply = FeatherConfigTests.apply
+    files = FeatherConfigTests.files
+    replace_delegation_block = FeatherConfigTests.replace_delegation_block
+
+    USER_LINE = "The Stop threshold for automatic review is {k}."
+    PROJECT_LINE = "The Stop threshold in this project is {k}; this overrides broader Feather guidance."
+
+    def line(self, scope, k):
+        return (self.PROJECT_LINE if scope == "project" else self.USER_LINE).format(k=k)
+
+    def guidance(self, scope):
+        return self.project / "CLAUDE.md" if scope == "project" else self.home / "CLAUDE.md"
+
+    def state_path(self, scope):
+        base = self.project / ".claude" if scope == "project" else self.home
+        return base / "cc-feather" / "state.json"
+
+    def record(self, scope):
+        return json.loads(self.state_path(scope).read_bytes())["components"]["delegation"]
+
+    def block(self, scope):
+        return config._block_parts(self.guidance(scope).read_text(encoding="utf-8"))[1]
+
+    def older_template_warnings(self, scope):
+        return [w for w in self.call("check", scope)[1]["warnings"] if "older template" in w]
+
+    @staticmethod
+    def release_0_19_0_block(mode, scope):
+        """The delegation block 0.19.0 renders without a role prefix, rebuilt from the templates."""
+        template = (config.ROOT / "templates" / "CLAUDE.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+        auto = (config.ROOT / "templates" / "review-auto.md").read_text(encoding="utf-8").replace("\r\n", "\n").strip()
+        if mode == "auto":
+            middle = auto + "\n\n"
+        else:
+            middle = ("Automatic plan review is off in this project; this overrides broader Feather guidance.\n\n"
+                      if scope == "project" else "")
+        return template.replace("{{auto_review}}", middle).replace("{{role_names}}", "").rstrip("\n")
+
+    def test_review_saves_shows_and_removes_the_stop_threshold_in_each_scope(self):
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                self.apply("install", scope, "--review-mode", "auto")
+                guidance_before = self.guidance(scope).read_bytes()
+                state_before = self.state_path(scope).read_bytes()
+                shown = self.call("show", scope)[1]
+                self.assertEqual((shown["stop_threshold"], shown["stop_threshold_set"]), (2, False))
+                code, preview = self.call("review", scope, "--stop-threshold", "4")
+                self.assertEqual(code, 0, preview)
+                self.assertEqual((preview["stop_threshold"], preview["stop_threshold_set"]), (4, True))
+                self.assertEqual(self.guidance(scope).read_bytes(), guidance_before)
+                self.apply("review", scope, "--stop-threshold", "4")
+                self.assertEqual(self.record(scope)["stop_threshold"], 4)
+                self.assertEqual(self.record(scope)["review_mode"], "auto")
+                self.assertEqual(self.block(scope).count(self.line(scope, 4)), 1)
+                for command in ("show", "check"):
+                    code, shown = self.call(command, scope)
+                    self.assertEqual((code, shown["status"]), (0, "ok"), shown)
+                    self.assertEqual((shown["stop_threshold"], shown["stop_threshold_set"]), (4, True))
+                self.assertEqual(self.older_template_warnings(scope), [])
+                self.apply("review", scope, "--stop-threshold", "10")
+                self.assertEqual(self.record(scope)["stop_threshold"], 10)
+                self.assertNotIn(self.line(scope, 4), self.block(scope))
+                self.assertEqual(self.block(scope).count(self.line(scope, 10)), 1)
+                self.apply("review", scope, "--stop-threshold", "default")
+                self.assertNotIn("stop_threshold", self.record(scope))
+                self.assertEqual(self.guidance(scope).read_bytes(), guidance_before)
+                self.assertEqual(self.state_path(scope).read_bytes(), state_before)
+                shown = self.call("show", scope)[1]
+                self.assertEqual((shown["stop_threshold"], shown["stop_threshold_set"]), (2, False))
+                # Setting it back to default where none is set changes nothing.
+                code, preview = self.call("review", scope, "--stop-threshold", "default")
+                self.assertEqual((code, preview["changes"]), (0, []), preview)
+
+    def test_the_sentence_is_separate_from_the_review_paragraph_in_both_modes(self):
+        auto = (config.ROOT / "templates" / "review-auto.md").read_text(encoding="utf-8").replace("\r\n", "\n").strip()
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                with self.subTest(scope=scope, mode=mode):
+                    self.apply("install", scope, "--review-mode", mode)
+                    self.apply("review", scope, "--stop-threshold", "3")
+                    block = self.block(scope).replace("\r\n", "\n")
+                    paragraphs = block.split("\n\n")
+                    self.assertIn(self.line(scope, 3), paragraphs)
+                    self.assertEqual(auto in paragraphs, mode == "auto")
+                    self.assertEqual(config.PROJECT_REVIEW_OFF in paragraphs, mode == "off" and scope == "project")
+                    # The sentence follows the review paragraph or the off line, never inside it.
+                    expected = self.release_0_19_0_block(mode, scope).replace(
+                        config.END, self.line(scope, 3) + "\n\n" + config.END)
+                    self.assertEqual(block, expected)
+                    self.assertEqual(self.older_template_warnings(scope), [])
+                    self.apply("remove", scope)
+
+    def test_guidance_without_a_stop_threshold_is_byte_identical_to_0_19_0(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                with self.subTest(scope=scope, mode=mode):
+                    self.apply("install", scope, "--review-mode", mode)
+                    self.assertEqual(self.block(scope), self.release_0_19_0_block(mode, scope))
+                    before = self.guidance(scope).read_bytes()
+                    self.assertNotIn("stop_threshold", self.record(scope))
+                    self.apply("review", scope, "--stop-threshold", "7")
+                    self.apply("review", scope, "--stop-threshold", "default")
+                    self.assertEqual(self.guidance(scope).read_bytes(), before)
+                    self.assertEqual(self.older_template_warnings(scope), [])
+                    self.apply("remove", scope)
+
+    def test_review_combines_both_settings_in_one_plan_and_needs_one(self):
+        self.apply("install", "project", "--review-mode", "off")
+        before = self.files()
+        code, error = self.call("review", "project")
+        self.assertEqual(code, 2, error)
+        self.assertIn("review requires --review-mode", error["error"])
+        self.assertIn("--stop-threshold", error["error"])
+        self.assertEqual(self.files(), before)
+        self.apply("review", "project", "--review-mode", "auto", "--stop-threshold", "5")
+        self.assertEqual((self.record("project")["review_mode"], self.record("project")["stop_threshold"]), ("auto", 5))
+        self.assertEqual(self.block("project").replace("\r\n", "\n"), self.release_0_19_0_block("auto", "project").replace(
+            config.END, self.line("project", 5) + "\n\n" + config.END))
+        self.apply("review", "project", "--review-mode", "off", "--stop-threshold", "default")
+        self.assertEqual(self.block("project"), self.release_0_19_0_block("off", "project"))
+        self.assertNotIn("stop_threshold", self.record("project"))
+
+    def test_invalid_values_commands_and_scopes_are_refused_before_writing(self):
+        self.apply("install", "project", "--review-mode", "auto")
+        before = self.files()
+        for value in ("1", "0", "11", "-2", "-3", "2.5", "3.0", "three", "", " 3", "+3", "1e1", "auto"):
+            with self.subTest(value=value):
+                code, error = self.call("review", "project", "--stop-threshold", value)
+                self.assertEqual((code, error["status"]), (2, "error"), error)
+                self.assertIn("--stop-threshold", error["error"])
+                self.assertEqual(self.files(), before)
+        for command, extra in (("install", ("--component", "handoff")), ("update", ()), ("remove", ()),
+                               ("model", ("--set", "scout.model=sonnet")), ("check", ()), ("show", ()),
+                               ("session", ())):
+            with self.subTest(command=command):
+                code, error = self.call(command, "project", *extra, "--stop-threshold", "4")
+                self.assertEqual((code, error["status"]), (2, "error"), error)
+                self.assertIn("--stop-threshold", error["error"])
+                self.assertEqual(self.files(), before)
+        code, error = self.call("review", "project", "--component", "handoff", "--stop-threshold", "4")
+        self.assertEqual(code, 2, error)
+        self.assertEqual(self.files(), before)
+        # Delegation absent from the scope: nothing installed there, or only the handoff component.
+        code, error = self.call("review", "user", "--stop-threshold", "4")
+        self.assertEqual(code, 2, error)
+        self.assertIn("user delegation component is not installed", error["error"])
+        self.apply("install", "user", "--component", "handoff")
+        before = self.files()
+        code, error = self.call("review", "user", "--stop-threshold", "4")
+        self.assertEqual(code, 2, error)
+        self.assertIn("user delegation component is not installed", error["error"])
+        self.assertEqual(self.files(), before)
+
+    def test_a_malformed_saved_stop_threshold_is_refused_on_load(self):
+        self.apply("install", "project", "--review-mode", "auto")
+        self.apply("review", "project", "--stop-threshold", "3")
+        path = self.state_path("project")
+        valid = json.loads(path.read_bytes())
+        for bad in (True, False, 1, 0, 11, -2, 3.0, "3", None, [3]):
+            with self.subTest(bad=bad):
+                state = json.loads(json.dumps(valid))
+                state["components"]["delegation"]["stop_threshold"] = bad
+                path.write_bytes(config.canonical(state) + b"\n")
+                before = self.files()
+                for command, extra in (("check", ()), ("show", ()), ("session", ()),
+                                       ("review", ("--stop-threshold", "4")), ("update", ())):
+                    code, error = self.call(command, "project", *extra)
+                    self.assertEqual((code, error["status"]), (2, "error"), (command, error))
+                    self.assertIn("invalid saved stop threshold", error["error"])
+                self.assertEqual(self.files(), before)
+        path.write_bytes(config.canonical(valid) + b"\n")
+        self.assertEqual(self.call("check")[1]["status"], "ok")
+
+    def test_session_export_is_unchanged_by_a_saved_stop_threshold(self):
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                self.apply("install", scope, "--review-mode", "auto")
+                code, exported = self.call("session", scope)
+                self.assertEqual(code, 0, exported)
+                self.apply("review", scope, "--stop-threshold", "8")
+                self.assertEqual(self.call("session", scope), (0, exported))
+
+    def test_update_model_review_mode_and_handoff_changes_keep_it_and_removal_drops_it(self):
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                self.apply("install", scope, "--component", "delegation", "--review-mode", "auto")
+                self.apply("review", scope, "--stop-threshold", "6")
+                steps = (("update", ("--component", "delegation")),
+                         ("model", ("--set", "scout.model=sonnet")),
+                         ("review", ("--review-mode", "off")),
+                         ("update", ("--component", "delegation")),
+                         ("review", ("--review-mode", "auto")),
+                         ("install", ("--component", "handoff")),
+                         ("update", ("--component", "both")),
+                         ("remove", ("--component", "handoff")))
+                for command, extra in steps:
+                    self.apply(command, scope, *extra)
+                    self.assertEqual(self.record(scope)["stop_threshold"], 6, (command, extra))
+                    self.assertEqual(self.block(scope).count(self.line(scope, 6)), 1, (command, extra))
+                    shown = self.call("check", scope)[1]
+                    self.assertEqual((shown["status"], shown["stop_threshold"]), ("ok", 6), (command, extra))
+                    self.assertEqual(self.older_template_warnings(scope), [], (command, extra))
+                self.assertEqual(self.call("show", scope)[1]["choices"]["scout"]["model"], "sonnet")
+                self.apply("remove", scope, "--component", "delegation")
+                self.assertFalse(self.state_path(scope).exists())
+                self.assertNotIn("Stop threshold", self.guidance(scope).read_text(encoding="utf-8")
+                                 if self.guidance(scope).exists() else "")
+                shown = self.call("show", scope)[1]
+                self.assertEqual((shown["stop_threshold"], shown["stop_threshold_set"]), (2, False))
+                # Removing delegation alongside handoff removes the saved value too.
+                self.apply("install", scope, "--component", "both", "--review-mode", "off")
+                self.apply("review", scope, "--stop-threshold", "9")
+                self.apply("remove", scope, "--component", "delegation")
+                self.assertNotIn("delegation", json.loads(self.state_path(scope).read_bytes())["components"])
+                self.assertNotIn("Stop threshold", self.guidance(scope).read_text(encoding="utf-8"))
+                self.apply("install", scope, "--component", "delegation")
+                self.assertNotIn("stop_threshold", self.record(scope))
+                self.apply("remove", scope, "--component", "both")
+
+    def test_a_failed_write_rolls_back_state_and_guidance(self):
+        self.apply("install", "project", "--review-mode", "auto")
+        self.apply("review", "project", "--stop-threshold", "3")
+        guidance, state_path = self.guidance("project"), self.state_path("project")
+        for extra in (("--stop-threshold", "5"), ("--stop-threshold", "default"),
+                      ("--review-mode", "off", "--stop-threshold", "4")):
+            with self.subTest(extra=extra):
+                original = (guidance.read_bytes(), state_path.read_bytes())
+                _, preview = self.call("review", "project", *extra)
+                real_replace = config._replace
+
+                def fail_state(path, data):
+                    if path == state_path:
+                        raise OSError("injected state failure")
+                    return real_replace(path, data)
+
+                with mock.patch.object(config, "_replace", side_effect=fail_state):
+                    code, result = self.call("review", "project", *extra, "--apply", "--expected-plan", preview["plan_id"])
+                self.assertEqual(code, 2, result)
+                self.assertIn("injected state failure", result["error"])
+                self.assertEqual((guidance.read_bytes(), state_path.read_bytes()), original)
+                self.assertEqual(self.call("show")[1]["stop_threshold"], 3)
+
+    def test_older_template_guidance_needs_setup_update_before_a_stop_threshold(self):
+        legacy = ("<!-- cc-feather:begin -->\n# Feather delegation for Claude Code\n\nOlder rules.\n\n"
+                  "Automatic plan review mode: {mode}\n\nOlder triggers.\n\n<!-- cc-feather:end -->")
+        with mock.patch.object(config, "_policy", lambda mode, prefix="", *, scope="user": legacy.format(mode=mode)):
+            self.apply("install", "project", "--review-mode", "off")
+        before = self.files()
+        for extra in (("--stop-threshold", "4"), ("--review-mode", "auto", "--stop-threshold", "4")):
+            with self.subTest(extra=extra):
+                code, error = self.call("review", "project", *extra)
+                self.assertEqual(code, 2, error)
+                self.assertIn("installed guidance is from an older template; run setup update first", error["error"])
+                self.assertEqual(self.files(), before)
+        # The mode line still switches, and setup update makes the scope editable.
+        self.apply("review", "project", "--review-mode", "auto")
+        self.apply("update")
+        self.apply("review", "project", "--stop-threshold", "4")
+        self.assertEqual(self.block("project").count(self.line("project", 4)), 1)
+
+    def test_setup_document_describes_the_saved_stop_threshold(self):
+        setup = (config.ROOT / "docs" / "setup.md").read_text(encoding="utf-8")
+        section = setup.split("## Stop threshold\n", 1)[1].split("\n## ", 1)[0]
+        for sentence in (
+                "The Stop threshold is the number of consecutive automatic calls without a pass after which a step of the automatic review flow stops and waits for the user: one integer from 2 to 10 that applies to plan review, code review, outcome verification and Adversarial review alike, 2 by default.",
+                "`review --stop-threshold <2–10|default>` saves it in project or user scope, alone or together with `--review-mode`, through the usual preview and `--apply --expected-plan` steps; it needs the delegation component installed in that scope, and `default` removes the saved value.",
+                "A project's saved value overrides the user's.",
+                "The configuration tool refuses any other value, `--stop-threshold` on another command, and a scope without delegation before it writes anything.",
+                "A scope with a saved value states it in one sentence of its managed delegation block, in auto and in off: user scope says the Stop threshold for automatic review is K, and project scope says the Stop threshold in this project is K and that this overrides broader Feather guidance.",
+                "That sentence is how main learns a saved value: the procedures read it from the loaded guidance and do not run the configuration tool at each review decision.",
+                "A scope without a saved value has no such sentence, so its guidance and state stay byte-identical to what 0.19.0 writes.",
+                "Delegation guidance from a template older than the one the tool can edit is not changed: `--stop-threshold` asks for setup update first.",
+                "`show` and `check` report `stop_threshold`, which is the saved value or the default 2, and `stop_threshold_set`, which is false when none is saved; session export is unchanged.",
+                "Setup update, `model`, switching the review mode and installing or removing the handoff component keep the saved value and its sentence; removing the delegation component removes both.",
+                "Like the review mode, the Stop threshold is an agent instruction, not a hook-enforced counter."):
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIn(sentence, section)
+
+
 class UpstreamManifestTests(unittest.TestCase):
     """C7 item 2: the upstream manifest describes the handoff files that ship.
 

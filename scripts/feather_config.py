@@ -49,6 +49,13 @@ VERSION = 4
 GUIDANCE_FILES = ("CLAUDE.md", ".claude/CLAUDE.md", "AGENTS.md", ".claude/AGENTS.md")
 # Project guidance loads after user guidance, so an off project states it to override a user-scope auto.
 PROJECT_REVIEW_OFF = "Automatic plan review is off in this project; this overrides broader Feather guidance."
+# A saved Stop threshold: how many consecutive automatic calls without a pass stop a review step. Unset means the
+# default and renders nothing, so guidance without one stays byte-identical to earlier releases.
+STOP_THRESHOLD_DEFAULT = 2
+STOP_THRESHOLD_RANGE = range(2, 11)
+USER_STOP_THRESHOLD = "The Stop threshold for automatic review is {k}."
+# Project guidance loads after user guidance, so a project value says it overrides, like PROJECT_REVIEW_OFF.
+PROJECT_STOP_THRESHOLD = "The Stop threshold in this project is {k}; this overrides broader Feather guidance."
 # Commands allowed where project scope is the user configuration: inspection and removal of an earlier install.
 ALIASED_PROJECT_COMMANDS = {"check", "show", "session", "remove"}
 # YAML plain scalars starting with these may mean something other than their text.
@@ -487,6 +494,9 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
             expected |= {"choices", "hashes", "review_mode", "legacy_names"}
             if value["version"] == VERSION:
                 expected |= {"role_prefix", "external_roles"}
+            if value["version"] == VERSION and isinstance(record, dict) and "stop_threshold" in record:
+                # Optional: present only while a Stop threshold is saved.
+                expected |= {"stop_threshold"}
         if not isinstance(record, dict) or (value["version"] >= 3 and set(record) != expected):
             raise ConfigError(f"invalid {name} state schema")
         if not isinstance(record["added_before"], bool) or not isinstance(record["added_after"], bool):
@@ -502,6 +512,8 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
                 raise ConfigError("invalid external role state")
             if record["review_mode"] not in ("auto", "off"):
                 raise ConfigError("invalid saved review mode")
+            if "stop_threshold" in record and not _valid_stop_threshold(record["stop_threshold"]):
+                raise ConfigError("invalid saved stop threshold")
             if (not isinstance(record["choices"], dict) or not isinstance(record["hashes"], dict)
                     or set(record["hashes"]) != set(record["choices"])
                     or not set(ROLES) - set(ADDED_ROLES) - _external(record) <= set(record["choices"])
@@ -588,7 +600,7 @@ def _block_template(path: Path) -> str:
     return text
 
 
-def _policy(review_mode: str, prefix: str = "", *, scope: str = "user") -> str:
+def _policy(review_mode: str, prefix: str = "", *, scope: str = "user", stop_threshold: int | None = None) -> str:
     path = ROOT / "templates" / "CLAUDE.md"
     text = _block_template(path)
     parts = _block_parts(text)
@@ -601,11 +613,40 @@ def _policy(review_mode: str, prefix: str = "", *, scope: str = "user") -> str:
         auto = _auto_review() + "\n\n"
     else:
         auto = PROJECT_REVIEW_OFF + "\n\n" if scope == "project" else ""
+    # A saved Stop threshold is its own paragraph after the review rules, in both modes, so a later auto uses it.
+    if stop_threshold is not None:
+        auto += (PROJECT_STOP_THRESHOLD if scope == "project" else USER_STOP_THRESHOLD).format(k=stop_threshold) + "\n\n"
     names = ""
     if prefix:
         listed = ", ".join(f"{role} = {_role_name(role, prefix)}" for role in ROLES if role != "Explore")
         names = f"Native role names in this scope: {listed}; Explore is unchanged. Dispatch each role to its listed name.\n\n"
     return parts[1].replace("{{auto_review}}", auto).replace("{{role_names}}", names)
+
+
+def _valid_stop_threshold(value: object) -> bool:
+    # A JSON boolean is an int in Python, and 3.0 is not an integer here.
+    return type(value) is int and value in STOP_THRESHOLD_RANGE
+
+
+def _parse_stop_threshold(value: str) -> int | None:
+    """A requested Stop threshold: an integer from 2 to 10, or None for default."""
+    if value == "default":
+        return None
+    if not re.fullmatch(r"[0-9]+", value) or int(value) not in STOP_THRESHOLD_RANGE or value.startswith("0"):
+        raise ConfigError("--stop-threshold must be an integer from 2 to 10, or default")
+    return int(value)
+
+
+def _threshold_report(saved: int | None) -> dict[str, Any]:
+    """How show, check and previews report a scope's Stop threshold: the saved value, or the default while unset."""
+    return {"stop_threshold": STOP_THRESHOLD_DEFAULT if saved is None else saved, "stop_threshold_set": saved is not None}
+
+
+def _delegation_block(review_mode: str, prefix: str, scope: str, stop_threshold: int | None) -> str:
+    """The delegation block for these choices; without a saved Stop threshold, exactly the plain policy rendering."""
+    if stop_threshold is None:
+        return _policy(review_mode, prefix, scope=scope)
+    return _policy(review_mode, prefix, scope=scope, stop_threshold=stop_threshold)
 
 
 def _auto_review() -> str:
@@ -815,16 +856,19 @@ def _edit_role_fields(data: bytes, old: dict[str, str], new: dict[str, str], pat
     return (header + tail).encode("utf-8")
 
 
-def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: str = "user") -> str:
+def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: str = "user",
+                       old_threshold: int | None = None, new_threshold: int | None = None) -> str:
     # Blocks rendered from a CRLF checkout keep CRLF; compare as LF and write back the file's endings.
     current = block.replace("\r\n", "\n")
     # A project that was off before the off line existed has the user-scope rendering.
-    if current in (_policy(old, prefix, scope=scope), _policy(old, prefix, scope="user")):
-        result = _policy(new, prefix, scope=scope)
+    if current in (_delegation_block(old, prefix, scope, old_threshold),
+                   _delegation_block(old, prefix, "user", old_threshold)):
+        result = _delegation_block(new, prefix, scope, new_threshold)
     else:
-        # Guidance from earlier templates keeps its rules and switches them with a mode line.
+        # Guidance from earlier templates keeps its rules and switches them with a mode line; it has no place
+        # for a Stop threshold sentence, so changing the saved value needs setup update first.
         line = f"Automatic plan review mode: {old}"
-        if current.count(line) != 1:
+        if current.count(line) != 1 or old_threshold != new_threshold:
             raise ConfigError("installed guidance is from an older template; run setup update first")
         result = current.replace(line, f"Automatic plan review mode: {new}", 1)
     return result.replace("\n", "\r\n") if "\r\n" in block else result
@@ -839,7 +883,7 @@ def _older_template(block: str, record: dict[str, Any], scope: str) -> bool:
     """
     mode, prefix = record["review_mode"], record.get("role_prefix", "")
     try:
-        current = _policy(mode, prefix, scope=scope)
+        current = _delegation_block(mode, prefix, scope, record.get("stop_threshold"))
     except ConfigError:
         return False
     return block.replace("\r\n", "\n") != current
@@ -1003,8 +1047,11 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("model and review belong to the delegation component")
     if args.command != "model" and args.set:
         raise ConfigError("--set is supported only by model")
-    if args.command == "review" and args.review_mode is None:
-        raise ConfigError("review requires --review-mode auto|off")
+    if args.stop_threshold is not None and args.command != "review":
+        raise ConfigError("--stop-threshold is supported only by review")
+    requested_threshold = _parse_stop_threshold(args.stop_threshold) if args.stop_threshold is not None else None
+    if args.command == "review" and args.review_mode is None and args.stop_threshold is None:
+        raise ConfigError("review requires --review-mode auto|off, --stop-threshold 2-10|default, or both")
     if args.command not in {"install", "review"} and args.review_mode is not None:
         raise ConfigError("--review-mode is supported only by install or review")
     if args.review_mode is not None and "delegation" not in selected:
@@ -1154,6 +1201,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 continue  # refused above for commands that write role files; reported by inspection
             _validate_choice(choice["model"], choice["effort"])
     review_mode = args.review_mode or (delegation["review_mode"] if delegation else "off")
+    saved_threshold = delegation.get("stop_threshold") if delegation else None
+    stop_threshold = requested_threshold if args.stop_threshold is not None else saved_threshold
     for name in active_components:
         record = records.get(name)
         if args.command == "remove" and record is None:
@@ -1188,16 +1237,20 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 after[str(path)] = _render(role, choices[role], prefix)
         parts = _guidance_parts(text, name)
         if args.command == "review":
-            block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix, scope=args.scope)
+            block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix, scope=args.scope,
+                                       old_threshold=saved_threshold, new_threshold=stop_threshold)
         elif args.command == "model":
             block = parts[1]
         else:
-            block = _file_line_endings(_policy(review_mode, prefix, scope=args.scope), text)
+            block = _file_line_endings(_delegation_block(review_mode, prefix, args.scope, stop_threshold), text)
         text, added_before, added_after = _put_block(text, name, block, record)
         records[name] = {"choices": choices, "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
                          "block_hash": _block_digest(block), "review_mode": review_mode,
                          "added_before": added_before, "added_after": added_after, "legacy_names": False,
                          "role_prefix": prefix, "external_roles": external}
+        if stop_threshold is not None:
+            # Present only while set, so a scope without one keeps the record earlier releases write.
+            records[name]["stop_threshold"] = stop_threshold
     created_imports = list(target["imports"])
     created_guidance = state is not None and state.get("created_guidance") is True
     guidance_warnings = []
@@ -1234,13 +1287,14 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 "changes": [{"path": c["path"], "after_sha256": c["after_sha256"]} for c in changes],
                 "templates": {role: digest(_render(role, choices[role], prefix)) for role in choices}
                              if "delegation" in active_components and args.command in {"install", "update"} else {},
-                "policy": digest(_policy(review_mode, prefix, scope=args.scope).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
+                "policy": digest(_delegation_block(review_mode, prefix, args.scope, stop_threshold).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
                 "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
     result = {"status": "preview", "command": args.command, "component": args.component, "scope": args.scope,
               "plan_id": plan_id, "components": {name: {"installed": name in records} for name in ("handoff", "delegation")},
               "choices": choices if choices else (delegation["choices"] if delegation else {}),
-              "review_mode": review_mode, "guidance": str(guidance), "requested_configuration_only": True,
+              "review_mode": review_mode, **_threshold_report(stop_threshold if "delegation" in records else None),
+              "guidance": str(guidance), "requested_configuration_only": True,
               "changes": changes,
               "warnings": (_warnings(args) + list(_AGENT_WARNINGS) if "delegation" in selected else []) + guidance_warnings}
     resolved = _resolved_paths(args)
@@ -1501,6 +1555,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             "pending_external_roles": pending_external,
             "requested_configuration_only": True,
             "review_mode": delegation["review_mode"] if delegation else "off",
+            **_threshold_report(delegation.get("stop_threshold") if delegation else None),
             "paths": {"config_root": str(base / "cc-feather"), "state": str(state_path),
                       "guidance": str(guidance), "agents": {role: str(path) for role, path in reported_agents.items()}},
             "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
@@ -1594,6 +1649,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--claude-home", help="Absolute Claude configuration directory (default: CLAUDE_CONFIG_DIR or ~/.claude)")
     parser.add_argument("--set", action="append", default=[], metavar="ROLE.FIELD=VALUE")
     parser.add_argument("--review-mode", choices=("auto", "off"))
+    parser.add_argument("--stop-threshold", metavar="2-10|default",
+                        help="review: save the Stop threshold for the scope, or remove it with default")
     parser.add_argument("--component", choices=("handoff", "delegation", "both"), help="Component for mutations; default delegation")
     parser.add_argument("--guidance", choices=("claude", "agents"),
                         help="Project install where AGENTS.md is in effect: create CLAUDE.md importing it, or write into it")
@@ -1611,10 +1668,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.component is None:
             args.component = "delegation" if args.command not in {"check", "show"} else "both"
         if args.command == "session":
+            if args.stop_threshold is not None:
+                raise ConfigError("--stop-threshold is supported only by review")
             if args.apply or args.expected_plan or args.review_mode or args.guidance or args.component != "delegation":
                 raise ConfigError("session is read-only and delegation-only")
             result = _session(args)
         elif args.command in {"check", "show"}:
+            if args.stop_threshold is not None:
+                raise ConfigError("--stop-threshold is supported only by review")
             if args.apply or args.expected_plan or args.set or args.review_mode or args.guidance:
                 raise ConfigError("check and show are read-only and accept no mutation options")
             result = _inspect(args)
