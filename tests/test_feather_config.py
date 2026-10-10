@@ -7078,18 +7078,44 @@ class CommandScopeTests(unittest.TestCase):
         "repository-chosen program runs.",
         "Main lists in the brief the staged, unstaged and in-scope untracked paths, where in-scope untracked means "
         "untracked, not ignored and within the arguments' paths or attack scope.",
+        # Item 9.2 (Q23, F2 and F3): the example disables fsmonitor with an empty value and names stage 0.
         "The role reads those paths with the file tools, and staged and HEAD content from Git objects without filters, for "
-        "example with `git -c core.fsmonitor=false cat-file blob :<path>` and `git cat-file blob HEAD:<path>`, and runs "
+        "example with `git -c core.fsmonitor= cat-file blob :0:<path>` and `git cat-file blob HEAD:<path>`, and runs "
         "no Git command that compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE "
         "rather than run one.",
-        # Outcome-verification fix (C2 item 5.2): reading the index runs a configured fsmonitor unless it is disabled.
+        # Item 9.2 (Q23): an empty core.fsmonitor value disables it on any Git; an explicit stage keeps a colon path whole.
         "Reading the index can run a configured fsmonitor program, so every Git command the role runs that reads the "
-        "index disables it, as that example does, and reading staged or HEAD content follows the role's Repository, "
-        "secrets and effects section for missing objects in a partial clone.",
+        "index disables it with an empty value, `-c core.fsmonitor=`, which disables it whether the installed Git reads "
+        "the setting as a boolean or, before Git 2.36, as a hook path, and every such command that names an index path "
+        "names its stage, `:0:<path>`, so that a path that itself contains a colon is not read as another stage.",
+        "Reading staged or HEAD content follows the role's Repository, secrets and effects section for missing objects in "
+        "a partial clone.",
         "Secrets read from untracked files are masked as the role requires.",
         "These limits apply only to a call under this bullet; elsewhere the role's Repository, secrets and effects section "
         "alone governs its Git commands.",
     )
+    # Item 9.9 (Q23, F1): main lists untracked paths file by file and marks links.
+    LINK_LISTING = (
+        "Main lists untracked paths file by file and never lists a collapsed directory; an untracked directory Git cannot "
+        "list file by file, such as a nested repository, is named in the brief and reported INCONCLUSIVE.",
+        "Main marks each listed path that is, or lies under, a symbolic link, junction or other reparse point.",
+    )
+    # Item 9.9 (Q23, F1): the role reads only listed files, checks every component and never reads through a link.
+    LINK_READS = (
+        "The role reads only the listed files themselves and searches or walks no directory under this bullet, a "
+        "submodule directory included; what that leaves unexamined it reports as INCONCLUSIVE.",
+        "Before reading a listed path, the role checks with file-system metadata, not with Git, that none of its "
+        "components is a link or reparse point and that its canonical path lies inside the project, comparing "
+        "case-sensitively unless the file system is known to be case-insensitive, and never reads a listed path that "
+        "contains `..`, is absolute, names a drive or contains `:`.",
+        "A marked path or one that fails the check is never read through: the role reports the link and its target "
+        "string, reads no content through it, and reports INCONCLUSIVE for what that content would need.",
+        "A reparse point of any kind, a cloud-file placeholder included, fails the check.",
+        "A hard link is project content like any other file.",
+    )
+    # Item 9.9's fixture rule, which applies to every ungated call and so stands in the Fixtures bullet.
+    FIXTURE_LINKS = ("A fixture main lists for a call outside the gate is never a symbolic link, junction or other reparse "
+                     "point and never lies under one.")
     # Items 2.3 and 2.4: a clean workspace, and paths with no change.
     CLEAN = "Without a range and with a clean workspace, main asks the user which range to review."
     PATHS = (
@@ -7229,7 +7255,7 @@ class CommandScopeTests(unittest.TestCase):
                             "command#Uncommitted changes": self.UNCOMMITTED,
                             "command#A clean workspace": (self.CLEAN,),
                             "command#Paths": self.PATHS,
-                            "command#Fixtures": (self.FIXTURES,),
+                            "command#Fixtures": (self.FIXTURES, self.FIXTURE_LINKS),
                             "command": (self.BRIEF,)})
 
     def test_no_sentence_authorises_main_or_the_role_to_change_git_state(self):
@@ -7251,18 +7277,107 @@ class CommandScopeTests(unittest.TestCase):
         self.assertIn("runs no Git command that compares or refreshes the working tree",
                       self.source("command#Uncommitted changes"))
 
+    @staticmethod
+    def index_reads(text):
+        return [span for span in re.findall(r"`(git [^`]*)`", text) if re.search(r"(?:^|\s):", span)]
+
     def test_every_index_read_the_command_hands_the_role_disables_fsmonitor(self):
         # Regression (outcome verification of C5, C2 item 5.2): `git cat-file blob :<path>` loads the index, and Git
-        # then runs a configured core.fsmonitor program; observed on Git 2.43.0 and absent with
-        # `-c core.fsmonitor=false` and for `HEAD:<path>`. Every Git example that reads an index path disables it.
+        # then runs a configured core.fsmonitor program; observed on Git 2.43.0 and absent for `HEAD:<path>`.
+        # Item 9.2 (Q23, C5's first Adversarial review F2 and F3): `=false` need not disable it on a Git before 2.36,
+        # which reads the setting as a hook path, while an empty value disables it on either; and `:<path>` reads a
+        # path such as `0:foo` as stage 0 of `foo`. Every Git example that reads an index path uses both forms.
         text = self.source("command")
-        index_reads = [span for span in re.findall(r"`(git [^`]*)`", text) if re.search(r"(?:^|\s):", span)]
+        index_reads = self.index_reads(text)
         self.assertTrue(index_reads, "the Uncommitted changes bullet gives an index-read example")
         for span in index_reads:
             with self.subTest(span=span):
-                self.assertRegex(span, r"^git -c core\.fsmonitor=false ")
+                self.assertRegex(span, r"^git -c core\.fsmonitor= ")
+                for argument in re.findall(r"(?:^|\s)(:\S*)", span):
+                    self.assertTrue(argument.startswith(":0:"), f"{argument} names no stage")
+        # The replaced unsafe forms stay gone.
         self.assertNotIn("`git cat-file blob :<path>`", text)
+        self.assertNotIn("`git -c core.fsmonitor=false cat-file blob :<path>`", text)
+        self.assertNotIn("core.fsmonitor=false", text)
         self.assertIn("`git cat-file blob HEAD:<path>`", self.source("command#Uncommitted changes"))
+
+    def test_the_index_read_example_runs_no_fsmonitor_and_keeps_a_colon_path_whole(self):
+        """Regression (item 9.2, F2 and F3): the command's own index-read example, run in a throwaway repository whose
+        core.fsmonitor names a program that leaves a marker, runs no such program and reads a listed path `0:foo` as
+        that path, never as the staged `foo`, which the replaced `:<path>` form returned."""
+        examples = self.index_reads(self.source("command#Uncommitted changes"))
+        self.assertEqual(len(examples), 1, examples)
+        example = examples[0].split()
+        self.assertEqual(example[0], "git")
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, marker, monitor, empty = root / "repo", root / "marker", root / "monitor.sh", root / "gitconfig"
+            repo.mkdir()
+            empty.write_bytes(b"")
+            monitor.write_text(f'#!/bin/sh\necho ran >> "{marker.as_posix()}"\nexit 1\n', encoding="utf-8", newline="\n")
+            monitor.chmod(0o755)
+            env = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)}
+
+            def git(*args):
+                try:
+                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            def run_example(path):
+                return git(*(argument.replace("<path>", path) for argument in example[1:]))
+
+            for args in (("init", "-q", "."), ("config", "core.autocrlf", "false")):
+                self.assertEqual(git(*args).returncode, 0, args)
+            (repo / "foo").write_bytes(b"staged foo\n")
+            self.assertEqual(git("add", "--", "foo").returncode, 0)
+            self.assertEqual(git("config", "core.fsmonitor", monitor.as_posix()).returncode, 0)
+            # Control: an index read without the override runs the program, so its absence below is meaningful.
+            git("cat-file", "blob", ":0:foo")
+            if not marker.exists():
+                self.skipTest("this Git ran no configured fsmonitor program for an index read")
+            marker.unlink()
+            read = run_example("foo")
+            self.assertEqual((read.returncode, read.stdout), (0, b"staged foo\n"), read.stderr)
+            self.assertFalse(marker.exists(), "the index-read example ran the configured fsmonitor program")
+            # F3: `0:foo` is not staged, so the example finds nothing; the replaced form returned `foo`'s content.
+            self.assertNotEqual(run_example("0:foo").stdout, b"staged foo\n")
+            self.assertEqual(git("-c", "core.fsmonitor=", "cat-file", "blob", ":" + "0:foo").stdout, b"staged foo\n")
+            self.assertFalse(marker.exists(), "an empty core.fsmonitor value ran the configured program")
+
+    def test_listed_paths_are_read_file_by_file_and_never_through_a_link(self):
+        # Item 9.9 (Q23, C5's first Adversarial review F1): file tools follow links, so main lists and marks, and the
+        # role checks every component itself and reads nothing through a link or outside the project.
+        self.assert_pinned({"command#Uncommitted changes": (*self.LINK_LISTING, *self.LINK_READS)})
+        bullet = self.sentences(self.source("command#Uncommitted changes"))
+        # The listing precedes the role's reads, and the check precedes what a failing path gets.
+        order = [bullet.index(sentence) for sentence in (*self.LINK_LISTING, self.UNCOMMITTED[3], *self.LINK_READS)]
+        self.assertEqual(order, sorted(order))
+
+    def test_no_sentence_lets_the_role_follow_a_link_or_walk_a_directory(self):
+        # Abuse check (item 9.9): every sentence of the command that names a link, junction or reparse point marks it,
+        # refuses it, makes it fail the check, keeps fixtures off it, or names a hard link as plain content.
+        links = re.compile(r"\b(?:link|junction|reparse)", re.I)
+        allowed = {*self.LINK_LISTING[1:], *self.LINK_READS[1:], self.FIXTURE_LINKS}
+        for sentence in self.sentences(self.source("command")):
+            if links.search(sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, allowed)
+        # The bullet's only directory sentences forbid collapsed listings and walking or searching one.
+        directories = [s for s in self.sentences(self.source("command#Uncommitted changes"))
+                       if re.search(r"director|\b(?:walk|search|glob|recurs)", s, re.I)]
+        self.assertEqual(directories, [self.LINK_LISTING[0], self.LINK_READS[0]])
+
+    def test_link_limits_stay_in_their_bullet_and_the_fixture_rule_covers_every_ungated_call(self):
+        # Items 9 and 9.9: the role's 9.2 and 9.9 limits precede the scope sentence that confines them to the
+        # uncommitted change, while the fixture rule stands in the Fixtures bullet, which every ungated call follows.
+        bullet = self.source("command#Uncommitted changes")
+        self.assertEqual(self.sentences(bullet)[-1], self.UNCOMMITTED[-1])
+        self.assertNotIn("fixture", bullet)
+        fixtures = self.source("command#Fixtures")
+        self.assertIn(self.FIXTURE_LINKS, fixtures)
+        self.assertNotIn("under this bullet", fixtures)
 
     def test_the_result_says_what_was_reviewed_and_whether_it_counts(self):
         self.assert_pinned({"command#results": self.RESULT})
