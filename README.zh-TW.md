@@ -231,7 +231,7 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 
 ### 停止門檻
 
-停止門檻是自動流程的一個步驟連續幾次自動呼叫沒通過就停下：一個 2 到 10 的數字，計畫審查、程式碼審查、結果驗證與對抗式審查都適用同一個值，預設 2。你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](docs/setup.md#stop-threshold)），`default` 會移除已儲存的值。主 Agent 依序採用你的任務或 session 選擇、project 指引寫明的值、user 指引寫明的值，最後才是 2，所以 project 儲存的值優先於你的 user 值。主 Agent 絕不自行更改它，每次要做審查決定時都會說明目前的值與來源；session 選擇不會帶到新的或恢復的 session，也不會寫進交接。指引中不在 2–10 的值會被略過並回報；主 Agent 無法確定你是否做過 session 選擇時（例如 context 壓縮後），會把受影響的步驟視為已停下並問你。
+停止門檻是自動流程的一個步驟連續幾次自動呼叫沒通過就停下：一個 2 到 10 的數字，計畫審查、程式碼審查、結果驗證與對抗式審查都適用同一個值，預設 2。你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](docs/setup.md#stop-threshold)），`default` 會移除已儲存的值。主 Agent 依序採用你的任務或 session 選擇、project 指引寫明的值、user 指引寫明的值，最後才是 2，所以 project 儲存的值優先於你的 user 值。主 Agent 絕不自行更改它，每次要做審查決定時都會說明目前的值與來源；session 選擇不會帶到新的或恢復的 session，也不會寫進交接。指引中不在 2–10 的值會被略過並回報；主 Agent 無法確定你是否做過任務或 session 選擇時（例如 context 壓縮後），會把受影響的步驟視為已停下並問你。
 
 ```text
 /cc-feather:stop-threshold 4

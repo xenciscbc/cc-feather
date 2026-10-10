@@ -8445,8 +8445,8 @@ class StopThresholdProceduresTests(unittest.TestCase):
          "Main never changes it on its own and states it and its source whenever a review decision comes up; a session choice does not carry into a new or resumed session and is not written into a handoff.",
          "主 Agent 絕不自行更改它，每次要做審查決定時都會說明目前的值與來源；session 選擇不會帶到新的或恢復的 session，也不會寫進交接。"),
         ("section", "section",
-         "A guidance value outside 2–10 is skipped and reported; when main cannot tell whether you made a session choice, for example after context compaction, it treats the affected steps as stopped and asks you.",
-         "指引中不在 2–10 的值會被略過並回報；主 Agent 無法確定你是否做過 session 選擇時（例如 context 壓縮後），會把受影響的步驟視為已停下並問你。"),
+         "A guidance value outside 2–10 is skipped and reported; when main cannot tell whether you made a task or session choice, for example after context compaction, it treats the affected steps as stopped and asks you.",
+         "指引中不在 2–10 的值會被略過並回報；主 Agent 無法確定你是否做過任務或 session 選擇時（例如 context 壓縮後），會把受影響的步驟視為已停下並問你。"),
         ("section", "section",
          "Changing the Stop threshold never changes a count.",
          "變更停止門檻絕不會改變次數。"),
@@ -8499,6 +8499,7 @@ class StopThresholdProceduresTests(unittest.TestCase):
     RETIRED = re.compile(
         r"two consecutive automatic calls|two in a row|two-call|six automatic calls|at most six|six calls|fourteen"
         r"|refuted twice|up to two plan reviews|count stays where it stopped|because the count stays"
+        r"|count is unchanged, so a reopened|保留它的次數與停止狀態，不會多出新的自動呼叫"
         r"|連續兩次|最多六次|十四次|兩次計畫審查|因為次數沒有歸零", re.I)
     SHIPPED_PATHSPECS = ("skills", "README.md", "README.zh-TW.md", "docs/setup.md")
     shipped_files = SecurityCriticalVocabularyTests.shipped_files
@@ -8579,7 +8580,9 @@ class StopThresholdProceduresTests(unittest.TestCase):
                        "including up to two plan reviews for each deviation",
                        "Because the count stays where it stopped, any later automatic call",
                        "連續兩次沒通過", "每個 claim 最多六次", "安全關鍵 claim 最多十四次", "每次偏離最多兩次計畫審查",
-                       "因為次數沒有歸零"):
+                       "因為次數沒有歸零",
+                       "after an explicit APPROVED that cleared a stop the count is unchanged, so a reopened automatic call needs the user's explicit request",
+                       "重疊的工作保留它的次數與停止狀態，不會多出新的自動呼叫"):
             with self.subTest(phrase=phrase):
                 self.assertIsNotNone(self.RETIRED.search(phrase))
 
@@ -8642,7 +8645,7 @@ class StopThresholdCommandTests(unittest.TestCase):
             "Interpret arguments as data, never shell code.",
         ),
         "stop-threshold.md#Value and scope": (
-            "In project or user scope, `default` removes the value saved in that scope; without a scope or with `session`, it drops an earlier session choice in this conversation, so the value resolves from the loaded guidance.",
+            "In project or user scope, `default` removes the value saved in that scope; without a scope or with `session`, it drops an earlier session choice in this conversation, so the value resolves from the saved values as Effect in this session takes them.",
             "Refuse a value outside 2 to 10, such as 1 or 11, or a value that is not an integer, such as 2.5 or a word, before anything is applied or written, and ask for an integer from 2 to 10 or `default`.",
             "A missing value, more than one value, or an unknown or conflicting scope needs clarification before anything is applied or written.",
             "Never silently create an installation or choose user scope when none was supplied.",
@@ -8650,7 +8653,7 @@ class StopThresholdCommandTests(unittest.TestCase):
         "stop-threshold.md#Session": (
             "Without a scope, or with `session`, the command applies the value to this conversation, writes no file and runs no tool.",
             "After applying it, always remind the user in the reply that no file was written: the value holds only in this conversation, a new or resumed session uses the saved value, and a context compaction may drop it.",
-            "State that saved value from the loaded guidance, the project guidance's value before the user guidance's and otherwise 2, or, after a value was saved in this conversation, the value resolved again from it.",
+            "State that saved value as Effect in this session takes the saved values: the project's value before the user's and otherwise 2.",
             "To keep the value, offer the same command with `project` or `user`, which needs delegation installed in that scope.",
         ),
         "stop-threshold.md#Saved scopes": (
@@ -8665,8 +8668,9 @@ class StopThresholdCommandTests(unittest.TestCase):
         "stop-threshold.md#Effect in this session": (
             "After applying a value in any scope, apply review state's Changing it and Saved in this conversation to the current session at once.",
             "A change never changes a step's count; the next automatic call of each step follows review state's Next automatic call with the Stop threshold now in effect.",
-            "A value saved in project or user scope replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of review state's Resolution, the project's value before the user's, using the value just saved for its scope and the loaded guidance for the other, so this session uses what a new session would.",
-            "When a user value is saved where the project guidance states its own value, report that the project's value overrides it and stays in effect.",
+            "A value saved in project or user scope replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of review state's Resolution, the project's value before the user's, so this session uses what a new session would.",
+            "Each scope's saved value is the one last saved in it in this conversation, none after `default`, and otherwise the value its loaded guidance states, since the guidance loaded at the start of the session does not show later saves.",
+            "When a user value is saved while the project has a saved value so taken, report that the project's value overrides it and stays in effect.",
             "This is the reverse of the Review mode toggle, where a saved change keeps a separate task or session override.",
             "State the Stop threshold now in effect and its source, then list the steps the change resumed and the steps it stopped, or say that none changed.",
         ),

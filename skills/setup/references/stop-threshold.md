@@ -4,7 +4,7 @@ Used by cc-feather:stop-threshold and by a natural-language request to change th
 
 ## Value and scope
 
-- The value is an integer from 2 to 10, or `default`. In project or user scope, `default` removes the value saved in that scope; without a scope or with `session`, it drops an earlier session choice in this conversation, so the value resolves from the loaded guidance.
+- The value is an integer from 2 to 10, or `default`. In project or user scope, `default` removes the value saved in that scope; without a scope or with `session`, it drops an earlier session choice in this conversation, so the value resolves from the saved values as Effect in this session takes them.
 - Refuse a value outside 2 to 10, such as 1 or 11, or a value that is not an integer, such as 2.5 or a word, before anything is applied or written, and ask for an integer from 2 to 10 or `default`. A missing value, more than one value, or an unknown or conflicting scope needs clarification before anything is applied or written.
 - No scope or `session` sets a session choice. A request the user limits to the current task sets a task choice for that task instead, handled like the session form.
 - `project` saves the value for the confirmed current project installation. `user` saves it for the selected Claude user configuration root, affecting projects that use that installation; a project whose guidance states its own Stop threshold overrides it.
@@ -12,7 +12,7 @@ Used by cc-feather:stop-threshold and by a natural-language request to change th
 
 ## Session
 
-Without a scope, or with `session`, the command applies the value to this conversation, writes no file and runs no tool. After applying it, always remind the user in the reply that no file was written: the value holds only in this conversation, a new or resumed session uses the saved value, and a context compaction may drop it. State that saved value from the loaded guidance, the project guidance's value before the user guidance's and otherwise 2, or, after a value was saved in this conversation, the value resolved again from it. To keep the value, offer the same command with `project` or `user`, which needs delegation installed in that scope. An earlier task choice stays in effect for its task, and the reply says so.
+Without a scope, or with `session`, the command applies the value to this conversation, writes no file and runs no tool. After applying it, always remind the user in the reply that no file was written: the value holds only in this conversation, a new or resumed session uses the saved value, and a context compaction may drop it. State that saved value as Effect in this session takes the saved values: the project's value before the user's and otherwise 2. To keep the value, offer the same command with `project` or `user`, which needs delegation installed in that scope. An earlier task choice stays in effect for its task, and the reply says so.
 
 ## Saved scopes
 
@@ -24,7 +24,7 @@ Preview `review --project <confirmed-root> --scope <project|user> --stop-thresho
 
 After applying a value in any scope, apply review state's Changing it and Saved in this conversation to the current session at once. A change never changes a step's count; the next automatic call of each step follows review state's Next automatic call with the Stop threshold now in effect.
 
-A value saved in project or user scope replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of review state's Resolution, the project's value before the user's, using the value just saved for its scope and the loaded guidance for the other, so this session uses what a new session would. When a user value is saved where the project guidance states its own value, report that the project's value overrides it and stays in effect. This is the reverse of the Review mode toggle, where a saved change keeps a separate task or session override.
+A value saved in project or user scope replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of review state's Resolution, the project's value before the user's, so this session uses what a new session would. Each scope's saved value is the one last saved in it in this conversation, none after `default`, and otherwise the value its loaded guidance states, since the guidance loaded at the start of the session does not show later saves. When a user value is saved while the project has a saved value so taken, report that the project's value overrides it and stays in effect. This is the reverse of the Review mode toggle, where a saved change keeps a separate task or session override.
 
 State the Stop threshold now in effect and its source, then list the steps the change resumed and the steps it stopped, or say that none changed. A stopped step whose count is now below the new value resumes; a step whose count reaches or exceeds it stops at once, and a step an explicit pass had cleared stays cleared.
 
