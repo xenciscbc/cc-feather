@@ -1,0 +1,247 @@
+"""Release tests: each release's version, update and rollback notes and validation entry, and the documents users
+follow to install, update and recover."""
+
+from __future__ import annotations
+
+import json
+import unittest
+
+from tests.feather_support import config
+
+
+class SecurityRoutingReleaseTests(unittest.TestCase):
+    """0.18.0 C7 (docs/specs/security-critical-routing.md): the release requires setup update and records its validation."""
+
+    README = {
+        "README.md": "0.18.0 adds the `adversary` role and changes the executor role definition, the delegation guidance and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` (adversary is missing, and the executor role and the delegation guidance are from an older template), `model`, `review` and session export ask for setup update first, in `auto` and in `off`, and a required Adversarial review is blocked because adversary is missing.",
+        "README.zh-TW.md": "0.18.0 新增 `adversary` 角色，並改了 executor 的角色定義、分派指引與自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`（缺少 adversary，executor 角色與分派指引來自較舊的範本），`model`、`review` 與 session export 也會要求先做 setup update，需要的對抗式審查也會因缺少 adversary 而受阻。",
+    }
+
+    ENTRY = (
+        "**Setup update is required.** This release adds the `adversary` role and changes the executor role definition, the delegation guidance and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
+        "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, remove the scope with 0.18.0 first, or restore the files listed in the update's backup manifest.",
+        "the 0.17.0 tool's `check` and `show` both exited 2 with `{\"status\": \"error\", \"error\": \"state role schema mismatch\"}`",
+        "Live scenarios: this release was implemented by a session running the installed 0.17.0 rules and roles.",
+        "`v0.18.0` does not exist when this entry is written; it is created only after both passes on the release commit and the user's go-ahead, and then checked against that commit and this manifest version.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    def test_readmes_require_setup_update(self):
+        # The manifest version is pinned by the current release's tests (0.19.0 C8 item 1).
+        for name, sentence in self.README.items():
+            with self.subTest(readme=name):
+                self.assertIn(sentence, self.text(name))
+
+    def test_validation_entry_records_the_update_downgrade_upgrade_and_live_flows(self):
+        entry = self.text("docs/setup-validation.md").split("\n## 0.18.0 security-critical routing\n", 1)[1].split("\n## ", 1)[0]
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("no setup update is required", entry)
+
+
+class ReviewFollowUpsReleaseTests(unittest.TestCase):
+    """0.19.0 C8 (docs/specs/review-followups-0-19-0.md): the release requires setup update, merges its rollback
+    instructions and records its validation."""
+
+    # C8 item 3: the Updates sections, paired in both languages.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.19.0 changes the executor, security-executor, adversary and reviewer role definitions, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` with those four roles from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`."),
+        ("## 更新、移除與驗證\n",
+         "0.19.0 改了 executor、security-executor、adversary 與 reviewer 的角色定義，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出這四個角色來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。"),
+    )
+
+    # C8 item 4: one rollback instruction per case, in the setup document's added-roles section.
+    ROLLBACK = (
+        "To go back to 0.18.0, no remove is needed: 0.18.0 reads the state 0.19.0 writes, and its own setup update re-renders its role templates, so run setup update with 0.18.0 in every scope where delegation is installed, then start a fresh session.",
+        "To go back to 0.17.0 or older, which rejects a state that records `adversary`, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
+    )
+    REPLACED_ROLLBACK = (
+        "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, remove the scope with 0.18.0 first, or restore the files listed in the update's backup manifest.",
+        "To go back to such a version, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
+    )
+
+    # C8 items 3, 5 and 6, and the carried-forward follow-ups (Out of Scope).
+    ENTRY = (
+        "**Setup update is required.** This release changes the executor, security-executor, adversary and reviewer role definitions: run setup update in every scope where delegation is installed, then start a fresh session.",
+        "To go back to 0.18.0, no remove is needed: 0.18.0 reads the state 0.19.0 writes, and its own setup update re-renders its role templates.",
+        "A 0.17.0 or older tool rejects a state that records `adversary`: to go back to one, run remove with the newer plugin first, or restore the files listed in the update's backup manifest.",
+        "Live scenarios (Q20): this release's plan reviews, implementation and review round ran with the installed 0.18.0 roles and procedures (user scope, setup update run on 2026-10-09), as the spec's Governance requires;",
+        "No live scenario ran with the 0.19.0 roles or procedures: the changed rules of C2–C6 are proven only as text, by the contract tests, and are listed below as follow-ups to exercise live.",
+        "`v0.19.0` does not exist when this entry is written.",
+        "it is created only after every Claim has a valid APPROVED and CONFIRMED, and C2, C3 and C5 a valid HELD, or the user's accept-and-land decision for the Claim, and only with the user's go-ahead for landing and for the tag; that it names the release commit and matches this manifest version are checked afterwards.",
+        "**Review round: pending when this entry was written.** The review round's results (code review and outcome verification per Claim, and Adversarial review for C2, C3 and C5) are added after the review round, in a commit that only records review history.",
+        "Carried forward from 0.18.0: `check` and `show` do not name a missing role in a warning, only through `role_update_required` and its absence from the choices and agents; and the delegation skill's sentence \"After a claim passes and is committed\" does not name HELD itself.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, sentence) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            with self.subTest(readme=name):
+                self.assertIn(sentence, self.section(self.text(name), heading))
+
+    def test_setup_document_gives_one_rollback_instruction_per_case(self):
+        section = self.section(self.text("docs/setup.md"), "## Added roles and incompatible role sets\n")
+        for sentence in self.ROLLBACK:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        setup = self.text("docs/setup.md")
+        for sentence in self.REPLACED_ROLLBACK:
+            with self.subTest(replaced=sentence[:40]):
+                self.assertNotIn(sentence, setup)
+
+    def test_validation_entry_records_the_update_rollback_live_scope_tag_and_review(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.19.0 review follow-ups\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("no setup update is required", entry)
+
+
+class StopThresholdReleaseTests(unittest.TestCase):
+    """0.20.0 C4 (docs/specs/configurable-stop-threshold.md): the release needs only the plugin update, says how to go
+    back, and records its validation."""
+
+    # C4 item 3: the Updates sections, paired in both languages.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.20.0 adds the Stop threshold and the `/cc-feather:stop-threshold` command and changes no role definition or guidance template, so existing installations need only the plugin update and a fresh session, and their guidance and state stay unchanged until a Stop threshold is saved.",
+         "A 0.19.x or older configuration tool rejects a scope with a saved Stop threshold, so before going back to one, set it to `default` in that scope; a task or session choice needs nothing."),
+        ("## 更新、移除與驗證\n",
+         "0.20.0 新增停止門檻與 `/cc-feather:stop-threshold` 指令，沒有改任何角色定義或指引範本，所以既有安裝只要更新 plugin 再開新 session，在儲存停止門檻之前，指引與 state 都不會改變。",
+         "0.19.x 或更舊的設定工具不接受已儲存停止門檻的範圍，所以要回到這些版本前，先在該範圍把它設回 `default`；task 或 session 的指定不需要處理。"),
+    )
+
+    # C4 item 3: the setup document's added-roles section.
+    SETUP = (
+        "Upgrading to 0.20.0 needs only the plugin update and a fresh session: it changes no role or guidance template, and a scope keeps byte-identical guidance and state until a Stop threshold is saved.",
+        "To go back to 0.19.x or older from 0.20.0, which reject a state that records a Stop threshold, first run `review --stop-threshold default` in every scope that saved one; a scope without one, and a task or session choice, need nothing.",
+    )
+
+    # C4 items 2-4.
+    ENTRY = (
+        "**No setup update is required.** This release changes no role definition and no guidance template: existing installations need only the plugin update and a fresh session, and a scope keeps byte-identical guidance and state until a Stop threshold is saved in it.",
+        "A 0.19.x or older configuration tool rejects a state that records a Stop threshold: to go back to one, first run `review --stop-threshold default` in every scope that saved one; a scope without one, and a task or session choice, need nothing.",
+        "all 22 files of both scopes were byte-identical before and after, and `show` reported the default Stop threshold 2, not set, with no warnings.",
+        "Live scenarios: this release's plan reviews and implementation ran, and its review round runs, with the installed 0.19.0 roles and procedures, under which the Stop threshold is the fixed two.",
+        "No live scenario ran with the 0.20.0 procedures or the `/cc-feather:stop-threshold` command: the rules of C2 and C3 are proven only as text, by the contract tests, and the configuration tool's behaviour of C1 by its command-line tests and the checks above.",
+        "`v0.20.0` does not exist when this entry is written.",
+        "it is created only after every Claim has a valid APPROVED and CONFIRMED, or the user's accept-and-land decision for the Claim, and only with the user's go-ahead for landing and for the tag; that it names the release commit and matches this manifest version are checked afterwards.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_20_0(self):
+        self.assertEqual("0.20.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
+        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertIn(sentence, self.section(self.text(name), heading))
+
+    def test_setup_document_states_the_upgrade_and_the_way_back(self):
+        section = self.section(self.text("docs/setup.md"), "## Added roles and incompatible role sets\n")
+        for sentence in self.SETUP:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+
+    def test_validation_entry_records_the_update_checks_live_scope_and_tag(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.20.0 configurable Stop threshold\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("Setup update is required", entry)
+
+
+class InstallDocumentTests(unittest.TestCase):
+    """C7 item 3: the documents users follow to install, update and recover are current."""
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    def test_install_and_update_commands_replace_prerelease_wording(self):
+        for name, prerelease in (("README.md", "After publishing this version"),
+                                 ("README.zh-TW.md", "將此版本推送至 GitHub 後")):
+            with self.subTest(readme=name):
+                text = self.text(name)
+                self.assertNotIn(prerelease, text.replace("[GitHub](https://github.com/xenciscbc/cc-feather)", "GitHub"))
+                for command in ("/plugin marketplace add xenciscbc/cc-feather", "/plugin install cc-feather@cc-feather",
+                                "claude plugin update cc-feather@cc-feather"):
+                    self.assertIn(command, text)
+        self.assertNotIn("D:/work_data", self.text("README.zh-TW.md"))
+        self.assertIn("`/plugin marketplace add /absolute/path/to/cc-feather`", self.text("README.zh-TW.md"))
+
+    def test_setup_document_counts_the_packaged_skills(self):
+        skills = json.loads(self.text(".claude-plugin/plugin.json"))["skills"]
+        words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
+        setup = self.text("docs/setup.md")
+        self.assertIn(f"The plugin packages {words[len(skills)]} skills.", setup)
+        # Only the manifest's count is stated: an earlier count left behind would contradict it.
+        for count, word in words.items():
+            if count != len(skills):
+                with self.subTest(stale=word):
+                    self.assertNotIn(f"The plugin packages {word} skills.", setup)
+
+    def test_setup_documents_describe_both_causes_and_reinstall_reset(self):
+        setup = self.text("docs/setup.md")
+        self.assertIn("Check/show report `role_update_required: true` for two causes.", setup)
+        self.assertIn("rendered from an older role template than the plugin now packages", setup)
+        self.assertIn("remove and reinstall the scope, which resets the saved choices to the defaults and the review "
+                      "mode to off unless install is given `--review-mode auto`.", setup)
+        self.assertNotIn("the installation predates a newly packaged role;", self.text("skills/setup/SKILL.md"))
+        self.assertIn("or an unedited role was rendered from an older template", self.text("skills/setup/SKILL.md"))
+
+
+class UpstreamManifestTests(unittest.TestCase):
+    """C7 item 2: the upstream manifest describes the handoff files that ship.
+
+    Hashes are of the bytes as checked out; .gitattributes keeps *.py at LF in every checkout, so a CRLF
+    platform hashes the same bytes.
+    """
+
+    def setUp(self):
+        self.manifest = json.loads((config.ROOT / "docs" / "upstream-manifest.json").read_bytes())
+
+    def test_listed_files_ship_with_their_recorded_hashes(self):
+        files = self.manifest["files"]
+        self.assertTrue(files)
+        self.assertEqual(set(self.manifest["upstream_paths"]), set(files))
+        for name, recorded in files.items():
+            with self.subTest(file=name):
+                path = config.ROOT / name
+                self.assertTrue(path.is_file(), f"listed file does not ship: {name}")
+                self.assertEqual(config.digest(path.read_bytes()), recorded, f"stale manifest hash: {name}")
+
+    def test_adaptations_name_listed_files_that_differ_from_their_source(self):
+        files = self.manifest["files"]
+        for name, entry in self.manifest["adaptations"].items():
+            with self.subTest(file=name):
+                self.assertIn(name, files)
+                self.assertEqual(set(entry), {"source_sha256", "change"})
+                self.assertRegex(entry["source_sha256"], r"^[0-9a-f]{64}$")
+                # An adaptation records changed bytes; a file identical to its source needs no entry.
+                self.assertNotEqual(entry["source_sha256"], files[name])
+                self.assertTrue(entry["change"].strip())
+
+
+if __name__ == "__main__":
+    unittest.main()

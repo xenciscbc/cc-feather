@@ -30,7 +30,7 @@ A parent smoke test ran Python as a real subprocess with PYTHONIOENCODING=cp950 
 ## Reproduce
 
 ```text
-python -B -m unittest tests.test_feather_config tests.test_plugin_portability -v
+python -B -m unittest discover -s tests -t .
 claude plugin validate . --json
 claude plugin validate .claude-plugin/plugin.json --json
 ```
@@ -260,3 +260,38 @@ Review: in the session that wrote the spec, under the installed 0.19.0, plan rev
 Review round, recorded after it (2026-10-10; every call by the installed 0.19.0 roles in fresh context; the calls for different Claims were dispatched together rather than in the Schedule's order, since each is read-only and judges the same candidate): at the first candidate f2576cb, the C4 commit, code review returned APPROVED for C1, C2 and C4 and CHANGES_REQUESTED for C3, whose shared procedure re-resolved a value saved in the conversation against the guidance loaded at the start of the session, so an earlier save in the same conversation was ignored; outcome verification CONFIRMED C1. The fix a595e24 corrects that and also carries two non-blocking items from C2's code review: the READMEs' unknown-choice sentence names a task or session choice, and the retired-wording pattern catches two more 0.19.0 phrases. At a595e24, code review returned APPROVED for C3 (its second automatic call) and, narrowed to the fix, for C1, C2 and C4, whose files the fix touched; outcome verification CONFIRMED C1 again, narrowed to the fix, and C2 and C3 in full. This commit only records the review history in this entry, which no other Claim's files include, so it reopens C4 alone and the passes of C1, C2 and C3 at a595e24 stand; C4's code review and outcome verification follow at this commit.
 
 Follow-ups left open, all non-blocking: the remove-and-reinstall recovery path and its messages do not say a saved Stop threshold is lost; review state's Resolution names the loaded guidance without pointing to Saved in this conversation, and Unknown state does not cover saves made earlier in a conversation that compaction may drop; a natural-language request reaches the shared procedure only once the delegation or setup skill is loaded; the retired-wording pattern misses some 0.19.0 phrasings of the old derivations; the byte-identity test rebuilds its 0.19.0 baseline from current templates; the update notes do not say that an installation older than 0.19.0 still needs setup update, and give no recovery after a downgrade made with a saved value; the session form's `default` is not described in the READMEs; minor wording (en dash, "Budget" labels, ADR 0009 note order, `_delegation_block` comment); and the explicit-request wording in the adversarial-review command, which predates this release.
+
+## Test module split (on main after 0.20.0)
+
+Implements [the test module split spec](specs/test-module-split.md). No release: the plugin version stays 0.20.0 and the next release carries the split. The 22 test classes of `tests/test_feather_config.py` moved whole into five feature modules, and the definitions a class in another module uses moved to `tests/feather_support.py`, a support module that holds no tests and loads the configuration tool once; no assertion changed. Test IDs change with the module names. The test modules import the support module as `from tests import feather_support`, so they run through `python -m unittest` from the repository root, like the handoff test modules.
+
+Validation on 2026-10-11 (Windows 11 Pro 10.0.26100, Python 3.11.9, Git 2.43.0.windows.1), compared with the base revision ba0837d by class and method name with each test's outcome and skip reason (temporary directory names in skip reasons masked): `python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests` each ran 540 tests at the C1 commit 5a451b6 and at the C2 commit, all passing with the same 23 skips as at the base revision.
+
+Code comparisons, by one-off scripts that are not committed: for C1, a syntax-tree comparison of every statement of the 22 classes with the base revision found 41 differing members, each an owner class binding a moved member in place or a reference changed to reach the support module, as C1's commit message inventories; every one of the 30 support-module definitions has its original's syntax tree apart from the inventoried rewrites (new name, removed decorator, a fixed-class reference replaced by the support definition, the removed `cls` parameter), and 7 are identical. For C2, each class's source text, from its `class` line to its last line, is identical to C1's, and each module keeps the classes' original order.
+
+| Class | Module |
+| --- | --- |
+| `FeatherConfigTests` | `tests.test_feather_config` |
+| `SavedStopThresholdTests` | `tests.test_feather_config` |
+| `ReviewRulesFollowUpTests` | `tests.test_feather_review_rules` |
+| `PostFixReviewTests` | `tests.test_feather_review_rules` |
+| `StopThresholdProceduresTests` | `tests.test_feather_review_rules` |
+| `SecurityCriticalVocabularyTests` | `tests.test_feather_security_review` |
+| `PreApprovalSecurityAnalysisTests` | `tests.test_feather_security_review` |
+| `AdversaryRoleTests` | `tests.test_feather_security_review` |
+| `AdversarialReviewTests` | `tests.test_feather_security_review` |
+| `AdversarialReviewCommandTests` | `tests.test_feather_security_review` |
+| `DecisionRecordAndDocumentsTests` | `tests.test_feather_security_review` |
+| `SecurityCriticalWordingTests` | `tests.test_feather_security_review` |
+| `AdversaryLimitsTests` | `tests.test_feather_security_review` |
+| `AdversarialReviewRetriesTests` | `tests.test_feather_security_review` |
+| `PreApprovalApprovalRuleTests` | `tests.test_feather_security_review` |
+| `CommandScopeTests` | `tests.test_feather_commands` |
+| `StopThresholdCommandTests` | `tests.test_feather_commands` |
+| `SecurityRoutingReleaseTests` | `tests.test_feather_releases` |
+| `ReviewFollowUpsReleaseTests` | `tests.test_feather_releases` |
+| `StopThresholdReleaseTests` | `tests.test_feather_releases` |
+| `InstallDocumentTests` | `tests.test_feather_releases` |
+| `UpstreamManifestTests` | `tests.test_feather_releases` |
+
+**Review round: pending when this entry was written.**
