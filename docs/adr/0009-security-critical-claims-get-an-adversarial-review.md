@@ -39,6 +39,8 @@ Residual risk: a role loads the project's CLAUDE.md, so a commit under attack th
 
 This amends ADR 0006, ADR 0007 and ADR 0008: a Security-critical claim also needs a valid HELD, or the user's accept-and-land decision, before it is landed on the default branch, released, reported complete or has its ticket set to a done value, and its pending-acceptance note names a missing Adversarial review. A Security-critical claim makes at most fourteen automatic calls in one uninterrupted attempt, and a Plan with one also gets a security analysis per Plan or shared trust boundary. The new role and the changed role and guidance templates need setup update in every scope where delegation is installed, and a fresh session; until then a required Adversarial review is blocked because adversary is missing. A 0.17.0 or older tool rejects a state that records `adversary`. Exploit details and secrets go only into untracked, non-public records, so this record, like any public place, carries only a summary. These remain model instructions rather than hook-enforced gates.
 
+(Amended by ADR 0010: the two consecutive non-passes that stop Adversarial review and the fourteen automatic calls per Security-critical claim are the values at the default Stop threshold of 2; with Stop threshold K, from 2 to 10, the step stops after K consecutive automatic calls without a pass and a Security-critical claim makes at most K³ + K² + K automatic calls in one uninterrupted attempt.)
+
 ## Amendment note for 0.19.0
 
 The [0.19.0 review follow-ups spec](../specs/review-followups-0-19-0.md) adds the following to this record without rewriting the decision text above.

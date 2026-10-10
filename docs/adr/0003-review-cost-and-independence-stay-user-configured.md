@@ -14,3 +14,5 @@ In auto, every Claim of plan-driven work gets its own code review and outcome ve
 ## Consequences
 
 The README tells users how many automatic calls auto makes and how to lower cost or add model diversity with cc-feather:model, for example a lower verifier effort or a different analyst or reviewer model. Switching a role's model never resets a step's two-call budget. Plans whose Claims are too fine or too coarse are fixed where the Plan is written. Revisit if measured cost, missed defects or retry rates show a default should change.
+
+(Amended by ADR 0010: the two-call budget is the value at the default Stop threshold of 2; the Stop threshold is now one user-configurable number from 2 to 10, the README gives the number of automatic calls in terms of it, and switching a role's model never resets a step's count toward it.)

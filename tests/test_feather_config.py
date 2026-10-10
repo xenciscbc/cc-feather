@@ -3907,19 +3907,20 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertIn(phrase, bullets[label])
 
-    def test_six_calls_are_described_as_one_uninterrupted_attempt(self):
+    def test_per_claim_bound_is_described_as_one_uninterrupted_attempt(self):
+        # Configurable Stop threshold C2: the bound is K(K+1), and its K = 2 example is 6.
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
         readme = (config.ROOT / "README.md").read_text(encoding="utf-8")
         readme_zh = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
         sources = {
             "preview.md": ((config.ROOT / "skills" / "delegation" / "references" / "preview.md")
-                           .read_text(encoding="utf-8"), "six", "uninterrupted", r"[.;:] "),
-            "README cost": (readme.split("- **Cost:**", 1)[1].split("\n", 1)[0], "six", "uninterrupted", r"[.;:] "),
+                           .read_text(encoding="utf-8"), "K(K+1)", "uninterrupted", r"[.;:] "),
+            "README cost": (readme.split("- **Cost:**", 1)[1].split("\n", 1)[0], "K(K+1)", "uninterrupted", r"[.;:] "),
             "README preview": (readme.split("### Delegation preview", 1)[1].split("\n### ", 1)[0],
-                               "six", "uninterrupted", r"[.;:] "),
-            "README.zh-TW cost": (readme_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "六", "不中斷", "[。；：]"),
+                               "K(K+1)", "uninterrupted", r"[.;:] "),
+            "README.zh-TW cost": (readme_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "K(K+1)", "不中斷", "[。；：]"),
             "README.zh-TW preview": (readme_zh.split("### 分派預覽", 1)[1].split("\n### ", 1)[0],
-                                     "六", "不中斷", "[。；：]"),
+                                     "K(K+1)", "不中斷", "[。；：]"),
         }
         # The bound may also be written as the numeral 6 ("6 calls", 「6 次」), but not as part of "6N".
         numeral = re.compile(r"(?<![0-9A-Za-z])[6６]\s*(?:calls?|automatic|次)")
@@ -3966,8 +3967,8 @@ class FeatherConfigTests(unittest.TestCase):
                     "review-state.md", "including a generic retry after a temporary failure"),
         "Lost state": ("狀態不明", "main treats the step as stopped and asks you", "主 Agent 會視為已停下並問你",
                        "review-state.md", "treat the step as stopped and ask the user"),
-        "Cost": ("成本", "a claim makes at most six", "每個 claim 最多六次",
-                 "preview.md", "at most six automatic calls per Claim"),
+        "Cost": ("成本", "a claim makes at most K(K+1)", "每個 claim 最多 K(K+1) 次",
+                 "preview.md", "a Claim makes at most K(K+1) automatic calls"),
         "Independence": ("獨立性", "each review runs in a fresh context", "每次審查都在新的 context",
                          "plan-review.md", "in fresh native context"),
         "A spec, or some of its tickets": ("一份 spec，或其中幾張 ticket", "Each unfinished ticket in that scope is one claim",
@@ -4027,7 +4028,7 @@ class FeatherConfigTests(unittest.TestCase):
         "Explicit request": ("it clears the stop without resetting the count",
                              "review-state.md", "clears the stop and leaves the count unchanged"),
         "Unreviewed claim": ("stopped at its Stop threshold without APPROVED",
-                             "code-review.md", "After two consecutive automatic calls without APPROVED"),
+                             "code-review.md", "When the count reaches the Stop threshold in effect without APPROVED"),
         "Unverified claim": ("no currently valid CONFIRMED", "outcome-verification.md", "report the claim as unverified"),
         "Delegation preview": ("the dispatch basis only in the session that made it",
                                "preview.md", "only in the session that made it"),
@@ -4505,7 +4506,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "reviewer.md": ('When the brief says the previous call for this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the full scope from the base revision and treat earlier and partial findings supplied as evidence only.',),
         "analyst.md": ('When the brief says the previous call for this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only.',),
         # Budgets stay as they were.
-        "review-state.md#Stop": ("Two consecutive automatic calls without a pass stop the step for that work; it waits for the user's explicit request.",),
+        "review-state.md#Stop": ("As many consecutive automatic calls without a pass as the Stop threshold in effect stop the step for that work; it waits for the user's explicit request.",),
         "review-state.md#What counts as a call": ("Every attempted call counts, including a generic retry after a temporary failure, and a stopped step is never dispatched again as a retry.",),
     }
 
@@ -4608,9 +4609,9 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          (("analyst.md", "when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only."),
           ("plan-review.md", "analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan,")),
          (("analyst.md", "On a second review, verify resolved blockers"),)),
-        ("two consecutive automatic calls fail (budget exhausted)",
+        ("as many consecutive automatic calls as the Stop threshold fail (budget exhausted)",
          "the step stops and waits for the user's explicit request; nothing changes the budget",
-         (("review-state.md#Stop", "Two consecutive automatic calls without a pass stop the step for that work; it waits for the user's explicit request."),
+         (("review-state.md#Stop", "As many consecutive automatic calls without a pass as the Stop threshold in effect stop the step for that work; it waits for the user's explicit request."),
           ("review-state.md#Completed calls and coverage", "Every attempted call still counts as under What counts as a call, and the budgets are unchanged.")),
          ()),
         ("off mode, an active handoff records the claim as unreviewed, an explicit code review returns APPROVED",
@@ -5423,7 +5424,7 @@ class AdversarialReviewTests(unittest.TestCase):
             "Count consecutive automatic calls without a pass, per claim: failed, interrupted and protocol-failure calls count, an INCONCLUSIVE returned after dispatch counts as a non-pass, and a missing verdict is not HELD.",
             # 0.19.0 C4 item 2: only a HELD main accepts under step 6 resets the count.
             "An automatic HELD that main accepts under step 6 resets the count to zero; an explicit call's verdict does not change it, and changing the adversary's model or the brief's wording never resets it.",
-            "Two consecutive automatic calls without HELD stop automatic Adversarial review (step 8).",
+            "A count that reaches the Stop threshold in effect without HELD stops automatic Adversarial review (step 8).",
             "Explicit and automatic calls are classified as for the other steps, as [review state](review-state.md) describes.",
             "Recover the count, verdicts, coverage and open gaps as in [plan review](plan-review.md) step 1: counts are per session, a resumed session starts a new count, HELD does not cross sessions, an in-session state that cannot be established makes the step stopped until the user decides, and an unresolved verdict restricts a resumed session only when an active handoff records it.",
         ),
@@ -5441,7 +5442,7 @@ class AdversarialReviewTests(unittest.TestCase):
     HANDOFF_NOTE = {
         "adversarial-review.md": (
             "When the step stops, or a BROKEN is unresolved, and a handoff is active, record as plain text that the claim is pending acceptance with the Adversarial review missing, its open findings and that it must not be landed on the default branch, released or reported complete, whether or not an earlier note existed; change or remove the note only as [review state](review-state.md)'s Pending acceptance describes.",
-            "After two consecutive automatic calls without HELD, stop automatic Adversarial review, report the claim with its Adversarial review missing and its open findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
+            "When the count reaches the Stop threshold in effect without HELD, stop automatic Adversarial review, report the claim with its Adversarial review missing and its open findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
         ),
         "review-state.md#Pending acceptance": (
             "A gated claim stays gated after either single pass, and a Security-critical claim after both until it also has a valid HELD.",
@@ -5536,8 +5537,8 @@ class AdversarialReviewTests(unittest.TestCase):
         ),
         "preview.md": (
             "3. One review section, listed once rather than under each Claim: plan review by analyst, code review by reviewer and outcome verification by verifier, and, when a Plan has a Security-critical claim, the security analysis by analyst before plan review and Adversarial review by adversary after outcome verification, each with model, effort and source.",
-            "State the number of Plans, Claims and Security-critical claims covered, that the security analysis runs once per Plan or per trust boundary that several Security-critical claims share, and that each step stops after two consecutive automatic calls without a pass, per Plan for plan review and per Claim for code review, outcome verification and Adversarial review, an automatic pass resetting the count;",
-            "under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures this comes to at most six automatic calls per Claim, or fourteen for a Security-critical claim, in one uninterrupted attempt, and each reopened Claim or Material deviation adds calls.",
+            "State the number of Plans, Claims and Security-critical claims covered, that the security analysis runs once per Plan or per trust boundary that several Security-critical claims share, the Stop threshold in effect, written K, with its source (task, session, project, user or default), and that each step stops after K consecutive automatic calls without a pass, per Plan for plan review and per Claim for code review, outcome verification and Adversarial review, an automatic pass resetting the count.",
+            "Under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures, in one uninterrupted attempt, a Claim makes at most K(K+1) automatic calls (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification), a Security-critical claim at most K³ + K² + K (also up to K Adversarial reviews, between which up to K − 1 fixes after BROKEN each get up to K(K+1) code review and verification calls), and a Plan with N Claims of which S are Security-critical about K + K(K+1)N + K³S.",
         ),
         "review-auto.md": (
             "Use cc-feather:delegation so that work done from a plan, spec or ticket the user agreed to gets plan review before implementation, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, before it is reported complete.",
@@ -5561,7 +5562,7 @@ class AdversarialReviewTests(unittest.TestCase):
             "Includes model configuration and optional automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work, default off;",
         ),
         "setup.md": (
-            "The automatic limits for plan review, code review, outcome verification and Adversarial review (each step stops after two consecutive automatic calls without a pass, and an automatic pass resets the count) are agent instructions, not a hook-enforced counter.",
+            "The automatic limits for plan review, code review, outcome verification and Adversarial review (each step stops once its consecutive automatic calls without a pass reach the Stop threshold, 2 by default, and an automatic pass resets the count) are agent instructions, not a hook-enforced counter.",
             "enabled mode `auto` gives plan-driven work (from a plan, spec, ticket or conversation plan the user agreed to) plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review.",
             "Landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus a valid HELD for a Security-critical claim, or the user's explicit accept-and-land decision (`templates/review-auto.md`; the delegation skill's review state holds the rules).",
             "Each step's count is separate; changing modes does not reset a count or convert an unresolved verdict into READY, APPROVED, CONFIRMED or HELD.",
@@ -5597,14 +5598,14 @@ class AdversarialReviewTests(unittest.TestCase):
             "- `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions above).",
-            "The plan review, code review and outcome verification roles, and for a plan with a Security-critical claim the security analysis and Adversarial review roles, are listed once at the end, with the number of plans, claims and Security-critical claims and when each step stops (two consecutive automatic calls without a pass, at most six calls per claim, or fourteen for a Security-critical claim, in one uninterrupted attempt, each reopened claim or approved material deviation adding calls);",
+            "The plan review, code review and outcome verification roles, and for a plan with a Security-critical claim the security analysis and Adversarial review roles, are listed once at the end, with the number of plans, claims and Security-critical claims and when each step stops (the Stop threshold in effect and its source, at most K(K+1) calls per claim, or K³ + K² + K for a Security-critical claim, in one uninterrupted attempt, each reopened claim or approved material deviation adding calls);",
         ),
         "README.zh-TW.md": (
             "| 對抗式審查 | 安全關鍵 claim 在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |",
             "| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；",
             "但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |",
             "進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見上方 Commit 條件與你的決定）；",
-            "計畫審查、程式碼審查與結果驗證的角色，以及有安全關鍵 claim 的計畫的安全分析與對抗式審查角色，只在最後列一次，附上計畫數、claim 數、安全關鍵 claim 數與各步驟何時停下（連續兩次自動呼叫沒通過，一次不中斷的完成過程中每個 claim 最多六次、安全關鍵 claim 最多十四次，重新打開的 claim 與經你同意的重大偏離會再增加呼叫）；",
+            "計畫審查、程式碼審查與結果驗證的角色，以及有安全關鍵 claim 的計畫的安全分析與對抗式審查角色，只在最後列一次，附上計畫數、claim 數、安全關鍵 claim 數與各步驟何時停下（目前的停止門檻與它的來源，一次不中斷的完成過程中每個 claim 最多 K(K+1) 次、安全關鍵 claim 最多 K³ + K² + K 次，重新打開的 claim 與經你同意的重大偏離會再增加呼叫）；",
         ),
         "README.md#Budget": (
             "each step counts consecutive automatic calls that do not pass, per plan for plan review and per claim for code review, verification and Adversarial review.",
@@ -5655,11 +5656,11 @@ class AdversarialReviewTests(unittest.TestCase):
             "ticket 要在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值，",
         ),
         "README.md#Cost": (
-            "in one uninterrupted attempt in a session, a plan with N claims, S of them Security-critical, makes at least 1 + 2N + S automatic calls and up to about 2 + 6N + 8S, since a claim makes at most six (code review twice before and twice after a fix, verification twice) and a Security-critical claim at most fourteen (also Adversarial review twice, and up to six more code review and verification calls for the fix after a BROKEN, whose counts restart after their passes);",
-            "a plan with a Security-critical claim also gets one security analysis by analyst per plan or shared trust boundary before plan review;",
+            "in one uninterrupted attempt in a session, with K the Stop threshold, a plan with N claims, S of them Security-critical, makes at least 1 + 2N + S automatic calls and up to about K + K(K+1)N + K³S, since a claim makes at most K(K+1) (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification) and a Security-critical claim at most K³ + K² + K (also up to K Adversarial reviews, between which up to K − 1 fixes after a BROKEN each get up to K(K+1) code review and verification calls, whose counts restart after their passes).",
+            "A plan with a Security-critical claim also gets one security analysis by analyst per plan or shared trust boundary before plan review;",
         ),
         "README.zh-TW.md#成本": (
-            "在一個 session 內一次不中斷的完成過程中，一份有 N 個 claim、其中 S 個是安全關鍵 claim 的計畫，至少自動呼叫 1 + 2N + S 次，最多約 2 + 6N + 8S 次，因為每個 claim 最多六次（修正前後各兩次程式碼審查、兩次驗證），安全關鍵 claim 最多十四次（再加上兩次對抗式審查，以及 BROKEN 修正後最多再六次程式碼審查與驗證，因為兩者通過後次數會歸零）；",
+            "在一個 session 內一次不中斷的完成過程中，停止門檻為 K 時，一份有 N 個 claim、其中 S 個是安全關鍵 claim 的計畫，至少自動呼叫 1 + 2N + S 次，最多約 K + K(K+1)N + K³S 次，因為每個 claim 最多 K(K+1) 次（最多 K 次驗證，其間最多 K − 1 次修正各最多 K 次程式碼審查，再加上第一次驗證前最多 K 次程式碼審查），安全關鍵 claim 最多 K³ + K² + K 次（再加上最多 K 次對抗式審查，其間最多 K − 1 次 BROKEN 後的修正各最多 K(K+1) 次程式碼審查與驗證，因為兩者通過後次數會歸零）。",
             "有安全關鍵 claim 的計畫，在計畫審查前還會由 analyst 對每份計畫或共用的信任邊界做一次安全分析；",
         ),
     }
@@ -6739,7 +6740,7 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
         "may run once the brief names each uncovered invariant and gap.",
         "When the call lacked a target, evidence or prerequisite, the next call runs only once that missing evidence, "
         "target or prerequisite has changed; otherwise report the claim's Adversarial review missing.",
-        "Either next call counts toward the two-call stop of step 4.",
+        "Either next call counts toward the stop of step 4.",
     )
     # Item 2: only an accepted HELD resets the count; a HELD main does not accept is a non-pass.
     COUNT = (
@@ -6904,10 +6905,10 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
           ("adversarial-review.md#3", "A target missing its start and reset, its synthetic data, its allowed effects or its reachable dependencies counts as no target,")),
          ()),
         ("main does not accept an automatic HELD, and the next automatic call returns BROKEN",
-         "two consecutive automatic calls without a pass: automatic Adversarial review stops",
+         "at the default Stop threshold, two consecutive automatic calls without a pass: automatic Adversarial review stops",
          (("adversarial-review.md#4", COUNT[1]),
-          ("adversarial-review.md#4", "Two consecutive automatic calls without HELD stop automatic Adversarial review (step 8)."),
-          ("adversarial-review.md#8", "After two consecutive automatic calls without HELD, stop automatic Adversarial review,")),
+          ("adversarial-review.md#4", "A count that reaches the Stop threshold in effect without HELD stops automatic Adversarial review (step 8)."),
+          ("adversarial-review.md#8", "When the count reaches the Stop threshold in effect without HELD, stop automatic Adversarial review,")),
          (("adversarial-review.md", "An automatic HELD resets the count to zero"),)),
         ("a new claim shares security assumptions with an already accepted claim",
          "the new claim owns the composed review; the accepted claim's HELD is not reopened",
@@ -8141,6 +8142,387 @@ class SavedStopThresholdTests(unittest.TestCase):
                 "Like the review mode, the Stop threshold is an agent instruction, not a hook-enforced counter."):
             with self.subTest(sentence=sentence[:40]):
                 self.assertIn(sentence, section)
+
+
+class StopThresholdProceduresTests(unittest.TestCase):
+    """Configurable Stop threshold C2: the procedures stop at K, resolve and state it, apply one rule for the next
+    automatic call, handle a change of K, give costs in K, and the READMEs and decision records say so."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+    ADR = config.ROOT / "docs" / "adr"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """'<file>' or '<file>#<label>': a '- **<label>.**' bullet of a procedure, a README rule bullet, or the
+        README and setup sections named '#section'."""
+        path, _, label = name.partition("#")
+        files = {
+            "review-state.md": cls.REFERENCES / "review-state.md",
+            "plan-review.md": cls.REFERENCES / "plan-review.md",
+            "code-review.md": cls.REFERENCES / "code-review.md",
+            "outcome-verification.md": cls.REFERENCES / "outcome-verification.md",
+            "adversarial-review.md": cls.REFERENCES / "adversarial-review.md",
+            "preview.md": cls.REFERENCES / "preview.md",
+            "delegation SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md",
+            "setup.md": config.ROOT / "docs" / "setup.md",
+            "README.md": config.ROOT / "README.md",
+            "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+            "ADR 0010": cls.ADR / "0010-the-stop-threshold-is-one-configurable-number.md",
+        }
+        text = files[path].read_text(encoding="utf-8")
+        if not label:
+            return text
+        if label == "section":
+            heading = {"README.md": "\n### Stop threshold\n", "README.zh-TW.md": "\n### 停止門檻\n",
+                       "setup.md": "\n## Stop threshold\n", "review-state.md": "\n## Stop threshold\n"}[path]
+            return text.split(heading, 1)[1].split("\n#", 1)[0]
+        if path == "README.md":
+            return dict(FeatherConfigTests.readme_rule_bullets(text, "## Roles and routing", "### Automatic review switch"))[label]
+        if path == "README.zh-TW.md":
+            return dict(FeatherConfigTests.readme_rule_bullets(text, "## 分派與預設模型", "### 自動審查開關"))[label]
+        if label.isdigit():
+            return next(line for line in text.splitlines() if line.startswith(f"{label}. "))
+        return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
+
+    def assert_whole_sentence(self, sentence, text):
+        # An English sentence ends at whitespace or the end; a Chinese one ends with its own 。 and may follow one.
+        end = "" if sentence.endswith("。") else r"(?=\s|$)"
+        self.assertRegex(text, rf"(?:^|(?<=[\s。])){re.escape(sentence)}{end}", sentence[:60])
+
+    def assert_pinned(self, pins):
+        for place, sentences in pins.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assert_whole_sentence(sentence, text)
+
+    # Item 3: the one rule, stated once in review state and applied wherever a request used to be derived.
+    NEXT_CALL_RULE = ("A step's next automatic call for a work needs the user's explicit request exactly while that step's "
+                      "count for the work is at or above the Stop threshold in effect, and is made without one while it is below.")
+
+    # Item 1: resolution, never changed by main, invalid guidance skipped, unknown choice treated like Unknown state.
+    RESOLUTION = {
+        "review-state.md#section": (
+            "The Stop threshold, written K in formulas, is the number of consecutive automatic calls without a pass that stops a step: one integer from 2 to 10 that applies to plan review, code review, outcome verification and Adversarial review alike.",
+        ),
+        "review-state.md#Resolution": (
+            "The Stop threshold in effect is, in order: the user's task choice, for that task; otherwise the user's session choice; otherwise the value the loaded project guidance states; otherwise the value the loaded user guidance states; otherwise 2.",
+            "Main never raises or lowers the Stop threshold on its own; a task or session choice comes only from the user's own words in this conversation.",
+            "A guidance value that is not an integer from 2 to 10 is not used: main takes the next source and reports the invalid value.",
+        ),
+        "review-state.md#Unknown threshold": (
+            "When main cannot establish whether a task or session choice exists, for example after context compaction, it treats the Stop threshold as unknown, as Unknown state does for counts: affected steps are treated as stopped and main asks the user.",
+            "A step whose count is below 2 is not affected, since no Stop threshold is lower.",
+        ),
+        "plan-review.md": (
+            "Resolve the Stop threshold in effect, the number of consecutive automatic calls without a pass that stops each step, as [review state](review-state.md) describes, and state it and its source whenever a review decision comes up.",
+        ),
+        "delegation SKILL.md": (
+            "Each step of the automatic flow stops at the Stop threshold, which main resolves, states and applies to a change as [review state](references/review-state.md) describes and never changes on its own.",
+        ),
+    }
+
+    # Item 2: every step stops at K.
+    STOPPING = {
+        "review-state.md": (
+            "| Consecutive non-pass count | Automatic calls in a row that did not pass, including failed, interrupted and protocol-failure calls. A count that reaches the Stop threshold in effect stops the step. |",
+        ),
+        "review-state.md#Stop": (
+            "As many consecutive automatic calls without a pass as the Stop threshold in effect stop the step for that work; it waits for the user's explicit request.",
+        ),
+        "plan-review.md#3": (
+            "A count that reaches the Stop threshold in effect without READY stops automatic submission (step 6).",
+        ),
+        "plan-review.md#6": (
+            "Once the count reaches the Stop threshold in effect without READY, stop automatic submission.",
+            "While the count stays at or above the Stop threshold, further review requires an explicit user request, and an explicit call is outside the count; an explicit READY clears the stop and lets work continue, as [review state](review-state.md) describes.",
+        ),
+        "code-review.md#3": (
+            "A count that reaches the Stop threshold in effect without APPROVED stops automatic review (step 6); the Stop threshold is resolved and stated as [review state](review-state.md) describes.",
+        ),
+        "code-review.md#6": (
+            "When the count reaches the Stop threshold in effect without APPROVED, for any reason (a retry counts as a call), the claim is unreviewed: stop automatic review, do not start automatic outcome verification, do not land it on the default branch, release it or report it complete, report its open findings and require an explicit user request for another call.",
+        ),
+        "outcome-verification.md#3": (
+            "A count that reaches the Stop threshold in effect without CONFIRMED stops automatic verification (step 6), so, with K the Stop threshold, a claim refuted K times in a row stops after K − 1 automatically rechecked fixes.",
+        ),
+        "outcome-verification.md#6": (
+            "When the count reaches the Stop threshold in effect without CONFIRMED, stop automatic verification, report the claim as unverified with the findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
+        ),
+        "adversarial-review.md#4": (
+            "A count that reaches the Stop threshold in effect without HELD stops automatic Adversarial review (step 8).",
+        ),
+        "adversarial-review.md#5": ("Either next call counts toward the stop of step 4.",),
+        "adversarial-review.md#8": (
+            "When the count reaches the Stop threshold in effect without HELD, stop automatic Adversarial review, report the claim with its Adversarial review missing and its open findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
+        ),
+    }
+
+    # Item 3: the single rule and each place that used to derive a request from a count left where it stopped.
+    NEXT_CALL = {
+        "review-state.md#Next automatic call": (
+            NEXT_CALL_RULE,
+            "This one rule decides it after an explicit pass that cleared a stop, for a reopened call, for a review after a material deviation, for the review of a fix and for work that inherits an overlapping plan's count and stop.",
+        ),
+        "review-state.md#Clearing a stop": (
+            "An explicit call that passes clears the stop and leaves the count unchanged, and in auto the automatic flow continues to the next step.",
+            "A later automatic call in the same step for the same work, such as a reopened review or the review of a fix, follows Next automatic call: while the count is at or above the Stop threshold in effect it needs the user's explicit request; that requested call is still an automatic call of the flow, so a pass resets the count and a non-pass stops the step again.",
+        ),
+        "review-state.md#Reopened calls": (
+            "A reopened call continues the step's count from where it stands, which is zero after an automatic pass and unchanged after an explicit pass that cleared a stop.",
+            "It follows Next automatic call: a reopened automatic call needs the user's explicit request exactly while that count is at or above the Stop threshold in effect.",
+        ),
+        "review-state.md#Overlap": (
+            "Work that overlaps a stopped plan keeps that plan's count and stop, and its next automatic call follows Next automatic call, so it gains no new automatic calls while that count is at or above the Stop threshold in effect: an automatic READY of the widened plan does not clear the inherited stop for the overlapping work, while an explicit pass covering it does.",
+        ),
+        "plan-review.md#5": (
+            "The same applies when implementation deviates from the plan: a material deviation stops dependent work for another review of the revised plan, counted from the reset of the last automatic READY, or from the unchanged count after an explicit READY that cleared a stop, and the user's approval.",
+            "That review needs the user's explicit request exactly while the count is at or above the Stop threshold in effect, as [review state](review-state.md)'s Next automatic call describes.",
+            "When the count is already at or above the Stop threshold, report the deviation and keep dependent work stopped; another review then needs an explicit user request, as in step 6.",
+        ),
+        "code-review.md": (
+            "Its count continues from where it stands, which is zero after an automatic APPROVED and unchanged after an explicit APPROVED that cleared a stop.",
+            "The review of the fix follows [review state](review-state.md)'s Next automatic call: a reopened automatic call needs the user's explicit request exactly while that count is at or above the Stop threshold in effect.",
+        ),
+        "outcome-verification.md#3": (
+            "Whether the next automatic call, such as the recheck after a fix or a reopened verification, needs the user's explicit request follows [review state](review-state.md)'s Next automatic call.",
+        ),
+        "adversarial-review.md#4": (
+            "Whether the next automatic call, such as the call after a fix for BROKEN or a reopened one, needs the user's explicit request follows [review state](review-state.md)'s Next automatic call.",
+        ),
+    }
+
+    # Items 4 and 5: a change of K, a saved change re-resolving, and stating K with its source.
+    CHANGE = {
+        "review-state.md#Changing it": (
+            "A change of the Stop threshold never changes a count; Next automatic call is applied with the new value at once.",
+            "A stopped step whose count is now below the new value resumes automatically, because the change is the user's own act.",
+            "A step whose count reaches or exceeds the new value stops at once, which means only that its next automatic call now needs the user's request under Next automatic call: a step an explicit pass had cleared stays cleared, and a call the user then requests is classified as Clearing a stop describes.",
+            "Main lists the steps the change resumed or stopped in its reply.",
+        ),
+        "review-state.md#Saved in this conversation": (
+            "A value the user saves in project or user scope in this conversation replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of Resolution, so this session uses what a new session would.",
+            "A user value saved where the project states its own is reported as overridden by it.",
+            "This is the reverse of the Review mode, whose saved change keeps a separate task or session override.",
+        ),
+        "review-state.md#Stating it": (
+            "Whenever a review decision comes up, main states the Stop threshold in effect and its source (task, session, project, user or default), as it does for the Review mode.",
+            "A session choice does not cross sessions and is not written into a handoff; a resumed session resolves the Stop threshold again from its loaded guidance.",
+        ),
+        "setup.md#section": (
+            "In a session, main uses the user's task or session choice, then the value the loaded project guidance states, then the value the loaded user guidance states, then 2, and states the value in effect and its source at each review decision; a session choice writes nothing and does not reach a new or resumed session.",
+            "A value saved in project or user scope during a conversation replaces any earlier task or session choice in that conversation, and main resolves the Stop threshold again from the saved values, so the session uses what a new session would.",
+            "This is the reverse of the review mode, where a separate task or session override still takes precedence over a saved change.",
+            "Changing the Stop threshold never changes a count: a stopped step whose count is below the new value resumes, a step whose count reaches or exceeds it stops at once, and main lists those steps; the delegation skill's review state holds the rules.",
+        ),
+        "setup.md": (
+            "The automatic limits for plan review, code review, outcome verification and Adversarial review (each step stops once its consecutive automatic calls without a pass reach the Stop threshold, 2 by default, and an automatic pass resets the count) are agent instructions, not a hook-enforced counter.",
+        ),
+    }
+
+    # Item 6: the security analysis is not counted.
+    NOT_COUNTED = {
+        "review-state.md#Not counted": (
+            "The security analysis before plan review is not a counted step, and the Stop threshold does not apply to it.",
+        ),
+        "plan-review.md": (
+            "The security analysis is not a counted step, and the Stop threshold does not apply to it.",
+        ),
+    }
+
+    # Item 7: the preview states K, its source and the bounds.
+    PREVIEW = {
+        "preview.md": (
+            "- **Stop threshold:** resolve it as [review state](review-state.md) describes: a task or session choice, then the value the project guidance states, then the value the user guidance states, then 2, with a value saved in this conversation resolved again from the saved values.",
+            "A task or session choice takes precedence over the saved values reported by `show`.",
+            "State the number of Plans, Claims and Security-critical claims covered, that the security analysis runs once per Plan or per trust boundary that several Security-critical claims share, the Stop threshold in effect, written K, with its source (task, session, project, user or default), and that each step stops after K consecutive automatic calls without a pass, per Plan for plan review and per Claim for code review, outcome verification and Adversarial review, an automatic pass resetting the count.",
+            "Under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures, in one uninterrupted attempt, a Claim makes at most K(K+1) automatic calls (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification), a Security-critical claim at most K³ + K² + K (also up to K Adversarial reviews, between which up to K − 1 fixes after BROKEN each get up to K(K+1) code review and verification calls), and a Plan with N Claims of which S are Security-critical about K + K(K+1)N + K³S.",
+            "Each reopened Claim or approved Material deviation adds calls, including up to K plan reviews for each deviation.",
+        ),
+    }
+
+    # Item 8: each README paragraph that stated the fixed number, paired (English, Traditional Chinese).
+    README_PAIRS = (
+        ("Budget", "次數上限",
+         "An automatic pass resets the count; when the count reaches the [Stop threshold](#stop-threshold), 2 by default, the step stops, which never counts as passing, and the work waits for you.",
+         "自動呼叫通過就歸零；次數達到[停止門檻](#停止門檻)（預設 2）時，該步驟停下，不等於通過，工作會等你決定。"),
+        ("Budget", "次數上限",
+         "A step's next automatic call for the same work needs your request exactly while its count is at or above the Stop threshold, and runs without one while it is below.",
+         "同一份工作在某個步驟的下一次自動呼叫，恰好在該步驟的次數大於或等於停止門檻時需要你要求，低於門檻時不需要你要求就會進行。"),
+        ("Re-review during implementation", "施工中的重審",
+         "Dependent work stops, and the revised plan must pass plan review and get your approval before that work continues; that plan review needs your request only while plan review's count is at or above the Stop threshold.",
+         "受影響的後續工作會停下，修訂後的計畫要通過計畫審查並經你同意才繼續；只有在計畫審查的次數大於或等於停止門檻時，那次計畫審查才需要你要求。"),
+        ("Not passed", "未通過",
+         "Verification keeps counting across fixes and resets only on an automatic CONFIRMED, so, with K the Stop threshold, a claim refuted K times in a row stops after K − 1 automatically rechecked fixes.",
+         "驗證次數跨修正累計，只有自動的 CONFIRMED 才歸零，所以停止門檻為 K 時，連續 K 次 REFUTED 的 claim 在 K − 1 輪自動複驗的修正後就會停下。"),
+        ("Validity", "有效範圍",
+         "A reopened step continues its count, which is zero after an automatic pass and unchanged after an explicit pass that cleared a stop; the reopened call needs your request again exactly while that count is at or above the Stop threshold.",
+         "重新打開的步驟沿用原本的次數，自動通過後是零，明確通過解除停止後則維持不變；恰好在這個次數大於或等於停止門檻時，重新打開的呼叫仍需要你再要求。"),
+        ("After a stop", "停下之後",
+         "Any later automatic call in that step for the same work, such as the review of a fix, needs your request exactly while the count is at or above the Stop threshold; that call is still part of the automatic flow, so a pass resets the count and a non-pass stops the step again.",
+         "同一份工作在該步驟之後的自動呼叫（例如修正後的審查），恰好在次數大於或等於停止門檻時都需要你要求；那次呼叫仍屬於自動流程，通過就歸零，沒通過就再次停下。"),
+        ("Partial overlap", "部分重疊",
+         "Where that plan had stopped, the overlapping work keeps its count and stop and gains no new automatic calls while that count is at or above the Stop threshold: an automatic READY of the new plan does not clear that stop, while an explicit pass covering the work does.",
+         "若既有計畫已停下，重疊的工作保留它的次數與停止狀態，在這個次數大於或等於停止門檻時，不會多出新的自動呼叫：新計畫的自動 READY 不會解除那個停止，涵蓋這些工作的明確通過才會。"),
+        ("Cost", "成本",
+         "At the default K = 2 that is, in one uninterrupted attempt, at most 6 calls per claim, 14 per Security-critical claim and about 2 + 6N + 8S per plan; at K = 10 it is 110, 1110 and about 10 + 110N + 1000S.",
+         "預設 K = 2 時，一次不中斷的完成過程中每個 claim 最多 6 次、安全關鍵 claim 最多 14 次，整份計畫約 2 + 6N + 8S 次；K = 10 時則是 110 次、1110 次與約 10 + 110N + 1000S 次。"),
+        ("Cost", "成本",
+         "The bounds grow faster than K because each fix is reviewed and verified again.",
+         "因為每次修正都要重新審查與驗證，上限增加得比 K 快。"),
+        ("Cost", "成本",
+         "A plan with a Security-critical claim also gets one security analysis by analyst per plan or shared trust boundary before plan review; each reopened claim or material deviation you approve adds calls, including up to K plan reviews for each deviation; the default roles run on opus/high.",
+         "有安全關鍵 claim 的計畫，在計畫審查前還會由 analyst 對每份計畫或共用的信任邊界做一次安全分析；重新打開的 claim 與每次經你同意的重大偏離都會再增加呼叫，每次偏離最多 K 次計畫審查；預設角色都是 opus/high。"),
+        ("section", "section",
+         "The Stop threshold is how many consecutive automatic calls without a pass stop a step of the automatic flow: one number from 2 to 10 for plan review, code review, outcome verification and Adversarial review alike, 2 by default.",
+         "停止門檻是自動流程的一個步驟連續幾次自動呼叫沒通過就停下：一個 2 到 10 的數字，計畫審查、程式碼審查、結果驗證與對抗式審查都適用同一個值，預設 2。"),
+        ("section", "section",
+         "Tell main a value for the current task or session, which writes nothing, or save one in project or user scope with the configuration tool's `review --stop-threshold` (see [Stop threshold](docs/setup.md#stop-threshold)), where `default` removes the saved value.",
+         "你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](docs/setup.md#stop-threshold)），`default` 會移除已儲存的值。"),
+        ("section", "section",
+         "Main uses your task or session choice, then the value the project guidance states, then the value the user guidance states, then 2, so a project's saved value overrides your user value.",
+         "主 Agent 依序採用你的任務或 session 選擇、project 指引寫明的值、user 指引寫明的值，最後才是 2，所以 project 儲存的值優先於你的 user 值。"),
+        ("section", "section",
+         "Main never changes it on its own and states it and its source whenever a review decision comes up; a session choice does not carry into a new or resumed session and is not written into a handoff.",
+         "主 Agent 絕不自行更改它，每次要做審查決定時都會說明目前的值與來源；session 選擇不會帶到新的或恢復的 session，也不會寫進交接。"),
+        ("section", "section",
+         "A guidance value outside 2–10 is skipped and reported; when main cannot tell whether you made a session choice, for example after context compaction, it treats the affected steps as stopped and asks you.",
+         "指引中不在 2–10 的值會被略過並回報；主 Agent 無法確定你是否做過 session 選擇時（例如 context 壓縮後），會把受影響的步驟視為已停下並問你。"),
+        ("section", "section",
+         "Changing the Stop threshold never changes a count.",
+         "變更停止門檻絕不會改變次數。"),
+        ("section", "section",
+         "A stopped step whose count is now below the new value resumes, a step whose count reaches or exceeds it stops at once, a step an explicit pass had cleared stays cleared, and main lists the steps that resumed or stopped.",
+         "已停下、次數低於新值的步驟會繼續；次數達到或超過新值的步驟立即停下；明確通過已解除停止的步驟仍維持解除；主 Agent 會列出因此繼續或停下的步驟。"),
+        ("section", "section",
+         "A value you save in project or user scope in this conversation replaces any earlier task or session choice in this conversation, and the Stop threshold is resolved again from the saved values, so this session uses what a new session would; a user value saved where the project states its own is reported as overridden by it.",
+         "你在這段對話中儲存到 project 或 user 範圍的值，會取代這段對話先前的任務或 session 選擇，並依已儲存的值重新決定停止門檻，所以這個 session 會用新 session 會用的值；project 已寫明自己的值時，你儲存的 user 值會被回報為被它覆寫。"),
+        ("section", "section",
+         "This is the reverse of the review mode, where a saved change keeps a separate task or session override.",
+         "這與審查模式相反：審查模式的已儲存變更會保留另行指定的任務或 session 選擇。"),
+    )
+
+    # Item 9: ADR 0010 and the amendment notes, appended without rewriting the earlier decisions.
+    DECISION = (
+        "- **One number.** The Stop threshold is one integer K from 2 to 10 that applies to plan review, code review, outcome verification and Adversarial review alike.",
+        "The Stop threshold in effect is the user's task choice, for that task; otherwise the user's session choice; otherwise the value the loaded project guidance states; otherwise the value the loaded user guidance states; otherwise 2.",
+        NEXT_CALL_RULE,
+        "A change of K never changes a count; the rule above is applied with the new K at once.",
+        "A value the user saves in project or user scope in a conversation replaces any earlier task or session choice in that conversation, and K is resolved again from the saved values, so the session uses what a new session would.",
+        "In one uninterrupted attempt, a Claim makes at most K(K+1) automatic calls: up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification.",
+        "A Security-critical claim makes at most K³ + K² + K: also up to K Adversarial reviews, between which up to K − 1 fixes after BROKEN each get up to K(K+1) code review and verification calls.",
+        "A Plan with N Claims of which S are Security-critical makes about K + K(K+1)N + K³S, and each reopened Claim or approved Material deviation adds calls, including up to K plan reviews for each deviation.",
+        "The user kept the range 2–10 knowing these bounds.",
+        "The minimum is 2 because a single non-pass can be a transient interruption or a protocol failure, and stopping on it would interrupt the user for noise.",
+        "There is no unlimited value because ADR 0004 rejected an unbounded loop: the user is asked at some point.",
+        "There is one number rather than one per step because no need for separate values is known and four values would turn the cost formula into four variables; a later per-step override could be added without breaking a single saved value.",
+        "- **Keep a fixed two**:", "- **One value per step**:", "- **Allow 1, or an unlimited value**:", "- **A smaller maximum**:",
+        "- **A saved value acting as a session choice**:", "- **Main reading the saved value with the configuration tool at each decision**:",
+    )
+    AMENDMENTS = {
+        "0002-session-scoped-review-counts.md": "(Amended by ADR 0010: the two more automatic calls a resume may run are the value at the default Stop threshold of 2; the Stop threshold is now one user-configurable number from 2 to 10, and a resume starts a fresh count toward the Stop threshold in effect.)",
+        "0003-review-cost-and-independence-stay-user-configured.md": "(Amended by ADR 0010: the two-call budget is the value at the default Stop threshold of 2; the Stop threshold is now one user-configurable number from 2 to 10, the README gives the number of automatic calls in terms of it, and switching a role's model never resets a step's count toward it.)",
+        "0004-consecutive-failure-review-budget.md": "(Amended by ADR 0010: two consecutive automatic calls, six calls per Claim, about 2 + 6N per Plan and up to two plan reviews for each Material deviation are the values at the default Stop threshold of 2; with Stop threshold K, from 2 to 10, a step stops after K consecutive automatic calls without a pass, a Claim makes at most K(K+1) automatic calls in one uninterrupted attempt, a Claim refuted K times in a row stops after K − 1 automatically rechecked fixes, and each Material deviation adds up to K plan reviews.)",
+        "0006-review-state-validity-and-completion.md": "(Amended by ADR 0010: the fixed two calls and the bound of six per Claim are the values at the default Stop threshold of 2, and the bound is K(K+1) at Stop threshold K. A step's next automatic call for a work needs the user's explicit request exactly while that step's count for the work is at or above the Stop threshold in effect, and is made without one while it is below; this one rule replaces the derivation of a needed request from a count left where it stopped, after an explicit pass that cleared a stop, for a reopened call, for a review after a Material deviation, for the review of a fix and for work that inherits an overlapping Plan's count and stop.)",
+        "0009-security-critical-claims-get-an-adversarial-review.md": "(Amended by ADR 0010: the two consecutive non-passes that stop Adversarial review and the fourteen automatic calls per Security-critical claim are the values at the default Stop threshold of 2; with Stop threshold K, from 2 to 10, the step stops after K consecutive automatic calls without a pass and a Security-critical claim makes at most K³ + K² + K automatic calls in one uninterrupted attempt.)",
+    }
+    # The original decision text each amended ADR keeps.
+    KEPT = {
+        "0002-session-scoped-review-counts.md": "A resume may run up to two more automatic calls for the same plan or claim.",
+        "0003-review-cost-and-independence-stay-user-configured.md": "Switching a role's model never resets a step's two-call budget.",
+        "0004-consecutive-failure-review-budget.md": "A Claim makes at most six automatic calls: code review twice before the fix and twice after it, and verification twice.",
+        "0006-review-state-validity-and-completion.md": "The bound of six automatic calls per Claim holds for one uninterrupted completion attempt;",
+        "0009-security-critical-claims-get-an-adversarial-review.md": "A Security-critical claim makes at most fourteen automatic calls in one uninterrupted attempt,",
+    }
+
+    # Item 10: wording that states the fixed number as a rule, retired from shipped skill files, READMEs and the
+    # setup document. The README's K = 2 example writes its bounds as numerals, so only "2 + 6N + 8S" needs an exception.
+    RETIRED = re.compile(
+        r"two consecutive automatic calls|two in a row|two-call|six automatic calls|at most six|six calls|fourteen"
+        r"|refuted twice|up to two plan reviews|count stays where it stopped|because the count stays"
+        r"|連續兩次|最多六次|十四次|兩次計畫審查|因為次數沒有歸零", re.I)
+    SHIPPED_PATHSPECS = ("skills", "README.md", "README.zh-TW.md", "docs/setup.md")
+    shipped_files = SecurityCriticalVocabularyTests.shipped_files
+
+    def test_review_state_resolves_the_stop_threshold_and_main_never_changes_it(self):
+        self.assert_pinned(self.RESOLUTION)
+
+    def test_every_step_stops_at_the_stop_threshold(self):
+        self.assert_pinned(self.STOPPING)
+
+    def test_one_rule_decides_the_next_automatic_call(self):
+        self.assert_pinned(self.NEXT_CALL)
+        # The rule is stated once, in review state, and the procedures point to it by name.
+        self.assertEqual(self.source("review-state.md").count(self.NEXT_CALL_RULE), 1)
+        for name in ("plan-review.md", "code-review.md", "outcome-verification.md", "adversarial-review.md"):
+            with self.subTest(procedure=name):
+                self.assertIn("[review state](review-state.md)'s Next automatic call", self.source(name))
+
+    def test_a_change_of_the_stop_threshold_and_stating_it(self):
+        self.assert_pinned(self.CHANGE)
+
+    def test_the_security_analysis_is_not_counted(self):
+        self.assert_pinned(self.NOT_COUNTED)
+
+    def test_the_preview_states_the_stop_threshold_and_bounds_in_k(self):
+        self.assert_pinned(self.PREVIEW)
+
+    def test_readmes_state_the_stop_threshold_rules_in_both_languages(self):
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_bounds_hold_for_every_stop_threshold(self):
+        # The stated formulas agree with the per-step counts they are derived from, and the README examples with them.
+        for k in range(2, 11):
+            with self.subTest(k=k):
+                claim = k + (k - 1) * k + k  # code reviews before verification and per fix, plus verifications
+                self.assertEqual(claim, k * (k + 1))
+                self.assertEqual(claim + k + (k - 1) * claim, k ** 3 + k ** 2 + k)
+        self.assertEqual((2 * 3, 2 ** 3 + 2 ** 2 + 2, 2 ** 3), (6, 14, 8))
+        self.assertEqual((10 * 11, 10 ** 3 + 10 ** 2 + 10, 10 ** 3), (110, 1110, 1000))
+
+    def test_adr_0010_records_the_decision_and_earlier_adrs_are_amended(self):
+        decision = self.source("ADR 0010")
+        self.assertTrue(decision.startswith("# The Stop threshold is one user-configurable number from 2 to 10\n"))
+        for phrase in self.DECISION:
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, decision)
+        for heading in ("\n## Considered Options\n", "\n## Consequences\n"):
+            with self.subTest(heading=heading.strip()):
+                self.assertIn(heading, decision)
+        for name, note in self.AMENDMENTS.items():
+            text = (self.ADR / name).read_text(encoding="utf-8")
+            with self.subTest(adr=name):
+                self.assertIn(note, text.splitlines())
+                self.assertIn(self.KEPT[name], text)
+
+    def test_fixed_number_wording_is_retired_from_shipped_documents(self):
+        files = [path for path in self.shipped_files() if path.suffix == ".md"]
+        names = {path.relative_to(config.ROOT).as_posix() for path in files}
+        self.assertTrue({"skills/delegation/references/review-state.md", "skills/delegation/references/preview.md",
+                         "README.md", "README.zh-TW.md", "docs/setup.md"} <= names, "Git must list the shipped files")
+        for path in files:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
+                self.assertIsNone(self.RETIRED.search(text))
+                # The fixed Plan bound appears only in the K = 2 example.
+                for clause in re.split(r"[.;。；] ?", text):
+                    if "2 + 6N + 8S" in clause:
+                        self.assertIn("K = 2", clause)
+
+    def test_the_retired_pattern_matches_the_0_19_0_wording(self):
+        for phrase in ("Two consecutive automatic calls without APPROVED stop automatic review",
+                       "two in a row without a pass stop the step", "counts toward the two-call stop of step 4",
+                       "at most six automatic calls per Claim, or fourteen for a Security-critical claim",
+                       "a claim refuted twice in a row stops after one rechecked fix",
+                       "including up to two plan reviews for each deviation",
+                       "Because the count stays where it stopped, any later automatic call",
+                       "連續兩次沒通過", "每個 claim 最多六次", "安全關鍵 claim 最多十四次", "每次偏離最多兩次計畫審查",
+                       "因為次數沒有歸零"):
+            with self.subTest(phrase=phrase):
+                self.assertIsNotNone(self.RETIRED.search(phrase))
 
 
 class UpstreamManifestTests(unittest.TestCase):

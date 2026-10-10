@@ -12,3 +12,5 @@ Automatic review counts (plan review, code review, outcome verification) are per
 A resume may run up to two more automatic calls for the same plan or claim. Restriction notes recorded in an active handoff still cross sessions, so such a claim is not committed or reported complete after a resume; an unresolved verdict that no active handoff records does not restrict a later session. The handoff runtime and record schema do not change.
 
 (Amended by ADR 0007: the restriction now applies to landing on the default branch, release and reporting complete rather than to committing; a restricted claim may be committed before its passes.)
+
+(Amended by ADR 0010: the two more automatic calls a resume may run are the value at the default Stop threshold of 2; the Stop threshold is now one user-configurable number from 2 to 10, and a resume starts a fresh count toward the Stop threshold in effect.)
