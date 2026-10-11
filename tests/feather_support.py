@@ -165,8 +165,9 @@ def review_rules_source(name: str) -> str:
 
 
 def shipped_files(self):
-    # core.fsmonitor=false keeps a repository-configured monitor from running; ls-files runs no filters.
-    command = ["git", "-c", "core.fsmonitor=false", "ls-files", "-z", "--", *self.SHIPPED_PATHSPECS]
+    # The empty core.fsmonitor value keeps a repository-configured monitor from running whether Git reads the setting as
+    # a boolean or a hook path (Repository safety C1-e); ls-files runs no filters.
+    command = ["git", "-c", "core.fsmonitor=", "ls-files", "-z", "--", *self.SHIPPED_PATHSPECS]
     try:
         listed = subprocess.run(command, cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as error:

@@ -254,7 +254,9 @@ class GitTopLevelOutputTest(LinkBase):
 
     def test_empty_top_level_output_is_uncertain_and_create_writes_nothing(self):
         def empty_top_level(args, **kwargs):
-            if args[-1] != "--show-toplevel":
+            # Repository safety C4: discovery runs Git only through the helper's hardened prefix.
+            if args[:6] != ["git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-C"] \
+                    or args[-1] != "--show-toplevel":
                 raise AssertionError(f"Unexpected Git call: {args}")
             return subprocess.CompletedProcess(args, 0, "\n", "")
         original = os.path.realpath

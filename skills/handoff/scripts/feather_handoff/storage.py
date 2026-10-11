@@ -30,6 +30,20 @@ def git_environment() -> dict[str, str]:
     return environment
 
 
+# Every Git command starts with these: no configured pager runs, no optional index refresh is written, and the empty
+# core.fsmonitor value disables a configured fsmonitor whether Git reads the setting as a boolean or a hook path.
+GIT_COMMAND = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=")
+
+
+def run_git(directory: Path, *arguments: str, errors: str = "strict") -> subprocess.CompletedProcess:
+    """The only place the handoff tool starts Git: `git <GIT_COMMAND options> -C <directory> <arguments>`.
+
+    Needs no Store, so root discovery can use it. Output is UTF-8 text decoded with `errors`; OSError and
+    subprocess.TimeoutExpired propagate, and each caller judges the return code."""
+    return subprocess.run([*GIT_COMMAND, "-C", str(directory), *arguments], capture_output=True, text=True,
+                          encoding="utf-8", errors=errors, timeout=5, env=git_environment())
+
+
 # Canonical project roots resolved in this process; links above them were followed once.
 _ROOTS: set[str] = set()
 
@@ -112,8 +126,7 @@ def _same(first, second) -> bool:
 
 
 def _discover(path: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(path), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", timeout=5, env=git_environment())
+    return run_git(path, "rev-parse", "--show-toplevel", errors="replace")
 
 
 NO_TOP_LEVEL = "Git root discovery succeeded without reporting an absolute top-level path"

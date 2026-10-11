@@ -7,7 +7,7 @@ import stat
 import subprocess
 
 from . import baseline
-from .storage import HandoffError, Store, check_path, read_file, git_environment
+from .storage import HandoffError, Store, check_path, read_file, run_git
 
 
 def signature(info):
@@ -71,11 +71,8 @@ def observe(project: Path, name: str, budget: list[int]):
 
 
 def git_observation(project: Path) -> dict:
-    env = git_environment()
-
     def run(*args):
-        return subprocess.run(["git", "-C", str(project), *args], capture_output=True,
-                              text=True, encoding="utf-8", errors="replace", timeout=5, env=env)
+        return run_git(project, *args, errors="replace")
 
     try:
         probe = run("rev-parse", "--is-inside-work-tree")
