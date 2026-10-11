@@ -1631,6 +1631,11 @@ class FeatherConfigTests(unittest.TestCase):
             if not current.is_file() or current.read_bytes() != shown:
                 changed[name] = shown
         recorded = self.recorded_0_18_0()
+        # Repository safety C1 changes the automatic-review guidance template, not a role template; the fixture records
+        # role templates only, and changed guidance is reported by check's older-template warning instead.
+        guidance = {name for name in changed if not name.startswith("templates/agents/")}
+        self.assertEqual(guidance, {"templates/review-auto.md"})
+        changed = {name: text for name, text in changed.items() if name not in guidance}
         self.assertEqual(sorted(changed), sorted(f"templates/agents/{role}.md" for role in recorded))
         for role, text in recorded.items():
             with self.subTest(role=role):
@@ -3980,6 +3985,19 @@ class FeatherConfigTests(unittest.TestCase):
                                              "is identified only from its original text, an available record or a version the user confirms"),
         "Where files live": ("檔案位置", "cc-feather does not decide where specs live", "不由 cc-feather 決定",
                              "plan-review.md", "Where specs live and whether tickets are committed are the project's choice"),
+        # Repository safety C1 item 7: the Repository safety section's bullets summarise the shared reference.
+        "Git commands": ("Git 指令", "runs no program the repository chose", "不執行儲存庫選定的程式",
+                         "repository-safety.md", "runs no Repository-chosen program"),
+        "File reads": ("讀取檔案", "has a single hard link", "只有一個硬連結",
+                       "repository-safety.md", "that its link count is 1."),
+        "Running repository code": ("執行儲存庫程式碼", "the repository is trusted to run on this machine",
+                                    "這個儲存庫可以在這台機器上執行", "repository-safety.md",
+                                    "the user has said that the repository is trusted to run on this machine"),
+        "Before a review": ("審查之前", "Git is 2.32 or later", "2.32 或更新版本",
+                            "repository-safety.md", "Git is 2.32 or later"),
+        "Before add, commit, tag or push": ("add、commit、tag 或 push 之前", "each with the SHA-256 of its content",
+                                            "內容的 SHA-256", "repository-safety.md",
+                                            "main names each program with the SHA-256 of its content"),
     }
 
     # Glossary term -> (phrase in its CONTEXT.md entry, procedure file, procedure phrase).

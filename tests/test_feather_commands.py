@@ -127,13 +127,16 @@ class CommandScopeTests(unittest.TestCase):
         "excluded and the report says so.",
         "Dynamic probing tests only what the brief's targets run; when the range's end is not the workspace's content, the "
         "report says the targets cannot be shown to run that revision and treats what needs execution as INCONCLUSIVE.",
-        "The role compares commits as its Repository, secrets and effects section describes, for example with "
-        "`--no-ext-diff --no-textconv`, and follows that section for missing objects in a partial clone; it never checks "
-        "out, adds a worktree for or otherwise materialises the range's end to run it, and reports what needs that "
-        "execution as INCONCLUSIVE.",
-        "Main resolves each endpoint of a two-dot range separately with `git rev-parse --verify <endpoint>^{commit}`, and "
-        "asks the user instead of resolving an omitted endpoint, an endpoint that starts with `-` or a symmetric range; it "
-        "passes paths after `--`.",
+        # Repository safety C1 items 1 and 2: commits are compared, and missing objects handled, as the shared
+        # reference's Safe Git invocation describes rather than the adversary's Repository, secrets and effects section,
+        # and main's rev-parse carries the common prefix.
+        "The role compares commits as [repository safety](../delegation/references/repository-safety.md)'s Safe Git "
+        "invocation describes, with `--no-ext-diff --no-textconv`, and follows it for missing objects in a partial "
+        "clone; it never checks out, adds a worktree for or otherwise materialises the range's end to run it, and reports "
+        "what needs that execution as INCONCLUSIVE.",
+        "Main resolves each endpoint of a two-dot range separately with `git <prefix> rev-parse --verify "
+        "<endpoint>^{commit}`, with that reference's common prefix as `<prefix>`, and asks the user instead of resolving "
+        "an omitted endpoint, an endpoint that starts with `-` or a symmetric range; it passes paths after `--`.",
     )
     # Items 2.2 and 9.2 (E2): the uncommitted change, listed by main and read with the file tools.
     UNCOMMITTED = (
@@ -143,22 +146,22 @@ class CommandScopeTests(unittest.TestCase):
         "repository-chosen program runs.",
         "Main lists in the brief the staged, unstaged and in-scope untracked paths, where in-scope untracked means "
         "untracked, not ignored and within the arguments' paths or attack scope.",
-        # Item 9.2 (Q23, F2 and F3): the example disables fsmonitor with an empty value and names stage 0; item 9.10
-        # (Q24, N1): both object reads pass the path as a single-quoted literal.
-        "The role reads those paths with the file tools, and staged and HEAD content from Git objects without filters, for "
-        "example with `git -c core.fsmonitor= cat-file blob :0:'<path>'` and `git cat-file blob HEAD:'<path>'`, and "
+        # Item 9.2 (Q23, F2 and F3) and item 9.10 (Q24, N1): both object reads name stage 0 or HEAD and pass the path as
+        # a single-quoted literal. Repository safety C1 item 3: they now carry the shared reference's common prefix,
+        # which disables fsmonitor with an empty value (its Fsmonitor rule) and states the stage rule; the removed
+        # sentence "Reading the index can run a configured fsmonitor program, ..." is that reference's Fsmonitor rule
+        # and its sentence "An object read from the index always names its stage, ...", and the removed "Reading staged
+        # or HEAD content follows the role's Repository, secrets and effects section for missing objects in a partial
+        # clone." is its Lazy fetch rule.
+        "The role reads those paths with the file tools, and staged and HEAD content from Git objects in that reference's "
+        "forms, for example `git <prefix> cat-file blob :0:'<path>'` and `git <prefix> cat-file blob HEAD:'<path>'`, and "
         "runs no Git command that compares or refreshes the working tree; for a path not listed, it reports INCONCLUSIVE "
         "rather than run one.",
-        # Item 9.2 (Q23): an empty core.fsmonitor value disables it on any Git; an explicit stage keeps a colon path whole.
-        "Reading the index can run a configured fsmonitor program, so every Git command the role runs that reads the "
-        "index disables it with an empty value, `-c core.fsmonitor=`, which disables it whether the installed Git reads "
-        "the setting as a boolean or, before Git 2.36, as a hook path, and every such command that names an index path "
-        "names its stage, `:0:'<path>'`, so that a path that itself contains a colon is not read as another stage.",
-        "Reading staged or HEAD content follows the role's Repository, secrets and effects section for missing objects in "
-        "a partial clone.",
         "Secrets read from untracked files are masked as the role requires.",
-        "These limits apply only to a call under this bullet; elsewhere the role's Repository, secrets and effects section "
-        "alone governs its Git commands.",
+        # Repository safety C1 item 1: outside this bullet the shared reference, not the adversary's section, governs.
+        "These limits apply only to a call under this bullet; elsewhere [repository "
+        "safety](../delegation/references/repository-safety.md) governs the role's reads and Git commands, as main's brief "
+        "carries it.",
     )
     # Item 9.9 (Q23, F1): main lists untracked paths file by file and marks links.
     LINK_LISTING = (
@@ -166,48 +169,58 @@ class CommandScopeTests(unittest.TestCase):
         "list file by file, such as a nested repository, is named in the brief and reported INCONCLUSIVE.",
         "Main marks each listed path that is, or lies under, a symbolic link, junction or other reparse point.",
     )
-    # Item 9.9 (Q23, F1): the role reads only listed files, checks every component and never reads through a link.
+    # Item 9.9 (Q23, F1): the role reads only listed files and never through a link. Repository safety C1 item 3 keeps
+    # in this bullet only its listing, marking and tighter search rule; the removed sentences and the shared
+    # reference's Paths and names rules that now state them:
+    # - "Before reading a listed path, the role checks with file-system metadata, not with Git, that none of its
+    #   components is a link or reparse point ...": its first check and its name rule (relative, no `..`, no `:`).
+    # - "A marked path or one that fails the check is never read through: the role reports the link and its target
+    #   string ...": "A path that fails, or whose check cannot run or is unclear, is never read: ...".
+    # - "A reparse point of any kind, a cloud-file placeholder included, fails the check, and so does a check that
+    #   cannot run or whose result is unclear.": its first check and the same sentence.
+    # - "A hard link is project content like any other file.": removed by C1 item 3; its third check now requires a
+    #   link count of 1, and an absence pin keeps the sentence out.
     LINK_READS = (
         "The role reads only the listed files themselves and searches or walks no directory under this bullet, a "
         "submodule directory included; what that leaves unexamined it reports as INCONCLUSIVE.",
-        "Before reading a listed path, the role checks with file-system metadata, not with Git, that none of its "
-        "components is a link or reparse point and that its canonical path lies inside the project, comparing "
-        "case-sensitively unless the file system is known to be case-insensitive, and never reads a listed path that "
-        "contains `..`, is absolute, names a drive or contains `:`.",
-        "A marked path or one that fails the check is never read through: the role reports the link and its target "
-        "string, reads no content through it, and reports INCONCLUSIVE for what that content would need.",
-        # Item 9.9 (Q24): a check that cannot run, such as one whose path a shell would not take as a literal, or
-        # whose result is unclear, fails like a link.
-        "A reparse point of any kind, a cloud-file placeholder included, fails the check, and so does a check that "
-        "cannot run or whose result is unclear.",
-        "A hard link is project content like any other file.",
+        "A marked path fails that reference's checks, so the role never reads it through the link and reports what that "
+        "reference requires.",
     )
-    # Item 9.10 (Q24, C5's second Adversarial review N1): the 9.9 check runs through a shell, so a name the code under
-    # attack chose must never be interpreted by one: a character allowlist, unsafe names named but never read or put in
-    # a command, attacker-controlled text kept out of commands, single-quoted literals, and argument-only nested
-    # interpreters.
+    HARD_LINK = "A hard link is project content like any other file."
+    # Item 9.10 (Q24, C5's second Adversarial review N1): a name the code under attack chose must never be interpreted
+    # by a shell. Repository safety C1 item 3 moves the rules to the shared reference's Paths and names, which tightens
+    # them; the removed sentences and the rules that now state them:
+    # - "A changed path is safe only when every character of its real name ... is an ASCII letter or digit, `.`, `_`,
+    #   `-` or `/`; ...": its name rule, per component, which also excludes `.`, `..`, a leading `-`, reserved device
+    #   names and a trailing dot or space (RepositorySafetyTests checks it leaves nothing for a shell).
+    # - "Every command main or the role runs on a listed path passes it as a single-quoted literal: ...": "A safe name
+    #   enters a command only as a single-quoted literal after `--`, ...".
+    # - "A nested interpreter, such as PowerShell started from Bash, receives a path only as a separate positional
+    #   argument ...": "Every check under Paths and names ... runs only tools and scripts outside the project, started
+    #   with flags that keep them from loading modules or profiles ..." and "A nested interpreter receives a path only as
+    #   a separate positional argument, never inside code it evaluates." with "Only tools that honour `--` ...".
+    # - The link target, file content and command output part of "Of the paths in the project and the text the code
+    #   under attack controls, ...": "Apart from a safe name passed as above, no text taken from file content, command
+    #   output or a link target enters a command."; a directory prefix is now a whole number of components without a trailing `/` (P5), and ref names
+    #   follow its ref rule (P6).
     NAMES = (
-        "A changed path is safe only when every character of its real name, as Git reports it with `-z`, is an ASCII "
-        "letter or digit, `.`, `_`, `-` or `/`; a name Git would quote is unsafe.",
-        "Main lists only safe paths for reading, names every other changed path in the brief as not read, in the "
-        "C-quoted form Git prints with `-c core.quotePath=true`, and runs no command on it; the role never reads such a "
-        "path or names it in a command, and reports INCONCLUSIVE for it.",
-        "Of the paths in the project and the text the code under attack controls, the role names in a command only a "
-        "listed path or a prefix of one that ends at a `/`, and never an unlisted path, a link target string or other "
-        "text taken from file content or command output; its own scratch paths, options and ref names are not limited "
-        "by this rule.",
-        "Every command main or the role runs on a listed path passes it as a single-quoted literal: after `--`, or as "
-        "`:0:'<path>'` or `HEAD:'<path>'` in an object read, and never inside double quotes, a here-document or a "
-        "command substitution.",
-        "A nested interpreter, such as PowerShell started from Bash, receives a path only as a separate positional "
-        "argument to a script outside the project, run without a profile, never inside code it evaluates, and only "
-        "tools that honour `--` or take the path as such an argument are used for the check of a listed path's "
-        "components.",
-        "These rules constrain changed paths; they do not change how a path the user gives in the arguments is handled.",
+        "Main lists for reading only names that are safe under [repository "
+        "safety](../delegation/references/repository-safety.md)'s Paths and names, names every other changed path in the "
+        "brief as not read, in the C-quoted form Git prints with `-c core.quotePath=true`, and runs no command on it; the "
+        "role never reads such a path or names it in a command, and reports INCONCLUSIVE for it.",
+        "Of the paths in the project, the role names in a command only a listed path or a directory prefix of one, and "
+        "never an unlisted path; its own scratch paths and options are not limited by this rule.",
+        "Every other rule for reading these paths, naming them in commands and reading staged and HEAD content is "
+        "[repository safety](../delegation/references/repository-safety.md)'s Safe Git invocation and Paths and names.",
+        "These listing rules constrain changed paths; a path the user gives in the arguments is not a listed path, and "
+        "repository safety still governs reading it.",
     )
     # Item 9.9's fixture rule, which applies to every ungated call and so stands in the Fixtures bullet.
     FIXTURE_LINKS = ("A fixture main lists for a call outside the gate is never a symbolic link, junction or other reparse "
                      "point and never lies under one.")
+    # Repository safety C1 item 3 (P2): a fixture also has link count 1, checked before it is modified or read.
+    FIXTURE_COUNT = ("It also has link count 1, checked before it is modified as well as before it is read, as [repository "
+                     "safety](../delegation/references/repository-safety.md)'s Paths and names describes.")
     # Items 2.3 and 2.4: a clean workspace, and paths with no change.
     CLEAN = "Without a range and with a clean workspace, main asks the user which range to review."
     PATHS = (
@@ -347,7 +360,7 @@ class CommandScopeTests(unittest.TestCase):
                             "command#Uncommitted changes": self.UNCOMMITTED,
                             "command#A clean workspace": (self.CLEAN,),
                             "command#Paths": self.PATHS,
-                            "command#Fixtures": (self.FIXTURES, self.FIXTURE_LINKS),
+                            "command#Fixtures": (self.FIXTURES, self.FIXTURE_LINKS, self.FIXTURE_COUNT),
                             "command": (self.BRIEF,)})
 
     def test_no_sentence_authorises_main_or_the_role_to_change_git_state(self):
@@ -373,18 +386,27 @@ class CommandScopeTests(unittest.TestCase):
     def index_reads(text):
         return [span for span in re.findall(r"`(git [^`]*)`", text) if re.search(r"(?:^|\s):", span)]
 
+    @staticmethod
+    def common_prefix():
+        """The shared reference's common prefix (Repository safety C1 item 2), which `<prefix>` in the command names."""
+        reference = (feather_support.REVIEW_RULES_REFERENCES / "repository-safety.md").read_text(encoding="utf-8")
+        return reference.split("```text\n", 1)[1].split("\n```", 1)[0]
+
     def test_every_index_read_the_command_hands_the_role_disables_fsmonitor(self):
         # Regression (outcome verification of C5, C2 item 5.2): `git cat-file blob :<path>` loads the index, and Git
         # then runs a configured core.fsmonitor program; observed on Git 2.43.0 and absent for `HEAD:<path>`.
         # Item 9.2 (Q23, C5's first Adversarial review F2 and F3): `=false` need not disable it on a Git before 2.36,
         # which reads the setting as a hook path, while an empty value disables it on either; and `:<path>` reads a
         # path such as `0:foo` as stage 0 of `foo`. Every Git example that reads an index path uses both forms.
+        # Repository safety C1 item 2: the examples carry the shared reference's common prefix, which holds the empty
+        # value, instead of spelling it out.
         text = self.source("command")
         index_reads = self.index_reads(text)
         self.assertTrue(index_reads, "the Uncommitted changes bullet gives an index-read example")
+        self.assertRegex(self.common_prefix(), r"^git --no-pager --no-optional-locks -c core\.fsmonitor= ")
         for span in index_reads:
             with self.subTest(span=span):
-                self.assertRegex(span, r"^git -c core\.fsmonitor= ")
+                self.assertRegex(span, r"^git <prefix> ")
                 for argument in re.findall(r"(?:^|\s)(:\S*)", span):
                     self.assertTrue(argument.startswith(":0:"), f"{argument} names no stage")
         # The replaced unsafe forms stay gone, the unquoted 0.19.0 examples included (item 9.10, Q24).
@@ -393,17 +415,22 @@ class CommandScopeTests(unittest.TestCase):
         self.assertNotIn("core.fsmonitor=false", text)
         self.assertNotIn(":0:<path>", text)
         self.assertNotIn("HEAD:<path>", text)
-        self.assertIn("`git cat-file blob HEAD:'<path>'`", self.source("command#Uncommitted changes"))
+        self.assertIn("`git <prefix> cat-file blob HEAD:'<path>'`", self.source("command#Uncommitted changes"))
+        # Every Git command the command spells out carries the common prefix.
+        for span in re.findall(r"`(git [^`]*)`", text):
+            with self.subTest(command=span):
+                self.assertTrue(span.startswith("git <prefix> "), span)
 
     def test_the_index_read_example_runs_no_fsmonitor_and_keeps_a_colon_path_whole(self):
-        """Regression (item 9.2, F2 and F3): the command's own index-read example, run in a throwaway repository whose
-        core.fsmonitor names a program that leaves a marker, runs no such program and reads a listed path `0:foo` as
-        that path, never as the staged `foo`, which the replaced `:<path>` form returned. Since item 9.10 (Q24) the
-        example quotes the path, so it is split into words as a POSIX shell would split it, and a name such as `0:foo`
-        is unsafe and never read; the explicit stage still keeps such a name whole."""
+        """Regression (item 9.2, F2 and F3): the command's own index-read example, with the shared reference's common
+        prefix in place of `<prefix>`, run in a throwaway repository whose core.fsmonitor names a program that leaves a
+        marker, runs no such program and reads a listed path `0:foo` as that path, never as the staged `foo`, which the
+        replaced `:<path>` form returned. Since item 9.10 (Q24) the example quotes the path, so it is split into words
+        as a POSIX shell would split it, and a name such as `0:foo` is unsafe and never read; the explicit stage still
+        keeps such a name whole."""
         examples = self.index_reads(self.source("command#Uncommitted changes"))
         self.assertEqual(len(examples), 1, examples)
-        example = examples[0]
+        example = examples[0].replace("git <prefix>", self.common_prefix(), 1)
         self.assertEqual(shlex.split(example)[0], "git")
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
             root = Path(os.path.realpath(temp))
@@ -442,12 +469,13 @@ class CommandScopeTests(unittest.TestCase):
             read = run_example("foo")
             self.assertEqual((read.returncode, read.stdout), (0, b"staged foo\n"), read.stderr)
             self.assertFalse(marker.exists(), "the index-read example ran the configured fsmonitor program")
-            # Item 9.10: a safe name with every allowed kind of character reads as itself through the quoted form.
+            # Item 9.10: a safe name with every allowed kind of character reads as itself through the quoted form;
+            # since Repository safety C1 item 3 no component may start with `-`, so the nested name no longer does.
             (repo / "sub").mkdir()
-            (repo / "sub" / "-a_b.9").write_bytes(b"staged nested\n")
-            self.assertEqual(git("-c", "core.fsmonitor=", "add", "--", "sub/-a_b.9").returncode, 0)
+            (repo / "sub" / "a-_b.9").write_bytes(b"staged nested\n")
+            self.assertEqual(git("-c", "core.fsmonitor=", "add", "--", "sub/a-_b.9").returncode, 0)
             self.assertFalse(marker.exists(), "staging the nested file ran the configured fsmonitor program")
-            read = run_example("sub/-a_b.9")
+            read = run_example("sub/a-_b.9")
             self.assertEqual((read.returncode, read.stdout), (0, b"staged nested\n"), read.stderr)
             self.assertFalse(marker.exists(), "the index-read example ran the configured fsmonitor program")
             # F3: `0:foo` is not staged, so the example finds nothing; the replaced form returned `foo`'s content.
@@ -457,30 +485,34 @@ class CommandScopeTests(unittest.TestCase):
 
     def test_listed_paths_are_read_file_by_file_and_never_through_a_link(self):
         # Item 9.9 (Q23, C5's first Adversarial review F1): file tools follow links, so main lists and marks, and the
-        # role checks every component itself and reads nothing through a link or outside the project.
+        # role reads nothing through a link; the shared reference's Paths and names states the checks themselves.
         self.assert_pinned({"command#Uncommitted changes": (*self.LINK_LISTING, *self.LINK_READS)})
         bullet = self.sentences(self.source("command#Uncommitted changes"))
-        # The listing precedes the role's reads, and the check precedes what a failing path gets.
+        # The listing precedes the role's reads, and the reads precede what a marked path gets.
         order = [bullet.index(sentence) for sentence in (*self.LINK_LISTING, self.UNCOMMITTED[3], *self.LINK_READS)]
         self.assertEqual(order, sorted(order))
+        # Repository safety C1 item 3: the hard-link sentence is gone; a hard-linked file is never read.
+        self.assertNotIn(self.HARD_LINK, self.source("command"))
+        self.assertNotIn("hard link", self.source("command").casefold())
 
     def test_no_sentence_lets_the_role_follow_a_link_or_walk_a_directory(self):
         # Abuse check (item 9.9): every sentence of the command that names a link, junction or reparse point marks it,
-        # refuses it, makes it fail the check, keeps fixtures off it, or names a hard link as plain content.
+        # refuses it, keeps fixtures off it or requires a fixture's link count of 1.
         links = re.compile(r"\b(?:link|junction|reparse)", re.I)
-        # Item 9.10 adds one: the role never names a link target string in a command.
-        allowed = {*self.LINK_LISTING[1:], *self.LINK_READS[1:], self.FIXTURE_LINKS, self.NAMES[2]}
+        allowed = {*self.LINK_LISTING[1:], *self.LINK_READS[1:], self.FIXTURE_LINKS, self.FIXTURE_COUNT}
         for sentence in self.sentences(self.source("command")):
             if links.search(sentence):
                 with self.subTest(sentence=sentence[:60]):
                     self.assertIn(sentence, allowed)
-        # The bullet's only directory sentences forbid collapsed listings and walking or searching one.
+        # The bullet's only directory sentences forbid collapsed listings and walking or searching one, and limit a
+        # directory named in a command to a prefix of a listed path.
         directories = [s for s in self.sentences(self.source("command#Uncommitted changes"))
                        if re.search(r"director|\b(?:walk|search|glob|recurs)", s, re.I)]
-        self.assertEqual(directories, [self.LINK_LISTING[0], self.LINK_READS[0]])
+        self.assertEqual(directories, [self.LINK_LISTING[0], self.LINK_READS[0], self.NAMES[1]])
 
     def test_changed_names_are_allowlisted_and_passed_only_as_literals(self):
-        # Item 9.10 (Q24, C5's second Adversarial review N1), stated in the bullet before its scope sentence.
+        # Item 9.10 (Q24, C5's second Adversarial review N1), stated in the bullet before its scope sentence; since
+        # Repository safety C1 item 3 the bullet keeps the listing and points to the shared reference for the rest.
         self.assert_pinned({"command#Uncommitted changes": self.NAMES})
         bullet = self.sentences(self.source("command#Uncommitted changes"))
         self.assertLess(max(bullet.index(sentence) for sentence in self.NAMES), bullet.index(self.UNCOMMITTED[-1]))
@@ -490,7 +522,7 @@ class CommandScopeTests(unittest.TestCase):
         # never stands bare, in double quotes or in a substitution.
         text = self.source("command")
         placeholders = list(re.finditer(r"<path>", text))
-        self.assertGreaterEqual(len(placeholders), 4)
+        self.assertGreaterEqual(len(placeholders), 2)
         for match in placeholders:
             context = text[max(0, match.start() - 8):match.end() + 1]
             with self.subTest(context=context):
@@ -504,66 +536,31 @@ class CommandScopeTests(unittest.TestCase):
         # targets, file content or command output is one of the rules that keep them out of commands, and each of
         # those that names a command forbids it.
         risky = re.compile(r"unsafe|not read(?! as)|such a path|quot|target|file content|command output|interpreter", re.I)
-        allowed = {*self.NAMES, self.LINK_READS[2]}
+        allowed = {*self.NAMES, *self.LINK_READS[1:]}
         for sentence in self.sentences(self.source("command#Uncommitted changes")):
             if risky.search(sentence):
                 with self.subTest(sentence=sentence[:60]):
                     self.assertIn(sentence, allowed)
-        for sentence in self.NAMES[1:5]:
+        for sentence in self.NAMES[:2]:
             with self.subTest(sentence=sentence[:60]):
                 self.assertRegex(sentence, r"\b(?:never|no command|only)\b")
-        self.assertIn("runs no command on it", self.NAMES[1])
-        self.assertIn("never reads such a path or names it in a command", self.NAMES[1])
-        self.assertIn("never an unlisted path, a link target string or other text taken from file content or command "
-                      "output", self.NAMES[2])
-        self.assertIn("never inside double quotes, a here-document or a command substitution", self.NAMES[3])
-        self.assertIn("never inside code it evaluates", self.NAMES[4])
+        self.assertIn("runs no command on it", self.NAMES[0])
+        self.assertIn("never reads such a path or names it in a command", self.NAMES[0])
+        self.assertIn("never an unlisted path", self.NAMES[1])
+        # Repository safety C1 item 3: the shared reference now states the rules the bullet points to.
+        reference = " ".join((feather_support.REVIEW_RULES_REFERENCES / "repository-safety.md")
+                             .read_text(encoding="utf-8").split())
+        for rule in ("Apart from a safe name passed as above, no text taken from file content, command output or a link "
+                     "target enters a command.",
+                     "and never inside double quotes, a here-document or a command substitution.",
+                     "A nested interpreter receives a path only as a separate positional argument, never inside code it "
+                     "evaluates."):
+            with self.subTest(rule=rule[:60]):
+                self.assertIn(rule, reference)
         # No sentence elsewhere in the command lets main or the role put a listed path into a command another way.
         for sentence in self.sentences(self.source("command")):
-            if re.search(r"double quote|here-document|substitution|evaluat|nested interpreter", sentence, re.I):
-                with self.subTest(sentence=sentence[:60]):
-                    self.assertIn(sentence, self.NAMES)
-
-    def test_the_safe_name_allowlist_leaves_nothing_for_a_shell_to_interpret(self):
-        """Regression (item 9.10, N1): a name the code under attack chose reached the role's shell command line. The
-        allowlist the sentence states admits no character a POSIX shell interprets, so a safe name read through the
-        quoted examples is exactly one word, the path itself; a crafted name that breaks out of the quotes, which the
-        quoting alone would let through, fails the allowlist and is never put in a command."""
-        sentence = self.NAMES[0]
-        self.assertIn("is an ASCII letter or digit, `.`, `_`, `-` or `/`;", sentence)
-        listed = sentence.split("is an ASCII letter or digit,", 1)[1].split(";", 1)[0]
-        extra = re.findall(r"`(.)`", listed)
-        self.assertEqual(extra, [".", "_", "-", "/"])
-        allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") | set(extra)
-
-        def safe(name):
-            return bool(name) and all(character in allowed for character in name)
-
-        for character in sorted(allowed):
-            with self.subTest(character=character):
-                self.assertEqual(shlex.quote(character), character, "the shell would interpret an allowed character")
-        for character in "'\"\\$`!*?[]{}~#&|;<>() \t\n\r:%=@,+^":
-            with self.subTest(character=repr(character)):
-                self.assertFalse(safe(f"a{character}b"))
-        examples = re.findall(r"`(git [^`]*<path>[^`]*)`", self.source("command#Uncommitted changes"))
-        self.assertEqual(len(examples), 2, examples)
-        for name in ("skills/adversarial-review/SKILL.md", "sub/-a_b.9", "-n", "Z9"):
-            self.assertTrue(safe(name), name)
-            for example in examples:
-                with self.subTest(name=name, example=example):
-                    expected = [word.replace("<path>", name) for word in shlex.split(example)]
-                    self.assertEqual(shlex.split(example.replace("<path>", name)), expected)
-        # Control: single quotes alone do not hold a crafted name, which closes the quote and leaves a command
-        # substitution or a second word for the shell; the allowlist rejects each before any command is built.
-        for name in ("a'$(touch pwned)'b", "a' 'b", "a'b", "x'`id`'y"):
-            with self.subTest(name=name):
-                self.assertFalse(safe(name))
-                example = examples[0].replace("<path>", name)
-                try:
-                    words = shlex.split(example)
-                except ValueError:
-                    continue
-                self.assertNotEqual(words[-1], ":0:" + name)
+            with self.subTest(sentence=sentence[:60]):
+                self.assertNotRegex(sentence, r"(?i)double quote|here-document|substitution|evaluat|nested interpreter")
 
     def test_link_limits_stay_in_their_bullet_and_the_fixture_rule_covers_every_ungated_call(self):
         # Items 9 and 9.9: the role's 9.2 and 9.9 limits precede the scope sentence that confines them to the

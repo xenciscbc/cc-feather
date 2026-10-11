@@ -31,7 +31,7 @@ Use configured role models and effort. For task/session overrides, persistent ch
 
 A Security-critical change is a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream. Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list; input validation counts where untrusted data crosses a trust boundary. Recognise it by what the change does, not by keywords. A Security-critical claim is a claim whose outcome includes a Security-critical change; classify claims as [plan review](references/plan-review.md) describes, in off mode too, before dispatching their implementation.
 
-For requested security analysis or a Security-critical change, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope. Evaluate findings before assigning authorized fixes to security-executor, and route the implementation of every Security-critical claim to security-executor. Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules. In auto, for a plan with a Security-critical claim, the security analysis runs before plan review and its findings become security invariants and test targets in the plan, as [plan review](references/plan-review.md) describes.
+For requested security analysis or a Security-critical change, give analyst a read-only brief identifying paths, trust boundaries, evidence questions and excluded scope. Evaluate findings before assigning authorized fixes to security-executor, and route the implementation of every Security-critical claim to security-executor. Security analysis and plan review are separate assignments; a security analysis neither replaces nor triggers plan review, which follows its own rules. In auto, for a plan with a Security-critical claim, the security analysis runs before plan review and its findings become security invariants and test targets in the plan, as [plan review](references/plan-review.md) describes. Main and analyst follow [repository safety](references/repository-safety.md) for every repository read a security analysis makes, and main prepares the brief, including analyst's allowlist, as it describes.
 
 ## Dispatch
 
@@ -55,7 +55,7 @@ When the installed policy, a session preference that turns automatic review on (
 
 ## Code review
 
-When the installed policy, a session preference that turns automatic review on or an explicit user request requires code review, read and follow [the code-review procedure](references/code-review.md) after the primary acceptance passes and before outcome verification. Keep its call count and open findings across mode changes within a session.
+When the installed policy, a session preference that turns automatic review on or an explicit user request requires code review, read and follow [the code-review procedure](references/code-review.md) after the primary acceptance passes, or is recorded as not run under [repository safety](references/repository-safety.md)'s Execution, and before outcome verification. Keep its call count and open findings across mode changes within a session.
 
 ## Outcome verification
 
@@ -64,3 +64,7 @@ For automatic verification of plan-driven work or an explicit verification reque
 ## Adversarial review
 
 For automatic Adversarial review of a Security-critical claim, read and follow [the adversarial-review procedure](references/adversarial-review.md). For an explicit Adversarial review, including `/cc-feather:adversarial-review`, follow the same procedure and classify the call as [the adversarial-review command](../adversarial-review/SKILL.md) describes.
+
+## Repository safety
+
+For every repository read that a plan review, code review, outcome verification, Adversarial review or security analysis makes, for main's preparation of each call and its comparison of the workspace after it, and before main adds, commits, tags or pushes, read and follow [repository safety](references/repository-safety.md).

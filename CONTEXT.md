@@ -79,6 +79,10 @@ _Avoid_: testing, QA
 An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE. For a Claim the Acceptance gate does not require it for, it needs no prior passes and, with no target, may be static. BROKEN means a vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces; a pre-existing vulnerability becomes separate work and does not change the verdict.
 _Avoid_: pentest, red team, security review
 
+**Repository-chosen program**:
+A program that the reviewed repository's configuration, attributes or hooks select and Git may run, such as an fsmonitor, a textconv or external diff, a filter, a signing program or a hook. The reviewed repository's tracked content and its local Git metadata are both treated as attacker-controlled, so running one counts as executing the code under review.
+_Avoid_: git hook, safe git
+
 **Blocking finding**:
 A Code review finding that holds completion: a correctness bug, security problem, data loss, regression or deviation from the Plan.
 
