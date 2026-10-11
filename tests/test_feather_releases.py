@@ -148,8 +148,7 @@ class StopThresholdReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_20_0(self):
-        self.assertEqual("0.20.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.21.0 C5 item 1).
 
     def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
         for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
@@ -169,6 +168,88 @@ class StopThresholdReleaseTests(unittest.TestCase):
             with self.subTest(entry=sentence[:50]):
                 self.assertIn(sentence, entry)
         self.assertNotIn("Setup update is required", entry)
+
+
+class RepositorySafetyReleaseTests(unittest.TestCase):
+    """0.21.0 C5 (docs/specs/repository-safety.md): the release requires setup update, says how to go back, and
+    records its validation."""
+
+    # C5 item 3: the Updates sections, paired in both languages.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.21.0 changes the reviewer, verifier, adversary, analyst, scout and Explore role definitions and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` with those six roles from an older template, and in `auto` also the delegation guidance, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`.",
+         "Reviewer can now answer INCONCLUSIVE when it could not obtain the evidence a code review needs, and code review counts it like an INCONCLUSIVE outcome verification.",
+         "To go back to 0.20.0, no remove is needed: 0.20.0 reads the state 0.21.0 writes, and its own setup update re-renders its role templates and guidance."),
+        ("## 更新、移除與驗證\n",
+         "0.21.0 改了 reviewer、verifier、adversary、analyst、scout 與 Explore 的角色定義和自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出這六個角色來自較舊的範本，`auto` 下還會指出分派指引來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。",
+         "reviewer 現在可以在拿不到程式碼審查需要的證據時回答 INCONCLUSIVE，程式碼審查計算它的方式與結果驗證的 INCONCLUSIVE 相同。",
+         "要回到 0.20.0 不需要先移除：0.20.0 讀得懂 0.21.0 寫入的 state，它自己的 setup update 會重新寫入它的角色範本與指引。"),
+    )
+
+    # C5 item 3: the setup document's added-roles section.
+    SETUP = (
+        "Upgrading to 0.21.0 needs setup update in every scope where delegation is installed, then a fresh session: it changes the reviewer, verifier, adversary, analyst, scout and Explore role templates and the automatic review guidance, and until the update `check` and `show` report those six roles from an older template, in `auto` also the delegation guidance, and `model`, `review` and session export refuse.",
+        "To go back to 0.20.0 from 0.21.0, no remove is needed: 0.20.0 reads the state 0.21.0 writes, and its own setup update re-renders its role templates and guidance, so run setup update with 0.20.0 in every scope where delegation is installed, then start a fresh session.",
+    )
+
+    # C5 item 3: the setup document's summary of the automatic review guidance follows templates/review-auto.md (C1 item 1).
+    AUTO_SWITCH = "Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport settings the repository's Git configuration would use and asks the user when that list is not empty, as the delegation skill's repository safety reference describes."
+
+    # C5 item 2.
+    ENTRY = (
+        "**Setup update is required.** This release changes the reviewer, verifier, adversary, analyst, scout and Explore role definitions and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
+        "To go back to 0.20.0, no remove is needed: 0.20.0 reads the state 0.21.0 writes, and its own setup update re-renders its role templates and guidance.",
+        "C4 item 3's positive control ran and was not skipped",
+        "`check` and `show` reported `role_update_required: true` with exit 0 and named reviewer, verifier, adversary, analyst, scout and Explore as from an older template",
+        "the v0.20.0 tool's `check` and `show` exited 0 with status ok",
+        "No live scenario ran with the 0.21.0 procedures or roles:",
+        "`v0.21.0` does not exist when this entry is written.",
+        "**Review round: pending when this entry was written.**",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_21_0(self):
+        self.assertEqual("0.21.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_require_setup_update_and_name_inconclusive_in_both_languages(self):
+        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertIn(sentence, self.section(self.text(name), heading))
+
+    def test_setup_document_states_the_upgrade_and_the_way_back(self):
+        section = self.section(self.text("docs/setup.md"), "## Added roles and incompatible role sets\n")
+        for sentence in self.SETUP:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+
+    def test_setup_document_summarises_the_current_automatic_review_guidance(self):
+        section = self.section(self.text("docs/setup.md"), "\n## Automatic review switch\n")
+        self.assertIn(self.AUTO_SWITCH, section)
+        self.assertIn("Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport "
+                      "settings the repository's Git configuration would use and asks the user when that list is not empty",
+                      self.text("templates/review-auto.md"))
+
+    def test_validation_entry_records_the_update_checks_live_scope_tag_and_pending_review(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.21.0 repository safety\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("No setup update is required", entry)
+
+    def test_adr_0009_amendment_note_links_adr_0011(self):
+        adr = self.text("docs/adr/0009-security-critical-claims-get-an-adversarial-review.md")
+        note = self.section(adr, "\n## Amendment note for 0.21.0\n")
+        link = "(0011-reviews-treat-the-repository-as-hostile-by-instruction.md)"
+        self.assertIn(link, note)
+        self.assertTrue((config.ROOT / "docs" / "adr" / link.strip("()")).is_file())
 
 
 class InstallDocumentTests(unittest.TestCase):
