@@ -68,7 +68,7 @@ _Avoid_: manual review
 An independent check that a Plan is ready to implement, answered READY or REVISE.
 
 **Code review**:
-An independent check of the code implementing a Claim, answered APPROVED or CHANGES_REQUESTED. When the user says "review" about implemented work, this is what is meant.
+An independent check of the code implementing a Claim, answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE. INCONCLUSIVE means evidence the review needs could not be obtained, safely or at all; it is not a pass and does not prove a defect. When the user says "review" about implemented work, this is what is meant.
 _Avoid_: PR review, diff review
 
 **Outcome verification**:
@@ -87,7 +87,7 @@ A Code review finding that does not hold completion: style, naming, a refactorin
 _Avoid_: nit, minor issue
 
 **Unreviewed claim**:
-A Claim whose Code review stopped at its Stop threshold without APPROVED. It is not complete. It is not landed on the default branch, released or reported complete. The only exception is the user's Accept and land decision.
+A Claim whose Code review stopped at its Stop threshold without APPROVED, or ended INCONCLUSIVE while the evidence it named as missing has not changed. It is not complete. It is not landed on the default branch, released or reported complete. The only exception is the user's Accept and land decision.
 _Avoid_: failed review, skipped review
 
 **Unverified claim**:

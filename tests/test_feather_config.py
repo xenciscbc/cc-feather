@@ -3991,6 +3991,8 @@ class FeatherConfigTests(unittest.TestCase):
         "Unplanned work": ("must first become Plan-driven work", "plan-review.md", "must not start without one"),
         "Explicit request": ("it clears the stop without resetting the count",
                              "review-state.md", "clears the stop and leaves the count unchanged"),
+        "Code review": ("answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE",
+                        "code-review.md", "its APPROVED, CHANGES_REQUESTED or INCONCLUSIVE report"),
         "Unreviewed claim": ("stopped at its Stop threshold without APPROVED",
                              "code-review.md", "When the count reaches the Stop threshold in effect without APPROVED"),
         "Unverified claim": ("no currently valid CONFIRMED", "outcome-verification.md", "report the claim as unverified"),

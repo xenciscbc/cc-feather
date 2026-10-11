@@ -1093,5 +1093,142 @@ class StopThresholdProceduresTests(unittest.TestCase):
                 self.assertIsNotNone(self.RETIRED.search(phrase))
 
 
+class ReviewerInconclusiveTests(unittest.TestCase):
+    """Repository safety C3: reviewer can answer INCONCLUSIVE, code review counts and retries it like outcome
+    verification, the call after it covers every gap it named, and every list of reviewer's verdicts has all three."""
+
+    @staticmethod
+    def source(name: str) -> str:
+        """'reviewer.md', 'CONTEXT.md#<term>', '<README>#roles' (the reviewer row of the role table), or any place
+            stop_threshold_source reads: '<procedure>', '<procedure>#<step>', a review-state bullet or a README rule."""
+        path, _, part = name.partition("#")
+        if path == "reviewer.md":
+            return (config.ROOT / "templates" / "agents" / "reviewer.md").read_text(encoding="utf-8")
+        if path == "CONTEXT.md":
+            return feather_support.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))[part]
+        if part == "roles":
+            text = (config.ROOT / path).read_text(encoding="utf-8")
+            return next(line for line in text.splitlines() if line.startswith("| reviewer |"))
+        return feather_support.stop_threshold_source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    # Item 1: the verdict, and CHANGES_REQUESTED when a blocking finding comes with gaps.
+    VERDICT = {
+        "reviewer.md": (
+            "- APPROVED: no blocking finding remains and no evidence the review needs is missing.",
+            "- INCONCLUSIVE: evidence the review needs could not be obtained, safely or at all, and you have no blocking finding.",
+            "Name the missing evidence and list any non-blocking findings; INCONCLUSIVE proves no defect.",
+            "When you have a blocking finding and evidence the review needs is also missing, answer CHANGES_REQUESTED and list the gaps with it.",
+        ),
+        "code-review.md": (
+            "This procedure governs main's orchestration. Reviewer's role definition governs review criteria and its APPROVED, CHANGES_REQUESTED or INCONCLUSIVE report.",
+        ),
+    }
+
+    # Item 2: counted like outcome verification, no FIX or REJECT obligation, retried only after the evidence changed.
+    COUNTING = {
+        "code-review.md#3": (
+            "An automatic INCONCLUSIVE counts as a call without a pass, as in [outcome verification](outcome-verification.md).",
+        ),
+        "code-review.md#4": (
+            "An INCONCLUSIVE proves no defect and creates no FIX or REJECT obligation: make the next call only after the named missing evidence has changed, and otherwise report the claim unreviewed.",
+        ),
+        "outcome-verification.md#5": (
+            "On INCONCLUSIVE, use the next call only after the named missing evidence, prerequisite or environment has changed; otherwise report the claim unverified.",
+        ),
+        "CONTEXT.md#Code review": (
+            "An independent check of the code implementing a Claim, answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE.",
+            "INCONCLUSIVE means evidence the review needs could not be obtained, safely or at all; it is not a pass and does not prove a defect.",
+        ),
+        "CONTEXT.md#Unreviewed claim": (
+            "A Claim whose Code review stopped at its Stop threshold without APPROVED, or ended INCONCLUSIVE while the evidence it named as missing has not changed.",
+        ),
+    }
+
+    # Item 3: no narrowing past a gap, beside the narrowed-review rule in review state, the procedure and the role.
+    NARROWING = {
+        "review-state.md#Completed calls and coverage": (
+            "A second review, narrowed to the earlier findings and the fixes, and the range from the previously judged commit follow only when the previous call completed.",
+            "The code review after an INCONCLUSIVE covers every gap that call named, even though that call completed: a narrowed follow-up never closes a gap it did not examine, and no APPROVED is given while a named gap is unexamined.",
+        ),
+        "code-review.md#2": (
+            "On a later call for the same claim, state whether the previous call completed with a verdict; the reviewer narrows its review only when the brief says it did, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "When the previous call answered INCONCLUSIVE, the brief names every gap that call named, and the next call covers each of them even though that call completed; a narrowed follow-up never closes a gap it did not examine, and no APPROVED is given while a named gap is unexamined.",
+        ),
+        "reviewer.md": (
+            "When the previous call answered INCONCLUSIVE, cover every gap it named, even though that call completed: a narrowed review never closes a gap you did not examine, and you do not answer APPROVED while a named gap is unexamined.",
+        ),
+    }
+
+    # Item 4: every list of reviewer's verdicts names all three, the READMEs in both languages.
+    LISTS = {
+        "README.md#roles": ("APPROVED/CHANGES_REQUESTED/INCONCLUSIVE",),
+        "README.zh-TW.md#roles": ("APPROVED／CHANGES_REQUESTED／INCONCLUSIVE",),
+    }
+
+    README_PAIRS = (
+        ("Budget", "次數上限",
+         "A code review that returns INCONCLUSIVE counts as not passing too, but proves no defect and asks for no fix: its next call waits until the missing evidence it names has changed, and until then the claim is unreviewed.",
+         "程式碼審查回覆 INCONCLUSIVE 也算沒通過，但不代表有缺陷，也不要求修正；下一次呼叫要等它指出的缺少證據有所改變，在那之前 claim 都算未審查。"),
+    )
+
+    # A list of reviewer's verdicts that stops at two.
+    TWO_VERDICTS = re.compile(r"APPROVED(?:/|／|, | or )CHANGES_REQUESTED(?!(?:/|／| or )INCONCLUSIVE)")
+    SHIPPED_PATHSPECS = ("skills", "templates", "README.md", "README.zh-TW.md", "CONTEXT.md", "docs/setup.md")
+    shipped_files = feather_support.shipped_files
+
+    def test_reviewer_answers_inconclusive_and_changes_requested_takes_precedence(self):
+        self.assert_pinned(self.VERDICT)
+
+    def test_code_review_counts_and_retries_inconclusive_like_outcome_verification(self):
+        self.assert_pinned(self.COUNTING)
+
+    def test_the_call_after_inconclusive_covers_every_named_gap(self):
+        self.assert_pinned(self.NARROWING)
+        # The rule sits beside the narrowed-review rule: in the same review-state bullet, procedure step and role paragraph.
+        reviewer = self.source("reviewer.md")
+        paragraph = next(part for part in reviewer.split("\n\n")
+                         if part.startswith("When the brief says the previous call for this claim completed with a verdict"))
+        self.assertIn(self.NARROWING["reviewer.md"][0], paragraph)
+
+    def test_every_list_of_reviewer_verdicts_names_all_three(self):
+        for place, phrases in self.LISTS.items():
+            for phrase in phrases:
+                with self.subTest(place=place):
+                    self.assertIn(phrase, self.source(place))
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+        files = [path for path in self.shipped_files() if path.suffix == ".md"]
+        names = {path.relative_to(config.ROOT).as_posix() for path in files}
+        self.assertTrue({"templates/agents/reviewer.md", "skills/delegation/references/code-review.md",
+                         "README.md", "README.zh-TW.md", "CONTEXT.md"} <= names, "Git must list the shipped files")
+        for path in files:
+            with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
+                self.assertIsNone(self.TWO_VERDICTS.search(path.read_text(encoding="utf-8")))
+
+    def test_the_two_verdict_pattern_matches_the_earlier_wording(self):
+        for phrase in ("its APPROVED/CHANGES_REQUESTED report", "APPROVED／CHANGES_REQUESTED |",
+                       "answered APPROVED or CHANGES_REQUESTED.", "APPROVED/CHANGES_REQUESTED |"):
+            with self.subTest(phrase=phrase):
+                self.assertIsNotNone(self.TWO_VERDICTS.search(phrase))
+        for phrase in ("APPROVED/CHANGES_REQUESTED/INCONCLUSIVE", "APPROVED, CHANGES_REQUESTED or INCONCLUSIVE",
+                       "APPROVED／CHANGES_REQUESTED／INCONCLUSIVE"):
+            with self.subTest(phrase=phrase):
+                self.assertIsNone(self.TWO_VERDICTS.search(phrase))
+
+    def test_installed_reviewer_renders_the_verdict_and_the_gap_rule(self):
+        choice = {"model": "sonnet", "effort": "high"}
+        for prefix in ("", "cc-"):
+            rendered = config._render("reviewer", choice, prefix).decode("utf-8")
+            for sentence in (self.VERDICT["reviewer.md"][1], self.VERDICT["reviewer.md"][3], self.NARROWING["reviewer.md"][0]):
+                with self.subTest(prefix=prefix, sentence=sentence[:40]):
+                    self.assertIn(sentence, rendered)
+
+
 if __name__ == "__main__":
     unittest.main()
