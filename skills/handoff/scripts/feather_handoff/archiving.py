@@ -214,8 +214,13 @@ def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool =
     try:
         result["tracking"] = ensure_tracking(store, name, tracking)
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        cause = getattr(error, "code", "io")
+        resolve = ("Resolve the Git rules" if cause not in {"promisor-remote", "promisor-unknown"} else
+                   "No Git command that could read objects was run because of a promisor remote; report it, and "
+                   "upgrade Git to 2.45.0 or later or have the user remove the promisor configuration "
+                   "(promisor-unknown: first have the user make the configuration and Git readable)")
         return {**result, "status": "partial", "complete": False, "code": "tracking-failed",
-                "cause_code": getattr(error, "code", "io"), "message": str(error), "tracking": "error",
+                "cause_code": cause, "message": str(error), "tracking": "error",
                 "recovery": "History was saved and the completed work removed before tracking failed; do not retry "
-                            "archive. Resolve the Git rules; a later create or update applies tracking again."}
+                            f"archive. {resolve}; a later create or update applies tracking again."}
     return result

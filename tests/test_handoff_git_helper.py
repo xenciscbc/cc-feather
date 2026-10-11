@@ -5,10 +5,12 @@ repository's own configuration must not choose a program the tool's Git commands
 index; the user's global and system configuration and environment stay trusted."""
 import ast
 import contextlib
+import hashlib
 import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -290,6 +292,413 @@ class RepositoryChosenProgramTest(unittest.TestCase):
         step("list", "list")
         for repo, index in indexes.items():
             self.assertEqual((repo / ".git/index").read_bytes(), index, f"{repo.name}: the tool wrote Git's index")
+
+
+CONFIG_READ = ["config", "--list", "--includes", "-z"]
+OBJECT_READS = {"ls-files", "check-ignore"}
+COMPLETED_AT = "2026-10-11T12:00:00+08:00"
+
+
+MARKER = "# cc-feather: track /.feather/handoffs/"
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def git_version(text: str) -> tuple[int, int, int] | None:
+    match = re.match(r"git version (\d+)\.(\d+)\.(\d+)", text.strip())
+    return tuple(map(int, match.groups())) if match else None
+
+
+class FakeGit:
+    """A recorded stand-in for the Git process: answers the tool's tracking commands for a chosen version and
+    configuration, and fails when a version older than 2.45.0 receives --no-lazy-fetch, as a real one would."""
+
+    def __init__(self, project: Path, version="git version 2.45.0", config="remote.origin.promisor\ntrue\0",
+                 config_code=0, version_code=0):
+        self.project, self.version, self.config = project, version, config
+        self.config_code, self.version_code = config_code, version_code
+        self.calls: list[list[str]] = []
+
+    def split(self, args: list[str]) -> tuple[bool, list[str]]:
+        """Whether the command carries --no-lazy-fetch, and its Git arguments after the -C directory."""
+        flagged = args[len(PREFIX)] == "--no-lazy-fetch"
+        start = len(PREFIX) + (1 if flagged else 0)
+        assert args[:len(PREFIX)] == PREFIX and args[start:start + 2] == ["-C", str(self.project)], args
+        return flagged, args[start + 2:]
+
+    def __call__(self, args, **kwargs):
+        args = list(args)
+        self.calls.append(args)
+        flagged, rest = self.split(args)
+        parsed = git_version(self.version)
+        if flagged and (parsed is None or parsed < (2, 45, 0)):
+            return subprocess.CompletedProcess(args, 129, "", "unknown option: --no-lazy-fetch\n")
+        if rest == ["rev-parse", "--is-inside-work-tree"]:
+            return subprocess.CompletedProcess(args, 0, "true\n", "")
+        if rest == CONFIG_READ:
+            return subprocess.CompletedProcess(args, self.config_code, self.config, "")
+        if rest == ["version"]:
+            return subprocess.CompletedProcess(args, self.version_code, self.version + "\n", "")
+        if rest[:1] == ["ls-files"]:
+            return subprocess.CompletedProcess(args, 0, "", "")
+        if rest[:1] == ["check-ignore"]:
+            return subprocess.CompletedProcess(args, 1, "", "")
+        raise AssertionError(f"unexpected Git command {args}")
+
+    def commands(self) -> list[tuple[bool, list[str]]]:
+        return [self.split(call) for call in self.calls]
+
+    def reset(self):
+        self.calls.clear()
+
+
+class PromisorDetectionTest(unittest.TestCase):
+    """C4 item 7 (D-1): the effective configuration, includes followed, decides whether the checkout declares a
+    promisor remote; only then is the Git version read, and only Git 2.45.0 or later may read objects there."""
+
+    DECLARING = ("extensions.partialclone\norigin\0", "remote.origin.promisor\0", "remote.origin.promisor\ntrue\0",
+                 "core.bare\nfalse\0remote.Up.Stream.promisor\nyes\0", "remote.origin.partialclonefilter\nblob:none\0",
+                 "remote.origin.promisor\nfalse\0remote.other.promisor\n1\0")
+    NOT_DECLARING = ("", "core.bare\nfalse\0", "remote.origin.promisor\nfalse\0", "remote.origin.promisor\n\0",
+                     "remote.origin.promisor\noff\0remote.origin.url\nfile:///elsewhere\0")
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.project = Path(os.path.realpath(temporary.name))
+
+    def guard(self, fake: FakeGit):
+        with mock.patch.object(storage.subprocess, "run", side_effect=fake):
+            return storage.lazy_fetch_guard(self.project)
+
+    def test_a_declared_promisor_remote_needs_git_2_45_0(self):
+        for config in self.DECLARING:
+            for version, allowed in (("git version 2.45.0", True), ("git version 2.47.1.windows.1", True),
+                                     ("git version 3.0.0", True), ("git version 2.44.9", False),
+                                     ("git version 2.43.0.windows.1", False)):
+                with self.subTest(config=config, version=version):
+                    fake = FakeGit(self.project, version=version, config=config)
+                    if allowed:
+                        self.assertIs(self.guard(fake), True)
+                    else:
+                        with self.assertRaises(storage.HandoffError) as raised:
+                            self.guard(fake)
+                        self.assertEqual(raised.exception.code, "promisor-remote")
+                        self.assertIn("2.45.0", str(raised.exception))
+                    # The configuration is read with includes followed, then the version; neither carries the flag.
+                    self.assertEqual(fake.commands(), [(False, CONFIG_READ), (False, ["version"])])
+
+    def test_no_promisor_remote_needs_no_version_and_no_flag(self):
+        for config in self.NOT_DECLARING:
+            with self.subTest(config=config):
+                fake = FakeGit(self.project, version="git version 2.43.0", config=config)
+                self.assertIs(self.guard(fake), False)
+                self.assertEqual(fake.commands(), [(False, CONFIG_READ)])
+
+    def test_an_unreadable_configuration_or_unknown_version_is_not_established(self):
+        for label, fake in (("config fails", FakeGit(self.project, config_code=1)),
+                            ("version fails", FakeGit(self.project, version_code=1)),
+                            ("version unparsable", FakeGit(self.project, version="git version unknown")),
+                            ("version incomplete", FakeGit(self.project, version="git version 2.45"))):
+            with self.subTest(label), self.assertRaises(storage.HandoffError) as raised:
+                self.guard(fake)
+            self.assertEqual(raised.exception.code, "promisor-unknown")
+
+    def test_a_process_failure_propagates(self):
+        # The caller maps these to git-unavailable, as for the first probe.
+        for error in (FileNotFoundError("git"), subprocess.TimeoutExpired(["git"], 5)):
+            with self.subTest(error=type(error).__name__), \
+                    mock.patch.object(storage.subprocess, "run", side_effect=error), self.assertRaises(type(error)):
+                storage.lazy_fetch_guard(self.project)
+
+    def test_the_helper_places_the_flag_among_its_global_options(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(storage.subprocess, "run", return_value=completed) as run:
+            storage.run_git(self.project, "ls-files", "--", "x", no_lazy_fetch=True)
+            storage.run_git(self.project, "ls-files", "--", "x")
+        flagged, plain = (call.args[0] for call in run.call_args_list)
+        self.assertEqual(flagged, [*PREFIX, "--no-lazy-fetch", "-C", str(self.project), "ls-files", "--", "x"])
+        self.assertEqual(plain, [*PREFIX, "-C", str(self.project), "ls-files", "--", "x"])
+
+
+class SimulatedPromisorTest(unittest.TestCase):
+    """C4 item 7 through the tool's command line with a simulated Git: on 2.45.0 or later every command after the
+    detection carries --no-lazy-fetch; on an older or unknown Git no command that can read objects runs, nothing
+    is written to the Git rules, and the work is saved as a tracking failure whose recovery is not a retry."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.project = Path(os.path.realpath(temporary.name))
+        self.directory = self.project / ".feather/handoffs"
+        self.ignore = self.project / ".gitignore"
+        self.addCleanup(storage.reset_roots)
+
+    def invoke(self, fake: FakeGit, *args, payload=None) -> tuple[int, dict]:
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["handoff", "--project", str(self.project), "--exact-root", *args]), \
+                mock.patch.object(cli, "input_payload", return_value=payload), \
+                mock.patch.object(storage.subprocess, "run", side_effect=fake), contextlib.redirect_stdout(out):
+            code = cli.main()
+        return code, json.loads(out.getvalue())
+
+    def assert_flagged_after_detection(self, fake: FakeGit):
+        commands = fake.commands()
+        self.assertEqual(commands[:3], [(False, ["rev-parse", "--is-inside-work-tree"]), (False, CONFIG_READ),
+                                        (False, ["version"])])
+        later = commands[3:]
+        self.assertTrue(later, "tracking ran no command after the detection")
+        self.assertTrue(OBJECT_READS & {rest[0] for _, rest in later}, later)
+        for flagged, rest in later:
+            self.assertTrue(flagged, f"{rest} ran without --no-lazy-fetch")
+
+    def test_new_git_adds_the_flag_to_every_command_after_detection(self):
+        for index, version in enumerate(("git version 2.45.0", "git version 2.47.1.windows.1", "git version 3.0.0")):
+            with self.subTest(version=version):
+                self.ignore.unlink(missing_ok=True)
+                fake, name = FakeGit(self.project, version=version), f"w{index}.md"
+                code, created = self.invoke(fake, "create", "--work", name, payload={"title": "w", "fields": FIELDS})
+                self.assertEqual((code, created["status"], created["tracking"]), (0, "ok", "ignored"), created)
+                self.assert_flagged_after_detection(fake)
+                fake.reset()
+                code, updated = self.invoke(fake, "update", "--work", name,
+                                            payload={"version": created["version"], "tracking": "track"})
+                self.assertEqual((code, updated["status"], updated["tracking"]), (0, "ok", "track"), updated)
+                self.assert_flagged_after_detection(fake)
+                fake.reset()
+                code, done = self.invoke(fake, "update", "--work", name, payload={
+                    "version": updated["version"], "tracking": "track",
+                    "fields": {"status": "完成", "updated": COMPLETED_AT}})
+                self.assertEqual((code, done["status"], done["archived"]), (0, "ok", True), done)
+                self.assert_flagged_after_detection(fake)
+
+    def assert_not_established(self, code: int, result: dict, cause: str, name: str, choice: str, completed: bool):
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result["status"], result["code"], result["cause_code"], result["tracking"], result["state"]),
+                         ("partial", "tracking-failed", cause, "error", "saved"))
+        path = self.directory / name
+        self.assertTrue(path.is_file(), "the saved work must stay in place")
+        self.assertEqual(result["saved_version"], sha256(path.read_bytes()))
+        recovery = result["recovery"]
+        self.assertIn("2.45.0", recovery)
+        self.assertIn("remove the promisor configuration", recovery)
+        self.assertIn("Do not retry", recovery)
+        if completed:
+            self.assertIn("not archived", recovery)
+            self.assertIn(f'archive using {{"version": "<current version>", "tracking": "{choice}"}}', recovery)
+        else:
+            self.assertIn(f'update using the current version and {{"tracking": "{choice}"}}', recovery)
+            self.assertNotIn("archive", recovery)
+
+    def check_not_established(self, make_fake, cause: str):
+        for completed in (False, True):
+            for choice in ("default", "track"):
+                with self.subTest(completed=completed, choice=choice):
+                    self.saves = getattr(self, "saves", 0) + 1
+                    fake, name = make_fake(), f"{cause}-{choice}-{int(completed)}-{self.saves}.md"
+                    fields = {**FIELDS, "updated": COMPLETED_AT, **({"status": "完成"} if completed else {})}
+                    code, result = self.invoke(fake, "create", "--work", name,
+                                               payload={"title": "w", "fields": fields, "tracking": choice})
+                    self.assert_not_established(code, result, cause, name, choice, completed)
+                    self.assertFalse(self.ignore.exists(), "tracking must write nothing")
+                    self.assertFalse((self.directory / "history.md").exists())
+                    for flagged, rest in fake.commands():
+                        self.assertFalse(flagged, rest)
+                        self.assertNotIn(rest[0], OBJECT_READS, f"{rest} can read objects")
+                    if completed:
+                        fake.reset()
+                        code, archived = self.invoke(fake, "archive", "--work", name,
+                                                     payload={"version": result["version"], "tracking": choice})
+                        self.assertEqual((code, archived["status"], archived["code"], archived["cause_code"]),
+                                         (2, "partial", "tracking-failed", cause), archived)
+                        self.assertTrue(archived["archived"])
+                        self.assertIn("do not retry archive", archived["recovery"])
+                        self.assertIn("2.45.0", archived["recovery"])
+                        self.assertIn("remove the promisor configuration", archived["recovery"])
+                        self.assertFalse((self.directory / name).exists())
+                        self.assertFalse(self.ignore.exists())
+                        self.assertFalse(any(rest[0] in OBJECT_READS for _, rest in fake.commands()))
+                        (self.directory / "history.md").unlink()
+
+    def test_old_git_with_a_promisor_remote_reads_no_object(self):
+        for version in ("git version 2.44.9", "git version 2.43.0.windows.1"):
+            with self.subTest(version=version):
+                self.check_not_established(lambda: FakeGit(self.project, version=version), "promisor-remote")
+
+    def test_unknown_configuration_or_version_reads_no_object(self):
+        for label, make in (("config", lambda: FakeGit(self.project, config_code=1)),
+                            ("version", lambda: FakeGit(self.project, version="git version ?"))):
+            with self.subTest(label):
+                self.check_not_established(make, "promisor-unknown")
+
+    def test_without_a_promisor_remote_commands_carry_no_flag(self):
+        fake = FakeGit(self.project, version="git version 2.43.0", config="remote.origin.url\nfile:///x\0")
+        code, created = self.invoke(fake, "create", "--work", "w.md", payload={"title": "w", "fields": FIELDS})
+        self.assertEqual((code, created["tracking"]), (0, "ignored"), created)
+        self.assertNotIn((False, ["version"]), fake.commands())
+        self.assertTrue(all(not flagged for flagged, _ in fake.commands()))
+
+    def test_a_default_save_under_the_track_marker_needs_no_detection(self):
+        # It reads no object and writes nothing, so it keeps reporting existing-rule even on an older Git.
+        self.ignore.write_bytes(f"{MARKER}\n".encode("utf-8"))
+        fake = FakeGit(self.project, version="git version 2.43.0")
+        code, created = self.invoke(fake, "create", "--work", "w.md", payload={"title": "w", "fields": FIELDS})
+        self.assertEqual((code, created["tracking"]), (0, "existing-rule"), created)
+        self.assertEqual(fake.commands(), [(False, ["rev-parse", "--is-inside-work-tree"])])
+
+
+class PromisorReferenceTest(unittest.TestCase):
+    """C4 item 7: the handoff tool reference's Create section describes the cause codes the tool returns."""
+
+    def test_create_section_describes_the_promisor_cause_codes(self):
+        text = (ROOT / "skills/handoff/references/tool.md").read_text(encoding="utf-8")
+        create = text[text.index("\n## Create\n"):text.index("\n## Update and completion\n")]
+        for phrase in ("`cause_code: promisor-remote`", "`cause_code: promisor-unknown`", "`--no-lazy-fetch`",
+                       "2.45.0", "`extensions.partialClone`", "`remote.<name>.promisor`",
+                       "`remote.<name>.partialclonefilter`", "the user removes the promisor configuration", "not to retry"):
+            self.assertIn(phrase, create)
+
+
+class PartialCloneTest(unittest.TestCase):
+    """C4 item 7, the refuted case as a regression and abuse check: a blob-less partial clone through a local file://
+    URL, sparse so the root .gitignore blob is missing, whose local configuration names a marker program as the
+    remote's upload program. A plain check-ignore runs it (positive control); none of the tool's operations does."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(os.path.realpath(temporary.name))
+        self.marker = self.root / "marker"
+        (self.root / "home").mkdir()
+        empty = self.root / "gitconfig"
+        empty.write_bytes(b"")
+        # Isolated from the user's global and system Git configuration; no inherited GIT_* variable reaches Git.
+        self.env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+        self.env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty), "HOME": str(self.root / "home"),
+                         "XDG_CONFIG_HOME": str(self.root / "home")})
+        self.upload = self.root / "upload.sh"
+        self.upload.write_text(f'#!/bin/sh\necho upload >> "{self.marker.as_posix()}"\nexit 1\n', encoding="utf-8",
+                               newline="\n")
+        self.upload.chmod(0o755)
+
+    def git(self, cwd: Path, *args, check=True) -> subprocess.CompletedProcess:
+        try:
+            result = subprocess.run(["git", *args], cwd=cwd, env={**self.env, **COMMIT_ENV}, stdin=subprocess.DEVNULL,
+                                    capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run: {error}")
+        if check and result.returncode:
+            self.skipTest(f"this Git cannot set up the partial clone: {args}: {result.stderr.strip()}")
+        return result
+
+    def partial_clone(self) -> Path:
+        source = self.root / "source"
+        source.mkdir()
+        self.git(source, "-c", "core.fsmonitor=", "init", "--quiet", "--initial-branch=main", ".")
+        self.git(source, "config", "uploadpack.allowFilter", "true")
+        self.git(source, "config", "uploadpack.allowAnySHA1InWant", "true")
+        (source / ".gitignore").write_bytes(b"*.log\n")
+        (source / "keep").mkdir()
+        (source / "keep/a.txt").write_bytes(b"a\n")
+        self.git(source, "-c", "core.fsmonitor=", "add", "--", ".gitignore", "keep/a.txt")
+        self.git(source, "-c", "core.fsmonitor=", "-c", "commit.gpgSign=false", "commit", "--quiet", "--no-verify",
+                 "-m", "fixture")
+        clone = self.root / "clone"
+        posix = source.as_posix()
+        url = "file://" + (posix if posix.startswith("/") else "/" + posix)
+        self.git(self.root, "-c", "core.fsmonitor=", "clone", "--quiet", "--filter=blob:none", "--no-checkout", url,
+                 str(clone))
+        self.git(clone, "-c", "core.fsmonitor=", "sparse-checkout", "set", "--no-cone", "/keep/")
+        self.git(clone, "-c", "core.fsmonitor=", "checkout", "--quiet", "main")
+        if (clone / ".gitignore").exists():
+            self.skipTest("the sparse checkout kept the root .gitignore")
+        self.git(clone, "config", "remote.origin.uploadpack", self.upload.as_posix())
+        return clone
+
+    def ran(self) -> bool:
+        found = self.marker.exists()
+        self.marker.unlink(missing_ok=True)
+        return found
+
+    def run_tool(self, repo: Path, *args, payload=None) -> tuple[int, dict]:
+        result = subprocess.run([sys.executable, "-B", str(TOOL), "--project", str(repo), *args],
+                                input=json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload else b"",
+                                capture_output=True, timeout=60, env=self.env)
+        stdout = result.stdout.decode("utf-8")
+        self.assertIn(result.returncode, {0, 2}, stdout + result.stderr.decode("utf-8", "replace"))
+        return result.returncode, json.loads(stdout)
+
+    def installed_version(self) -> tuple[int, int, int] | None:
+        return git_version(self.git(self.root, "version").stdout)
+
+    def test_no_operation_fetches_lazily_from_the_promisor_remote(self):
+        clone = self.partial_clone()
+        self.assertFalse(self.ran())
+        # Positive control: the plain tracking command, without the tool, lazily fetches and runs the upload program.
+        self.git(clone, "-c", "core.fsmonitor=", "check-ignore", "-q", "--", ".feather/handoffs/w.md", check=False)
+        if not self.ran():
+            self.skipTest("this Git ran no configured upload program for a lazy fetch")
+        version = self.installed_version()
+        if version is None:
+            self.skipTest("the installed Git version cannot be read")
+        old = version < (2, 45, 0)
+
+        def step(label: str, *args, payload=None) -> tuple[int, dict]:
+            outcome = self.run_tool(clone, *args, payload=payload)
+            self.assertFalse(self.ran(), f"{label} ran the remote's upload program")
+            return outcome
+
+        code, listed = step("list", "list")
+        self.assertEqual(listed["status"], "missing")
+        code, snapshot = step("snapshot", "snapshot", payload={"paths": ["keep/a.txt"]})
+        self.assertEqual(snapshot["snapshot"]["git"]["state"], "available")
+        for choice in ("default", "track"):
+            name = f"{choice}.md"
+            code, created = step(f"create {choice}", "create", "--work", name,
+                                 payload={"title": "w", "fields": FIELDS, "tracking": choice,
+                                          "snapshot": snapshot["snapshot"]})
+            self.assertTrue((clone / ".feather/handoffs" / name).is_file(), created)
+            if old:
+                self.assertEqual((code, created["status"], created["code"], created["cause_code"]),
+                                 (2, "partial", "tracking-failed", "promisor-remote"), created)
+                self.assertIn("Do not retry", created["recovery"])
+                self.assertFalse((clone / ".gitignore").exists(), "tracking must write nothing")
+            else:
+                self.assertNotIn(created.get("cause_code"), {"promisor-remote", "promisor-unknown"}, created)
+            code, updated = step(f"update {choice}", "update", "--work", name,
+                                 payload={"version": created["version"], "tracking": choice,
+                                          "fields": {"next": "m", "updated": UPDATED}})
+            if old:
+                self.assertEqual((code, updated["cause_code"]), (2, "promisor-remote"), updated)
+            code, compared = step(f"compare {choice}", "compare", "--work", name)
+            self.assertEqual(compared["git"]["comparison"], "unchanged", compared)
+        code, done = step("complete", "create", "--work", "done.md", payload={
+            "title": "done", "fields": {**FIELDS, "updated": COMPLETED_AT, "status": "完成"}})
+        if old:
+            self.assertEqual((code, done["cause_code"]), (2, "promisor-remote"), done)
+            code, archived = step("archive", "archive", "--work", "done.md", payload={"version": done["version"]})
+            self.assertEqual((code, archived["archived"], archived["cause_code"]), (2, True, "promisor-remote"))
+        step("read", "read", "--work", "default.md")
+
+    def test_an_included_promisor_declaration_counts(self):
+        # A repository with every object present whose local configuration includes a file declaring a promisor
+        # remote: the detection follows the include. Git 2.45.0 or later reads with the flag and succeeds.
+        repo = self.root / "repo"
+        repo.mkdir()
+        self.git(repo, "-c", "core.fsmonitor=", "init", "--quiet", "--initial-branch=main", ".")
+        included = self.root / "included.gitconfig"
+        included.write_text('[remote "origin"]\n\tpromisor = true\n', encoding="utf-8", newline="\n")
+        self.git(repo, "config", "include.path", included.as_posix())
+        version = self.installed_version()
+        code, created = self.run_tool(repo, "create", "--work", "w.md", payload={"title": "w", "fields": FIELDS})
+        self.assertTrue((repo / ".feather/handoffs/w.md").is_file())
+        if version is None or version < (2, 45, 0):
+            self.assertEqual((code, created["cause_code"]), (2, "promisor-remote"), created)
+            self.assertFalse((repo / ".gitignore").exists())
+        else:
+            self.assertEqual((code, created["status"], created["tracking"]), (0, "ok", "ignored"), created)
 
 
 if __name__ == "__main__":

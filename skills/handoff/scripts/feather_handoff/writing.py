@@ -257,6 +257,20 @@ def update_work(store: Store, name: str, raw: object) -> dict:
     return result
 
 
+# Recovery for a tracking failure where no command that can read objects ran because of a promisor remote.
+PROMISOR_CAUSES = {
+    "promisor-remote": ("tracking was not established because the repository declares a promisor remote and the "
+                        "installed Git cannot disable lazy fetch, so no Git command that could fetch from it was run. "
+                        "Do not retry: report it, and upgrade Git to 2.45.0 or later or have the user remove the "
+                        "promisor configuration."),
+    "promisor-unknown": ("tracking was not established because the Git configuration or the installed Git version "
+                         "could not be established, so a lazy fetch from a promisor remote could not be ruled out and "
+                         "no Git command that could read objects was run. Do not retry: report it, have the user make "
+                         "the configuration and Git readable, and if a promisor remote is declared, upgrade Git to "
+                         "2.45.0 or later or have the user remove the promisor configuration."),
+}
+
+
 def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
     result = read_work(store, name)
     try:
@@ -282,6 +296,16 @@ def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
                             "it archives the work and then applies tracking.")
             else:
                 recovery = ("Work was saved, but " + unavailable + "update using the current version and "
+                            f'{{"tracking": "{tracking}"}}.')
+        elif cause in PROMISOR_CAUSES:
+            # Retrying cannot help: the checkout or the installed Git has to change first.
+            blocked = PROMISOR_CAUSES[cause] + " Once that is done, apply tracking with "
+            if result["work_status"] == "完成":
+                recovery = ("Completed work was saved but not archived, and " + blocked + "archive using "
+                            f'{{"version": "<current version>", "tracking": "{tracking}"}}; '
+                            "it archives the work and then applies tracking.")
+            else:
+                recovery = ("Work was saved, but " + blocked + "update using the current version and "
                             f'{{"tracking": "{tracking}"}}.')
         elif result["work_status"] == "完成":
             # A completed work refuses normal updates; archive retries it and applies the same tracking choice.

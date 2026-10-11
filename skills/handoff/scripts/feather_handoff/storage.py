@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import hashlib
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import secrets
@@ -35,13 +36,69 @@ def git_environment() -> dict[str, str]:
 GIT_COMMAND = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=")
 
 
-def run_git(directory: Path, *arguments: str, errors: str = "strict") -> subprocess.CompletedProcess:
-    """The only place the handoff tool starts Git: `git <GIT_COMMAND options> -C <directory> <arguments>`.
+def run_git(directory: Path, *arguments: str, errors: str = "strict",
+            no_lazy_fetch: bool = False) -> subprocess.CompletedProcess:
+    """The only place the handoff tool starts Git: `git <GIT_COMMAND> [--no-lazy-fetch] -C <directory> <arguments>`.
 
-    Needs no Store, so root discovery can use it. Output is UTF-8 text decoded with `errors`; OSError and
-    subprocess.TimeoutExpired propagate, and each caller judges the return code."""
-    return subprocess.run([*GIT_COMMAND, "-C", str(directory), *arguments], capture_output=True, text=True,
+    Needs no Store, so root discovery can use it. no_lazy_fetch is what lazy_fetch_guard returned for the operation.
+    Output is UTF-8 text decoded with `errors`; OSError and subprocess.TimeoutExpired propagate, and each caller
+    judges the return code."""
+    options = (*GIT_COMMAND, "--no-lazy-fetch") if no_lazy_fetch else GIT_COMMAND
+    return subprocess.run([*options, "-C", str(directory), *arguments], capture_output=True, text=True,
                           encoding="utf-8", errors=errors, timeout=5, env=git_environment())
+
+
+# The first Git release whose --no-lazy-fetch keeps a command from fetching a missing object from a promisor remote.
+NO_LAZY_FETCH_FROM = (2, 45, 0)
+_FALSE = {"false", "no", "off", "0", ""}
+
+
+def _promisor_keys(listing: str) -> list[str]:
+    """Settings in a `git config --list -z` listing that declare a promisor remote.
+
+    A remote.<name>.promisor set to a value Git reads as false declares nothing; any other value, including one Git
+    would reject, counts as declared."""
+    found = []
+    for entry in listing.split("\0"):
+        key, separator, value = entry.partition("\n")
+        name = key.lower()
+        if name == "extensions.partialclone" or (name.startswith("remote.") and name.endswith(".partialclonefilter")):
+            found.append(key)
+        elif name.startswith("remote.") and name.endswith(".promisor"):
+            if not separator or value.strip().lower() not in _FALSE:
+                found.append(key)
+    return found
+
+
+def lazy_fetch_guard(directory: Path) -> bool:
+    """Run before an operation's first Git command that can read objects, and before tracking writes anything.
+
+    Reads the effective configuration with includes followed. Returns False when it declares no promisor remote and
+    True when it declares one and Git is 2.45.0 or later, so every later command must pass no_lazy_fetch=True.
+    Raises HandoffError promisor-remote when an older Git could fetch from the remote, and promisor-unknown when the
+    configuration or the Git version cannot be established; then no command that can read objects may run. OSError
+    and subprocess.TimeoutExpired propagate. The configuration and version reads themselves read no objects."""
+    listing = run_git(directory, "config", "--list", "--includes", "-z", errors="replace")
+    if listing.returncode:
+        raise HandoffError("promisor-unknown",
+                           "Could not read the Git configuration to find whether it declares a promisor remote: "
+                           + (listing.stderr.strip() or f"git config exited with {listing.returncode}"))
+    keys = _promisor_keys(listing.stdout)
+    if not keys:
+        return False
+    reported = run_git(directory, "version", errors="replace")
+    match = re.match(r"git version (\d+)\.(\d+)\.(\d+)", reported.stdout.strip())
+    if reported.returncode or not match:
+        raise HandoffError("promisor-unknown",
+                           f"The Git configuration declares a promisor remote ({', '.join(keys)}), and the installed "
+                           "Git version could not be established")
+    version = tuple(map(int, match.groups()))
+    if version < NO_LAZY_FETCH_FROM:
+        raise HandoffError("promisor-remote",
+                           f"The Git configuration declares a promisor remote ({', '.join(keys)}), and Git "
+                           f"{'.'.join(map(str, version))} cannot disable lazy fetch (2.45.0 or later can); no command "
+                           "that could fetch from that remote was run")
+    return True
 
 
 # Canonical project roots resolved in this process; links above them were followed once.
