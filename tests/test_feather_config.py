@@ -315,6 +315,14 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("install")
         agents = self.project / ".claude" / "agents"
         analyst = (agents / "analyst.md").read_text(encoding="utf-8")
+        # Repository safety (Adversarial review of C2, finding F2): the paragraph for roles without a shell defines a
+        # review assignment by every kind of review D4 lists, code review included, so that sentence is set aside;
+        # nothing else in analyst's template mentions code review.
+        definition = ("Every assignment that reads a repository for a plan review, code review, outcome verification, "
+                      "Adversarial review or security analysis is a review assignment, whatever mode or name your brief "
+                      "gives it.")
+        self.assertEqual(analyst.count(definition), 1)
+        analyst = analyst.replace(definition, "")
         self.assertNotIn("Code review", analyst)
         self.assertNotIn("code review", analyst)
         self.assertIn("code review to reviewer", (agents / "verifier.md").read_text(encoding="utf-8"))

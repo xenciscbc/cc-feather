@@ -138,6 +138,23 @@ class RepositorySafetyTests(unittest.TestCase):
         "Names a listing prints reach another Git command only as NUL-separated data on standard input, such as "
         "`check-attr -z --stdin`, never on its command line."
     )
+    # Adversarial review of C2 (BROKEN), finding F1: a reader runs only the listed forms, a role only its subset of them,
+    # content hashing is main's alone, and every command that compares or refreshes the working tree is forbidden, the
+    # named ones being examples. They replace WORKING_TREE_REMOVED, whose closed list left other commands unnamed.
+    CONFINED = (
+        "No Git command is run to read a repository for a review except in a form these rules list.",
+        "A role runs only the forms for the index, untracked, ignored and tree listings, object reads, comparing commits, "
+        "history, blame and attribute checks; configuration reads, the repository layout and content hashing are for "
+        "main's preparation only, and a role never runs `hash-object`.",
+        "A command that compares or refreshes the working tree is never run for a review; `git status`, `git diff` "
+        "without two commits, `diff-files`, `diff-index` without `--cached` and `update-index` are examples, not a "
+        "complete list.",
+        "The `--filters` and `--textconv` options are not used for a review.",
+    )
+    WORKING_TREE_REMOVED = (
+        "`git status`, working-tree diffs (`git diff` without two commits, `diff-files`, and `diff-index` without "
+        "`--cached`) and the `--filters` and `--textconv` options are not used for a review."
+    )
     # Item 2 (G1–G7, C12, R2-Q5, S19): the common prefix and its rules.
     GIT = (
         "Every Git command main or a role runs to read a repository for a review starts with this common prefix, and the "
@@ -166,8 +183,8 @@ class RepositorySafetyTests(unittest.TestCase):
         *LAZY_FETCH,
         "The command never recurses into a submodule, `-c submodule.recurse=false` and `--submodule=short` where a "
         "command accepts it; content under a submodule's path is reported as not examined.",
-        "`git status`, working-tree diffs (`git diff` without two commits, `diff-files`, and `diff-index` without "
-        "`--cached`) and the `--filters` and `--textconv` options are not used for a review.",
+        # Finding F1: the closed list of working-tree commands (WORKING_TREE_REMOVED) becomes these sentences.
+        *CONFINED,
         "An object read from the index always names its stage, `:0:'<path>'`, so that a path is never read as another "
         "stage.",
         # Code review blocking finding B1: the earlier sentence kept every listed name off every command line, which
@@ -189,6 +206,26 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> check-attr -z <attribute> -- '<path>'",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         "git <prefix> hash-object -- '<path>'",
+    )
+    # Finding F1: the forms only main runs, for its preparation; the table holds these and ROLE_FORMS and nothing else.
+    MAIN_ONLY_FORMS = (
+        "git <prefix> config --list --show-origin --show-scope --no-includes",
+        "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
+        "git <prefix> hash-object -- '<path>'",
+    )
+    # Finding F1: the forms a role runs, exactly those its paragraph lists.
+    ROLE_FORMS = (
+        "git <prefix> ls-files -z --stage",
+        "git <prefix> ls-files -z --others --exclude-standard",
+        "git <prefix> ls-files -z --cached --ignored --exclude-standard",
+        "git <prefix> ls-tree -r -z --full-tree <commit>",
+        "git <prefix> cat-file blob <commit>:'<path>'",
+        "git <prefix> cat-file blob :0:'<path>'",
+        "git <prefix> diff --no-ext-diff --no-textconv --submodule=short <commit> <commit> -- '<path>'",
+        "git <prefix> diff-tree -r -z --no-ext-diff --no-textconv <commit> <commit>",
+        "git <prefix> log --no-ext-diff --no-textconv --submodule=short --format='%H %an %ad %s' <commit>",
+        "git <prefix> blame --no-textconv <commit> -- '<path>'",
+        "git <prefix> check-attr -z <attribute> -- '<path>'",
     )
     # Item 3 (P1–P6, R1-Q3–Q10, S4, S17, B8, C3).
     PATHS = (
@@ -308,8 +345,15 @@ class RepositorySafetyTests(unittest.TestCase):
         "Main's brief carries this paragraph for roles without a shell word for word, so a role installed by the user, "
         "such as the user's own Explore, receives it too:",
     )
-    # Item 4 (S14–S16): the paragraph C2 item 4 copies into analyst, scout and Explore, kept whole.
+    # Item 4 (S14–S16): the paragraph C2 item 4 copies into analyst, scout and Explore, kept whole. Finding F2: its
+    # first sentence defines a review assignment by D4's list, so a security analysis or plan review, which analyst
+    # lists as modes of its own, is one too.
+    NO_SHELL_DEFINITION = (
+        "Every assignment that reads a repository for a plan review, code review, outcome verification, Adversarial "
+        "review or security analysis is a review assignment, whatever mode or name your brief gives it."
+    )
     NO_SHELL_PARAGRAPH = (
+        NO_SHELL_DEFINITION + " "
         "In a review assignment, read only the files your brief lists and search only the directories it lists, and "
         "never follow a symbolic link, junction or other reparse point. An empty search result does not show that "
         "something is absent, because a search skips ignored files; report what your reads and searches leave "
@@ -481,6 +525,60 @@ class RepositorySafetyTests(unittest.TestCase):
         index = paragraphs.index(self.NO_SHELL_PARAGRAPH)
         self.assertTrue(paragraphs[index - 1].endswith("receives it too:"))
         self.assertIn(self.NO_SHELL_PARAGRAPH, self.source("reference#Main's preparation"))
+
+    def test_the_paragraph_for_roles_without_a_shell_covers_every_review_kind(self):
+        """Adversarial review of C2, finding F2, regression: the paragraph applies to every assignment that reads a
+        repository for one of D4's kinds, security analysis and plan review included, whatever the assignment calls
+        itself, so a role that lists them as separate modes cannot read past its allowlist in one of them."""
+        first = self.sentences(self.NO_SHELL_PARAGRAPH)[0]
+        self.assertEqual(first, self.NO_SHELL_DEFINITION)
+        kinds = "plan review, code review, outcome verification, Adversarial review or security analysis"
+        self.assertIn(kinds, self.SCOPE[0])
+        self.assertIn(f"for a {kinds} is a review assignment, whatever mode or name your brief gives it.", first)
+        # Every mode analyst lists that reads a repository for one of those kinds is named by the definition.
+        analyst = read(AGENTS / "analyst.md")
+        modes = re.findall(r"^- ([A-Z][a-z ]+): ", analyst, re.M)
+        self.assertEqual(modes, ["General analysis", "Security analysis", "Plan review"])
+        for mode in modes[1:]:
+            with self.subTest(mode=mode):
+                self.assertIn(mode.casefold(), first.casefold())
+        # The paragraph that applied only "in a review assignment" without defining it is gone everywhere.
+        for path in (REFERENCE, *sorted(AGENTS.glob("*.md"))):
+            with self.subTest(place=path.name):
+                paragraphs = read(path).replace("\r\n", "\n").split("\n\n")
+                self.assertEqual([p for p in paragraphs if p.startswith("In a review assignment,")], [])
+
+    def test_readers_run_only_the_listed_forms_and_never_touch_the_working_tree(self):
+        """Adversarial review of C2 (BROKEN), finding F1, regression and abuse check: the reference confines every reader
+        to the forms it lists and a role to its subset, keeps content hashing for main's preparation, and forbids every
+        command that compares or refreshes the working tree, naming some only as examples, so a command outside the
+        forms cannot apply a filter the repository's configuration chooses."""
+        reference = read(REFERENCE)
+        section = self.source("reference#Safe Git invocation")
+        self.assert_pinned({"reference#Safe Git invocation": self.CONFINED})
+        # The table is a closed set: its forms are exactly the role forms and main's.
+        rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| ---")][1:]
+        spans = {span for row in rows for span in re.findall(r"`(git <prefix> [^`]*)`", row)}
+        self.assertEqual(spans, {*self.ROLE_FORMS, *self.MAIN_ONLY_FORMS})
+        self.assertEqual(set(self.ROLE_FORMS) & set(self.MAIN_ONLY_FORMS), set())
+        # The role sentence names each role form's purpose before main's, and main's after "for main's preparation".
+        role, main = self.CONFINED[1].split("; configuration reads", 1)
+        for purpose in ("index", "untracked", "ignored", "tree listings", "object reads", "comparing commits", "history",
+                        "blame", "attribute checks"):
+            with self.subTest(purpose=purpose):
+                self.assertIn(purpose, role)
+        self.assertIn("content hashing are for main's preparation only, and a role never runs `hash-object`.", main)
+        hashing = next(row for row in rows if row.startswith("| Content hashing |"))
+        self.assertIn("only under Main's preparation", hashing)
+        # The closed list of working-tree commands is gone; the sentence that replaces it names examples.
+        self.assertNotIn(self.WORKING_TREE_REMOVED, " ".join(reference.split()))
+        self.assertIn("are examples, not a complete list.", self.CONFINED[2])
+        # Every sentence naming a working-tree command or option forbids it.
+        named = re.compile(r"`git status`|working-tree diff|`diff-files`|`diff-index`|`update-index`|`--filters`")
+        for sentence in self.sentences(reference):
+            if named.search(sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertRegex(sentence, r"\bnever\b|not used")
 
     def test_the_reference_states_mains_checks_before_add_commit_tag_or_push(self):
         self.assert_pinned({"reference#Before add, commit, tag or push": self.WRITING})
@@ -759,11 +857,16 @@ class RepositorySafetyTests(unittest.TestCase):
          "a signing program or a hook.",
          "**Git 指令：**審查執行的每個 Git 指令都會停用 fsmonitor、選用鎖定與分頁程式，不寫入任何東西、不連線遠端，也不執行儲存庫選定的程式，"
          "例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。"),
-        ("It compares commits rather than the working tree, never runs `git status` or a working-tree diff, verifies no "
-         "signature, ignores configured mailmap and order files, fetches no missing object and does not recurse into "
-         "submodules.",
-         "它比對 commit 而不是工作樹，絕不執行 `git status` 或工作樹 diff，不驗證簽章，忽略設定指定的 mailmap 與排序檔，"
-         "不抓取缺少的物件，也不遞迴進入 submodule。"),
+        # Finding F1: the closed set of forms and main's content hashing, and every command that compares or refreshes
+        # the working tree forbidden, not only `git status` and working-tree diffs.
+        ("It runs only the Git forms the reference lists, and only main hashes working-tree content, while it prepares a "
+         "review.",
+         "它只執行參考文件列出的 Git 指令形式，而且只有主 Agent 會在準備審查時對工作樹內容計算雜湊。"),
+        ("It compares commits rather than the working tree, never runs `git status`, a working-tree diff or another "
+         "command that compares or refreshes the working tree, verifies no signature, ignores configured mailmap and "
+         "order files, fetches no missing object and does not recurse into submodules.",
+         "它比對 commit 而不是工作樹，絕不執行 `git status`、工作樹 diff 或其他比對或刷新工作樹的指令，不驗證簽章，"
+         "忽略設定指定的 mailmap 與排序檔，不抓取缺少的物件，也不遞迴進入 submodule。"),
         ("before a file is read, main or the role checks without following links that no part of its path is a symbolic "
          "link, junction or other reparse point, cloud-file placeholders included, that it lies inside the project, is a "
          "regular file and has a single hard link; a file that fails is reported and not read, and only what needs its "
@@ -854,6 +957,9 @@ class RepositorySafetyTests(unittest.TestCase):
         for english, chinese in self.README:
             with self.subTest(sentence=english[:60]):
                 self.assert_pinned({"README.md#section": (english,), "README.zh-TW.md#section": (chinese,)})
+        # Finding F1: the summary that named only `git status` and working-tree diffs is replaced in both languages.
+        self.assertNotIn("never runs `git status` or a working-tree diff,", self.source("README.md"))
+        self.assertNotIn("絕不執行 `git status` 或工作樹 diff，", self.source("README.zh-TW.md"))
         for english, chinese in self.README_LABELS:
             with self.subTest(label=english):
                 self.assertIn(f"\n- **{english}:** ", self.source("README.md#section"))
@@ -917,14 +1023,21 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         "History and differences are read only between commits or objects, with `--no-ext-diff --no-textconv`; `blame` "
         "always names a commit and uses `--no-textconv`; `cat-file` and `show` are never given `--filters` or "
         "`--textconv`. "
-        "`git status`, working-tree diffs (`git diff` without two commits, `diff-files`, and `diff-index` without "
-        "`--cached`) and the `--filters` and `--textconv` options are not used for a review. "
+        + RepositorySafetyTests.CONFINED[2] + " "
+        + RepositorySafetyTests.CONFINED[3] + " "
+        "List the index with `git <prefix> ls-files -z --stage`, untracked files with `git <prefix> ls-files -z --others "
+        "--exclude-standard`, adding `--ignored` for ignored files, tracked files that ignore rules match with `git "
+        "<prefix> ls-files -z --cached --ignored --exclude-standard` and a commit's tree with `git <prefix> ls-tree -r -z "
+        "--full-tree <commit>`, and check attributes with `git <prefix> check-attr -z <attribute> -- '<path>'`, adding "
+        "`--cached` for the index's attributes. "
         "Compare commits with `git <prefix> diff --no-ext-diff --no-textconv --submodule=short <commit> <commit> -- "
         "'<path>'` or `git <prefix> diff-tree -r -z --no-ext-diff --no-textconv <commit> <commit>`, read an object with "
         "`git <prefix> cat-file blob <commit>:'<path>'` or, from the index, `git <prefix> cat-file blob :0:'<path>'`, "
         "read history with `git <prefix> log --no-ext-diff --no-textconv --submodule=short --format='%H %an %ad %s' "
         "<commit>` or with `show` given the same options and an explicit `--format`, and read blame with `git <prefix> "
         "blame --no-textconv <commit> -- '<path>'`. "
+        + RepositorySafetyTests.CONFINED[0] + " "
+        + RepositorySafetyTests.CONFINED[1] + " "
         "An object read from the index always names its stage, `:0:'<path>'`, so that a path is never read as another "
         "stage. "
         + RepositorySafetyTests.LISTED_NAMES + " "
@@ -1064,9 +1177,10 @@ class RoleRepositorySafetyTests(unittest.TestCase):
     README_ROWS = {
         "shell": ("It reads the repository and runs its code only as [Repository safety](#repository-safety) allows.",
                   "它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。"),
-        "no shell": ("In a review it reads and searches only the files and directories main lists, and reports a missing "
-                     "list instead of reading.",
-                     "審查時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。"),
+        # Finding F2: a security analysis is named beside a review.
+        "no shell": ("In a review or security analysis it reads and searches only the files and directories main lists, "
+                     "and reports a missing list instead of reading.",
+                     "審查或安全分析時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。"),
         "reviewer": ("Compares commits from a base revision and reads the uncommitted files main lists, runs only the lint "
                      "and type checks its brief names, never edits or runs tests;",
                      "自行比對 base revision 與受審 commit，並讀取主 Agent 列出的未提交檔案，只跑 brief 指定的 lint 與型別檢查，"
@@ -1079,11 +1193,16 @@ class RoleRepositorySafetyTests(unittest.TestCase):
          "**角色：**reviewer、verifier 與 adversary 各自帶有同一段 Repository safety 段落，由測試確保三份完全相同，段落中寫明這些 Git 與"
          "檔案規則以及執行儲存庫程式碼的規則；reviewer 比對 commit 而不是對工作樹做 diff，而且只跑 brief 指定的 lint 與型別檢查。"),
         ("Analyst, scout and Explore carry the reference's paragraph for roles without a shell word for word: in a review "
-         "they read and search only the files and directories main lists, never follow a link, do not take an empty "
-         "search as proof that something is absent, and report a missing list instead of reading.",
-         "analyst、scout 與 Explore 逐字帶有參考文件中給沒有 shell 的角色的段落：審查時只讀取與搜尋主 Agent 列出的檔案與目錄，"
-         "絕不跟隨連結，不把空的搜尋結果當成東西不存在的證明，沒有清單時回報缺少需求而不讀取。"),
+         "or security analysis they read and search only the files and directories main lists, never follow a link, do "
+         "not take an empty search as proof that something is absent, and report a missing list instead of reading.",
+         "analyst、scout 與 Explore 逐字帶有參考文件中給沒有 shell 的角色的段落：審查或安全分析時只讀取與搜尋主 Agent 列出的"
+         "檔案與目錄，絕不跟隨連結，不把空的搜尋結果當成東西不存在的證明，沒有清單時回報缺少需求而不讀取。"),
     )
+    # Finding F2: the summaries that named only a review.
+    README_REMOVED = {
+        "README.md": ("In a review it reads and searches only", "in a review they read and search only"),
+        "README.zh-TW.md": ("。審查時只讀取與搜尋", "段落：審查時只讀取"),
+    }
     README_TABLES = {"README.md": "| Role | When to use |", "README.zh-TW.md": "| 角色 | 何時使用 |"}
 
     assert_whole_sentence = feather_support.adversarial_retries_assert_whole_sentence
@@ -1269,6 +1388,38 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         self.assertNotIn("Reads the diff itself from a base revision, runs non-modifying static checks",
                          read(config.ROOT / "README.md"))
         self.assertNotIn("自行從 base revision 取得 diff，可跑不改檔的靜態檢查", read(config.ROOT / "README.zh-TW.md"))
+        for name, phrases in self.README_REMOVED.items():
+            for phrase in phrases:
+                with self.subTest(readme=name, removed=phrase):
+                    self.assertNotIn(phrase, read(config.ROOT / name))
+
+    def test_the_paragraph_confines_a_role_to_the_role_forms(self):
+        """Adversarial review of C2 (BROKEN), finding F1, regression and abuse check: the shell roles' paragraph names
+        exactly the role forms, states the reference's sentences that confine every reader to the listed forms and a
+        role to that subset, and forbids every command that compares or refreshes the working tree; no role template
+        names `hash-object` except to forbid it."""
+        spans = re.findall(r"`(git <prefix> [^`]*)`", self.PARAGRAPH)
+        self.assertEqual(set(spans), set(self.R.ROLE_FORMS))
+        for sentence in self.R.CONFINED:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, self.PARAGRAPH)
+                self.assert_whole_sentence(sentence, RepositorySafetyTests.source("reference#Safe Git invocation"))
+        # The closed list of working-tree commands is gone from every template.
+        for path in sorted(AGENTS.glob("*.md")):
+            text = " ".join(read(path).split())
+            with self.subTest(template=path.name):
+                self.assertNotIn(self.R.WORKING_TREE_REMOVED, text)
+                self.assertNotIn("<prefix> hash-object", text)
+                for sentence in self.sentences(text):
+                    if "hash-object" in sentence:
+                        self.assertIn(path.stem, SHELL_ROLES)
+                        self.assertEqual(sentence, self.R.CONFINED[1])
+        # Each paragraph sentence naming a working-tree command or option forbids it.
+        named = re.compile(r"`git status`|working-tree diff|`diff-files`|`diff-index`|`update-index`|`--filters`")
+        for sentence in self.sentences(self.PARAGRAPH):
+            if named.search(sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertRegex(sentence, r"\bnever\b|not used")
 
 
 class RepositorySafetyGitFormsTests(unittest.TestCase):
@@ -1346,6 +1497,72 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                     self.assertEqual(ran(), set(), f"{command} ran a configured program")
             # Each control that ran is one this check covered, so a form that dropped its option would be caught.
             self.assertTrue(controls <= {"monitor", "textconv", "extdiff"}, controls)
+
+    def test_the_role_forms_run_no_filter_the_working_tree_would_run(self):
+        """Adversarial review of C2 (BROKEN), finding F1, regression: in a throwaway repository whose attributes and local
+        configuration name a clean filter that leaves a marker, no form a role may run applies it, while content
+        hashing, which the reference keeps for main's preparation, and a working-tree diff do (positive controls)."""
+        reference = read(REFERENCE)
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, marker, empty = root / "repo", root / "marker", root / "gitconfig"
+            repo.mkdir()
+            empty.write_bytes(b"")
+            script = root / "clean.sh"
+            script.write_text(f'#!/bin/sh\necho clean >> "{marker.as_posix()}"\ncat\n', encoding="utf-8", newline="\n")
+            script.chmod(0o755)
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+
+            def git(*args):
+                try:
+                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            def ran():
+                found = marker.read_text(encoding="utf-8").split() if marker.exists() else []
+                if marker.exists():
+                    marker.unlink()
+                return bool(found)
+
+            identity = ("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "core.fsmonitor=",
+                        "-c", "commit.gpgSign=false")
+            self.assertEqual(git("init", "-q", ".").returncode, 0)
+            self.assertEqual(git("config", "core.autocrlf", "false").returncode, 0)
+            (repo / ".gitattributes").write_bytes(b"*.txt filter=marker\n")
+            (repo / "a.txt").write_bytes(b"one\n")
+            self.assertEqual(git(*identity, "add", "--", ".gitattributes", "a.txt").returncode, 0)
+            self.assertEqual(git(*identity, "commit", "-q", "--no-verify", "-m", "one").returncode, 0)
+            (repo / "a.txt").write_bytes(b"one\ntwo\n")
+            self.assertEqual(git(*identity, "commit", "-q", "--no-verify", "-am", "two").returncode, 0)
+            # The filter is defined only after both commits, and the working tree then differs from the index.
+            self.assertEqual(git("config", "filter.marker.clean", script.as_posix()).returncode, 0)
+            (repo / "a.txt").write_bytes(b"one\ntwo\nthree\n")
+            ran()
+
+            # Positive controls: content hashing and a working-tree diff, with the common prefix, apply the filter.
+            git(*prefix, "hash-object", "--", "a.txt")
+            hashing = ran()
+            git(*prefix, "diff", "--no-ext-diff", "--no-textconv")
+            working_tree_diff = ran()
+            if not hashing and not working_tree_diff:
+                self.skipTest("this Git ran no configured filter in the control reads")
+            # Content hashing applies the filter whenever this Git runs it at all, which is why it is main's alone.
+            self.assertTrue(hashing, "content hashing did not apply the configured filter")
+
+            substitutions = {"<prefix>": " ".join(prefix), "<commit> <commit>": "HEAD~1 HEAD", "<commit>": "HEAD",
+                             "<path>": "a.txt", "<attribute>": "filter"}
+            for form in RepositorySafetyTests.ROLE_FORMS:
+                command = form
+                for placeholder, value in substitutions.items():
+                    command = command.replace(placeholder, value)
+                with self.subTest(form=form):
+                    result = git(*shlex.split(command)[1:])
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertFalse(ran(), f"{command} ran the configured filter")
 
     def test_promisor_detection_reads_the_effective_configuration(self):
         """Deviation D-1, regression: a promisor setting that a tracked file supplies through an include is invisible to
