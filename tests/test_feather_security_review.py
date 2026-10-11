@@ -1528,24 +1528,24 @@ class AdversaryLimitsTests(unittest.TestCase):
 
     # The existing permission, pinned unchanged by AdversaryRoleTests.SAFETY_LIMITS; the new sentences sit beside it.
     PERMISSION = AdversaryRoleTests.SAFETY_LIMITS["no Git state changes"]
-    # C2 item 1: what the read-only Git commands may not do.
-    READ_ONLY_GIT = "The read-only Git commands you may run change no refs or configuration and contact no remote."
-    # C2 item 5.1: the sentence narrows and never extends; the index refresh is the only tolerated index write.
-    NARROWING = ("Read-only Git narrows and never extends these limits: the rule to change no Git state and the Scope rule on "
-                 "project files govern every Git command, so run no Git command that stages or unstages, writes objects, adds "
-                 "a worktree or changes a working-tree file; Git's own index refresh during status or diff is the only index "
-                 "write tolerated.")
+    # Repository safety C2 item 2 removed three pins of 0.19.0 C2 here, each now stated by the role's Repository safety
+    # paragraph (tests/test_feather_repository_safety.py, RoleRepositorySafetyTests): the read-only Git commands
+    # sentence (READ_ONLY_GIT) by the paragraph's read-only Git definition; the index-refresh tolerance that ended
+    # NARROWING by "Git's own index refresh is not an exception"; and the lazy-fetch sentence naming
+    # `GIT_NO_LAZY_FETCH=1` (REMOTE) by the reference's lazy-fetch sentence, which uses `--no-lazy-fetch` on Git 2.45.0
+    # or later and otherwise reads no missing object.
+    # C2 item 5.1: the sentence narrows and never extends.
+    NARROWING = ("Read-only Git, as Repository safety below defines it, narrows and never extends these limits: the rule to "
+                 "change no Git state and the Scope rule on project files govern every Git command, so run no Git command "
+                 "that stages or unstages, writes objects, adds a worktree or changes a working-tree file.")
     # C2 item 5.2: repository-chosen programs, including the hook an index refresh can run.
     PROGRAMS = ("Git can run programs that repository configuration or attributes choose, such as fsmonitor, textconv, "
                 "external diff, filters and hooks, including a `post-index-change` hook that Git's own index refresh can run.")
     NO_PROGRAMS = ("Run Git so that no such repository-chosen program runs on the code under attack, for example by comparing "
                    "commits with `--no-ext-diff --no-textconv` rather than the working tree; when a Git command would still run "
                    "such a program, treat it as execution and report INCONCLUSIVE for it instead of running it.")
-    # C2 item 5.3: lazy fetch in a partial clone is remote contact.
-    REMOTE = ("Fetching missing objects in a partial clone is contacting a remote: in a checkout with a promisor remote, "
-              "either disable lazy fetch where your Git supports it, for example with `GIT_NO_LAZY_FETCH=1`, or read no "
-              "missing object and report what you could not examine.")
-    GIT_SENTENCES = (READ_ONLY_GIT, NARROWING, PROGRAMS, NO_PROGRAMS, REMOTE)
+    GIT_SENTENCES = (NARROWING, PROGRAMS, NO_PROGRAMS)
+    SAFETY_HEADING = "**Repository safety.** "
 
     # C2 items 2, 4 and 5.4: each README's adversary row, paired in both languages.
     ROW_RULES = (
@@ -1581,24 +1581,35 @@ class AdversaryLimitsTests(unittest.TestCase):
         for sentence in (self.PERMISSION,) + self.GIT_SENTENCES:
             with self.subTest(sentence=sentence[:60]):
                 self.assert_whole_sentence(sentence, section)
-        # Item 1: added beside the permission, which keeps its sentence, and the narrowing directly follows (item 5.1).
-        self.assertIn(f"{self.PERMISSION} {self.READ_ONLY_GIT} {self.NARROWING}", section)
-        # Item 1: index writes are not named as forbidden, since status and diff may refresh the index.
-        self.assertNotIn("no refs, index", section)
+        # Item 1: the narrowing directly follows the permission, which keeps its sentence (item 5.1); repository safety
+        # C2 item 2 removed the read-only Git sentence that stood between them.
+        self.assertIn(f"{self.PERMISSION} {self.NARROWING}", section)
+        # The role's Repository safety paragraph sits in this section, after the Git rules.
+        self.assertEqual(sum(p.startswith(self.SAFETY_HEADING) for p in section.split("\n\n")), 1)
+        self.assertLess(section.index(self.NO_PROGRAMS), section.index(self.SAFETY_HEADING))
+
+    def safety_paragraph(self):
+        return next(p for p in self.role_section().split("\n\n") if p.startswith(self.SAFETY_HEADING))
 
     def test_read_only_git_grants_no_write(self):
         """Abuse check (item 5.1): no sentence of the role lets a Git command stage, write objects, add a worktree or
-        change working-tree files, and the only permissions in the Git rules are the existing one and the narrowed one."""
+        change working-tree files. Outside the Repository safety paragraph, which repository safety C2 pins whole and
+        which only forbids such writes, the narrowing sentence is the only one that names them, and the only permission
+        in the Git rules is the existing one."""
         role = self.ROLE.read_text(encoding="utf-8")
+        paragraph = self.safety_paragraph()
         writes = re.compile(r"\b(?:stage|stages|unstage|unstages|worktree|worktrees|working-tree|writes objects|index write)\b")
-        for sentence in self.sentences(role):
+        for sentence in self.sentences(role.replace(paragraph, "")):
             if writes.search(sentence):
                 with self.subTest(sentence=sentence[:60]):
                     self.assertIn(sentence, (self.NARROWING,), "a write-capable Git action outside the narrowing sentence")
         self.assertIn("run no Git command that stages or unstages, writes objects, adds a worktree or changes a working-tree file",
                       self.NARROWING)
-        grants = [s for s in self.sentences(self.role_section()) if re.search(r"\b(?:allowed|may)\b", s)]
-        self.assertEqual(grants, [self.PERMISSION, self.READ_ONLY_GIT])
+        self.assertIn("writes no index, object, ref, configuration or working-tree file, contacts no remote", paragraph)
+        self.assertIn("Git's own index refresh is not an exception.", paragraph)
+        grants = [s for s in self.sentences(self.role_section().replace(paragraph, ""))
+                  if re.search(r"\b(?:allowed|may)\b", s)]
+        self.assertEqual(grants, [self.PERMISSION])
 
     def test_existing_limits_and_the_disclosure_are_unchanged(self):
         role = self.ROLE.read_text(encoding="utf-8")

@@ -1592,77 +1592,90 @@ class FeatherConfigTests(unittest.TestCase):
                         self.assertEqual(code, 0, exported)
                         self.assertIn("previous call for this claim completed", exported[f"{prefix}reviewer"]["prompt"])
 
-    # 0.19.0 C8 item 2: the role templates v0.18.0 shipped, kept verbatim in a data file copied from
-    # `git show v0.18.0:templates/agents/<role>.md`, never rebuilt from the current templates.
-    TEMPLATES_0_18_0 = Path(__file__).resolve().parent / "role_templates_0_18_0.json"
-    CHANGED_SINCE_0_18_0 = ("executor", "security-executor", "reviewer", "adversary")
+    # Repository safety C2 item 5 (B10): the role templates v0.20.0 shipped, kept verbatim in a data file copied from
+    # `git show v0.20.0:templates/agents/<role>.md`, never rebuilt from the current templates. It replaces the v0.18.0
+    # fixture and its two tests, retired in the same change: the stale check that matters is against the previous
+    # release, and their assertion that exactly four role templates differ from v0.18.0 no longer holds.
+    TEMPLATES_0_20_0 = Path(__file__).resolve().parent / "role_templates_0_20_0.json"
+    CHANGED_SINCE_0_20_0 = ("reviewer", "verifier", "adversary", "analyst", "scout", "Explore")
+    # The reference's read-only Git prefix for reading the tag (repository safety's Safe Git invocation).
+    GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
+                "-c", "log.showSignature=false", "-c", "mailmap.file=", "-c", "mailmap.blob=",
+                "-c", "blame.ignoreRevsFile=", "-c", "diff.orderFile=/dev/null", "-c", "submodule.recurse=false")
 
-    def recorded_0_18_0(self):
-        recorded = json.loads(self.TEMPLATES_0_18_0.read_bytes())
-        self.assertEqual(recorded["tag"], "v0.18.0")
-        self.assertEqual(set(recorded["templates"]), set(self.CHANGED_SINCE_0_18_0))
+    def recorded_0_20_0(self):
+        recorded = json.loads(self.TEMPLATES_0_20_0.read_bytes())
+        self.assertEqual(recorded["tag"], "v0.20.0")
+        self.assertEqual(recorded["source"], "git show v0.20.0:templates/agents/<role>.md")
+        self.assertEqual(set(recorded["templates"]), set(self.CHANGED_SINCE_0_20_0))
         return recorded["templates"]
 
-    def templates_0_18_0(self):
-        """The packaged templates with the four role templates exactly as v0.18.0 shipped them."""
-        fixture = self.root / "package-0.18.0"
+    def templates_0_20_0(self):
+        """The packaged templates with the six role templates exactly as v0.20.0 shipped them."""
+        fixture = self.root / "package-0.20.0"
         if fixture.exists():
             return fixture
         shutil.copytree(config.ROOT / "templates", fixture / "templates")
-        for role, text in self.recorded_0_18_0().items():
+        for role, text in self.recorded_0_20_0().items():
             path = fixture / "templates" / "agents" / f"{role}.md"
             self.assertNotEqual(path.read_text(encoding="utf-8"), text, role)
             path.write_bytes(text.encode("utf-8"))
         return fixture
 
-    def test_0_18_0_fixture_is_the_tagged_content_of_every_changed_template(self):
+    def test_0_20_0_fixture_is_the_tagged_content_of_every_changed_role_template(self):
+        def git(*args):
+            return subprocess.run([*self.GIT_READ, *args], cwd=config.ROOT, stdin=subprocess.DEVNULL,
+                                  capture_output=True, timeout=60)
         try:
-            listed = subprocess.run(["git", "ls-tree", "-r", "--name-only", "v0.18.0", "--", "templates"], cwd=config.ROOT,
-                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            listed = git("ls-tree", "-r", "-z", "--name-only", "v0.20.0", "--", "templates")
         except (OSError, subprocess.TimeoutExpired) as error:
-            self.skipTest(f"Git cannot be run, so the v0.18.0 templates cannot be read: {error}")
+            self.skipTest(f"Git cannot be run, so the v0.20.0 templates cannot be read: {error}")
         if listed.returncode != 0:
-            self.skipTest(f"no v0.18.0 tag in this checkout: {listed.stderr.decode('utf-8', 'replace').strip()}")
+            self.skipTest(f"no v0.20.0 tag in this checkout: {listed.stderr.decode('utf-8', 'replace').strip()}")
         changed = {}
-        for name in listed.stdout.decode("utf-8").splitlines():
-            shown = subprocess.run(["git", "show", f"v0.18.0:{name}"], cwd=config.ROOT, stdin=subprocess.DEVNULL,
-                                   capture_output=True, timeout=60, check=True).stdout
+        for name in filter(None, listed.stdout.decode("utf-8").split("\0")):
+            shown = git("cat-file", "blob", f"v0.20.0:{name}")
+            self.assertEqual(shown.returncode, 0, shown.stderr)
             current = config.ROOT / name
-            if not current.is_file() or current.read_bytes() != shown:
-                changed[name] = shown
-        recorded = self.recorded_0_18_0()
-        # Repository safety C1 changes the automatic-review guidance template, not a role template; the fixture records
-        # role templates only, and changed guidance is reported by check's older-template warning instead.
+            if not current.is_file() or current.read_bytes() != shown.stdout:
+                changed[name] = shown.stdout
+        recorded = self.recorded_0_20_0()
+        # Repository safety C1 changes the automatic-review guidance template, which is not a role template; the fixture
+        # records role templates only, and changed guidance is reported by check's older-template warning instead.
         guidance = {name for name in changed if not name.startswith("templates/agents/")}
         self.assertEqual(guidance, {"templates/review-auto.md"})
         changed = {name: text for name, text in changed.items() if name not in guidance}
-        self.assertEqual(sorted(changed), sorted(f"templates/agents/{role}.md" for role in recorded))
+        self.assertEqual(sorted(changed), sorted(f"templates/agents/{role}.md" for role in self.CHANGED_SINCE_0_20_0))
         for role, text in recorded.items():
             with self.subTest(role=role):
                 self.assertEqual(text.encode("utf-8"), changed[f"templates/agents/{role}.md"])
 
-    def test_0_18_0_role_templates_are_stale_until_setup_update(self):
-        stale = [role for role in config.ROLES if role in self.CHANGED_SINCE_0_18_0]
-        self.assertEqual(len(stale), len(self.CHANGED_SINCE_0_18_0))
+    def test_0_20_0_role_templates_are_stale_until_setup_update(self):
+        stale = [role for role in config.ROLES if role in self.CHANGED_SINCE_0_20_0]
+        self.assertEqual(len(stale), len(self.CHANGED_SINCE_0_20_0))
         for scope in ("project", "user"):
             for mode in ("auto", "off"):
                 for prefixed in (False, True):
                     with self.subTest(scope=scope, mode=mode, prefixed=prefixed):
-                        self.use_fresh_roots(f"0.18.0-{scope}-{mode}-{prefixed}")
+                        self.use_fresh_roots(f"0.20.0-{scope}-{mode}-{prefixed}")
                         agents = (self.project / ".claude" if scope == "project" else self.home) / "agents"
                         if prefixed:
                             agents.mkdir(parents=True)
                             (agents / "custom.md").write_text("---\nname: scout\n---\nThe user's own scout\n",
                                                               encoding="utf-8")
                         prefix = config.ROLE_PREFIX if prefixed else ""
-                        with mock.patch.object(config, "ROOT", self.templates_0_18_0()):
+                        # Explore keeps its exact name under a prefix.
+                        names = {role: config._role_name(role, prefix) for role in config.ROLES}
+                        with mock.patch.object(config, "ROOT", self.templates_0_20_0()):
                             self.apply("install", scope, "--review-mode", mode)
-                            self.apply("model", scope, "--set", "reviewer.model=sonnet", "--set", "executor.effort=high")
+                            self.apply("model", scope, "--set", "reviewer.model=sonnet", "--set", "scout.effort=medium")
                             installed = {role: config._render(role, self.call("show", scope)[1]["choices"][role], prefix)
                                          for role in stale}
                         for role in stale:
-                            self.assertEqual((agents / f"{prefix}{role}.md").read_bytes(), installed[role], role)
+                            self.assertEqual((agents / f"{names[role]}.md").read_bytes(), installed[role], role)
                         guidance = (self.project if scope == "project" else self.home) / "CLAUDE.md"
+                        warnings = [f"role {names[role]} is from an older template ({agents / (names[role] + '.md')}); "
+                                    "run setup update" for role in stale]
                         for command in ("check", "show"):
                             code, shown = self.call(command, scope)
                             self.assertEqual(code, 0, shown)
@@ -1670,8 +1683,7 @@ class FeatherConfigTests(unittest.TestCase):
                             self.assertEqual(shown["issues"], [])
                             self.assertTrue(shown["role_update_required"])
                             self.assertEqual(set(shown["choices"]), set(config.ROLES))
-                            self.assertEqual(self.stale_warnings(shown), [self.stale_warning(agents, prefix, role)
-                                                                          for role in stale])
+                            self.assertEqual(self.stale_warnings(shown), warnings)
                             self.assertNotIn("delegation guidance is from an older template; run setup update",
                                              shown["warnings"])
                         before = {path: path.read_bytes() for path in (*agents.glob("*.md"), guidance)}
@@ -1690,9 +1702,10 @@ class FeatherConfigTests(unittest.TestCase):
                         self.assertEqual(shown["review_mode"], mode)
                         self.assertEqual(shown["role_prefix"], prefix)
                         self.assertEqual(shown["choices"]["reviewer"], {"model": "sonnet", "effort": "high"})
-                        self.assertEqual(shown["choices"]["executor"], {"model": "opus", "effort": "high"})
+                        self.assertEqual(shown["choices"]["scout"]["effort"], "medium")
+                        by_name = {name: role for role, name in names.items()}
                         for path, data in before.items():
-                            role = path.stem[len(prefix):] if path.stem.startswith(prefix) else path.stem
+                            role = by_name.get(path.stem)
                             if path.parent == agents and role in stale:
                                 current = config._render(role, shown["choices"][role], prefix)
                                 self.assertEqual(path.read_bytes(), current, role)
@@ -1702,10 +1715,13 @@ class FeatherConfigTests(unittest.TestCase):
                         self.apply("model", scope, "--set", "scout.effort=low")
                         code, exported = self.call("session", scope)
                         self.assertEqual(code, 0, exported)
-                        self.assertIn("it carries that role's findings with the main Agent's FIX or REJECT disposition",
-                                      exported[f"{prefix}reviewer"]["prompt"])
-                        self.assertIn("The read-only Git commands you may run change no refs",
-                                      exported[f"{prefix}adversary"]["prompt"])
+                        for role in ("reviewer", "verifier", "adversary"):
+                            self.assertIn("**Repository safety.** These rules govern every repository read",
+                                          exported[names[role]]["prompt"])
+                        for role in ("analyst", "scout", "Explore"):
+                            self.assertIn("When a review assignment's brief gives no allowlist, report it as a missing "
+                                          "requirement instead of reading the repository.",
+                                          exported[names[role]]["prompt"])
 
     def test_edited_0_16_0_role_is_a_conflict_not_stale(self):
         agents, prefix = self.install_0_16_0()
@@ -3998,6 +4014,9 @@ class FeatherConfigTests(unittest.TestCase):
         "Before add, commit, tag or push": ("add、commit、tag 或 push 之前", "each with the SHA-256 of its content",
                                             "內容的 SHA-256", "repository-safety.md",
                                             "main names each program with the SHA-256 of its content"),
+        # Repository safety C2 item 6: the roles bullet summarises the paragraph for roles without a shell.
+        "Roles": ("角色", "report a missing list instead of reading", "沒有清單時回報缺少需求而不讀取",
+                  "repository-safety.md", "report it as a missing requirement instead of reading the repository"),
     }
 
     # Glossary term -> (phrase in its CONTEXT.md entry, procedure file, procedure phrase).

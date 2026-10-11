@@ -123,15 +123,15 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 | 角色 | 何時使用 | 產出與權限 |
 | --- | --- | --- |
-| scout | 範圍明確的事實查找，例如定位定義、設定或引用 | 唯讀；回報檔案位置與證據，不做複雜因果分析 |
-| Explore | 尚不清楚程式結構，需要較廣的模組、入口、呼叫關係探索 | 唯讀；建立理解程式的地圖，深入診斷交給 analyst |
-| analyst | 根因／影響分析、安全問題查找、實作前計畫審查 | 唯讀；回報證據、推論與建議；計畫審查回覆 READY／REVISE |
+| scout | 範圍明確的事實查找，例如定位定義、設定或引用 | 唯讀；回報檔案位置與證據，不做複雜因果分析。審查時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。 |
+| Explore | 尚不清楚程式結構，需要較廣的模組、入口、呼叫關係探索 | 唯讀；建立理解程式的地圖，深入診斷交給 analyst。審查時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。 |
+| analyst | 根因／影響分析、安全問題查找、實作前計畫審查 | 唯讀；回報證據、推論與建議；計畫審查回覆 READY／REVISE。審查時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。 |
 | mech-executor | 規則、範圍與結果已明確的重複修改 | 可修改指定檔案；按完整規格執行，例如批次改名 |
 | executor | 需要局部設計與工程判斷的功能或修正 | 可修改指定檔案並驗證，遇到架構或需求缺口交回主 Agent |
 | security-executor | 影響授權、秘密資料、密碼學或信任邊界的實作 | 可修改指定檔案；驗證正常行為及濫用／拒絕案例 |
-| verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE |
-| reviewer | 獨立審查實作某個 claim 的程式碼 | 自行從 base revision 取得 diff，可跑不改檔的靜態檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED／INCONCLUSIVE |
-| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，絕不修復程式碼；回覆 HELD／BROKEN／INCONCLUSIVE。只有 brief 把某個專案檔列為 fixture 並附上重設方式時才會改動它，且絕不在受把關的呼叫中改動。這些安全限制（這條 fixture 規則、只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。 |
+| verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE。它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。 |
+| reviewer | 獨立審查實作某個 claim 的程式碼 | 自行比對 base revision 與受審 commit，並讀取主 Agent 列出的未提交檔案，只跑 brief 指定的 lint 與型別檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED／INCONCLUSIVE。它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。 |
+| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，絕不修復程式碼；回覆 HELD／BROKEN／INCONCLUSIVE。只有 brief 把某個專案檔列為 fixture 並附上重設方式時才會改動它，且絕不在受把關的呼叫中改動。這些安全限制（這條 fixture 規則、只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。 |
 
 主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派，也不維護交接或進度紀錄，改由主 Agent 依其回報記錄。
 
@@ -214,6 +214,7 @@ adversary 的限制是給模型的指示，只有你的權限設定（permission
 - **執行儲存庫程式碼：**主 Agent、reviewer、verifier 與 adversary 只有在你於這個 session 說過這個儲存庫可以在這台機器上執行，而且變更是你寫的或在這個 session 寫的時，才會為審查執行儲存庫程式碼，例如測試、建置、linter、型別檢查與探測；否則只在你指定的隔離環境中執行，需要執行的部分回報 INCONCLUSIVE。session 第一次需要時，主 Agent 會問你是否信任這個儲存庫。主 Agent 不能自己執行主要驗收時，會記為未執行，程式碼審查仍就程式碼進行，結果驗證也照樣派出。
 - **審查之前：**主 Agent 每個 session 檢查一次 Git 是否為 2.32 或更新版本，在不跟隨 include 的情況下讀取儲存庫設定，設定指向專案外或移動了工作樹時，會在派出前先問你；比對工作區會執行 filter 時，該次呼叫前也會問你；派出之間儲存庫的 Git 中繼資料有變化時，會再問你。沒有 shell 的角色，例如 analyst、scout 與 Explore，只讀取與搜尋主 Agent 為它列出、已檢查過的檔案與目錄。
 - **add、commit、tag 或 push 之前：**主 Agent 會列出儲存庫的 Git 設定會執行的 hook、filter 與簽章程式，每一個附上內容的 SHA-256，push 時還有目的地與傳輸設定，並問你要照設定執行、略過 hook 與簽章，還是不執行這個操作；filter、傳輸設定與目的地只能執行或拒絕。你的回答只涵蓋主 Agent 列出的項目，在這個 session 剩下的時間有效。
+- **角色：**reviewer、verifier 與 adversary 各自帶有同一段 Repository safety 段落，由測試確保三份完全相同，段落中寫明這些 Git 與檔案規則以及執行儲存庫程式碼的規則；reviewer 比對 commit 而不是對工作樹做 diff，而且只跑 brief 指定的 lint 與型別檢查。analyst、scout 與 Explore 逐字帶有參考文件中給沒有 shell 的角色的段落：審查時只讀取與搜尋主 Agent 列出的檔案與目錄，絕不跟隨連結，不把空的搜尋結果當成東西不存在的證明，沒有清單時回報缺少需求而不讀取。
 
 這些規則是給模型的指示，不是 sandbox：沒有任何權限規則、hook 或 sandbox 強制它們，測試只確保文字前後一致。它們涵蓋主 Agent 與角色如何讀取受審的原始碼內容，而不是 Git 本身讀取的每個檔案。審查期間檔案被同時修改的情況不在防護範圍內，而 Claude Code 本身在 session 開始時會在專案中執行 Git，並載入專案的 `CLAUDE.md`、它匯入的檔案與 `.claude` 設定，這些都發生在這些規則之前、之外；兩者都是剩餘風險。詳見 [ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md)。
 
