@@ -1532,8 +1532,8 @@ class AdversaryLimitsTests(unittest.TestCase):
     # paragraph (tests/test_feather_repository_safety.py, RoleRepositorySafetyTests): the read-only Git commands
     # sentence (READ_ONLY_GIT) by the paragraph's read-only Git definition; the index-refresh tolerance that ended
     # NARROWING by "Git's own index refresh is not an exception"; and the lazy-fetch sentence naming
-    # `GIT_NO_LAZY_FETCH=1` (REMOTE) by the reference's lazy-fetch sentence, which uses `--no-lazy-fetch` on Git 2.45.0
-    # or later and otherwise reads no missing object.
+    # `GIT_NO_LAZY_FETCH=1` (REMOTE) by the reference's Lazy fetch rule, which uses `--no-lazy-fetch` on Git 2.45.0
+    # or later and, since deviation D-1, dispatches no review in such a checkout on an older Git.
     # C2 item 5.1: the sentence narrows and never extends.
     NARROWING = ("Read-only Git, as Repository safety below defines it, narrows and never extends these limits: the rule to "
                  "change no Git state and the Scope rule on project files govern every Git command, so run no Git command "

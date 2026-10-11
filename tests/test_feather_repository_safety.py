@@ -113,6 +113,31 @@ class RepositorySafetyTests(unittest.TestCase):
         "The handoff tool keeps its own link rule, under which only name-surrogate or unidentified reparse points are "
         "links and hard links are rejected, because it reads only records Feather writes.",
     )
+    # Item 2.7 (G7, deviation D-1): the Lazy fetch rule, carried whole by the shell roles' paragraph.
+    LAZY_FETCH = (
+        "In a checkout with a promisor remote, which main detects and states in every brief with the installed Git "
+        "version, every Git command carries `--no-lazy-fetch` after `git` on Git 2.45.0 or later, and an object that "
+        "is missing is reported as not examined.",
+        "On an older Git no review is dispatched in such a checkout, and main runs there only its version check, "
+        "configuration reads and repository discovery.",
+        "If a brief nonetheless names a promisor remote with a Git older than 2.45.0, the role runs no Git command and "
+        "reports it as a missing requirement instead of reading the repository.",
+    )
+    # The sentence that let a reader on an older Git proceed in a promisor checkout, removed by D-1.
+    LAZY_FETCH_REMOVED = (
+        "on an older Git the reader reads no missing object, does not probe object existence to find one, and reports "
+        "what it could not examine."
+    )
+    # Code review blocking finding B1: how a name a listing prints reaches another Git command.
+    LISTED_NAMES = (
+        "A name a listing prints reaches another Git command's command line only as a safe name, as the name rule below "
+        "defines it, in the forms above; a batch of names, or any name that is not safe, reaches it only as "
+        "NUL-separated data on standard input, such as `check-attr -z --stdin`."
+    )
+    LISTED_NAMES_REMOVED = (
+        "Names a listing prints reach another Git command only as NUL-separated data on standard input, such as "
+        "`check-attr -z --stdin`, never on its command line."
+    )
     # Item 2 (G1–G7, C12, R2-Q5, S19): the common prefix and its rules.
     GIT = (
         "Every Git command main or a role runs to read a repository for a review starts with this common prefix, and the "
@@ -135,17 +160,19 @@ class RepositorySafetyTests(unittest.TestCase):
         "setting names for these commands, `-c blame.ignoreRevsFile= -c diff.orderFile=/dev/null`; a tracked "
         "`.mailmap` is repository content like any other.",
         "The order file is cancelled with `/dev/null`, as Git documents, because an empty value makes `git diff` fail.",
-        "In a checkout with a promisor remote, `--no-lazy-fetch` follows `git` only on Git 2.45.0 or later; on an older "
-        "Git the reader reads no missing object, does not probe object existence to find one, and reports what it could "
-        "not examine.",
+        # Item 2.7 as revised for deviation D-1: main detects the promisor remote under item 4.2 and states it in the
+        # brief; on an older Git nothing is dispatched, replacing the sentence that let the reader proceed and only
+        # avoid missing objects, since no object read could be guaranteed not to fetch one.
+        *LAZY_FETCH,
         "The command never recurses into a submodule, `-c submodule.recurse=false` and `--submodule=short` where a "
         "command accepts it; content under a submodule's path is reported as not examined.",
         "`git status`, working-tree diffs (`git diff` without two commits, `diff-files`, and `diff-index` without "
         "`--cached`) and the `--filters` and `--textconv` options are not used for a review.",
         "An object read from the index always names its stage, `:0:'<path>'`, so that a path is never read as another "
         "stage.",
-        "Names a listing prints reach another Git command only as NUL-separated data on standard input, such as "
-        "`check-attr -z --stdin`, never on its command line.",
+        # Code review blocking finding B1: the earlier sentence kept every listed name off every command line, which
+        # contradicted the object-read, attribute-check and content-hashing forms and the safe-name rule.
+        LISTED_NAMES,
     )
     # The per-operation forms (Implementation Decisions), each run by the behaviour check below.
     FORMS = (
@@ -225,6 +252,22 @@ class RepositorySafetyTests(unittest.TestCase):
         "repository configuration, package-manager scripts and binaries, and an interpreter started in the repository "
         "that can load a module from it.",
     )
+    # Item 4.2 as revised for deviation D-1: promisor detection from the effective configuration, and on an older Git
+    # no dispatch and no way to proceed as configured.
+    PROMISOR = (
+        "After the user has answered any question from this item, main reads the effective configuration with its "
+        "includes followed and all scopes, with origins, to find whether it declares a promisor remote "
+        "(`extensions.partialClone`, or `remote.<name>.promisor` or `remote.<name>.partialclonefilter` for any remote), "
+        "and reads it again before every later dispatch as part of item 4.",
+        "When it declares one, main states the promisor remote and the installed Git version in every brief, and on Git "
+        "2.45.0 or later every Git command main or a role runs in that checkout carries `--no-lazy-fetch`.",
+        "On an older Git no object read can be guaranteed not to fetch a missing object, so main runs no Git command in "
+        "that checkout other than the version check, configuration reads and repository discovery (`rev-parse` of the "
+        "top level, the Git directory and the common directory), dispatches nothing, and reports it to the user with "
+        "the choices: upgrade Git; the user removes or disables the promisor configuration, after which main checks "
+        "again; name an isolated environment for the review; or do not proceed, which leaves the claim blocked.",
+        "There is no choice to proceed as configured;",
+    )
     # Item 4 (R2-Q1, R2-Q5, R2-Q6, Q-S2, S1–S3, S5, S9, S14–S16).
     PREPARATION = (
         "Before the first Git command it runs in a session for a repository, whether for a review or under Before add, "
@@ -234,9 +277,12 @@ class RepositorySafetyTests(unittest.TestCase):
         "confirms that the version check has run;",
         "reads the repository's configuration with origins and scopes and without following includes, covering its local "
         "and worktree scopes, and reports and asks the user before dispatching when `include.path` or an `includeIf` "
-        "path, `core.attributesFile` or `core.excludesFile` points outside the project, when `core.worktree` or "
-        "`core.bare` is set, when the Git directory is a gitfile or has a `commondir` pointing outside the project, when "
-        "alternates are configured, or when Git's top-level directory differs from the project;",
+        # Deviation D-1: main asks only when `core.bare` is true, since `git init` writes `core.bare=false`; the item
+        # now ends with the promisor detection (PROMISOR), so this sentence ends with a full stop.
+        "path, `core.attributesFile` or `core.excludesFile` points outside the project, when `core.worktree` is set or "
+        "`core.bare` is true, when the Git directory is a gitfile or has a `commondir` pointing outside the project, "
+        "when alternates are configured, or when Git's top-level directory differs from the project.",
+        *PROMISOR,
         "lists changes and establishes that the workspace equals the reviewed commit only with commands that read the "
         "index, objects and attributes and with reads under Paths and names, never with `git status`, a working-tree "
         "diff or another command that compares or refreshes the working tree;",
@@ -270,6 +316,12 @@ class RepositorySafetyTests(unittest.TestCase):
         "unexamined. When a review assignment's brief gives no allowlist, report it as a missing requirement instead of "
         "reading the repository."
     )
+    WRITING_PROMISOR = (
+        "Before every such operation, including one that comes before the session's first dispatch, main detects a "
+        "promisor remote as item 2 of Main's preparation describes; when there is one, on Git 2.45.0 or later the "
+        "operation carries `--no-lazy-fetch`, and on an older Git main does not perform it and reports that item's "
+        "choices."
+    )
     # Item 6 (R2-Q2, S6–S8, Q-S3, Q-S4, B7, plan review call 2's R2).
     WRITING = (
         "This rule adds a condition to main's existing authority under [review state](review-state.md)'s Commits before "
@@ -300,6 +352,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "The push settings are listed by namespace, not by key, because any of them can change where content and "
         "credentials go or which program runs while the URL stays the same.",
         "Every operation also disables fsmonitor with `-c core.fsmonitor=`.",
+        # Item 6 as revised for deviation D-1 (N-1): an operation before the first dispatch is covered too.
+        WRITING_PROMISOR,
         "A claim file whose name is unsafe under Paths and names is not added; main reports it and does not perform the "
         "operation.",
         "When the list is not empty, main names each program with the SHA-256 of its content, read under Paths and names "
@@ -433,6 +487,66 @@ class RepositorySafetyTests(unittest.TestCase):
         section = self.source("reference#Before add, commit, tag or push")
         for label in ("Run them as configured.", "Skip hooks and signing.", "Do not perform the operation."):
             self.assertIn(f"- **{label}**", section)
+
+    def test_a_listed_name_reaches_a_command_line_only_as_a_safe_name(self):
+        """Code review blocking finding B1, regression: the rule for names a listing prints agrees with the forms that
+        place a safe name on the command line, so no sentence forbids what the object-read, attribute-check and
+        content-hashing forms do, and a batch of names or an unsafe one still travels only on standard input."""
+        reference = read(REFERENCE)
+        section = self.source("reference#Safe Git invocation")
+        self.assertIn(self.LISTED_NAMES, section)
+        self.assertEqual(reference.count(self.LISTED_NAMES), 1)
+        # The sentence refers to forms above it that place a safe name on the command line, and to the name rule below.
+        position = section.index(self.LISTED_NAMES)
+        for form in ("cat-file blob :0:'<path>'", "check-attr -z <attribute> -- '<path>'", "hash-object -- '<path>'"):
+            with self.subTest(form=form):
+                self.assertLess(section.index(form), position)
+        self.assertLess(reference.index(self.LISTED_NAMES), reference.index("A path name from the repository is safe"))
+        # The shell roles' paragraph keeps the same order: its forms above the sentence, its name rule below.
+        paragraph = RoleRepositorySafetyTests.PARAGRAPH
+        self.assertLess(paragraph.index("cat-file blob :0:'<path>'"), paragraph.index(self.LISTED_NAMES))
+        self.assertLess(paragraph.index(self.LISTED_NAMES), paragraph.index("A path name from the repository is safe"))
+        for path in (REFERENCE, *sorted(AGENTS.glob("*.md"))):
+            with self.subTest(place=path.name):
+                text = " ".join(read(path).split())
+                self.assertNotIn(self.LISTED_NAMES_REMOVED, text)
+                self.assertNotRegex(text, r"never on (?:its|a|the) command line")
+
+    def test_main_detects_a_promisor_remote_and_an_older_git_dispatches_nothing(self):
+        """Deviation D-1, regression and abuse check: the Lazy fetch rule depends on main's detection of a promisor
+        remote, which follows includes; on Git older than 2.45.0 no review is dispatched, no operation under Before add,
+        commit, tag or push runs, and no choice proceeds as configured."""
+        section = self.source("reference#Safe Git invocation")
+        self.assertIn("\n- **Lazy fetch.** " + " ".join(self.LAZY_FETCH) + "\n", section)
+        # The detection and its outcome belong to item 2 of Main's preparation, which item 4 reads again.
+        preparation = self.source("reference#Main's preparation")
+        item = next(line for line in preparation.splitlines() if line.startswith("2. "))
+        for sentence in self.PROMISOR:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, item)
+        self.assertIn("`core.bare` is true", item)
+        self.assertNotIn("`core.bare` is set", item)
+        reference = read(REFERENCE)
+        self.assertEqual(reference.count("proceed as configured"), 1)
+        self.assertIn("There is no choice to proceed as configured", reference)
+        # The effective configuration read covers every scope.
+        self.assertIn("and with `--includes` in place of `--no-includes`, in every scope, for the effective "
+                      "configuration", section)
+        # Every sentence that names an older Git stops: nothing is dispatched or performed there.
+        older = [s for s in self.sentences(reference) if re.search(r"older (?:Git|than)", s)]
+        self.assertGreaterEqual(len(older), 4)
+        for sentence in older:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertRegex(sentence, r"dispatches nothing|no review is dispatched|does not perform|"
+                                           r"runs no Git command")
+        # `--no-lazy-fetch` is never named without the version that supports it.
+        for sentence in self.sentences(reference):
+            if "--no-lazy-fetch" in sentence:
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn("2.45.0", sentence)
+        for path in (REFERENCE, *sorted(AGENTS.glob("*.md"))):
+            with self.subTest(place=path.name):
+                self.assertNotIn(self.LAZY_FETCH_REMOVED, " ".join(read(path).split()))
 
     # Item 1: the glossary entry, which ADR 0011 and the reference use.
     GLOSSARY = ("A program that the reviewed repository's configuration, attributes or hooks select and Git may run, such "
@@ -682,6 +796,14 @@ class RepositorySafetyTests(unittest.TestCase):
          "**審查之前：**主 Agent 每個 session 檢查一次 Git 是否為 2.32 或更新版本，在不跟隨 include 的情況下讀取儲存庫設定，設定指向專案"
          "外或移動了工作樹時，會在派出前先問你；比對工作區會執行 filter 時，該次呼叫前也會問你；派出之間儲存庫的 Git 中繼資料"
          "有變化時，會再問你。"),
+        # Deviation D-1: promisor detection and the older-Git outcome, summarised from item 4.2.
+        ("In a partial clone, a checkout with a promisor remote, main states the promisor remote and the Git version in "
+         "every brief, and every Git command carries `--no-lazy-fetch` on Git 2.45.0 or later; on an older Git main "
+         "dispatches no review there and offers you four choices: upgrade Git, remove or disable the promisor "
+         "configuration, name an isolated environment, or leave the claim blocked.",
+         "在部分複製（partial clone），也就是有 promisor remote 的 checkout 中，主 Agent 會在每份 brief 寫明 promisor remote "
+         "與 Git 版本，Git 2.45.0 或更新版本時每個 Git 指令都帶 `--no-lazy-fetch`；較舊的 Git 上，主 Agent 不在其中派出審查，"
+         "並給你四個選擇：升級 Git、移除或停用 promisor 設定、指定隔離環境，或讓 claim 維持 blocked。"),
         ("A role without a shell, such as analyst, scout or Explore, reads and searches only the checked files and "
          "directories main lists for it.",
          "沒有 shell 的角色，例如 analyst、scout 與 Explore，只讀取與搜尋主 Agent 為它列出、已檢查過的檔案與目錄。"),
@@ -693,6 +815,10 @@ class RepositorySafetyTests(unittest.TestCase):
          "傳輸設定，並問你要照設定執行、略過 hook 與簽章，還是不執行這個操作；filter、傳輸設定與目的地只能執行或拒絕。"),
         ("Your answer covers exactly what main named, for the rest of the session.",
          "你的回答只涵蓋主 Agent 列出的項目，在這個 session 剩下的時間有效。"),
+        # Deviation D-1 (N-1): the same detection before every such operation.
+        ("In a partial clone each of these operations also carries `--no-lazy-fetch`, and on Git older than 2.45.0 main "
+         "does not perform it and offers the same four choices.",
+         "在部分複製中，這些操作同樣帶 `--no-lazy-fetch`；Git 早於 2.45.0 時，主 Agent 不執行該操作，並給你同樣的四個選擇。"),
         ("These rules are instructions to the model, not a sandbox: no permission rule, hook or sandbox enforces them, "
          "and tests only keep the texts consistent.",
          "這些規則是給模型的指示，不是 sandbox：沒有任何權限規則、hook 或 sandbox 強制它們，測試只確保文字前後一致。"),
@@ -801,8 +927,7 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         "blame --no-textconv <commit> -- '<path>'`. "
         "An object read from the index always names its stage, `:0:'<path>'`, so that a path is never read as another "
         "stage. "
-        "Names a listing prints reach another Git command only as NUL-separated data on standard input, such as "
-        "`check-attr -z --stdin`, never on its command line. "
+        + RepositorySafetyTests.LISTED_NAMES + " "
         "No signature is verified: the prefix sets `-c log.showSignature=false`, and every `log` or `show` that prints "
         "commits names an explicit format containing no signature placeholder, so a format the repository configures is "
         "never used. "
@@ -810,9 +935,7 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         "setting names for these commands, `-c blame.ignoreRevsFile= -c diff.orderFile=/dev/null`; a tracked "
         "`.mailmap` is repository content like any other. "
         "The order file is cancelled with `/dev/null`, as Git documents, because an empty value makes `git diff` fail. "
-        "In a checkout with a promisor remote, `--no-lazy-fetch` follows `git` only on Git 2.45.0 or later; on an older "
-        "Git the reader reads no missing object, does not probe object existence to find one, and reports what it could "
-        "not examine. "
+        + " ".join(RepositorySafetyTests.LAZY_FETCH) + " "
         "The command never recurses into a submodule, `-c submodule.recurse=false` and `--submodule=short` where a "
         "command accepts it; content under a submodule's path is reported as not examined. "
         "Working-tree content is read only under the checks that follow, never through a working-tree diff or `git "
@@ -1223,6 +1346,52 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                     self.assertEqual(ran(), set(), f"{command} ran a configured program")
             # Each control that ran is one this check covered, so a form that dropped its option would be caught.
             self.assertTrue(controls <= {"monitor", "textconv", "extdiff"}, controls)
+
+    def test_promisor_detection_reads_the_effective_configuration(self):
+        """Deviation D-1, regression: a promisor setting that a tracked file supplies through an include is invisible to
+        the include-less read of item 4.2's first step and found by the effective read the detection uses, with the
+        keys the reference names. Nothing is fetched: the throwaway repository has no remote to contact."""
+        detection = RepositorySafetyTests.PROMISOR[0]
+        keys = re.findall(r"`([a-zA-Z.<>]+)`", detection.split("promisor remote (", 1)[1].split(")", 1)[0])
+        self.assertEqual(keys, ["extensions.partialClone", "remote.<name>.promisor", "remote.<name>.partialclonefilter"])
+        # Git prints configuration keys with their section and variable names in lower case.
+        pattern = re.compile("|".join(re.escape(key.lower()).replace(re.escape("<name>"), r"[^\s=]+") for key in keys))
+        reference = read(REFERENCE)
+        self.assertIn(detection, " ".join(reference.split()))
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, empty = root / "repo", root / "gitconfig"
+            repo.mkdir()
+            empty.write_bytes(b"")
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+
+            def git(*args):
+                try:
+                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            self.assertEqual(git("init", "-q", ".").returncode, 0)
+            # A file in the working tree, as a tracked file would be, supplies the setting through an include.
+            (repo / "settings.cfg").write_bytes(b'[remote "origin"]\n\tpromisor = true\n')
+            self.assertEqual(git("config", "include.path", "../settings.cfg").returncode, 0)
+            local = git(*prefix, "config", "--list", "--show-origin", "--show-scope", "--no-includes", "--local")
+            effective = git(*prefix, "config", "--list", "--show-origin", "--show-scope", "--includes")
+            if local.returncode or effective.returncode:
+                self.skipTest(f"this Git cannot read configuration with scopes: {(local.stderr or effective.stderr)!r}")
+            self.assertIsNone(pattern.search(local.stdout.decode("utf-8")), "the include-less read found the setting")
+            found = [line for line in effective.stdout.decode("utf-8").splitlines() if pattern.search(line)]
+            self.assertEqual(len(found), 1, found)
+            self.assertTrue(found[0].startswith("local\t"), found[0])
+            self.assertIn("settings.cfg", found[0])
+            self.assertTrue(found[0].endswith("remote.origin.promisor=true"), found[0])
+            # The detection keys match the other two settings too, whatever the remote's name.
+            for line in ("extensions.partialclone=origin", "remote.up-stream.partialclonefilter=blob:none"):
+                with self.subTest(line=line):
+                    self.assertIsNotNone(pattern.search(line))
 
 
 if __name__ == "__main__":
