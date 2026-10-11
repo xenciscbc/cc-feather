@@ -9,7 +9,7 @@
     "skills/handoff/scripts/feather_handoff/cli.py": "e17ccffec1f66b83dca99f15d6f1fcd74c052eb96ea23221d2ae9c6047866bfd",
     "skills/handoff/scripts/feather_handoff/history.py": "238153ce6c6d0d728591b6fa622d06b0d3c137ff0d843c3386741107297d855d",
     "skills/handoff/scripts/feather_handoff/history_mutations.py": "da86a9249595192f8c8d22b240c95f1cb529370491c463846ea883b267d03208",
-    "skills/handoff/scripts/feather_handoff/observations.py": "9d0a0879339f97692340e7c0072493371776d332e41cc1e796f90326c8d8a7ac",
+    "skills/handoff/scripts/feather_handoff/observations.py": "09d3d3f7b74063a6d253b6aafe3578c7c63000e73a5b4e6a444c769ab16fd768",
     "skills/handoff/scripts/feather_handoff/records.py": "00caa0a37277ea9a6f7a16f6ac365a416ef69f47da443be66e3fbb414c4cf268",
     "skills/handoff/scripts/feather_handoff/storage.py": "ab28a2df4e40ce27b58c8fa64c7d26dec9f4729550c93b730ef42b33f3ad6295",
     "skills/handoff/scripts/feather_handoff/tracking.py": "7ee48012ae384480d3b39c9028dee8bad4e462b035a2deeaa8cd75a6fce45300",
@@ -101,7 +101,7 @@
     },
     "skills/handoff/scripts/feather_handoff/observations.py": {
       "source_sha256": "b3376cbbd0a0a50d52c3dc36ea36f051ec95a9060a7ca4b1a7f8813be99d4c7c",
-      "change": "Local fix pending upstream: source change detection ignores st_ctime (stat and fstat disagree on Windows with Python 3.12+). Duplicate-source detection uses the resolved path when st_ino is unavailable. git_observation runs Git through storage.run_git, decoding with errors=replace as before."
+      "change": "Local fix pending upstream: source change detection ignores st_ctime (stat and fstat disagree on Windows with Python 3.12+). Duplicate-source detection uses the resolved path when st_ino is unavailable. git_observation runs Git through storage.run_git, decoding with errors=replace as before. Its rev-parse and symbolic-ref read no object; before show-ref --verify, which checks that the unresolved branch's object exists and can therefore fetch it, git_observation runs lazy_fetch_guard and passes its result to show-ref (--no-lazy-fetch on Git 2.45.0 or later); on promisor-remote or promisor-unknown it skips show-ref and returns an unknown Git observation with that code as its reason (OSError or a timeout there is git-unavailable). An observation whose HEAD resolves runs no detection."
     },
     "skills/handoff/scripts/feather_handoff/tracking.py": {
       "source_sha256": "5f9eb71dfc4a18cc31489ab979d9492c5865f494891b75d7c700af8ef5988797",

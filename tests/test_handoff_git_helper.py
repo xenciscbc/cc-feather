@@ -22,7 +22,7 @@ SCRIPTS = ROOT / "skills/handoff/scripts"
 TOOL = SCRIPTS / "handoff.py"
 sys.path.insert(0, str(SCRIPTS))
 
-from feather_handoff import cli, storage  # noqa: E402
+from feather_handoff import cli, observations, storage  # noqa: E402
 
 PREFIX = ["git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor="]
 FIELDS = {"goal": "g", "progress": "p", "next": "n", "updated": "2026-10-11T10:00:00+08:00"}
@@ -549,6 +549,130 @@ class SimulatedPromisorTest(unittest.TestCase):
         self.assertEqual(fake.commands(), [(False, ["rev-parse", "--is-inside-work-tree"])])
 
 
+SHOW_REF = ["show-ref", "--verify", "--quiet", "refs/heads/main"]
+OBSERVATION_START = [(False, ["rev-parse", "--is-inside-work-tree"]), (False, ["symbolic-ref", "--quiet", "HEAD"]),
+                     (False, ["rev-parse", "--verify", "--quiet", "HEAD"])]
+
+
+class ObservationGit(FakeGit):
+    """FakeGit that also answers the snapshot and compare observation: HEAD names refs/heads/main, which does not
+    resolve (an unborn branch) unless head_code is 0, so the observation reaches its show-ref check."""
+
+    def __init__(self, project: Path, head_code=1, **kwargs):
+        super().__init__(project, **kwargs)
+        self.head_code = head_code
+
+    def __call__(self, args, **kwargs):
+        flagged, rest = self.split(list(args))
+        if flagged and (git_version(self.version) or (0, 0, 0)) < (2, 45, 0):
+            return super().__call__(args, **kwargs)  # refuses the flag, as an older Git would
+        if rest == ["symbolic-ref", "--quiet", "HEAD"]:
+            self.calls.append(list(args))
+            return subprocess.CompletedProcess(args, 0, "refs/heads/main\n", "")
+        if rest == ["rev-parse", "--verify", "--quiet", "HEAD"]:
+            self.calls.append(list(args))
+            return subprocess.CompletedProcess(args, self.head_code, "1" * 40 + "\n" if not self.head_code else "", "")
+        if rest == SHOW_REF:
+            self.calls.append(list(args))
+            return subprocess.CompletedProcess(args, 1, "", "")
+        return super().__call__(args, **kwargs)
+
+
+class SimulatedObservationPromisorTest(unittest.TestCase):
+    """C4 item 7: the snapshot and compare observation runs show-ref --verify, which checks that the ref's object
+    exists and so can fetch it, only after the promisor-remote detection. On Git 2.45.0 or later it carries
+    --no-lazy-fetch; on an older Git, or when the configuration or version cannot be established, it does not run
+    and the Git observation is unknown with the cause as its reason. Detection runs only before show-ref."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.project = Path(os.path.realpath(temporary.name))
+        self.addCleanup(storage.reset_roots)
+
+    def observe(self, fake: FakeGit) -> dict:
+        with mock.patch.object(storage.subprocess, "run", side_effect=fake):
+            return observations.git_observation(self.project)
+
+    def test_new_git_runs_show_ref_with_the_flag_after_detection(self):
+        for version in ("git version 2.45.0", "git version 2.47.1.windows.1", "git version 3.0.0"):
+            with self.subTest(version=version):
+                fake = ObservationGit(self.project, version=version)
+                self.assertEqual(self.observe(fake), {"state": "available", "head": None, "branch": "main"})
+                self.assertEqual(fake.commands(), [*OBSERVATION_START, (False, CONFIG_READ), (False, ["version"]),
+                                                   (True, SHOW_REF)])
+
+    def test_old_git_with_a_promisor_remote_does_not_run_show_ref(self):
+        for version in ("git version 2.44.9", "git version 2.43.0.windows.1"):
+            with self.subTest(version=version):
+                fake = ObservationGit(self.project, version=version)
+                self.assertEqual(self.observe(fake), {"state": "unknown", "reason": "promisor-remote"})
+                self.assertEqual(fake.commands(), [*OBSERVATION_START, (False, CONFIG_READ), (False, ["version"])])
+
+    def test_unknown_configuration_or_version_does_not_run_show_ref(self):
+        for label, fake in (("config", ObservationGit(self.project, config_code=1)),
+                            ("version", ObservationGit(self.project, version="git version ?"))):
+            with self.subTest(label):
+                self.assertEqual(self.observe(fake), {"state": "unknown", "reason": "promisor-unknown"})
+                self.assertNotIn(SHOW_REF, [rest for _, rest in fake.commands()])
+
+    def test_without_a_promisor_remote_show_ref_carries_no_flag(self):
+        fake = ObservationGit(self.project, version="git version 2.43.0", config="remote.origin.url\nfile:///x\0")
+        self.assertEqual(self.observe(fake), {"state": "available", "head": None, "branch": "main"})
+        self.assertEqual(fake.commands(), [*OBSERVATION_START, (False, CONFIG_READ), (False, SHOW_REF)])
+
+    def test_a_resolved_head_needs_no_detection(self):
+        # rev-parse and symbolic-ref read no object, so an observation that never reaches show-ref reads no
+        # configuration, even on an older Git in a promisor checkout.
+        fake = ObservationGit(self.project, head_code=0, version="git version 2.43.0")
+        self.assertEqual(self.observe(fake), {"state": "available", "head": "1" * 40, "branch": "main"})
+        self.assertEqual(fake.commands(), OBSERVATION_START)
+
+    def test_git_failing_during_detection_is_git_unavailable(self):
+        for error in (FileNotFoundError("git"), subprocess.TimeoutExpired(["git"], 5)):
+            fake = ObservationGit(self.project)
+
+            def failing(args, **kwargs):
+                if args[len(PREFIX) + 2:] == CONFIG_READ:
+                    raise error
+                return fake(args, **kwargs)
+            with self.subTest(error=type(error).__name__), \
+                    mock.patch.object(storage.subprocess, "run", side_effect=failing):
+                self.assertEqual(observations.git_observation(self.project),
+                                 {"state": "unknown", "reason": "git-unavailable"})
+            self.assertNotIn(SHOW_REF, [rest for _, rest in fake.commands()])
+
+    def invoke(self, fake: FakeGit, *args, payload=None) -> tuple[int, dict]:
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["handoff", "--project", str(self.project), "--exact-root", *args]), \
+                mock.patch.object(cli, "input_payload", return_value=payload), \
+                mock.patch.object(storage.subprocess, "run", side_effect=fake), contextlib.redirect_stdout(out):
+            code = cli.main()
+        return code, json.loads(out.getvalue())
+
+    def test_snapshot_and_compare_report_the_unknown_git_observation(self):
+        (self.project / "a.txt").write_bytes(b"a\n")
+        plain = lambda: ObservationGit(self.project, config="remote.origin.url\nfile:///x\0")  # noqa: E731
+        code, snapshot = self.invoke(plain(), "snapshot", payload={"paths": ["a.txt"]})
+        self.assertEqual((code, snapshot["snapshot"]["git"]), (0, {"state": "available", "head": None,
+                                                                    "branch": "main"}), snapshot)
+        code, created = self.invoke(plain(), "create", "--work", "w.md",
+                                    payload={"title": "w", "fields": FIELDS, "snapshot": snapshot["snapshot"]})
+        self.assertEqual((code, created["status"]), (0, "ok"), created)
+        old = lambda: ObservationGit(self.project, version="git version 2.43.0")  # noqa: E731
+        code, partial = self.invoke(old(), "snapshot", payload={"paths": ["a.txt"]})
+        self.assertEqual((code, partial["status"], partial["complete"]), (2, "partial", False), partial)
+        self.assertEqual(partial["snapshot"]["git"], {"state": "unknown", "reason": "promisor-remote"})
+        self.assertEqual(partial["issues"], [{"path": "", "code": "promisor-remote"}])
+        self.assertEqual(partial["snapshot"]["files"], snapshot["snapshot"]["files"])
+        code, compared = self.invoke(old(), "compare", "--work", "w.md")
+        self.assertEqual((code, compared["status"], compared["git"]["comparison"]), (2, "partial", "unknown"),
+                         compared)
+        self.assertEqual(compared["git"]["current_observation"], {"state": "unknown", "reason": "promisor-remote"})
+        self.assertEqual(compared["issues"], [{"path": "", "code": "git-unknown"}])
+        self.assertEqual([item["comparison"] for item in compared["files"]], ["unchanged"])
+
+
 class PromisorReferenceTest(unittest.TestCase):
     """C4 item 7: the handoff tool reference's Create section describes the cause codes the tool returns."""
 
@@ -681,6 +805,60 @@ class PartialCloneTest(unittest.TestCase):
             code, archived = step("archive", "archive", "--work", "done.md", payload={"version": done["version"]})
             self.assertEqual((code, archived["archived"], archived["cause_code"]), (2, True, "promisor-remote"))
         step("read", "read", "--work", "default.md")
+
+    def test_the_observation_show_ref_does_not_fetch_lazily(self):
+        # The observation reaches show-ref --verify only when HEAD names a branch that rev-parse cannot resolve; in
+        # a probe of on-disk states, every such state made show-ref read no object. The fixture therefore stands in
+        # for a concurrent writer: once the observation's rev-parse has found the branch unborn, the branch is
+        # created pointing to a blob the partial clone lacks, so show-ref would have to fetch it.
+        clone = self.partial_clone()
+        listed = self.git(clone, "-c", "core.fsmonitor=", "ls-tree", "HEAD", "--", ".gitignore").stdout.split()
+        self.assertFalse(self.ran(), "reading the tree fetched an object")
+        if len(listed) < 3:
+            self.skipTest("the fixture's root .gitignore is not in the tree")
+        blob, ref = listed[2], clone / ".git/refs/heads/side"
+        self.git(clone, "-c", "core.fsmonitor=", "symbolic-ref", "HEAD", "refs/heads/side")
+        # Positive control: the plain show-ref of a branch at the missing blob runs the remote's upload program.
+        ref.write_text(blob + "\n", encoding="utf-8", newline="\n")
+        self.git(clone, "-c", "core.fsmonitor=", "show-ref", "--verify", "--quiet", "refs/heads/side", check=False)
+        if not self.ran():
+            self.skipTest("this Git ran no configured upload program for a lazy fetch")
+        version = self.installed_version()
+        if version is None:
+            self.skipTest("the installed Git version cannot be read")
+        real = subprocess.run
+
+        def observe(**patches) -> tuple[dict, list[list[str]]]:
+            ref.unlink(missing_ok=True)
+            calls = []
+
+            def concurrent(args, **kwargs):
+                calls.append(list(args))
+                result = real(args, **kwargs)
+                if list(args[-4:]) == ["rev-parse", "--verify", "--quiet", "HEAD"] and result.returncode == 1:
+                    ref.write_text(blob + "\n", encoding="utf-8", newline="\n")
+                return result
+            with mock.patch.dict(os.environ, self.env, clear=True), \
+                    mock.patch.object(storage.subprocess, "run", side_effect=concurrent), \
+                    contextlib.ExitStack() as stack:
+                for name, value in patches.items():
+                    stack.enter_context(mock.patch.object(observations, name, value))
+                return observations.git_observation(clone), calls
+
+        # Second positive control: without the detection, the observation's own show-ref runs the upload program,
+        # so the interleaving reaches the command under test.
+        _, calls = observe(lazy_fetch_guard=lambda directory: False)
+        self.assertIn("show-ref", [call[-4] for call in calls])
+        self.assertTrue(self.ran(), "the fixture did not reach a show-ref that fetches")
+        observed, calls = observe()
+        self.assertFalse(self.ran(), "the observation ran the remote's upload program")
+        self.assertEqual(observed["state"], "unknown", observed)
+        show_refs = [call for call in calls if call[-4:] == ["show-ref", "--verify", "--quiet", "refs/heads/side"]]
+        if version < (2, 45, 0):
+            self.assertEqual(observed, {"state": "unknown", "reason": "promisor-remote"})
+            self.assertEqual(show_refs, [])
+        else:
+            self.assertEqual([call[len(PREFIX)] for call in show_refs], ["--no-lazy-fetch"])
 
     def test_an_included_promisor_declaration_counts(self):
         # A repository with every object present whose local configuration includes a file declaring a promisor

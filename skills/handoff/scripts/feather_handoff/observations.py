@@ -7,7 +7,7 @@ import stat
 import subprocess
 
 from . import baseline
-from .storage import HandoffError, Store, check_path, read_file, run_git
+from .storage import HandoffError, Store, check_path, lazy_fetch_guard, read_file, run_git
 
 
 def signature(info):
@@ -71,9 +71,12 @@ def observe(project: Path, name: str, budget: list[int]):
 
 
 def git_observation(project: Path) -> dict:
-    def run(*args):
-        return run_git(project, *args, errors="replace")
+    def run(*args, no_lazy_fetch=False):
+        return run_git(project, *args, errors="replace", no_lazy_fetch=no_lazy_fetch)
 
+    # rev-parse and symbolic-ref read no object. show-ref --verify checks that the ref's object exists, so in a
+    # checkout with a promisor remote it could fetch it: it runs only after the promisor-remote detection, with
+    # --no-lazy-fetch when that is needed, and otherwise the observation is unknown with the detection's cause code.
     try:
         probe = run("rev-parse", "--is-inside-work-tree")
         if probe.returncode:
@@ -89,7 +92,11 @@ def git_observation(project: Path) -> dict:
         if head.returncode:
             if head.returncode != 1 or branch.returncode != 0:
                 return {"state": "unknown", "reason": "git-error"}
-            unborn = run("show-ref", "--verify", "--quiet", branch.stdout.strip())
+            try:
+                lazy = lazy_fetch_guard(project)
+            except HandoffError as error:  # promisor-remote or promisor-unknown
+                return {"state": "unknown", "reason": error.code}
+            unborn = run("show-ref", "--verify", "--quiet", branch.stdout.strip(), no_lazy_fetch=lazy)
             if unborn.returncode != 1:
                 return {"state": "unknown", "reason": "git-error"}
         return {"state": "available", "head": head.stdout.strip() if head.returncode == 0 else None,
