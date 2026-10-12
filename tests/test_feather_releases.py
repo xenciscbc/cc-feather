@@ -200,11 +200,15 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
         "**Setup update is required.** This release changes the reviewer, verifier, adversary, analyst, scout and Explore role definitions and the automatic review guidance: run setup update in every scope where delegation is installed, then start a fresh session.",
         "To go back to 0.20.0, no remove is needed: 0.20.0 reads the state 0.21.0 writes, and its own setup update re-renders its role templates and guidance.",
         "C4 item 3's positive control ran and was not skipped",
+        "and 624 at C1 4c3e894, the candidate.",
         "`check` and `show` reported `role_update_required: true` with exit 0 and named reviewer, verifier, adversary, analyst, scout and Explore as from an older template",
         "the v0.20.0 tool's `check` and `show` exited 0 with status ok",
         "No live scenario ran with the 0.21.0 procedures or roles:",
         "`v0.21.0` does not exist when this entry is written.",
-        "**Review round: pending when this entry was written.**",
+        "Review round, recorded after it (2026-10-11 to 2026-10-12; every call by the installed 0.20.0 roles in fresh context; the final candidate is 4c3e894).",
+        "call 6 HELD at 4c3e894.",
+        "Sub-checks recorded as not established:",
+        "The review round's non-blocking findings and the pre-existing items it found are recorded as later work in the project's records, not here.",
     )
 
     @staticmethod
@@ -242,12 +246,17 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
         for text in (section, self.text("templates/review-auto.md")):
             self.assertNotIn("operation profile", text)
 
-    def test_validation_entry_records_the_update_checks_live_scope_tag_and_pending_review(self):
+    def test_validation_entry_records_the_update_checks_live_scope_tag_and_review_round(self):
         entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.21.0 repository safety\n")
         for sentence in self.ENTRY:
             with self.subTest(entry=sentence[:50]):
                 self.assertIn(sentence, entry)
         self.assertNotIn("No setup update is required", entry)
+        # The review round replaced the pending note, and each Claim has its line at the final candidate.
+        self.assertNotIn("pending when this entry was written", entry)
+        for claim in ("C3", "C1", "C2", "C4", "C5"):
+            with self.subTest(claim=claim):
+                self.assertEqual(entry.count(f"\n- {claim}: "), 1)
 
     def test_adr_0009_amendment_note_links_adr_0011(self):
         adr = self.text("docs/adr/0009-security-critical-claims-get-an-adversarial-review.md")
