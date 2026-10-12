@@ -4019,9 +4019,9 @@ class FeatherConfigTests(unittest.TestCase):
                                     "the user has said that the repository is trusted to run on this machine"),
         "Before a review": ("審查之前", "Git is 2.32 or later", "2.32 或更新版本",
                             "repository-safety.md", "Git is 2.32 or later"),
-        "Before add, commit, tag or push": ("add、commit、tag 或 push 之前", "each with the SHA-256 of its content",
-                                            "內容的 SHA-256", "repository-safety.md",
-                                            "main names each program with the SHA-256 of its content"),
+        # Repository safety deviation D-6: the bullet summarises the fixed forms instead of the named programs.
+        "Before add, commit, tag or push": ("add、commit、tag 或 push 之前", "runs in a fixed form", "以固定形式執行",
+                                            "repository-safety.md", "Each operation runs only in its fixed form"),
         # Repository safety C2 item 6: the roles bullet summarises the paragraph for roles without a shell.
         "Roles": ("角色", "report a missing list instead of reading", "沒有清單時回報缺少需求而不讀取",
                   "repository-safety.md", "report it as a missing requirement instead of reading the repository"),

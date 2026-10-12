@@ -4,10 +4,11 @@ run no Repository-chosen program."""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
-import stat
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -90,19 +91,42 @@ class RepositorySafetyTests(unittest.TestCase):
               "-c mailmap.file= -c mailmap.blob= -c blame.ignoreRevsFile= -c diff.orderFile=/dev/null "
               "-c submodule.recurse=false")
 
+    # D1 as revised for deviation D-6: the working tree, changes neither the user nor main wrote and configuration read
+    # from the working tree are attacker-controlled, while the Git directory's own configuration and metadata are the
+    # user's own; the glossary term keeps its scope and its reason.
+    THREAT = (
+        "The reviewed repository's working tree and tracked content (files, `.gitattributes`, submodule settings), every "
+        "change that neither the user nor main wrote, including one Git keeps in the Git directory as objects, refs or "
+        "staged content, and any configuration, hook or include file Git reads from a path inside the working tree, "
+        "that is, inside the project but outside its Git directory, are attacker-controlled.",
+        "The Git directory's own configuration and metadata (`.git/config`, a worktree's `config.worktree`, the hooks "
+        "directory, `info/attributes`, a gitfile, `commondir` and alternates) are the user's own and trusted, as are "
+        "user- and system-level Git configuration and the user's own environment: Claude Code normally asks the user to "
+        "trust a folder before working in it and runs Git in it before these rules apply.",
+        "A Git directory or configuration that is not the user's own, such as one copied in or extracted from an "
+        "archive, and anything repository code, or a program the user's configuration sets, writes into the Git "
+        "directory when it runs, are residual risk.",
+        "The rules that Safe Git invocation, Paths and names, Execution and Main's preparation, the roles and the "
+        "handoff tool follow for local Git metadata were established against a hostile Git directory and stay "
+        "unchanged, as defence in depth.",
+        "A Repository-chosen program is a program that the reviewed repository's configuration, attributes or hooks "
+        "select and Git may run, such as an fsmonitor, a textconv or external diff, a filter, a signing program or a "
+        "hook; since such a program can load the working tree's content, running one counts as executing repository "
+        "code.",
+    )
+    # The threat model deviation D-6 replaced, which counted the local Git metadata as attacker-controlled.
+    THREAT_REMOVED = (
+        "and its local Git metadata (`.git/config`",
+        "User- and system-level Git configuration and the user's own environment are trusted.",
+        "running one counts as executing the code under review.",
+    )
     # Item 1 and D1–D4, D6: scope, threat model, the glossary term, the assurance level and residual risk.
     SCOPE = (
         "These rules apply to every repository read that main or a role makes for a plan review, code review, outcome "
         "verification, Adversarial review or security analysis, to main's preparation for them and to main's comparison "
         "of the workspace after each call, whatever the claim's classification, unchanged dependencies included.",
         "Searches by scout or Explore that main dispatches outside such a review are not covered.",
-        "The reviewed repository's tracked content (files, `.gitattributes`, submodule settings) and its local Git "
-        "metadata (`.git/config`, a worktree's `config.worktree`, the hooks directory, `info/attributes`, a gitfile, "
-        "`commondir` and alternates) are attacker-controlled.",
-        "User- and system-level Git configuration and the user's own environment are trusted.",
-        "A Repository-chosen program is a program that the reviewed repository's configuration, attributes or hooks "
-        "select and Git may run, such as an fsmonitor, a textconv or external diff, a filter, a signing program or a "
-        "hook; running one counts as executing the code under review.",
+        *THREAT,
         "These rules are instructions to the model, kept consistent by tests, plus the handoff tool's own code.",
         "No permission rule, hook or sandbox enforces them, so a live model can still break one.",
         "The path rules guarantee how main and the roles read reviewed source content with the file tools and shell "
@@ -144,11 +168,10 @@ class RepositorySafetyTests(unittest.TestCase):
     # named ones being examples. They replace WORKING_TREE_REMOVED, whose closed list left other commands unnamed.
     CONFINED = (
         "No Git command is run to read a repository for a review except in a form these rules list.",
-        # Deviation D-4: content hashing also serves main's check after `git add`, which the sentence now names.
+        # Deviation D-6 restores this sentence to its text before deviation D-4.
         "A role runs only the forms for the index, untracked, ignored and tree listings, object reads, comparing commits, "
-        "history, blame and attribute checks; configuration reads and the repository layout are for main's preparation "
-        "only, content hashing for main's preparation and its check after `git add` only, and a role never runs "
-        "`hash-object`.",
+        "history, blame and attribute checks; configuration reads, the repository layout and content hashing are for "
+        "main's preparation only, and a role never runs `hash-object`.",
         "A command that compares or refreshes the working tree is never run for a review; `git status`, `git diff` "
         "without two commits, `diff-files`, `diff-index` without `--cached` and `update-index` are examples, not a "
         "complete list.",
@@ -158,11 +181,12 @@ class RepositorySafetyTests(unittest.TestCase):
         "`git status`, working-tree diffs (`git diff` without two commits, `diff-files`, and `diff-index` without "
         "`--cached`) and the `--filters` and `--textconv` options are not used for a review."
     )
-    # Deviation D-4: the wording that kept content hashing to main's preparation alone, before the check after `git add`
-    # used it, in the role sentence and in the table's row.
+    # Deviation D-6: the wording deviation D-4 gave content hashing for main's check after `git add`, which D-6 removed,
+    # restoring the role sentence and the table's row to their earlier text.
     HASHING_REMOVED = (
-        "configuration reads, the repository layout and content hashing are for main's preparation only,",
-        "never with `-w`, only under Main's preparation |",
+        "content hashing for main's preparation and its check after `git add` only,",
+        "only under Main's preparation and in the check after `git add`",
+        "hash-object --no-filters",
     )
     # Item 2 (G1–G7, C12, R2-Q5, S19): the common prefix and its rules.
     GIT = (
@@ -200,30 +224,28 @@ class RepositorySafetyTests(unittest.TestCase):
         # contradicted the object-read, attribute-check and content-hashing forms and the safe-name rule.
         LISTED_NAMES,
     )
-    # Item 6 as revised for deviations D-2 and D-3: the preparation forms the operation profile needs, main's alone, each
-    # run by the behaviour check below. D-3 lists the Git directory with profile item 11's walk instead of reading each
-    # operation state, and adds the parents of the new commit for the check after a commit.
-    PROFILE_FORMS = (
+    # Item 6 as revised for deviation D-6: the reads main's checks under Before add, commit, tag or push need, main's
+    # alone, each run by the behaviour check below.
+    WRITING_FORMS = (
+        "git <prefix> rev-parse --verify --quiet HEAD",
+        "git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff --no-textconv <commit> --",
+    )
+    # Item 4.4 as revised for deviation D-6: the hooks directory for the hooks snapshot, main's alone.
+    HOOKS_FORM = "git <prefix> rev-parse --git-path hooks"
+    # Deviation D-6: the forms that only the removed operation profile and its checks after `git add` and after a commit
+    # read (deviations D-2 to D-4), and the forms D-3 had already removed.
+    FORMS_REMOVED = (
         "git <prefix> remote get-url --push --all <remote>",
         "git <prefix> symbolic-ref --quiet HEAD",
-        "git <prefix> rev-parse --verify --quiet HEAD",
-        "git <prefix> rev-parse --verify --quiet refs/stash",
         "git <prefix> rev-parse --verify --quiet <commit>^1",
         "git <prefix> rev-parse --verify --quiet <commit>^2",
+        "git <prefix> rev-parse --verify --quiet refs/stash",
         "git <prefix> ls-files -z --unmerged",
-        "git <prefix> ls-tree -z --full-tree <commit> -- '.gitmodules'",
-        "git <prefix> rev-parse --git-dir",
-        "git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff --no-textconv <commit> --",
-        # Deviation D-4: the index entries' tags for profile item 2's bits, and the claim files' modes in the tree
-        # `HEAD` names for the check after `git add`.
         "git <prefix> ls-files -z -v",
+        "git <prefix> ls-tree -z --full-tree <commit> -- '.gitmodules'",
         "git <prefix> ls-tree -z --full-tree <commit> -- '<path>'",
-    )
-    # Deviation D-4: the content-hashing form without conversion, main's alone, for the check after `git add`.
-    UNFILTERED_HASHING = "git <prefix> hash-object --no-filters -- '<path>'"
-    # Deviation D-3: the forms that read each operation state, removed because profile item 2 now admits only the
-    # entries it lists, which item 11's walk establishes.
-    PROFILE_FORMS_REMOVED = (
+        "git <prefix> rev-parse --git-dir",
+        "git <prefix> hash-object --no-filters -- '<path>'",
         "git <prefix> rev-parse --verify --quiet <pseudo-ref>",
         "git <prefix> rev-parse --git-path <name>",
     )
@@ -241,30 +263,33 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> blame --no-textconv <commit> -- '<path>'",
         "git <prefix> check-attr -z <attribute> -- '<path>'",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
+        HOOKS_FORM,
         "git <prefix> hash-object -- '<path>'",
-        UNFILTERED_HASHING,
-        *PROFILE_FORMS,
+        *WRITING_FORMS,
     )
-    # Finding F1: the forms only main runs, for its preparation; the table holds these and ROLE_FORMS and nothing else.
-    # Deviation D-2 adds the profile's forms, which only main's checks under item 6 use, and D-4 the hashing form
-    # without conversion.
+    # Finding F1: the forms only main runs; the table holds these and ROLE_FORMS and nothing else. Deviation D-6 keeps
+    # only the forms item 6's checks before the operation need and adds the hooks directory of item 4.4.
     MAIN_ONLY_FORMS = (
         "git <prefix> config --list --show-origin --show-scope --no-includes",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
+        HOOKS_FORM,
         "git <prefix> hash-object -- '<path>'",
-        UNFILTERED_HASHING,
         "git <prefix> rev-parse --verify <endpoint>^{commit}",
-        *PROFILE_FORMS,
+        *WRITING_FORMS,
     )
-    # Deviation D-2: the sentence that keeps the profile's forms to main's checks under item 6. It is not part of
-    # CONFINED, which the shell roles' paragraph carries word for word, because it names main's operations.
-    PROFILE_FORMS_MAIN_ONLY = (
-        "The forms for push URLs, the commit `HEAD` names, the parents of a commit, the stash ref, unmerged entries, "
-        "the assume-unchanged and skip-worktree bits, `.gitmodules` in a commit, the modes of claim files in a commit, "
-        "the Git directory and the index against a tree are for main's checks under Before add, commit, tag or push "
-        "only."
+    # Deviation D-6: the sentence that keeps the hooks-directory form to main's preparation and item 6's forms to main's
+    # checks. It is not part of CONFINED, which the shell roles' paragraph carries word for word, because it names main's
+    # operations.
+    MAIN_ONLY_SENTENCE = (
+        "The form for the hooks directory is for main's preparation only, and the forms for the commit `HEAD` names and "
+        "the index against a tree are for main's checks under Before add, commit, tag or push only."
     )
-    # Deviation D-3 (plan review of D-3, N-1): every form main runs under item 6 carries `--no-replace-objects`.
+    # Deviation D-6: the sentence that listed the forms of the removed operation profile.
+    MAIN_ONLY_SENTENCE_REMOVED = (
+        "The forms for push URLs, the commit `HEAD` names, the parents of a commit, the stash ref, unmerged entries,"
+    )
+    # Deviation D-3 (plan review of D-3, N-1), kept by D-6: every form main runs under item 6 carries
+    # `--no-replace-objects`.
     NO_REPLACE_OBJECTS_FORMS = (
         "Every form main runs under Before add, commit, tag or push, one a role also runs included, carries "
         "`--no-replace-objects` after the common prefix, as that section states."
@@ -326,7 +351,9 @@ class RepositorySafetyTests(unittest.TestCase):
         "A nested interpreter receives a path only as a separate positional argument, never inside code it evaluates.",
         "Loading any module, binary or configuration from the repository counts as executing repository code.",
     )
-    # Item 5 (D5, S10–S13, Q-S1, Q-S4).
+    # Deviation D-6: the exception D-2 had given approvals under item 6.
+    EXECUTION_EXCEPTION_REMOVED = "The only exception is a program the user approved by name"
+    # Item 5 (D5, S10–S13, Q-S1, Q-S4 as removed by D-6).
     EXECUTION = (
         "For a review (main's primary acceptance and every role's lint, type check, test or probe), main, reviewer, "
         "verifier and adversary execute repository code only when, in this session, the user has said that the repository "
@@ -335,11 +362,10 @@ class RepositorySafetyTests(unittest.TestCase):
         "INCONCLUSIVE.",
         "Main makes this one determination, asks whether the repository is trusted the first time a session needs to "
         "execute its code, and states the outcome in every brief of a role that may execute code.",
-        # Deviation D-2: the exception covers what an approved program loads, as item 6 states.
-        "The only exception is a program the user approved by name under Before add, commit, tag or push, for the "
-        "operation and content that approval covers, including what that program loads from the repository as it stood "
-        "at the answer and later changes written wholly by main or a role it dispatched in this session, as that section "
-        "states.",
+        # Deviation D-6: D5 no longer has an exception for programs the user approved under item 6; main's own operations
+        # are not a review and run the programs the user's configuration sets.
+        "Main's own `git add`, commit, tag and push under Before add, commit, tag or push are not a review and run the "
+        "programs the user's configuration sets, as that section states.",
         "Who wrote a change is decided only from what the user said in this conversation and the commits and edits main, "
         "or a role main dispatched, made in this session, never from Git metadata, a handoff or other repository "
         "content; a change of mixed origin counts as not written in this session.",
@@ -382,9 +408,12 @@ class RepositorySafetyTests(unittest.TestCase):
         "lists changes and establishes that the workspace equals the reviewed commit only with commands that read the "
         "index, objects and attributes and with reads under Paths and names, never with `git status`, a working-tree "
         "diff or another command that compares or refreshes the working tree;",
-        "records a snapshot of what item 2 read, the list of hooks under Before add, commit, tag or push and "
-        "`info/attributes`, and before every later dispatch and in every comparison of the workspace after a call reads "
-        "them again; a difference is reported and asked about before the next dispatch;",
+        # Deviation D-6: the hooks snapshot is defined by itself, no longer by a list under item 6.
+        "records a snapshot of what item 2 read, the hooks (the entries of the effective hooks directory, found with "
+        "`rev-parse --git-path hooks` and listed from file-system metadata as Paths and names reads, and the "
+        "`hook.<name>` keys of the configuration) and `info/attributes`, and before every later dispatch and in every "
+        "comparison of the workspace after a call reads them again; a difference is reported and asked about before the "
+        "next dispatch;",
         "compares the workspace after each call under the same restrictions as item 3.",
         "Before comparing any path under item 3, main checks the `filter` attribute of every path it will compare and, "
         "after the user has answered any question from item 2, reads the effective configuration with its includes to "
@@ -419,365 +448,120 @@ class RepositorySafetyTests(unittest.TestCase):
         "unexamined. When a review assignment's brief gives no allowlist, report it as a missing requirement instead of "
         "reading the repository."
     )
-    # Profile item 2 as revised for deviation D-3 (Adversarial review of C1, call 3, F-A; plan review of D-3, B1 and its
-    # advice): the top level of the Git directory admits only the entries the item lists, compared byte for byte and
-    # established with item 11's walk, and `HEAD` names a branch or is detached.
-    GIT_DIRECTORY = (
-        "The top level of the Git directory holds no entry other than these: the regular files `HEAD`, `config`, "
-        "`description`, `index`, `packed-refs`, `COMMIT_EDITMSG`, `ORIG_HEAD` and `FETCH_HEAD`; the directories "
-        "`objects`, `refs`, `logs`, `hooks` and `lfs`; the directory `info`, holding no entry other than the regular "
-        "files `exclude`, `attributes` and `refs`; and the directories `branches` and `remotes`, each with nothing in "
-        "it.",
-        "Any other entry puts the repository outside the profile, whoever placed it: an operation state, such as a "
-        "pseudo-ref `MERGE_HEAD`, `CHERRY_PICK_HEAD` or `REVERT_HEAD` or an entry `SQUASH_MSG`, `sequencer`, "
-        "`rebase-merge` or `rebase-apply`; other state such as `rr-cache`, `MERGE_RR`, `MERGE_MSG`, `AUTO_MERGE` or "
-        "`shallow`; a lock file; or a file another tool left there.",
-        "Git reads state files at the top of the Git directory during the four operations, and a commit can act on one "
-        "after its hooks have run, so a list of the entries to refuse cannot be shown complete, while this list admits "
-        "only entries from which a `git add`, commit, tag or push in the fixed forms runs no program other than those "
-        "the profile's other items name, and writes nothing outside the Git directory beyond what they check; what Git "
-        "records from the index is checked after a commit, as the check after a commit below describes.",
-        "Main establishes the entries with profile item 11's walk and compares their names byte for byte, so a name "
-        "that differs only in case is outside the profile.",
-        "`HEAD` is either detached or a symbolic ref whose target, as `symbolic-ref --quiet HEAD` reports it, which is "
-        "the last target of the whole chain of symbolic refs, is `refs/heads/<branch>` for a branch name that passes "
-        "the name rule of Paths and names, since a commit on an unborn branch creates its target wherever in the Git "
-        "directory that names.",
-        # Deviation D-4 (outcome verification of D-3, NB-5): no index entry carries the assume-unchanged or
-        # skip-worktree bit, established from the tags of `ls-files -z -v`.
-        "The index has no unmerged entry, and no entry carries the assume-unchanged or skip-worktree bit: in the output "
-        "of `ls-files -z -v`, every record's tag is `H` followed by a space, and any other tag or a record main cannot "
-        "parse puts the repository outside the profile, since `git add` does not stage the working-tree content of an "
-        "entry with either bit, and a commit would then record other content than main wrote.",
+    # Item 6 as revised for deviation D-6: under D1 the Git directory's own configuration and metadata are the user's
+    # own, so main runs the four operations in their fixed forms with the programs that configuration sets, without
+    # asking; the programs that can load an untrusted change, those taken from the working tree and a local push
+    # destination's hooks are residual risk; main skips hooks only when the user asks; and before the operation it runs
+    # only the version check and promisor detection, then establishes the claim paths and that a commit has something to
+    # commit. Every rule of the spec's item 6 is pinned whole here, in the order the section states it.
+    WRITING_CONFIGURED = (
+        "The Git directory's own configuration and metadata are the user's own, as Scope and assurance states, so main "
+        "runs `git add`, commit, tag and push with the programs that configuration sets, such as hooks and the frameworks "
+        "they start, filters, and signing, credential and transport programs, as the user's own Git commands would, "
+        "without asking."
     )
-    # Deviation D-4 (plan review of D-4, B2-r2 and B2-r3): profile item 8 refuses a name that equals a claim file's when
-    # ASCII letters are compared without regard to case.
-    CLAIM_NAME_CASE = (
-        "In the index listing, no entry's name differs from a claim file's name but equals it when ASCII letters are "
-        "compared without regard to case, and no two claim files' names are equal under that comparison, whatever "
-        "`core.ignorecase` says, since Git can then record a claim file's content under another name."
+    WRITING_RESIDUAL = (
+        "Those programs can load content from the working tree, including a change neither the user nor main wrote; that "
+        "is residual risk, which the READMEs state.",
+        "The same holds for a hook directory, an include or a program that the user's configuration takes from the "
+        "working tree, such as a `core.hooksPath` naming a tracked directory or an include of a tracked file, whose "
+        "content Scope and assurance places on the attacker's side, and for the hooks of a destination repository on "
+        "this machine that a push reaches, which run in that repository and which no skipping flag reaches; main runs "
+        "them as configured too, and that is residual risk as well.",
     )
-    # Deviation D-4 (plan review of D-4, B1, B2 and the findings of its later calls): the check after `git add`, its
-    # order, what it compares and its stop for the session, which security invariant item 8 states.
-    CHECK_AFTER_GIT_ADD = (
-        "After each `git add` under this rule, and before any later operation under this rule, main checks the result, "
-        "with the index entries listed from the top level with the index listing of Safe Git invocation immediately "
-        "before and after the add: the add exited 0; every entry whose name is not a claim file's name is unchanged, so "
-        "that no other entry was added, removed or altered; for each claim file that exists on disk, established from "
-        "file-system metadata with each component's directory entry matching the claim's name exactly, the index holds "
-        "exactly one entry of that name, compared byte for byte, at stage 0, whose mode is `100644` or `100755` and "
-        "equals the path's mode in the tree `HEAD` names, listed with the form for the modes of claim files in a commit, "
-        "when that tree has the path as a regular file, and is `100644` otherwise; for each claim file that does not "
-        "exist on disk, the index holds no entry of that name, and a claim file main can establish as neither existing "
-        "nor absent fails the check; and, only after those hold, for each claim file on disk whose path has no defined "
-        "filter driver, both in the attribute check before the add and in the same check repeated after it, the file "
-        "passes the checks of Paths and names that a hashed path passes, and the entry's object id equals either the "
-        "content hash main computes with the content-hashing form, which applies Git's own end-of-line conversion and "
-        "no program, or the hash of the file's unconverted bytes from that form with `--no-filters`.",
-        "For a path whose two attribute checks name the same approved driver, the object id is that filter's output and "
-        "is not compared; any other combination of the two checks fails.",
-        "A `git add` that exits other than 0, an exit status main cannot establish, or any other result means main "
-        "performs no further operation under this rule for the rest of the session and reports it, saying that the "
-        "index may now hold part of the claim's files, which a commit the user makes would also record, and that a "
-        "claim file ignore rules match is one cause; the claim then waits for the user as for an operation outside the "
-        "profile.",
+    WRITING_SETTINGS = (
+        "Every operation runs with the common prefix of Safe Git invocation, so fsmonitor is disabled with `-c "
+        "core.fsmonitor=` and no pager runs, with `--no-replace-objects`, and with `-c maintenance.auto=false -c "
+        "gc.auto=0 -c rerere.enabled=false`, because a commit otherwise starts `git maintenance run --auto` and replays "
+        "recorded resolutions through a configured merge driver.",
+        "A push also carries `-c push.gpgSign=false -c push.negotiate=false`.",
+        "These settings turn off the programs they name, even where the user's own configuration enables them; every "
+        "other program the user's configuration sets still runs.",
+        "Main skips hooks only when the user asks it to, and then tells the user that a push to a repository on this "
+        "machine still runs that repository's hooks.",
     )
-    # Deviation D-3: the item 2 that listed the operation states to refuse, which could not be shown complete.
-    GIT_DIRECTORY_REMOVED = (
-        "None of these operation states exists:",
-        "The Git directory holds no `rr-cache` and no `MERGE_RR`",
-        "*Operation state.*",
+    WRITING_BEFORE = (
+        "Before the first such operation in a session, even one that comes before any dispatch, main runs the version "
+        "check of Main's preparation and, of its item 2, only the detection of a promisor remote, and no command under "
+        "this rule reads an object before that detection; on Git older than 2.45.0 in a checkout with a promisor remote, "
+        "main does not perform the operation and tells the user they may run it themselves.",
+        "Main then establishes, with the common prefix and forms of Safe Git invocation and the metadata checks of Paths "
+        "and names, never with `git status`, a working-tree diff or another command that compares or refreshes the "
+        "working tree:",
+        "Each claim file's name passes the name rule of Paths and names, and no claim path is a gitlink in the index or a "
+        "directory on disk, since adding one can run the submodule's status.",
+        "For a commit, `git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff --no-textconv "
+        "<commit> --`, the index-against-a-tree form of Safe Git invocation, where `<commit>` is the commit `HEAD` names "
+        "or, for an unborn `HEAD`, the empty tree of the repository's object format, exits 1, so Git itself finds "
+        "something to commit with intent-to-add entries ignored.",
+        "On exit 0 main does not commit and reports it, and any other exit leaves the state not established, because a "
+        "commit with nothing to commit runs a status that refreshes each submodule's index and so runs that submodule's "
+        "own filters.",
+        "When main cannot establish these, it does not perform the operation and tells the user they may run it "
+        "themselves; the claim then waits for the user, as for a user instruction not to commit or push.",
+        "Safe Git invocation lists among main's preparation forms the reads this rule needs: `rev-parse --verify --quiet "
+        "HEAD` for the commit `HEAD` names or that it is unborn, the index listing, `ls-files --stage`, for gitlinks, "
+        "and the comparison of the index with a tree under Something to commit above.",
+        "Under this rule each of these reads carries `--no-replace-objects` after the common prefix, like the operations "
+        "themselves.",
     )
-    # Deviation D-4: the wording that D-4 extends, which no longer stands on its own: item 2's sentence that ended with
-    # unmerged entries, the `git add` row without the check after it, and the preparation forms' index listing that
-    # served only gitlinks and the check after a commit.
-    D4_REMOVED = (
-        "that names. The index has no unmerged entry.",
-        "| `git add` | the claim's files only, as safe names after `--` |",
-        "`ls-files --unmerged` for any conflict and the index listing, `ls-files --stage`, for gitlinks and for the "
-        "index entries the check after a commit compares;",
-        "`ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`, for that file;",
-    )
-    # Item 6's answer paragraph as revised for deviation D-3 (plan review of D-3, B1, N-1, N-2 and the advice and
-    # findings of its later calls): the check after a commit, its stop for the session, the residual risk of the
-    # programs that run under the answer before it or with none following, and `--no-replace-objects`.
-    CHECK_AFTER_COMMIT = (
-        "An index delivered with the repository can make a commit record content that profile item 9's comparison and "
-        "the listing of the index do not show.",
-        "So after each commit attempt under this rule that moves `HEAD`, whatever the commit's exit status, and before "
-        "any later operation under this rule, main compares the tree of the new commit, listed recursively from the "
-        "top of the tree with the tree listing of Safe Git invocation, with the index entries as listed after the "
-        "commit from the top level with its index listing, and checks with its form for the parents of a commit that "
-        "the new commit's only parent is the commit main recorded, or that it has none when `HEAD` was unborn.",
-        "Any difference, an intent-to-add entry included, or a result main cannot establish, means main performs no "
-        "further operation under this rule for the rest of the session and reports that the commit records content "
-        "main did not establish or that the index held an intent-to-add entry or an empty file it cannot tell apart "
-        "from one, naming every cause it cannot rule out, so the user can inspect the commit and run any further "
-        "operation themselves.",
-        "The report says that resetting `HEAD` alone may leave the cause in the index for the next commit, the user's "
-        "own included, and that the stop lasts only for this session, so the commit stays on the branch and a later "
-        "push of that branch sends it.",
-        "The programs that a `git add` or a commit attempt under this rule runs under the user's answer, their hooks, "
-        "filters and signing program, run before any check after a commit, and no check follows them when no commit "
-        "follows or the attempt does not move `HEAD`, so they can act on, or sign, content in the index, which a commit "
-        "records, before main has established it; that is residual risk, which the READMEs state, and the question "
-        "says so.",
-        "Every Git command main runs under this rule, the fixed forms and every read of the profile alike, carries "
-        "`--no-replace-objects` after the common prefix, so that replacement refs the repository supplies can neither "
-        "change what main's reads show nor make this check pass while a push sends the original objects.",
-    )
-    # Item 6 as revised for deviation D-2 (Adversarial review of C1, BROKEN, F1–F3; the plan reviews of D-2 and of the
-    # profile) and D-3: main adds, commits, tags or pushes only in a fixed form and only inside an operation profile that
-    # admits nothing it does not name, and leaves everything else for the user to run. Every rule of the spec's item 6
-    # is pinned whole here, in the order the section states it.
     WRITING = (
         "This rule adds a condition to main's existing authority under [review state](review-state.md)'s Commits "
         "before the passes and Repository authority; it grants no authority, and a tag still needs the user's "
         "authority for tagging.",
-        "Main performs `git add`, commit, tag or push only when the repository and the operation fall inside the "
-        "operation profile below, which admits nothing it does not name.",
-        "A setting, Git-directory entry or state outside the profile, or one main cannot establish, means main does "
-        "not perform the operation, names what fell outside the profile and tells the user they may run the "
-        "operation themselves.",
-        "Main never offers to run configuration it cannot identify as configured, since an answer to that would not "
-        "be an approval of named programs under the exception in Execution.",
-        "Inside the profile, the only programs the repository can choose that Git may run are the kinds the table "
-        "names, hooks, filters and signing programs, and each runs only under the user's answer for it by name.",
+        WRITING_CONFIGURED,
+        *WRITING_RESIDUAL,
         "Each operation runs only in its fixed form:",
-        # Deviation D-4: the check after `git add` follows each add.
-        "| `git add` | the claim's files only, as safe names after `--`, followed by the check after `git add` below | "
-        "hooks; filter drivers selected for any path in the index or being added | `-c core.hooksPath=` a directory outside the project with nothing in it, "
-        "and each `hook.<name>` the configuration defines disabled |",
-        # Deviation D-3: `--quiet` is required, since without it a commit prints a summary through a diff.
+        "| `git add` | the claim's files only, as safe names after `--` | `-c core.hooksPath=` a directory outside the "
+        "project with nothing in it, and each `hook.<name>` the configuration defines disabled |",
         "| commit | the whole argument list is the settings below, `-m` or `-F`, `--quiet`, which is required because "
-        "without it a commit prints a summary through a diff whose drivers the profile does not check, and the "
-        "skipping flags; no `-a`, `-i`, `-o`, pathspec, `--amend`, `--allow-empty`, `-e`, `-v`, `--status` or `--trailer` | hooks; "
-        "filter drivers selected for any path in the index; signing: `commit.gpgSign`, `gpg.program`, "
-        "`gpg.<format>.program`, `gpg.ssh.defaultKeyCommand` | as for `git add`, plus `--no-verify`, `--no-gpg-sign` "
-        "and `-c commit.gpgSign=false` |",
-        "| tag | annotated message by `-m` or `-F`, no editor | hooks; signing: `tag.gpgSign`, "
-        "`tag.forceSignAnnotated` and the signing programs above | as for `git add`, plus `--no-sign` and `-c "
+        "without it a commit prints a summary through a diff, and any skipping flags; no `-a`, `-i`, `-o`, pathspec, "
+        "`--amend`, `--allow-empty`, `-e`, `-v`, `--status` or `--trailer` | as for `git add`, plus `--no-verify`, "
+        "`--no-gpg-sign` and `-c commit.gpgSign=false` |",
+        "| tag | annotated message by `-m` or `-F`, no editor | as for `git add`, plus `--no-sign` and `-c "
         "tag.gpgSign=false -c tag.forceSignAnnotated=false` |",
         "| push | one remote named by main and an explicit refspec for each ref, with `--no-follow-tags`, "
-        "`--recurse-submodules=no` and `--no-signed` | hooks; and, not a program, every effective push URL of that "
-        "remote and each ref it updates | as for `git add`, plus `--no-verify` |",
-        "Every operation runs with the common prefix of Safe Git invocation, so fsmonitor is disabled with `-c "
-        "core.fsmonitor=` and no pager runs, with `--no-replace-objects`, as the check after a commit below "
-        "explains, and with `-c maintenance.auto=false -c gc.auto=0 -c "
-        "rerere.enabled=false`, because a commit otherwise starts `git maintenance run --auto`, whose garbage "
-        "collection can run a program such as `gc.recentObjectsHook`, and replays recorded resolutions through a "
-        "configured merge driver whenever the Git directory holds `rr-cache`.",
-        "A push also carries `-c push.gpgSign=false -c push.negotiate=false`, because signing a push runs the "
-        "signing program and negotiation starts a `git fetch` that reads a remote section named by the push URL "
-        "itself.",
-        "These settings stay as a second line of defence even where the profile already excludes what they guard "
-        "against, and a setting the user's own configuration enables is disabled by them too.",
-        "Before every such operation, including one that comes before the session's first dispatch, and after the "
-        "version check of Main's preparation, main first reads the local and worktree configuration without "
-        "includes, and an `include.*` or `includeIf.*` key there puts the repository outside the profile before Git "
-        "follows any include.",
-        "It then makes the checks of Main's preparation item 2 on the configuration read without includes, and any "
-        "condition that item would ask the user about puts the repository outside the profile, so main reports it "
-        "instead of asking.",
-        "Main then runs that item's detection of a promisor remote, and only then establishes the rest of the "
-        "profile, the state its answer depends on and what the operation will write.",
-        "No object is read and nothing else of the profile is established before that detection, so the checks "
-        "before it can only find the repository outside the profile.",
-        "Main does all of this with the common prefix and forms of Safe Git invocation and the metadata checks of "
-        "Paths and names, never with `git status`, a working-tree diff or another command that compares or refreshes "
-        "the working tree.",
-        "The repository and the operation are inside the profile only when all of these hold:",
-        "The version check of Main's preparation has run.",
-        "Git's top-level directory is the project, and its Git directory is the project's own `.git` directory, not "
-        "a gitfile, with no `commondir`, no `worktrees` entry, no `objects/info/alternates`, no file under `remotes` "
-        "or `branches` and no `modules` directory.",
-        "The index holds no gitlink and the tree `HEAD` names has no `.gitmodules`.",
-        "No promisor remote is declared, so a partial clone is outside the profile on every Git version.",
-        "Linked worktrees, alternates, partial clones and submodules are deferred to later work.",
-        *GIT_DIRECTORY,
-        "Read first without includes, so that Git follows none, and then with origins and scopes, the local and "
-        "worktree configuration has no `include.*` or `includeIf.*` key, and every key in it is one of these, with a "
-        "value of the kind stated: `core.repositoryformatversion` 0 or 1; `extensions.objectformat` `sha1` or "
-        "`sha256`, and no other `extensions.*` key; `core.bare` false; `core.filemode`, `core.symlinks`, "
-        "`core.ignorecase`, `core.precomposeunicode` and `core.longpaths`, booleans; `core.logallrefupdates`, a "
-        "boolean or `always`; `core.autocrlf`, a boolean or `input`; `core.eol`, `lf`, `crlf` or `native`; "
-        "`core.safecrlf`, a boolean or `warn`; `core.hooksPath`, a relative path that passes the name rule of Paths "
-        "and names and names a path inside the project that, when it exists, is a directory, whose hooks are named "
-        "like any other; `remote.<name>.url` and `remote.<name>.pushurl`, and `remote.<name>.fetch` only as "
-        "`+refs/heads/*:refs/remotes/<name>/*`, or `+refs/heads/<branch>:refs/remotes/<name>/<branch>` as a "
-        "single-branch clone writes it, for the same name and a branch name that passes the name rule, since a push "
-        "updates local tracking refs through it; `branch.<name>.remote` and `branch.<name>.merge`, for names that "
-        "pass the name rule, `branch.<name>.remote` naming such a remote and `branch.<name>.merge` a ref name that "
-        "passes it; and, as data the four operations do not act on, `remote.<name>.prune`, "
-        "`remote.<name>.gh-resolved`, `branch.<name>.rebase`, `branch.<name>.vscode-merge-base`, `pull.rebase`, "
-        "`pull.ff` and `lfs.repositoryformatversion`; and `user.name` and `user.email`, which a commit or tag records "
-        "as its author, committer or tagger identity and which select no program.",
-        "Any other key, such as one under `url.`, `http.`, `credential.`, `alias.`, `hook.`, `filter.`, `gc.`, "
-        "`maintenance.`, `rerere.`, `push.`, `gpg.`, `commit.`, `tag.`, `submodule.` or `remote.<name>.vcs`, "
-        "`core.sshCommand`, `core.askPass`, `core.fsmonitor` or `core.worktree`, puts the repository outside the "
-        "profile.",
-        "The user's global and system configuration are trusted, as Scope and assurance states, but a setting there "
-        "that names a program or file by a relative path or by a path inside the project makes Git run or load "
-        "repository content, and an include there whose file lies inside the project brings repository content into "
-        "that configuration.",
-        "Main checks these settings in the global and system configuration: `core.hooksPath`, `core.attributesFile`, "
-        "`core.excludesFile`, every `include.path` and `includeIf.<condition>.path`, every `filter.<driver>.clean`, "
-        "`.smudge` and `.process`, `gpg.program`, `gpg.<format>.program`, `gpg.ssh.defaultKeyCommand`, every "
-        "`credential.helper` and `credential.<url>.helper`, `core.askPass` and `core.sshCommand`, taking the first "
-        "word of a command; any other key is trusted and its effects are residual risk.",
-        "A hook, filter or signing program reached this way is named like any other; any other program reached this "
-        "way, and any such include, puts the repository outside the profile.",
-        "A path embedded later in a command string, such as an `ssh -F` argument, and a conditional include in that "
-        "configuration whose condition the repository can satisfy, such as `hasconfig:remote.*.url:`, `onbranch:` or "
-        "`gitdir:`, bringing in another file of the user's own, are residual risk, which the READMEs state.",
-        "The hooks are the files not ending in `.sample` in the effective hooks directory, with `core.hooksPath` "
-        "from any scope applied, and the hooks the configuration of any scope defines under `hook.<name>`; main "
-        "names every one of them.",
-        "A `core.hooksPath` naming a directory that does not exist, as before a hook manager is installed, means no "
-        "hook from it.",
-        "For every path in the index and every path being added, main resolves the `filter` attribute with Git's own "
-        "attribute check, which applies the tracked `.gitattributes` files, `info/attributes` and the attributes "
-        "file the configuration names.",
-        "Each path whose filter names a driver defined in any scope, such as Git LFS defined in the user's global "
-        "configuration, has its driver named.",
-        "When the configuration of any scope enables signing for a commit or tag, main names the signing program, "
-        "which is the default `gpg`, `gpgsm` for the X.509 format or `ssh-keygen` for the SSH format, when none is "
-        "configured.",
-        "Each claim file's name passes the name rule of Paths and names, and no claim path is a gitlink in the index "
-        "or a directory on disk, since adding one can run the submodule's status.",
-        CLAIM_NAME_CASE,
-        "For a commit, `git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff "
-        "--no-textconv <commit> --`, the index-against-a-tree form of Safe Git invocation, where `<commit>` is the "
-        "commit `HEAD` names or, for an unborn `HEAD`, the empty tree of the repository's object format, exits 1, so "
-        "Git itself finds something to commit with intent-to-add entries ignored.",
-        "On exit 0 main does not commit and reports it, and any other exit leaves the state not established, because "
-        "a commit with nothing to commit runs a status that refreshes each submodule's index and so runs that "
-        "submodule's own filters.",
-        "For a push, the remote's name passes the name rule of Paths and names and the remote is defined in the "
-        "local configuration.",
-        "Main resolves every effective push URL of that remote, after any `insteadOf` and `pushInsteadOf` rewriting "
-        "the trusted configuration applies, and every URL, as a whole string, has one of two shapes: `https://` or "
-        "`ssh://`, in exact lower case, then an authority of `host` or `user@host`, then `/` and a path; or the "
-        "scp-like `user@host:path`, in which `user@` is required, so that no drive-letter path such as `c:repo` or "
-        "`c:/dir` matches.",
-        "In both, the whole URL holds only ASCII letters, digits and `.`, `_`, `-`, `~` and `/`, besides the "
-        "scheme's `://`, at most one `@`, which ends `user`, and, in the scp-like shape only, the one `:` after the "
-        "host, so it carries no port, query, fragment, percent-encoding, backslash, whitespace or second `@`; `user` "
-        "begins with an ASCII letter or digit and holds only ASCII letters, digits, `.`, `_` and `-`; and the host "
-        "is at least two characters, made of dot-separated labels that each begin with an ASCII letter and hold only "
-        "ASCII letters, digits and hyphens, with no trailing dot, and is none of the loopback names `localhost`, "
-        "`localhost.localdomain`, `ip6-localhost`, `ip6-loopback` and `host.docker.internal`, no name ending in "
-        "`.localhost` and none of this machine's names, compared without regard to case.",
-        "This machine's names are the name the operating system's own `hostname` command reports, that name followed "
-        "by `.local`, and its fully qualified name when the system reports one.",
-        "These shapes exclude every IP literal however it is spelled.",
-        "Any other destination, such as a local path, a `file://` URL or a `<transport>::` remote-helper address, "
-        "can make Git run on this machine programs the profile does not name, such as the receive hooks of a "
-        "repository at that path, so it is outside the profile and the user's answer cannot override this.",
-        "No entry anywhere in the Git directory, the `.git` directory itself included, is a symbolic link, junction "
-        "or reparse point of any kind, and every entry anywhere in it is a directory or a regular file, so a socket, "
-        "FIFO or device puts the repository outside the profile; outside `objects`, every regular file has a link "
-        "count of 1.",
-        "Main establishes this with a walk of the whole Git directory using the metadata checks of Paths and names, "
-        "following no link and applying the link-count rule only outside `objects`.",
-        "Hard links under `objects`, which a local clone makes, are allowed, because Git writes new object files and "
-        "never writes content into an existing one.",
-        "Git creates `index`, `HEAD`, refs and `packed-refs` through a lock file it then renames, which a link at "
-        "the final name does not redirect but a directory link does, and it opens `COMMIT_EDITMSG` and the reflogs "
-        "under `logs` for writing in place without refusing a link, and a commit writes `COMMIT_EDITMSG` even with "
-        "`-m`; so a planted link would make main's own operation overwrite or append to a file outside the project "
-        "with text the local configuration supplies.",
+        "`--recurse-submodules=no` and `--no-signed` | as for `git add`, plus `--no-verify` |",
+        *WRITING_SETTINGS,
         "A message main passes with `-F` is a file main writes in its own scratch directory outside the project; "
         "before the operation, each component of its path below the scratch directory passes the link check of Paths "
         "and names, it is a regular file with a link count of 1, and its canonical path lies inside the scratch "
         "directory's canonical path; the requirement of Paths and names that a canonical path lie inside the "
         "project, which covers review reads, does not apply to it.",
-        "Safe Git invocation lists among main's preparation forms every read the profile needs: the configuration "
-        "reads with origins and scopes; `remote get-url --push --all <remote>` for the push URLs; `symbolic-ref "
-        "--quiet HEAD` and `rev-parse --verify --quiet HEAD` for the commit `HEAD` names or that it is unborn; "
-        # Deviation D-4: the forms the bits, profile item 8 and the check after `git add` read.
-        "`rev-parse --verify --quiet refs/stash` for the stash ref; `ls-files --unmerged` for any conflict, `ls-files "
-        "-z -v` for the assume-unchanged and skip-worktree bits, and the index listing, `ls-files --stage`, for "
-        "gitlinks, for the index entries the check after a commit compares, for the listings immediately before and "
-        "after each `git add` and for profile item 8's comparison of names, each listed from the top level; `ls-tree` "
-        "of the tree `HEAD` names, restricted to `.gitmodules`, for that file, and restricted to the claim files, for "
-        "their modes in the check after `git add`; the content-hashing form, and that form with `--no-filters`, for "
-        "each claim file whose path has no filter driver named, in that check, after the file passes the checks of "
-        "Paths and names, whose metadata reads, which follow no link, also establish each component's directory entry; "
-        "the tree listing, `ls-tree -r`, of the new commit and `rev-parse --verify --quiet` of its first and second parent for the check after a "
-        "commit, with the index entries listed after the commit; the attribute check for filters; the comparison of "
-        "the index with a tree in profile item 9; and `rev-parse --git-dir` for the Git directory.",
-        "Under this rule each of these reads carries `--no-replace-objects` after the common prefix, as the check "
-        "after a commit says.",
-        "Main then establishes the Git directory's entries, with their names, types, link counts and directory "
-        "entries, from file-system metadata without following links and without reading content, as profile item "
-        "11's walk does, in a script outside the project run with `python -I` that receives the path on standard "
-        "input and not as an argument, since that path comes from command output.",
-        "This machine's names for profile item 10 come from the operating system's own `hostname` command, which is "
-        "not a Git command and reads nothing from the repository.",
-        "A host name that resolves to this machine is not detected and is residual risk, which the READMEs state: an "
-        "attacker can choose a public DNS name that resolves to a loopback address, the hosts file or the user's own "
-        "SSH configuration can map a name to this machine, trusted transport settings such as `http.proxy` or "
-        "`core.sshCommand` can direct the connection here, and an HTTP server can redirect the push here, so the "
-        "remaining defence against a push that runs this machine's receive hooks through such a name is that this "
-        "machine runs no SSH or HTTP Git server reachable that way.",
-        "The profile was established from Git 2.43's documentation and source and checked by the 0.21.0 release's outcome verification "
-        "with that release's installed Git; behaviour of other Git versions from 2.32 on that the profile does not anticipate "
-        "is residual risk, which the READMEs state.",
-        "When the profile admits the operation and names programs, main names each program with the SHA-256 of its "
-        "content, read under Paths and names (a hook file, or the repository file a configured command names; for a "
-        "configured command naming no repository file, its command string), and for a push the destination URL and "
-        "refs, and asks the user to choose one of three answers:",
-        "This is the user's approval of those programs under the exception in Execution.",
-        "This is the user's explicit permission to skip hooks, and main offers it only when every named hook can be "
-        "disabled on the installed Git as the table shows.",
-        "This leaves the claim blocked as for a user instruction not to commit or push.",
-        "Filters and the destination cannot be skipped, because skipping would change what is written or where it is "
-        "sent, so for them the choices are only run or not perform.",
-        "When nothing is named and the operation is a push, main still asks about the destination.",
-        "When main cannot establish a program, its content or the effective destination, the operation is outside "
-        "the profile.",
-        "The answer covers exactly the programs, contents and destination main named, for the rest of the session; "
-        "when a later operation's names, a content hash or the destination differs, main asks again.",
-        "A content hash identifies only the file named, while a program may load other repository content, such as a "
-        "hook framework's configuration or a script's modules, so the question says the answer also covers what "
-        "those programs load from the repository as it stands at the answer, plus later changes written wholly by "
-        "main or a role it dispatched in this session, under the rule in Execution for who wrote a change.",
-        "The question also says that a named hook may send content to a destination profile item 10 does not check, "
-        "such as an LFS pre-push hook uploading to the server a tracked `.lfsconfig` names.",
-        "Main records, at the answer and after each of its own operations under this rule, the commit `HEAD` names, "
-        "or that it is unborn, and the stash ref, and asks again before an operation when any of these holds:",
-        "`HEAD` differs from the last commit main recorded;",
-        "the stash ref has changed since main recorded it;",
-        "what the operation will write includes staged content that main or a role in this session did not write, "
-        "which a commit would record and so make part of the recorded state;",
-        "main cannot establish any of this state, in which case it does not rely on the answer;",
-        "main ran, or was told of, a command since the answer that brought content into the index, the working tree "
-        "or the project's untracked files without being written by main or a role in this session, such as a merge, "
-        "cherry-pick, revert, stash apply or pop, a checkout or restore of paths, `git apply`, a submodule update or "
-        "a dependency install.",
-        *CHECK_AFTER_GIT_ADD,
-        *CHECK_AFTER_COMMIT,
-        "An operation's state, a pseudo-ref `MERGE_HEAD`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, an unmerged index "
-        "entry, or an entry `SQUASH_MSG`, `sequencer`, `rebase-merge` or `rebase-apply` in the Git directory, puts "
-        "the repository outside the profile under profile item 2, like any other entry that item does not admit, so "
-        "a conflicted merge stops the operation even when main's own commit would be what finally moves `HEAD`.",
-        "A change main can neither see in that state nor learn of, such as an edit made in another terminal, is "
-        "residual risk, which the READMEs state.",
-        "When an operation is outside the profile, the claim waits for the user to perform it, as for a user "
-        "instruction not to commit or push; the user's own commit then moves `HEAD`, so main's next operation under "
-        "this rule asks again.",
-        "The answer does not cross sessions and is not written into a handoff.",
+        *WRITING_BEFORE,
     )
-    # Item 6: the profile's eleven items, in order.
-    PROFILE_LABELS = ("Git and layout", "Git-directory entries and operation state", "Local configuration",
-                      "Trusted configuration that reaches into the repository", "Hooks", "Filters", "Signing",
-                      "Claim paths", "Something to commit", "Push destination", "No write through a link")
-    # Item 6: the three answers inside the profile.
-    ANSWERS = ("Run them as named.", "Skip hooks and signing.", "Do not perform the operation.")
-    # Deviation D-2: the wording that listed transport settings by namespace and offered to run them as configured, and
-    # the promisor sentence that offered choices on an older Git, are gone from the reference.
+    # Item 6: the checks before the operation, in order.
+    BEFORE_LABELS = ("Claim paths", "Something to commit")
+    # Deviation D-6: the wording of the operation profile (deviations D-2 to D-4), its answers and its checks after
+    # `git add` and after a commit, gone from the reference, together with the wording deviation D-2 had removed
+    # earlier.
     WRITING_REMOVED = (
+        "operation profile",
+        "outside the profile",
+        "the profile",
+        "**The profile.**",
+        "**The check after `git add`.**",
+        "**The check after a commit.**",
+        "The check after a commit",
+        "the check after `git add`",
+        "Programs main names for the user's answer",
+        "for the user's answer",
+        "Run them as named.",
+        "Skip hooks and signing.",
+        "Do not perform the operation.",
+        "the exception in Execution",
+        "approved by name",
+        "SHA-256",
+        "Git-directory entries and operation state",
+        "Push destination",
+        "No write through a link",
+        "This machine's names",
+        "A host name that resolves to this machine",
+        "established from Git 2.43's documentation",
+        "asks again before an operation when any of these holds",
+        "The answer does not cross sessions",
+        "assume-unchanged",
+        "case-variant",
         "Before every such operation, including one that comes before the session's first dispatch, main detects a "
         "promisor remote as item 2 of Main's preparation describes; when there is one, on Git 2.45.0 or later the "
         "operation carries `--no-lazy-fetch`, and on an older Git main does not perform it and reports that item's "
@@ -785,8 +569,6 @@ class RepositorySafetyTests(unittest.TestCase):
         "main runs it only in its fixed form and first lists what the repository's local Git metadata lets it run or "
         "use:",
         "The push settings are listed by namespace, not by key,",
-        "every setting in the local or worktree scope under `remote.<name>.*`, `url.*`, `http.*`, `credential.*`, "
-        "`ssh.*`, `protocol.*` and `push.*`, and `core.sshCommand`, `core.askPass` and `core.gitProxy`",
         "Filters, transport settings and the destination cannot be skipped",
         "Run them as configured.",
         "When the list is not empty, main names each program",
@@ -795,6 +577,14 @@ class RepositorySafetyTests(unittest.TestCase):
     def test_the_reference_states_its_scope_threat_model_and_assurance(self):
         self.assertTrue(read(REFERENCE).startswith("# Repository safety\n"))
         self.assert_pinned({"reference#Scope and assurance": self.SCOPE})
+        # Deviation D-6: the threat model is stated as D1 does, in one paragraph, and the earlier one is gone.
+        paragraph = next(p for p in self.source("reference#Scope and assurance").split("\n\n")
+                         if p.startswith("The reviewed repository's working tree"))
+        self.assertEqual(paragraph, " ".join(self.THREAT))
+        reference = " ".join(read(REFERENCE).split())
+        for phrase in self.THREAT_REMOVED:
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, reference)
 
     def test_the_reference_gives_the_common_prefix_once_with_its_rules(self):
         section = self.source("reference#Safe Git invocation")
@@ -811,11 +601,6 @@ class RepositorySafetyTests(unittest.TestCase):
         section = self.source("reference#Safe Git invocation")
         rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| ---")][1:]
         spans = [span for row in rows for span in re.findall(r"`(git [^`]*)`", row)]
-        # Deviation D-4: the rows for content hashing and claim files' modes name main's check after `git add`, the
-        # operation, not a form.
-        mentions = [row.split(" | ", 1)[0] for row in rows if "`git add`" in row]
-        self.assertEqual(mentions, ["| Content hashing", "| Modes of claim files in a commit"])
-        spans = [span for span in spans if span != "git add"]
         self.assertGreaterEqual(len(spans), len(self.FORMS))
         for span in spans:
             with self.subTest(span=span):
@@ -947,14 +732,12 @@ class RepositorySafetyTests(unittest.TestCase):
                         "blame", "attribute checks"):
             with self.subTest(purpose=purpose):
                 self.assertIn(purpose, role)
-        self.assertIn("content hashing for main's preparation and its check after `git add` only, and a role never runs "
-                      "`hash-object`.", main)
+        self.assertIn("content hashing are for main's preparation only, and a role never runs `hash-object`.", main)
         hashing = next(row for row in rows if row.startswith("| Content hashing |"))
-        self.assertIn("only under Main's preparation and in the check after `git add`", hashing)
-        # Deviation D-4: the row holds both hashing forms, and the wording that kept hashing to the preparation alone
-        # is gone.
-        self.assertEqual(re.findall(r"`(git <prefix> [^`]*)`", hashing),
-                         ["git <prefix> hash-object -- '<path>'", self.UNFILTERED_HASHING])
+        self.assertIn("only under Main's preparation", hashing)
+        # Deviation D-6: the row and the sentence are back to their text before deviation D-4, with one hashing form.
+        self.assertEqual(hashing, "| Content hashing | `git <prefix> hash-object -- '<path>'`, never with `-w`, only under "
+                                  "Main's preparation |")
         for phrase in self.HASHING_REMOVED:
             with self.subTest(removed=phrase):
                 self.assertNotIn(phrase, reference)
@@ -971,51 +754,58 @@ class RepositorySafetyTests(unittest.TestCase):
     def test_the_reference_states_mains_checks_before_add_commit_tag_or_push(self):
         self.assert_pinned({"reference#Before add, commit, tag or push": self.WRITING})
         section = self.source("reference#Before add, commit, tag or push")
-        for label in self.ANSWERS:
-            self.assertIn(f"- **{label}**", section)
-        # The profile's items are numbered 1 to 11 in the order the spec gives them, each with its label.
+        # The checks before the operation are numbered in the order the spec gives them, each with its label.
         items = re.findall(r"^(\d+)\. \*([^*]+)\.\* ", section, re.M)
-        self.assertEqual(items, [(str(n), label) for n, label in enumerate(self.PROFILE_LABELS, 1)])
-        # The table has the spec's columns and one row for each of the four operations, and nothing else.
-        self.assertIn("\n| Operation | Fixed form | Programs main names for the user's answer | How hooks and signing are "
-                      "skipped when the user chooses to skip |\n", section)
+        self.assertEqual(items, [(str(n), label) for n, label in enumerate(self.BEFORE_LABELS, 1)])
+        self.assertIn("\n**Before the operation.** ", section)
+        # The table has the spec's three columns and one row for each of the four operations, and nothing else.
+        self.assertIn("\n| Operation | Fixed form | How hooks and signing are skipped when the user asks to skip them |\n"
+                      "| --- | --- | --- |\n", section)
         rows = [line for line in section.splitlines()
                 if line.startswith("| ") and not line.startswith(("| ---", "| Operation |"))]
         self.assertEqual([row.split(" | ", 1)[0] for row in rows], ["| `git add`", "| commit", "| tag", "| push"])
+        for row in rows:
+            with self.subTest(row=row[:20]):
+                self.assertEqual(row.count(" | "), 2)
 
-    def test_the_profile_admits_nothing_it_does_not_name_and_checks_in_order(self):
-        """Deviation D-2, regression for the Adversarial review of C1 (BROKEN, F1–F3) and the plan reviews of D-2: the
-        operation runs only in its fixed form with the disabling settings; the include keys are refused before Git
-        follows any include, item 4.2's conditions are reported rather than asked about, and nothing else is established
-        before promisor detection; nothing outside the profile is offered to run as configured, and no lazy-fetch choice
-        remains for these operations, since a promisor remote puts the repository outside the profile."""
+    def test_main_runs_the_fixed_forms_with_the_users_programs_and_skips_hooks_only_when_asked(self):
+        """Deviation D-6, item 6: main runs `git add`, commit, tag and push with the programs the user's configuration
+        sets, without asking, only in the fixed forms that turn off fsmonitor, the pager, maintenance and rerere, and
+        for a push signing and negotiation; the residual risks stand in the section; hooks are skipped only when the
+        user asks, with the note about a local push destination; and the operation profile, its answers and its checks
+        after `git add` and after a commit are gone (abuse check: no sentence offers the user an answer or names the
+        removed checks, so no removed rule can be read as still in force)."""
         section = self.source("reference#Before add, commit, tag or push")
         flat = " ".join(section.split())
-        order = ("after the version check of Main's preparation",
-                 "main first reads the local and worktree configuration without includes",
-                 "puts the repository outside the profile before Git follows any include",
-                 "It then makes the checks of Main's preparation item 2",
-                 "so main reports it instead of asking",
-                 "Main then runs that item's detection of a promisor remote",
-                 "and only then establishes the rest of the profile")
-        positions = [flat.index(phrase) for phrase in order]
-        self.assertEqual(positions, sorted(positions))
-        # The disabling settings stay as a second line of defence, and the push's fixed form refuses to sign.
-        for setting in ("`-c maintenance.auto=false -c gc.auto=0 -c rerere.enabled=false`",
-                        "`-c push.gpgSign=false -c push.negotiate=false`", "`-c core.fsmonitor=`"):
+        # The disabling settings, `--no-replace-objects` and the push's refusal to sign are part of every fixed form.
+        for setting in ("`-c core.fsmonitor=`", "and no pager runs", "with `--no-replace-objects`",
+                        "`-c maintenance.auto=false -c gc.auto=0 -c rerere.enabled=false`",
+                        "`-c push.gpgSign=false -c push.negotiate=false`"):
             with self.subTest(setting=setting):
                 self.assertIn(setting, flat)
         push = next(line for line in section.splitlines() if line.startswith("| push |"))
-        fixed_form, programs, skipping = push.strip("| ").split(" | ")[1:]
+        fixed_form, skipping = push.strip("| ").split(" | ")[1:]
         self.assertIn("`--no-signed`", fixed_form)
-        self.assertIn("not a program, every effective push URL of that remote", programs)
         self.assertEqual(skipping, "as for `git add`, plus `--no-verify`")
-        # A partial clone is outside the profile on every Git version, so the section offers no lazy fetch and no
-        # choice that depends on the Git version.
-        self.assertNotIn("--no-lazy-fetch", section)
-        self.assertNotRegex(section, r"older (?:Git|than)")
-        self.assertIn("so a partial clone is outside the profile on every Git version.", flat)
-        # The removed wording is gone, and "as configured" appears only where it is refused.
+        commit = next(line for line in section.splitlines() if line.startswith("| commit |"))
+        self.assertIn("`--quiet`, which is required because without it a commit prints a summary through a diff,", commit)
+        # Main runs the configured programs without asking, and the section asks the user nothing; the only way hooks are
+        # skipped is the user's own request.
+        self.assertIn("as the user's own Git commands would, without asking.", self.WRITING_CONFIGURED)
+        self.assertNotRegex(flat, r"\basks? the user\b|\bthe user's answer\b|\bapprov")
+        skipping_sentences = [s for s in self.sentences(section) if re.search(r"\bskips?\b", s) and "|" not in s]
+        self.assertEqual(skipping_sentences, [self.WRITING_SETTINGS[3]])
+        self.assertIn("Main skips hooks only when the user asks it to,", skipping_sentences[0])
+        # The residual risks: programs that can load an untrusted change, those taken from the working tree and the
+        # hooks of a local push destination, which no skipping flag reaches.
+        for clause in ("including a change neither the user nor main wrote; that is residual risk",
+                       "a `core.hooksPath` naming a tracked directory or an include of a tracked file",
+                       "the hooks of a destination repository on this machine that a push reaches, which run in that "
+                       "repository and which no skipping flag reaches;"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, " ".join(self.WRITING_RESIDUAL))
+        # Nothing of the operation profile, its answers or its checks after `git add` and after a commit remains in the
+        # reference.
         reference = " ".join(read(REFERENCE).split())
         for phrase in self.WRITING_REMOVED:
             with self.subTest(removed=phrase[:60]):
@@ -1024,294 +814,74 @@ class RepositorySafetyTests(unittest.TestCase):
         self.assertEqual(len(configured), 2, configured)
         for sentence in configured:
             with self.subTest(sentence=sentence[:60]):
-                self.assertRegex(sentence, r"never offers to run configuration it cannot identify as configured|"
+                self.assertRegex(sentence, r"main runs them as configured too, and that is residual risk as well\.$|"
                                            r"There is no choice to proceed as configured")
-        # Every sentence of the section that names an answer or a choice keeps a named program or the destination as
-        # its object, never configuration main could not identify; the check after `git add` names a filter driver the
-        # user approved by name.
-        for sentence in self.sentences(section):
-            if re.search(r"\bapprov", sentence):
-                with self.subTest(sentence=sentence[:60]):
-                    self.assertRegex(sentence, r"named programs|programs under the exception|never offers|"
-                                               r"^For a path whose two attribute checks name the same approved driver,")
 
-    def test_the_profile_reads_only_the_forms_safe_git_invocation_lists_for_main(self):
-        """Deviation D-2 (F2 and the plan review's R2): every read the profile needs is one of main's preparation forms,
-        each with the common prefix, and no role runs them."""
+    def test_main_detects_a_promisor_remote_before_any_object_read_under_the_rule(self):
+        """Deviation D-6, item 6 and item 8: before the first operation main runs only the version check and promisor
+        detection, reads no object before it, on an older Git with a promisor remote performs nothing, and only then
+        establishes the claim paths and that a commit has something to commit, with the listed forms only."""
+        section = self.source("reference#Before add, commit, tag or push")
+        flat = " ".join(section.split())
+        order = ("main runs the version check of Main's preparation",
+                 "only the detection of a promisor remote",
+                 "no command under this rule reads an object before that detection",
+                 "main does not perform the operation and tells the user they may run it themselves.",
+                 "Main then establishes,",
+                 "1. *Claim paths.*",
+                 "2. *Something to commit.*",
+                 "When main cannot establish these,")
+        positions = [flat.index(phrase) for phrase in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("on Git older than 2.45.0 in a checkout with a promisor remote, main does not perform the "
+                      "operation", self.WRITING_BEFORE[0])
+        self.assertIn("never with `git status`, a working-tree diff or another command that compares or refreshes the "
+                      "working tree:", self.WRITING_BEFORE[1])
+        # Item 2 names the same comparison form the table lists.
+        self.assertIn(f"`{self.WRITING_FORMS[1]}`", section)
+
+    def test_item_6_reads_only_the_forms_safe_git_invocation_lists_for_main(self):
+        """Deviation D-6 (and D-2's F2): every read item 6 needs is one of main's forms, each with the common prefix,
+        no role runs them, and the forms only the removed profile and its checks used are gone."""
         git = self.source("reference#Safe Git invocation")
-        self.assert_whole_sentence(self.PROFILE_FORMS_MAIN_ONLY, git)
-        for form in self.PROFILE_FORMS:
+        self.assert_whole_sentence(self.MAIN_ONLY_SENTENCE, git)
+        for form in (*self.WRITING_FORMS, self.HOOKS_FORM):
             with self.subTest(form=form):
                 self.assertIn(f"`{form}`", git)
                 self.assertNotIn(form, RoleRepositorySafetyTests.PARAGRAPH)
-        self.assertIn("with `--global` and with `--system` for Before add, commit, tag or push", git)
         section = self.source("reference#Before add, commit, tag or push")
-        paragraph = next(p for p in section.split("\n\n")
-                         if p.startswith("Safe Git invocation lists among main's preparation forms every read"))
-        # The paragraph names each form by the words that identify it in the table.
-        named = {
-            "`remote get-url --push --all <remote>`": self.PROFILE_FORMS[0],
-            "`symbolic-ref --quiet HEAD`": self.PROFILE_FORMS[1],
-            "`rev-parse --verify --quiet HEAD`": self.PROFILE_FORMS[2],
-            "`rev-parse --verify --quiet refs/stash`": self.PROFILE_FORMS[3],
-            "`rev-parse --verify --quiet` of its first": self.PROFILE_FORMS[4],
-            "and second parent for the check after a commit": self.PROFILE_FORMS[5],
-            "`ls-files --unmerged`": self.PROFILE_FORMS[6],
-            "`ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`": self.PROFILE_FORMS[7],
-            "`rev-parse --git-dir` for the Git directory": self.PROFILE_FORMS[8],
-            "the comparison of the index with a tree in profile item 9": self.PROFILE_FORMS[9],
-            "`ls-files -z -v` for the assume-unchanged and skip-worktree bits": self.PROFILE_FORMS[10],
-            "and restricted to the claim files, for their modes in the check after `git add`": self.PROFILE_FORMS[11],
-        }
-        self.assertEqual(sorted(named.values()), sorted(self.PROFILE_FORMS))
+        paragraph = next(p for p in section.split("\n\n") if p.startswith("When main cannot establish these,"))
         flat_paragraph = " ".join(paragraph.split())
-        for phrase in named:
+        for phrase in ("`rev-parse --verify --quiet HEAD` for the commit `HEAD` names or that it is unborn",
+                       "the index listing, `ls-files --stage`, for gitlinks",
+                       "the comparison of the index with a tree under Something to commit above"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat_paragraph)
-        # Deviation D-3: the check after a commit also reads the role forms for the tree and index listings, and every
-        # read under item 6 carries `--no-replace-objects`. Deviation D-4: the index listing also serves the listings
-        # around each `git add` and profile item 8, from the top level, and both hashing forms serve the check after
-        # `git add`, after the file passes the checks of Paths and names.
-        for phrase in ("the index listing, `ls-files --stage`, for gitlinks, for the index entries the check after a "
-                       "commit compares, for the listings immediately before and after each `git add` and for profile "
-                       "item 8's comparison of names, each listed from the top level",
-                       "the content-hashing form, and that form with `--no-filters`, for each claim file whose path has "
-                       "no filter driver named, in that check, after the file passes the checks of Paths and names,",
-                       "the tree listing, `ls-tree -r`, of the new commit",
-                       "Under this rule each of these reads carries `--no-replace-objects` after the common prefix"):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, flat_paragraph)
-        self.assertIn(f"`{self.UNFILTERED_HASHING}`", git)
-        self.assertNotIn(self.UNFILTERED_HASHING, RoleRepositorySafetyTests.PARAGRAPH)
-        for form in ("git <prefix> ls-files -z --stage", "git <prefix> ls-tree -r -z --full-tree <commit>"):
-            with self.subTest(form=form):
-                self.assertIn(f"`{form}`", git)
+        self.assertIn("`git <prefix> ls-files -z --stage`", git)
+        self.assertIn(f"`{self.WRITING_FORMS[0]}`", git)
         self.assert_whole_sentence(self.NO_REPLACE_OBJECTS_FORMS, git)
-        # The forms that read each operation state are gone, and the Git directory is no longer read entry by entry.
-        reference = " ".join(read(REFERENCE).split())
-        for removed in (*self.PROFILE_FORMS_REMOVED, "<pseudo-ref>", "--git-path", "operation-state pseudo-ref",
-                        "operation-state refs", "Git-directory paths"):
-            with self.subTest(removed=removed):
-                self.assertNotIn(removed, reference)
-        # Profile item 9 names the same comparison form the table lists.
-        self.assertIn(f"`{self.PROFILE_FORMS[9]}`", section)
-        # A path from command output reaches the metadata script only on standard input.
-        self.assertIn("that receives the path on standard input and not as an argument, since that path comes from "
-                      "command output.", " ".join(paragraph.split()))
-
-    # Deviation D-3: the entries profile item 2 admits at the top of the Git directory, and in `info`.
-    GIT_DIRECTORY_FILES = ("HEAD", "config", "description", "index", "packed-refs", "COMMIT_EDITMSG", "ORIG_HEAD",
-                           "FETCH_HEAD")
-    GIT_DIRECTORY_DIRECTORIES = ("objects", "refs", "logs", "hooks", "lfs")
-    GIT_DIRECTORY_INFO = ("exclude", "attributes", "refs")
-    GIT_DIRECTORY_EMPTY = ("branches", "remotes")
-
-    @classmethod
-    def git_directory_allowlist(cls) -> dict:
-        """The allowlist as profile item 2 of the reference states it, parsed from its first sentence."""
-        section = cls.source("reference#Before add, commit, tag or push")
-        item = next(line for line in section.splitlines() if line.startswith("2. "))
-        first = item.split("The top level of the Git directory holds no entry other than these: ", 1)[1].split(". ")[0]
-        files, directories, info, empty = first.split("; ")
-        names = lambda text: tuple(re.findall(r"`([^`]+)`", text))
-        info, info_files = info.split(", holding no entry other than the regular files ")
-        return {"files": names(files), "directories": names(directories), "info": names(info_files),
-                "empty": names(empty), "info directory": names(info)}
-
-    def test_profile_item_2_admits_only_the_git_directory_entries_it_lists(self):
-        """Deviation D-3, regression for the Adversarial review of C1, call 3 (BROKEN, F-A): profile item 2 admits at
-        the top of the Git directory only the entries it lists, compared byte for byte, so an entry it does not name,
-        an operation state among them, puts the repository outside the profile instead of a list of refused entries
-        having to be complete; `HEAD` names a branch whose name passes the name rule, or is detached."""
-        section = self.source("reference#Before add, commit, tag or push")
-        item = next(line for line in section.splitlines() if line.startswith("2. "))
-        self.assertTrue(item.startswith("2. *Git-directory entries and operation state.* "))
-        for sentence in self.GIT_DIRECTORY:
-            with self.subTest(sentence=sentence[:60]):
-                self.assert_whole_sentence(sentence, item)
-        allowlist = self.git_directory_allowlist()
-        self.assertEqual(allowlist, {"files": self.GIT_DIRECTORY_FILES, "directories": self.GIT_DIRECTORY_DIRECTORIES,
-                                     "info": self.GIT_DIRECTORY_INFO, "empty": self.GIT_DIRECTORY_EMPTY,
-                                     "info directory": ("info",)})
-        # The operation states and other state the item names are examples of entries outside the profile, none of
-        # them admitted.
-        admitted = {*self.GIT_DIRECTORY_FILES, *self.GIT_DIRECTORY_DIRECTORIES, "info", *self.GIT_DIRECTORY_EMPTY}
-        refused = re.findall(r"`([^`]+)`", self.GIT_DIRECTORY[1])
-        self.assertEqual(refused, ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "SQUASH_MSG", "sequencer",
-                                   "rebase-merge", "rebase-apply", "rr-cache", "MERGE_RR", "MERGE_MSG", "AUTO_MERGE",
-                                   "shallow"])
-        self.assertEqual(admitted & set(refused), set())
-        # The claim is limited to programs and writes outside the Git directory, and the index is left to the check
-        # after a commit.
-        self.assertIn("runs no program other than those the profile's other items name, and writes nothing outside the "
-                      "Git directory beyond what they check;", self.GIT_DIRECTORY[2])
-        self.assertIn("what Git records from the index is checked after a commit", self.GIT_DIRECTORY[2])
-        # Names compare byte for byte; `HEAD` is detached or names a branch through the whole chain.
-        self.assertIn("compares their names byte for byte, so a name that differs only in case is outside the profile.",
-                      self.GIT_DIRECTORY[3])
-        self.assertIn("as `symbolic-ref --quiet HEAD` reports it, which is the last target of the whole chain of "
-                      "symbolic refs, is `refs/heads/<branch>` for a branch name that passes the name rule of Paths and "
-                      "names", self.GIT_DIRECTORY[4])
-        self.assertIn(f"`{self.PROFILE_FORMS[1]}`", self.source("reference#Safe Git invocation"))
-        # The item that listed the operation states to refuse is gone.
-        reference = " ".join(read(REFERENCE).split())
-        for phrase in self.GIT_DIRECTORY_REMOVED:
-            with self.subTest(removed=phrase):
-                self.assertNotIn(phrase, reference)
-        # The paragraph on operation states points to item 2's allowlist.
-        self.assertIn("puts the repository outside the profile under profile item 2, like any other entry that item "
-                      "does not admit,", " ".join(section.split()))
-
-    def test_main_checks_each_commit_against_the_index_and_stops_for_the_session(self):
-        """Deviation D-3, regression for the plan review of D-3 (B1, N-1, N-2 and the later calls' findings): after each
-        commit attempt that moves `HEAD`, main compares the new commit's tree and parent with the index and the commit
-        it recorded, and any difference or unestablished result stops every operation under the rule for the session;
-        the programs that run under the answer before the check, or with none following, are residual risk; and every
-        Git command under the rule carries `--no-replace-objects`."""
-        section = self.source("reference#Before add, commit, tag or push")
-        paragraph = next(p for p in section.split("\n\n") if p.startswith("**The check after a commit.** "))
-        for sentence in self.CHECK_AFTER_COMMIT:
-            with self.subTest(sentence=sentence[:60]):
-                self.assert_whole_sentence(sentence, paragraph)
-        flat = " ".join(section.split())
-        # The check follows the conditions for asking again and precedes the paragraph on operation states.
-        self.assertLess(flat.index("a submodule update or a dependency install."),
-                        flat.index("**The check after a commit.**"))
-        self.assertLess(flat.index("**The check after a commit.**"), flat.index("An operation's state, a pseudo-ref"))
-        check, stop = self.CHECK_AFTER_COMMIT[1], self.CHECK_AFTER_COMMIT[2]
-        for clause in ("after each commit attempt under this rule that moves `HEAD`, whatever the commit's exit status,",
-                       "and before any later operation under this rule,", "listed recursively from the top of the tree",
-                       "with the index entries as listed after the commit from the top level",
-                       "the new commit's only parent is the commit main recorded, or that it has none when `HEAD` was "
-                       "unborn."):
-            with self.subTest(clause=clause):
-                self.assertIn(clause, check)
-        self.assertIn("means main performs no further operation under this rule for the rest of the session", stop)
-        self.assertIn("an intent-to-add entry included, or a result main cannot establish,", stop)
-        self.assertIn("naming every cause it cannot rule out", stop)
-        # Every operation and every read under the rule carries `--no-replace-objects`, stated with the operation
-        # settings, in the preparation forms and in Safe Git invocation.
-        self.assertIn("with `--no-replace-objects`, as the check after a commit below explains,", flat)
-        self.assertIn("Every Git command main runs under this rule, the fixed forms and every read of the profile "
-                      "alike, carries `--no-replace-objects` after the common prefix,", flat)
-        self.assert_whole_sentence(self.NO_REPLACE_OBJECTS_FORMS, self.source("reference#Safe Git invocation"))
-        # The commit's fixed form requires `--quiet`, with the reason.
-        commit = next(line for line in section.splitlines() if line.startswith("| commit |"))
-        self.assertIn("`--quiet`, which is required because without it a commit prints a summary through a diff whose "
-                      "drivers the profile does not check,", commit)
-
-    def test_main_checks_each_git_add_and_refuses_marked_or_case_variant_entries(self):
-        """Deviation D-4, regression for the outcome verification of D-3 (NB-5) and the plan review of D-4: profile item 2
-        refuses an index entry with the assume-unchanged or skip-worktree bit, established from the tags of `ls-files
-        -z -v`; profile item 8 refuses a name that equals a claim file's under an ASCII case-insensitive comparison;
-        and after each `git add` main checks the result, every other entry unchanged and each claim file's single
-        entry, name, mode and, where no filter is named, content, and a failed or unestablished check stops every
-        operation under the rule for the session."""
-        section = self.source("reference#Before add, commit, tag or push")
-        item_2 = next(line for line in section.splitlines() if line.startswith("2. "))
-        self.assert_whole_sentence(self.GIT_DIRECTORY[-1], item_2)
-        self.assertTrue(item_2.endswith(self.GIT_DIRECTORY[-1]))
-        for clause in ("every record's tag is `H` followed by a space,", "any other tag or a record main cannot parse "
-                       "puts the repository outside the profile,"):
-            with self.subTest(clause=clause):
-                self.assertIn(clause, self.GIT_DIRECTORY[-1])
-        item_8 = next(line for line in section.splitlines() if line.startswith("8. "))
-        self.assertTrue(item_8.endswith(" " + self.CLAIM_NAME_CASE))
-        self.assertIn("whatever `core.ignorecase` says", self.CLAIM_NAME_CASE)
-        # The check after `git add` is its own paragraph, after the conditions for asking again and before the check
-        # after a commit.
-        paragraph = next(p for p in section.split("\n\n") if p.startswith("**The check after `git add`.** "))
-        self.assertEqual(paragraph, "**The check after `git add`.** " + " ".join(self.CHECK_AFTER_GIT_ADD))
-        flat = " ".join(section.split())
-        self.assertLess(flat.index("a submodule update or a dependency install."),
-                        flat.index("**The check after `git add`.**"))
-        self.assertLess(flat.index("**The check after `git add`.**"), flat.index("**The check after a commit.**"))
-        check, driver, stop = self.CHECK_AFTER_GIT_ADD
-        for clause in ("After each `git add` under this rule, and before any later operation under this rule,",
-                       "immediately before and after the add: the add exited 0;",
-                       "every entry whose name is not a claim file's name is unchanged,",
-                       "with each component's directory entry matching the claim's name exactly,",
-                       "exactly one entry of that name, compared byte for byte, at stage 0, whose mode is `100644` or "
-                       "`100755`", "and is `100644` otherwise;",
-                       "for each claim file that does not exist on disk, the index holds no entry of that name,",
-                       "a claim file main can establish as neither existing nor absent fails the check;",
-                       "and, only after those hold,",
-                       "both in the attribute check before the add and in the same check repeated after it,",
-                       "the file passes the checks of Paths and names that a hashed path passes,",
-                       "or the hash of the file's unconverted bytes from that form with `--no-filters`."):
-            with self.subTest(clause=clause):
-                self.assertIn(clause, check)
-        self.assertIn("any other combination of the two checks fails.", driver)
-        # The stop is the same as after a failed commit check: no further operation under the rule for the session.
-        self.assertIn("means main performs no further operation under this rule for the rest of the session", stop)
-        self.assertIn("means main performs no further operation under this rule for the rest of the session",
-                      self.CHECK_AFTER_COMMIT[2])
-        self.assertIn("A `git add` that exits other than 0, an exit status main cannot establish, or any other result",
-                      stop)
-        self.assertIn("a claim file ignore rules match is one cause;", stop)
-        # The `git add` row names the check, and the wording D-4 extends is gone.
-        row = next(line for line in section.splitlines() if line.startswith("| `git add` |"))
-        self.assertIn("| the claim's files only, as safe names after `--`, followed by the check after `git add` below |",
-                      row)
+        self.assertIn(self.WRITING_BEFORE[-1], flat_paragraph)
+        # The forms of the removed profile and its checks, and the sentence that listed them, are gone.
         reference = read(REFERENCE)
-        for phrase in self.D4_REMOVED:
-            with self.subTest(removed=phrase[:60]):
-                self.assertNotIn(phrase, reference)
+        for form in self.FORMS_REMOVED:
+            with self.subTest(removed=form):
+                self.assertNotIn(f"`{form}`", reference)
+        self.assertNotIn(self.MAIN_ONLY_SENTENCE_REMOVED, " ".join(reference.split()))
+        self.assertNotIn("with `--global` and with `--system` for Before add, commit, tag or push", git)
 
-    def test_a_push_destination_has_one_of_two_whole_string_shapes(self):
-        """Deviation D-2, regression for F1 and the plan review's B1, B2 and R1: a push is performed only to a URL of the
-        two shapes profile item 10 defines as a whole string, so a local path, a drive-letter path, a `file://` URL, a
-        remote-helper address, an IP literal, a loopback name or this machine's name is outside the profile. The rule
-        below follows the pinned sentences clause by clause; the examples are destination shapes, not exploits."""
-        rule = next(s for s in self.WRITING if s.startswith("In both, the whole URL holds only ASCII letters"))
-        for clause in ("at most one `@`, which ends `user`", "in the scp-like shape only, the one `:` after the host",
-                       "so it carries no port, query, fragment, percent-encoding, backslash, whitespace or second `@`",
-                       "`user` begins with an ASCII letter or digit and holds only ASCII letters, digits, `.`, `_` and "
-                       "`-`", "the host is at least two characters", "labels that each begin with an ASCII letter",
-                       "with no trailing dot", "no name ending in `.localhost`", "none of this machine's names",
-                       "compared without regard to case"):
-            with self.subTest(clause=clause):
-                self.assertIn(clause, rule)
-        shapes = next(s for s in self.WRITING if s.startswith("Main resolves every effective push URL"))
-        self.assertIn("`https://` or `ssh://`, in exact lower case", shapes)
-        self.assertIn("in which `user@` is required, so that no drive-letter path such as `c:repo` or `c:/dir` matches.",
-                      shapes)
-        loopback = ("localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback", "host.docker.internal")
-        for name in loopback:
-            self.assertIn(f"`{name}`", rule)
-        machine = ("devbox", "devbox.local", "devbox.corp.example.org")
-        user = r"[A-Za-z0-9][A-Za-z0-9._-]*"
-        label = r"[A-Za-z][A-Za-z0-9-]*"
-        host = rf"{label}(?:\.{label})*"
-        path = r"[A-Za-z0-9._~/-]*"
-
-        def admitted(url):
-            match = (re.fullmatch(rf"(?:https|ssh)://(?:{user}@)?(?P<host>{host})/{path}", url)
-                     or re.fullmatch(rf"{user}@(?P<host>{host}):{path}", url))
-            if not match:
-                return False
-            name = match.group("host").casefold()
-            return (len(name) >= 2 and name not in loopback and not name.endswith(".localhost")
-                    and name not in machine)
-
-        for url in ("https://github.com/owner/repo.git", "ssh://git@github.com/owner/repo.git",
-                    "git@github.com:owner/repo.git", "https://gitlab.example.org/group/sub/repo",
-                    "ssh://github.com/owner/repo", "git@ssh.github.com:owner/repo"):
-            with self.subTest(admitted=url):
-                self.assertTrue(admitted(url))
-        for url in ("c:repo", "c:/dir", "C:\\dir\\repo", "/srv/git/repo.git", "../repo", "repo",
-                    "file:///srv/git/repo.git", "\\\\server\\share\\repo", "//server/share/repo",
-                    "https://127.0.0.1/repo", "https://[::1]/repo", "https://2130706433/repo", "https://0x7f.1/repo",
-                    "git@localhost:repo", "https://LOCALHOST/repo", "https://Ip6-Loopback/repo",
-                    "https://host.docker.internal/repo", "https://app.localhost/repo", "https://devbox/repo",
-                    "git@DevBox.local:repo", "https://devbox.corp.example.org/repo",
-                    "ssh://git@ssh.github.com:443/owner/repo", "https://github.com/repo?x=1", "https://github.com/r%2e",
-                    "https://a@b@github.com/repo", "foo::https://github.com/repo", "HTTPS://github.com/repo",
-                    "http://github.com/repo", "git://github.com/repo", "github.com:owner/repo", "https://a/repo",
-                    "https://github.com./repo", "https://github.com", "git@github.com:own er/repo",
-                    "-x@github.com:repo", "https://github.com/repo#frag", "https://github.com\\repo"):
-            with self.subTest(refused=url):
-                self.assertFalse(admitted(url))
+    def test_the_hooks_snapshot_is_defined_by_itself(self):
+        """Deviation D-6, item 4.4: the hooks snapshot no longer points to a list under Before add, commit, tag or push;
+        it names the effective hooks directory, found with the listed form and read from file-system metadata, and the
+        `hook.<name>` keys."""
+        preparation = self.source("reference#Main's preparation")
+        item = next(line for line in preparation.splitlines() if line.startswith("4. "))
+        self.assertEqual(item, "4. " + next(s for s in self.PREPARATION if s.startswith("records a snapshot")))
+        self.assertIn("found with `rev-parse --git-path hooks` and listed from file-system metadata as Paths and names "
+                      "reads, and the `hook.<name>` keys of the configuration", item)
+        self.assertNotIn("the list of hooks under Before add, commit, tag or push", read(REFERENCE))
+        row = next(line for line in self.source("reference#Safe Git invocation").splitlines()
+                   if line.startswith("| Hooks directory |"))
+        self.assertEqual(row, f"| Hooks directory | `{self.HOOKS_FORM}`, for the hooks snapshot of Main's preparation |")
 
     def test_a_listed_name_reaches_a_command_line_only_as_a_safe_name(self):
         """Code review blocking finding B1, regression: the rule for names a listing prints agrees with the forms that
@@ -1340,8 +910,9 @@ class RepositorySafetyTests(unittest.TestCase):
     def test_main_detects_a_promisor_remote_and_an_older_git_dispatches_nothing(self):
         """Deviation D-1, regression and abuse check: the Lazy fetch rule depends on main's detection of a promisor
         remote, which follows includes; on Git older than 2.45.0 no review is dispatched and no choice proceeds as
-        configured. Deviation D-2: a promisor remote puts an operation under Before add, commit, tag or push outside the
-        operation profile on every Git version (test_the_profile_admits_nothing_it_does_not_name_and_checks_in_order)."""
+        configured. Deviation D-6: before an operation under Before add, commit, tag or push, main runs this detection
+        first and, on an older Git with a promisor remote, does not perform the operation
+        (test_main_detects_a_promisor_remote_before_any_object_read_under_the_rule)."""
         section = self.source("reference#Safe Git invocation")
         self.assertIn("\n- **Lazy fetch.** " + " ".join(self.LAZY_FETCH) + "\n", section)
         # The detection and its outcome belong to item 2 of Main's preparation, which item 4 reads again.
@@ -1375,10 +946,14 @@ class RepositorySafetyTests(unittest.TestCase):
                 self.assertNotIn(self.LAZY_FETCH_REMOVED, " ".join(read(path).split()))
 
     # Item 1: the glossary entry, which ADR 0011 and the reference use.
+    # Item 7 as revised for deviation D-6: the entry states the threat model as D1 does, keeping the term's scope and its
+    # reason.
     GLOSSARY = ("A program that the reviewed repository's configuration, attributes or hooks select and Git may run, such "
                 "as an fsmonitor, a textconv or external diff, a filter, a signing program or a hook. The reviewed "
-                "repository's tracked content and its local Git metadata are both treated as attacker-controlled, so "
-                "running one counts as executing the code under review.\n_Avoid_: git hook, safe git")
+                "repository's working tree, with any configuration, hook or include file Git reads from it, and every "
+                "change that neither the user nor main wrote are treated as attacker-controlled, while the Git "
+                "directory's own configuration and metadata are the user's own; since such a program can load the "
+                "working tree's content, running one counts as executing repository code.\n_Avoid_: git hook, safe git")
 
     def test_the_glossary_defines_repository_chosen_program_before_blocking_finding(self):
         text = self.source("CONTEXT.md")
@@ -1498,6 +1073,12 @@ class RepositorySafetyTests(unittest.TestCase):
 
     def test_execution_follows_the_reference_in_steps_1_and_in_adversarial_review(self):
         self.assert_pinned(self.EXECUTION_POINTERS)
+        # Deviation D-6: Execution states that main's own operations under item 6 are not a review, in place of the
+        # exception for approved programs.
+        execution = self.source("reference#Execution")
+        self.assertEqual([s for s in self.sentences(execution) if "Before add, commit, tag or push" in s],
+                         [self.EXECUTION[2]])
+        self.assertNotIn(self.EXECUTION_EXCEPTION_REMOVED, read(REFERENCE))
         for place, phrases in self.EXECUTION_REMOVED.items():
             for phrase in phrases:
                 with self.subTest(place=place, removed=phrase[:50]):
@@ -1514,17 +1095,19 @@ class RepositorySafetyTests(unittest.TestCase):
             "safety](repository-safety.md)'s Before add, commit, tag or push, which adds a condition to this authority "
             "and grants none.",
         ),
-        # Deviation D-2: the guidance names the operation profile instead of a list of transport settings to ask about.
+        # Deviation D-6: the guidance names the fixed form and the checks, the programs the user's configuration sets
+        # and skipping hooks only when asked, instead of the operation profile and its question.
         "review-auto.md": (
-            "Before any `git add`, commit, tag or push, main performs it only inside the operation profile that "
-            "cc-feather:delegation's repository safety describes, names the hooks, filters and signing programs it would "
-            "run and, for a push, its destination, and asks the user before running them; an operation outside that "
-            "profile is left for the user to run.",
+            "Before any `git add`, commit, tag or push, main runs it only in the fixed form and after the checks that "
+            "cc-feather:delegation's repository safety describes, with the programs the user's Git configuration sets, "
+            "and skips hooks only when the user asks.",
         ),
     }
     AUTHORITY_REMOVED = (
         "Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport settings",
         "asks the user when that list is not empty",
+        "operation profile",
+        "asks the user before running them",
     )
 
     def test_repository_authority_and_auto_guidance_point_to_the_writing_checks(self):
@@ -1575,94 +1158,128 @@ class RepositorySafetyTests(unittest.TestCase):
                       "`CLAUDE.md`, imports and `.claude` settings, which happen outside these rules.",
                       self.source("ADR 0011"))
 
-    # Item 7 as revised for deviation D-2: the Before add, commit, tag or push bullet summarises item 6's profile, fixed
-    # forms and answers, and says that main leaves an operation the profile does not admit for the user to run.
+    # Item 7 as revised for deviation D-6: ADR 0011 gains an amendment that records the narrowed threat model.
+    ADR_0011_AMENDMENT = (
+        "The [repository safety spec](../specs/repository-safety.md)'s deviation D-6, which the user decided on "
+        "2026-10-12, adds the following to this record without rewriting the decision text above.",
+        "The Git directory's own configuration and metadata (`.git/config`, a worktree's `config.worktree`, the hooks "
+        "directory, `info/attributes`, a gitfile, `commondir` and alternates) are the user's own and trusted, because "
+        "Claude Code normally asks the user to trust a folder before working in it and runs Git there before these rules "
+        "apply.",
+        "The working tree and tracked content, every change that neither the user nor main wrote, including one Git keeps "
+        "in the Git directory, and any configuration, hook or include file Git reads from inside the working tree stay "
+        "attacker-controlled.",
+        "A Git directory or configuration that is not the user's own, such as one copied in or extracted from an archive, "
+        "is residual risk.",
+        "Main runs them in fixed forms with the programs the user's configuration sets, as the user's own Git commands "
+        "would, without asking, and skips hooks only when the user asks.",
+        "Those programs can load a change neither the user nor main wrote, which is residual risk, so running the code of "
+        "such a change safely needs an isolated environment, such as CI, a container or a virtual machine.",
+        "The operation profile that deviations D-2 to D-4 built for a hostile Git directory is removed, because each "
+        "review of it had found another way for such a directory to steer main's operations, while Claude Code itself "
+        "already trusts that directory.",
+        "The rules for reading local Git metadata, established against a hostile Git directory, stay unchanged as defence "
+        "in depth, and running a Repository-chosen program still counts as executing repository code, because such a "
+        "program can load the working tree's content.",
+    )
+    ADR_0011_LABELS = ("A narrower threat model", "Main's own add, commit, tag and push", "Unchanged read rules")
+
+    def test_adr_0011_records_the_narrowed_threat_model_in_an_amendment(self):
+        """Deviation D-6, item 7: ADR 0011 keeps its decision text, which states D6 as residual risk, and gains an
+        amendment note, written like ADR 0009's, that records the narrowed threat model."""
+        text = self.source("ADR 0011")
+        self.assertEqual(text.count("\n## Amendment note for deviation D-6\n"), 1)
+        note = text.split("\n## Amendment note for deviation D-6\n", 1)[1]
+        self.assertNotIn("\n## ", note)
+        for sentence in self.ADR_0011_AMENDMENT:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, note)
+        self.assertEqual(re.findall(r"^- \*\*([^*]+)\.\*\* ", note, re.M), list(self.ADR_0011_LABELS))
+        # The decision text above the note is unchanged: it still records the threat model the note narrows.
+        decision = text.split("\n## Amendment note for deviation D-6\n", 1)[0]
+        self.assertIn("and its local Git metadata (`.git/config`, a worktree's `config.worktree`, the hooks directory, "
+                      "`info/attributes`, a gitfile, `commondir` and alternates) are attacker-controlled", decision)
+        self.assertTrue(decision.endswith("consistent with this decision.\n"))
+
+    # Item 7 as revised for deviation D-6: the Before add, commit, tag or push bullet says that main runs the four
+    # operations in fixed forms with the programs the user's configuration sets, without asking, which checks come first,
+    # and that hooks are skipped only when the user asks.
     README_WRITING = (
-        ("main performs a `git add`, commit, tag or push only inside a narrow operation profile that admits nothing it "
-         "does not name: a standalone, full, non-bare repository with no linked worktree, alternates, partial clone or "
-         # Deviation D-3: the Git-directory check admits only the entries profile item 2 lists, with no link.
-         "submodule, no operation in progress, a Git directory that holds at its top level only the entries the "
-         "profile lists and no link anywhere, and only listed local configuration keys, and for a push only an "
-         "`https://`, `ssh://` or `user@host:path` URL whose host is a name, never a local path, an IP address, a "
-         "loopback name or this machine's name.",
-         "**add、commit、tag 或 push 之前：**主 Agent 只在一組狹窄的操作條件（operation profile）內執行 `git add`、commit、"
-         "tag 或 push，條件沒有列出的一律不接受：獨立、完整、非 bare 的儲存庫，沒有 linked worktree、alternates、部分複製或 "
-         "submodule，沒有進行中的操作，Git 目錄最上層只有條件列出的項目、任何地方都沒有連結，本機設定也只有列出的鍵；push "
-         "時只接受 host 是名稱的 `https://`、`ssh://` 或 `user@host:path` URL，絕不接受本機路徑、IP 位址、loopback 名稱或"
-         "這台機器的名稱。"),
-        ("Each operation runs in a fixed form that also disables automatic maintenance, rerere and, for a push, signing "
-         "and negotiation.",
-         "每個操作都以固定形式執行，同時停用自動維護與 rerere，push 時還停用簽章與 negotiation。"),
-        ("Inside the profile main names the hooks, filters and signing programs the operation would run, each with the "
-         "SHA-256 of its content, and for a push the destination and refs, and asks you whether to run them as named, "
-         "skip hooks and signing, or not perform the operation; filters and the destination can only be run or "
-         "declined.",
-         "在條件內，主 Agent 會列出這個操作會執行的 hook、filter 與簽章程式，每一個附上內容的 SHA-256，push 時還有目的地與 "
-         "ref，並問你要照列出的項目執行、略過 hook 與簽章，還是不執行這個操作；filter 與目的地只能執行或拒絕。"),
-        ("Your answer covers exactly what main named, and what those programs load from the repository as it stood at "
-         "your answer plus later changes main or a role it dispatched wrote in this session, for the rest of the session; main asks again when anything it named changes, when `HEAD` or the "
-         "stash moves, or when content it did not write may have reached them.",
-         "你的回答只涵蓋主 Agent 列出的項目，以及這些程式從你回答當時的儲存庫載入的內容，加上之後在這個 session 由主 Agent 或它派出的角色寫入的變更，在這個 session 剩下的時間有效；"
-         "列出的項目有變化、`HEAD` 或 stash 移動，或不是它寫的內容可能已經進入這些程式時，主 Agent 會再問你。"),
-        ("Main never asks you to approve configuration it cannot identify: it leaves any operation in a repository the "
-         "profile does not admit, or whose state it cannot establish, for you to run yourself, and tells you what fell "
-         "outside the profile.",
-         "主 Agent 絕不請你核准它無法辨識的設定：條件不接受的儲存庫，或它無法確認狀態的操作，它都留給你自己執行，並告訴你"
-         "哪些項目不符合條件。"),
-        # Deviation D-3: a failed check after a commit stops main's operations for the session.
-        ("After each commit main checks that the commit recorded what the index holds and that its parent is the commit "
-         "main expected; when they differ, or main cannot establish it, main performs no further `git add`, commit, tag "
-         "or push for the rest of the session and tells you every cause it cannot rule out, and the commit stays on the "
-         "branch for you to inspect.",
-         "每次 commit 之後，主 Agent 會檢查 commit 記錄的內容是否就是 index 中的內容，以及它的父 commit 是否為主 Agent "
-         "預期的那一個；兩者不符或無法確認時，主 Agent 在這個 session 剩下的時間不再執行任何 `git add`、commit、tag 或 "
-         "push，並告訴你它無法排除的每個原因，這個 commit 則留在分支上供你檢查。"),
-        # Deviation D-4, item 7: a sparse checkout, any other marked index entry and a case-variant name are outside
-        # the profile, and a failed check after `git add` stops main's operations for the session.
-        ("The profile also leaves out a sparse checkout, whose index marks the paths it leaves out, any other index "
-         "entry marked assume-unchanged or skip-worktree, and a file main would add whose name differs only in letter "
-         "case from an index entry or another file it adds.",
-         "條件也不接受稀疏 checkout（sparse checkout，它的 index 會標記它略過的路徑）、其他標記為 assume-unchanged 或 "
-         "skip-worktree 的 index 項目，以及名稱與某個 index 項目或另一個要加入的檔案只差在英文字母大小寫的待加入檔案。"),
-        ("After each `git add` main checks that the index changed only in the claim's files and records each of them "
-         "under the name, mode and, where no filter applies, content main wrote; when it does not, or main cannot "
-         "establish it, main performs no further `git add`, commit, tag or push for the rest of the session and tells "
-         "you that the index may now hold part of the claim's files, which a commit you make would also record.",
-         "每次 `git add` 之後，主 Agent 會檢查 index 只有 claim 的檔案有變動，而且每個檔案都以主 Agent 寫入的名稱與模式"
-         "記錄，沒有套用 filter 時內容也與主 Agent 寫入的相同；不符或無法確認時，主 Agent 在這個 session 剩下的時間不再"
-         "執行任何 `git add`、commit、tag 或 push，並告訴你 index 現在可能含有 claim 的部分檔案，而你自己做的 commit 也"
-         "會把它們記錄進去。"),
+        ("since the Git directory's configuration is your own, main runs a `git add`, commit, tag or push with the "
+         "programs your Git configuration sets, such as hooks and the frameworks they start, filters, and signing, "
+         "credential and transport programs, as your own Git commands would, without asking.",
+         "**add、commit、tag 或 push 之前：**Git 目錄的設定是你自己的，所以主 Agent 執行 `git add`、commit、tag 或 push 時，"
+         "會像你自己下的 Git 指令一樣，不經詢問就執行你的 Git 設定指定的程式，例如 hook 與它們啟動的框架、filter，以及簽章、"
+         "認證與傳輸程式。"),
+        ("Each operation runs in a fixed form that also turns off fsmonitor, the pager, automatic maintenance, rerere "
+         "and, for a push, signing and negotiation; every other program your configuration sets still runs.",
+         "每個操作都以固定形式執行，同時關閉 fsmonitor、分頁程式、自動維護與 rerere，push 時還關閉簽章與 negotiation；"
+         "你的設定指定的其他程式照樣執行。"),
+        ("Before it, main checks that each file it adds has a safe name and is neither a submodule nor a directory, and "
+         "for a commit that there is something to commit; when it cannot establish this, or in a partial clone on Git "
+         "older than 2.45.0, it leaves the operation for you to run.",
+         "執行前，主 Agent 會檢查每個要加入的檔案名稱安全、既不是 submodule 也不是目錄，commit 時也確認有東西可以 commit；"
+         "無法確認時，或在 Git 早於 2.45.0 的部分複製中，它會把操作留給你自己執行。"),
+        ("Main skips hooks only when you ask it to, and then tells you that a push to a repository on this machine still "
+         "runs that repository's hooks.",
+         "主 Agent 只在你要求時才略過 hook，並會告訴你：push 到這台機器上的儲存庫時，那個儲存庫的 hook 仍會執行。"),
     )
-    # Item 7 as revised for deviation D-2: item 6's residual risks, in the paragraph that states D6.
+    # Item 7 as revised for deviation D-6: the residual risks of item 7, in the paragraph that states D6, and the
+    # statement that D5 is not a sandbox, so an untrusted change's code needs an isolated environment.
     README_RESIDUAL = (
-        "So are a push that reaches this machine through a host name that resolves here, an HTTP redirect or a trusted "
-        "transport setting in your own configuration; a change main can neither see nor learn of after you approve a "
-        "program, such as an edit in another terminal; the programs a `git add` or commit attempt runs under your "
-        "answer acting on content main has not yet established, whether before main's check after a commit or with "
-        "none following; behaviour of Git versions other than the installed one that the "
-        "operation profile does not anticipate; a path embedded in a trusted command string, or a trusted conditional "
-        "include the repository can satisfy; and main's own Git operations other than `git add`, commit, tag and push, "
-        "such as fetch, pull, merge, checkout or stash, and opening a pull request with `gh`.",
-        "下列情況同樣是剩餘風險：push 經由解析到這台機器的 host 名稱、HTTP 重新導向，或你自己設定中可信的傳輸設定而到達"
-        "這台機器；你核准程式之後，主 Agent 既看不到也無從得知的變更，例如在另一個終端機中做的編輯；`git add` 或 commit "
-        "嘗試依你的回答執行的程式，作用於主 Agent 尚未確認的內容，不論是在主 Agent 於 commit 之後的檢查之前，還是之後沒有"
-        "任何檢查；操作條件沒有預料到的、"
-        "已安裝版本以外的 Git 版本行為；嵌在可信指令字串中的路徑，或儲存庫能滿足其條件的可信條件式 include；以及主 Agent "
-        "自己在 `git add`、commit、tag 與 push 以外的 Git 操作，例如 fetch、pull、merge、checkout 或 stash，還有用 `gh` "
-        "開 pull request。",
+        ("So are a Git directory or configuration that is not your own, such as one copied in or extracted from an "
+         "archive; the programs main's `git add`, commit, tag and push run as your configuration sets them, such as "
+         "hooks and the frameworks they start, which can load a change neither you nor main wrote; hook directories, "
+         "includes and programs your configuration takes from the working tree; the hooks of a destination repository "
+         "on this machine that a push reaches; and main's own Git operations other than `git add`, commit, tag and push, "
+         "such as fetch, pull, merge, checkout or stash, and opening a pull request with `gh`.",
+         "下列情況同樣是剩餘風險：不是你自己的 Git 目錄或設定，例如從別處複製進來或從封存檔解開的；主 Agent 的 `git add`、"
+         "commit、tag 與 push 依你的設定執行的程式，例如 hook 與它們啟動的框架，它們可能載入不是你也不是主 Agent 寫的變更；"
+         "你的設定從工作樹取用的 hook 目錄、include 與程式；push 到達這台機器上的目的地儲存庫時，那個儲存庫的 hook；以及主 "
+         "Agent 自己在 `git add`、commit、tag 與 push 以外的 Git 操作，例如 fetch、pull、merge、checkout 或 stash，還有用 "
+         "`gh` 開 pull request。"),
+        ("The rule for running repository code is not a sandbox either: running the code of a change neither you nor "
+         "main wrote, including through those programs, needs an isolated environment, such as CI, a container or a "
+         "virtual machine.",
+         "執行儲存庫程式碼的規則同樣不是 sandbox：要執行不是你也不是主 Agent 寫的變更的程式碼，包括透過這些程式執行，都"
+         "需要隔離環境，例如 CI、容器或虛擬機器。"),
     )
-    # Deviation D-2: the summary that offered to run transport settings as configured and lazy-fetch choices for these
-    # operations, in both languages.
+    # Item 7 as revised for deviation D-6: the threat model as D1 states it, in the section's opening paragraph.
+    README_THREAT = (
+        ("The reviewed repository's working tree and tracked content, any change neither you nor main wrote, and any "
+         "configuration, hook or include file Git reads from inside the working tree count as attacker-controlled.",
+         "受審儲存庫的工作樹與追蹤的內容、任何不是你也不是主 Agent 寫的變更，以及 Git 從工作樹內讀取的任何設定、hook 或 "
+         "include 檔案，都視為攻擊者可控制。"),
+        ("The Git directory's own configuration and metadata, such as `.git/config`, its hooks and `info/attributes`, "
+         "are treated as your own, as are your user- and system-level Git configuration and your environment, since "
+         "Claude Code normally asks you to trust a folder before working in it and runs Git there before these rules "
+         "apply.",
+         "Git 目錄本身的設定與中繼資料（例如 `.git/config`、hooks 與 `info/attributes`）則視為你自己的，你的使用者與系統層級 "
+         "Git 設定以及你自己的環境也一樣，因為 Claude Code 通常會先請你信任一個資料夾才在其中工作，並在這些規則生效前就在"
+         "其中執行 Git。"),
+    )
+    # Deviation D-6: the summaries of the operation profile, its answers, its checks after `git add` and after a commit,
+    # its push URL shapes and its residual risks (deviations D-2 to D-4), the threat model that counted the local Git
+    # metadata as attacker-controlled, and the wording deviation D-2 had removed earlier, in both languages.
     README_WRITING_REMOVED = {
-        "README.md": ("and for a push the destination and its transport settings", "whether to run them as configured",
+        "README.md": ("operation profile", "outside the profile", "a sparse checkout", "assume-unchanged",
+                      "After each `git add` main checks", "After each commit main checks", "SHA-256",
+                      "`user@host:path`", "a host name that resolves here", "an HTTP redirect",
+                      "whether to run them as named", "Your answer covers", "after you approve a program",
+                      "behaviour of Git versions other than the installed one", "its local Git metadata",
+                      "count as attacker-controlled; your user- and system-level",
+                      "checks what the repository's Git configuration would run",
+                      "and for a push the destination and its transport settings", "whether to run them as configured",
                       "filters, transport settings and the destination can only be run or declined",
                       "In a partial clone each of these operations also carries `--no-lazy-fetch`",
-                      "offers the same four choices",
-                      # Deviation D-3: the check is described by profile item 2's list, not by unusual entries.
-                      "no link or unusual entry in its Git directory", "unusual entry"),
-        "README.zh-TW.md": ("push 時還有目的地與傳輸設定", "照設定執行", "filter、傳輸設定與目的地只能執行或拒絕",
-                            "這些操作同樣帶 `--no-lazy-fetch`", "並給你同樣的四個選擇",
-                            "Git 目錄中沒有連結或特殊項目", "特殊項目"),
+                      "offers the same four choices", "no link or unusual entry in its Git directory", "unusual entry"),
+        "README.zh-TW.md": ("操作條件", "operation profile", "稀疏 checkout", "assume-unchanged", "每次 `git add` 之後",
+                            "每次 commit 之後", "SHA-256", "`user@host:path`", "解析到這台機器的 host 名稱",
+                            "HTTP 重新導向", "照列出的項目執行", "你的回答", "你核准程式之後",
+                            "已安裝版本以外的 Git 版本行為", "本機的 Git 中繼資料", "會檢查儲存庫的 Git 設定會執行什麼",
+                            "push 時還有目的地與傳輸設定", "照設定執行", "filter、傳輸設定與目的地只能執行或拒絕",
+                            "這些操作同樣帶 `--no-lazy-fetch`", "並給你同樣的四個選擇", "Git 目錄中沒有連結或特殊項目",
+                            "特殊項目"),
     }
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
     README = (
@@ -1674,11 +1291,8 @@ class RepositorySafetyTests(unittest.TestCase):
          "每次審查都依同一套規則讀取你的儲存庫，也就是[儲存庫安全參考](skills/delegation/references/repository-safety.md)："
          "計畫審查、程式碼審查、結果驗證、對抗式審查或安全分析對儲存庫的每一次讀取、主 Agent 為每次呼叫所做的準備，以及呼叫後"
          "對工作區的比對，主 Agent 與每個角色都遵守它，不論 claim 如何分類，也包括沒有變更的相依項目。"),
-        ("The reviewed repository's tracked content and its local Git metadata, such as `.git/config`, its hooks and "
-         "`info/attributes`, count as attacker-controlled; your user- and system-level Git configuration and your "
-         "environment are trusted.",
-         "受審儲存庫追蹤的內容與它本機的 Git 中繼資料（例如 `.git/config`、hooks 與 `info/attributes`）都視為攻擊者可控制；"
-         "你的使用者與系統層級 Git 設定以及你自己的環境則視為可信。"),
+        # Deviation D-6: the threat model as D1 states it.
+        *README_THREAT,
         ("every Git command a review runs disables fsmonitor, optional locks and the pager, writes nothing, contacts no "
          "remote and runs no program the repository chose, such as an fsmonitor, a textconv or external diff, a filter, "
          "a signing program or a hook.",
@@ -1737,8 +1351,8 @@ class RepositorySafetyTests(unittest.TestCase):
         ("A role without a shell, such as analyst, scout or Explore, reads and searches only the checked files and "
          "directories main lists for it.",
          "沒有 shell 的角色，例如 analyst、scout 與 Explore，只讀取與搜尋主 Agent 為它列出、已檢查過的檔案與目錄。"),
-        # Item 6 as revised for deviation D-2: the operation profile, the fixed forms, the answers and the operations
-        # left for the user, replacing the summary that offered to run transport settings as configured.
+        # Item 6 as revised for deviation D-6: the fixed forms, the programs the user's configuration sets, the checks
+        # before the operation and skipping hooks only when asked.
         *README_WRITING,
         ("These rules are instructions to the model, not a sandbox: no permission rule, hook or sandbox enforces them, "
          "and tests only keep the texts consistent.",
@@ -1750,8 +1364,8 @@ class RepositorySafetyTests(unittest.TestCase):
          "before and outside these rules; both are residual risk.",
          "審查期間檔案被同時修改的情況不在防護範圍內，而 Claude Code 本身在 session 開始時會在專案中執行 Git，並載入專案的 "
          "`CLAUDE.md`、它匯入的檔案與 `.claude` 設定，這些都發生在這些規則之前、之外；兩者都是剩餘風險。"),
-        # Item 7 as revised for deviation D-2: item 6's residual risks, stated with D6.
-        README_RESIDUAL,
+        # Item 7 as revised for deviation D-6: item 7's residual risks, stated with D6, and D5 not being a sandbox.
+        *README_RESIDUAL,
     )
     # The bullets of the README section, by label, each pinned in both languages.
     README_LABELS = (("Git commands", "Git 指令"), ("File reads", "讀取檔案"),
@@ -1759,9 +1373,12 @@ class RepositorySafetyTests(unittest.TestCase):
                      ("Before add, commit, tag or push", "add、commit、tag 或 push 之前"))
     # The Commit rule, the code-review row and the dynamic-probing sentence point to the section.
     README_POINTERS = (
-        ("Before each `git add`, commit or push of these claims, main also checks what the repository's Git "
-         "configuration would run, as under [Repository safety](#repository-safety).",
-         "對這些 claim 做 `git add`、commit 或 push 之前，主 Agent 也會檢查儲存庫的 Git 設定會執行什麼，見[儲存庫安全](#儲存庫安全)。"),
+        # Deviation D-6: main no longer checks what the configuration would run; it makes item 6's checks and uses its
+        # fixed forms.
+        ("Before each `git add`, commit or push of these claims, main also makes the checks and uses the fixed forms "
+         "that [Repository safety](#repository-safety) describes.",
+         "對這些 claim 做 `git add`、commit 或 push 之前，主 Agent 也會先做[儲存庫安全](#儲存庫安全)所說的檢查，並使用其中的"
+         "固定形式。"),
         ("| Code review | After main's primary acceptance passes, or is recorded as not run under [Repository "
          "safety](#repository-safety) | reviewer, reading the diff itself | APPROVED |",
          "| 程式碼審查 | 主 Agent 的主要驗收通過後，或依[儲存庫安全](#儲存庫安全)記為未執行時 | reviewer，自行取得 diff | APPROVED |"),
@@ -1793,43 +1410,55 @@ class RepositorySafetyTests(unittest.TestCase):
                 self.assertLess(text.index(f"\n{before}\n"), text.index(f"\n{section}\n"))
                 self.assertLess(text.index(f"\n{section}\n"), text.index(f"\n{after}\n"))
 
-    def test_readmes_summarise_the_operation_profile_and_its_residual_risks(self):
-        """Deviation D-2, item 7: each README's Before add, commit, tag or push bullet states the profile, the fixed
-        forms, the answers and that main leaves an operation the profile does not admit for the user, and the paragraph
-        that states D6 names item 6's residual risks; both languages say the same, and the summary that offered to run
-        transport settings as configured is gone."""
+    def test_readmes_summarise_item_6_and_its_residual_risks(self):
+        """Deviation D-6, item 7: each README's Before add, commit, tag or push bullet says that main runs the four
+        operations in fixed forms with the programs the user's configuration sets, without asking, and skips hooks only
+        when asked; the opening paragraph states the threat model as D1 does; and the paragraph that states D6 names
+        item 7's residual risks and says that D5 is not a sandbox, keeping the "instructions to the model" words. Both
+        languages say the same, and the summaries of the removed operation profile and its checks are gone."""
         for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
                                                ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
             section = self.source(f"{name}#section")
             bullet = next(line for line in section.splitlines() if line.startswith(label))
+            opening = section.strip().split("\n\n", 1)[0]
             paragraph = next(p for p in section.split("\n\n") if p.startswith(("These rules are instructions to the "
                                                                                "model", "這些規則是給模型的指示")))
-            for pair in self.README_WRITING:
-                with self.subTest(readme=name, sentence=pair[index][:40]):
-                    self.assert_whole_sentence(pair[index], bullet)
-            with self.subTest(readme=name, residual=True):
-                self.assert_whole_sentence(self.README_RESIDUAL[index], paragraph)
+            # The bullet is exactly the pinned sentences: nothing of the removed summary survives beside them.
+            expected = (label + " ".join(pair[0] for pair in self.README_WRITING) if index == 0
+                        else "- " + "".join(pair[1] for pair in self.README_WRITING))
+            self.assertEqual(bullet, expected)
+            for pair in self.README_THREAT:
+                with self.subTest(readme=name, threat=pair[index][:40]):
+                    self.assert_whole_sentence(pair[index], opening)
+            for pair in self.README_RESIDUAL:
+                with self.subTest(readme=name, residual=pair[index][:40]):
+                    self.assert_whole_sentence(pair[index], paragraph)
+            with self.subTest(readme=name, order=True):
                 # The residual risks follow the sentence that states D6 and keep the "instructions to the model" words.
-                self.assertEqual(self.README[-1], self.README_RESIDUAL)
-                self.assertLess(paragraph.index(self.README[-2][index]), paragraph.index(self.README_RESIDUAL[index]))
-                self.assertIn(self.README[-4][index], paragraph)
+                d6 = next(pair[index] for pair in self.README if pair[0].startswith("Concurrent modification of files"))
+                instructions = next(pair[index] for pair in self.README
+                                    if pair[0].startswith("These rules are instructions to the model"))
+                self.assertIn(instructions, paragraph)
+                self.assertLess(paragraph.index(d6), paragraph.index(self.README_RESIDUAL[0][index]))
+                self.assertLess(paragraph.index(self.README_RESIDUAL[0][index]),
+                                paragraph.index(self.README_RESIDUAL[1][index]))
+            text = read(config.ROOT / name)
             for phrase in self.README_WRITING_REMOVED[name]:
                 with self.subTest(readme=name, removed=phrase):
-                    self.assertNotIn(phrase, read(config.ROOT / name))
-            # Deviation D-4: the check after `git add` is summarised before the check after a commit.
-            with self.subTest(readme=name, order=True):
-                self.assertLess(bullet.index(self.README_WRITING[-1][index]), bullet.index(self.README_WRITING[-3][index]))
-        self.assertIn("a sparse checkout", self.README_WRITING[-2][0])
-        # Each residual risk item 7 lists is named in the English summary.
-        for risk in ("a host name that resolves here", "an HTTP redirect", "a trusted transport setting in your own "
-                     "configuration", "a change main can neither see nor learn of after you approve a program",
-                     "the programs a `git add` or commit attempt runs under your answer acting on content main has not "
-                     "yet established, whether before main's check after a commit or with none following",
-                     "behaviour of Git versions other than the installed one", "a path embedded in a trusted command "
-                     "string", "a trusted conditional include the repository can satisfy", "main's own Git operations "
-                     "other than `git add`, commit, tag and push", "opening a pull request with `gh`"):
+                    self.assertNotIn(phrase, text)
+        # Each residual risk item 7 lists is named in the English summary, and the isolated environments it names.
+        for risk in ("a Git directory or configuration that is not your own, such as one copied in or extracted from an "
+                     "archive", "the programs main's `git add`, commit, tag and push run as your configuration sets them",
+                     "which can load a change neither you nor main wrote", "hook directories, includes and programs your "
+                     "configuration takes from the working tree", "the hooks of a destination repository on this machine "
+                     "that a push reaches", "main's own Git operations other than `git add`, commit, tag and push",
+                     "opening a pull request with `gh`"):
             with self.subTest(risk=risk):
-                self.assertIn(risk, self.README_RESIDUAL[0])
+                self.assertIn(risk, self.README_RESIDUAL[0][0])
+        self.assertIn("is not a sandbox either: running the code of a change neither you nor main wrote, including "
+                      "through those programs, needs an isolated environment, such as CI, a container or a virtual "
+                      "machine.", self.README_RESIDUAL[1][0])
+        self.assertIn("are treated as your own", self.README_THREAT[1][0])
 
     def test_readmes_point_to_the_section_from_the_commit_rule_table_and_probing(self):
         for english, chinese in self.README_POINTERS:
@@ -2145,14 +1774,11 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         for span in spans:
             with self.subTest(span=span):
                 self.assertIn(span, self.R.FORMS)
-        # Every Git command the paragraph names in full is the prefix itself; nothing else starts with `git `, except
-        # `git add` in the one sentence that keeps content hashing to main's preparation and its check after `git add`
-        # (deviation D-4), which names main's operation, not a form a role runs.
+        # Every Git command the paragraph names in full is the prefix itself; nothing else starts with `git `.
         for span in re.findall(r"`(git [^`]*)`", self.PARAGRAPH):
             if not span.startswith("git <prefix> "):
                 with self.subTest(span=span):
-                    self.assertIn(span, (self.R.PREFIX, "git status", "git diff", "git add"))
-        self.assertEqual([s for s in self.sentences(self.PARAGRAPH) if "`git add`" in s], [self.R.CONFINED[1]])
+                    self.assertIn(span, (self.R.PREFIX, "git status", "git diff"))
         for match in re.finditer(r"<path>", self.PARAGRAPH):
             context = self.PARAGRAPH[max(0, match.start() - 10):match.end() + 1]
             with self.subTest(context=context):
@@ -2333,8 +1959,6 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             self.assertEqual(git(*identity, "commit", "-q", "--no-verify", "-m", "one").returncode, 0)
             (repo / "a.txt").write_bytes(b"one\ntwo\n")
             self.assertEqual(git(*identity, "commit", "-q", "--no-verify", "-am", "two").returncode, 0)
-            # Deviation D-2: a remote the push-URL form reads; nothing contacts it.
-            self.assertEqual(git("config", "remote.origin.url", "https://example.invalid/repo.git").returncode, 0)
             for key, value in (("core.fsmonitor", scripts["monitor"]), ("diff.marker.textconv", scripts["textconv"]),
                                ("diff.external", scripts["extdiff"])):
                 self.assertEqual(git("config", key, value).returncode, 0)
@@ -2349,7 +1973,7 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 self.skipTest("this Git ran no configured program in the control reads")
 
             substitutions = {"<prefix>": " ".join(shlex.split(prefix)[1:]), "<commit> <commit>": "HEAD~1 HEAD",
-                             "<commit>": "HEAD", "<path>": "a.txt", "<attribute>": "diff", "<remote>": "origin"}
+                             "<commit>": "HEAD", "<path>": "a.txt", "<attribute>": "diff"}
             for form in RepositorySafetyTests.FORMS:
                 # Deviation D-3: under Before add, commit, tag or push every form carries `--no-replace-objects` after
                 # the common prefix, so each form also runs that way with the installed Git.
@@ -2359,31 +1983,49 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                         command = command.replace(placeholder, value)
                     with self.subTest(form=variant):
                         result = git(*shlex.split(command)[1:])
-                        # A `--quiet` form of the profile answers with its exit code: 1 for a ref that does not exist,
-                        # such as the second parent of a commit that has one, or an index that differs from the tree.
-                        # Any other failure, such as an unknown option, is an error.
+                        # A `--quiet` form of item 6 answers with its exit code: 1 for an index that differs from the
+                        # tree. Any other failure, such as an unknown option, is an error.
                         expected = (0, 1) if "--quiet" in form else (0,)
                         self.assertIn(result.returncode, expected, result.stderr)
                         self.assertEqual(ran(), set(), f"{command} ran a configured program")
             # Each control that ran is one this check covered, so a form that dropped its option would be caught.
             self.assertTrue(controls <= {"monitor", "textconv", "extdiff"}, controls)
 
-    def test_the_check_after_a_commit_and_the_git_directory_allowlist_with_the_installed_git(self):
-        """Deviation D-3, allowed and refused behaviour with the installed Git: a repository Git initialises and commits
-        in with the fixed form's settings and `--no-replace-objects` holds at the top of its Git directory only entries
-        profile item 2 admits, and `HEAD` names a branch; for each ordinary commit the forms of the check after a
-        commit find the new commit's tree equal to the index entries and its only parent the commit recorded, or none
-        for the first; and an intent-to-add entry, which Further Notes names as a usability cost, makes them differ."""
+    def test_the_fixed_forms_turn_off_fsmonitor_the_pager_maintenance_and_rerere_and_run_the_configured_hook(self):
+        """Deviation D-6, item 6, allowed and forbidden behaviour with the installed Git (Testing Decisions): in a
+        marker repository isolated from the user's configuration, whose local configuration names an fsmonitor, a pager,
+        a clean filter and a pre-commit hook that each leave a marker and turns rerere on, the plain `git add` and commit
+        run the fsmonitor, start automatic maintenance and turn rerere on (positive controls); the fixed forms, with the
+        settings the reference gives, run the configured filter and hook, as the user's own commands would, and no
+        fsmonitor, start no maintenance and leave rerere off; and with the skipping flags no hook runs. No pager runs in
+        any of them; Git starts a pager only on a terminal, so that has no positive control here. Every program is a
+        marker script in the scratch directory, and nothing contacts a remote."""
         reference = read(REFERENCE)
         prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
-        allowlist = RepositorySafetyTests.git_directory_allowlist()
+        section = " ".join(RepositorySafetyTests.source("reference#Before add, commit, tag or push").split())
+        settings = shlex.split(re.search(r"with `(-c maintenance\.auto=false [^`]*)`", section).group(1))
+        self.assertEqual(settings, ["-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "rerere.enabled=false"])
+        commit_row = next(line for line in RepositorySafetyTests.source("reference#Before add, commit, tag or push")
+                          .splitlines() if line.startswith("| commit |"))
+        self.assertIn("plus `--no-verify`, `--no-gpg-sign` and `-c commit.gpgSign=false`", commit_row)
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
             root = Path(os.path.realpath(temp))
-            repo, empty = root / "repo", root / "gitconfig"
+            repo, marker, empty = root / "repo", root / "marker", root / "gitconfig"
+            trace, no_hooks = root / "trace", root / "no-hooks"
             repo.mkdir()
+            no_hooks.mkdir()
             empty.write_bytes(b"")
+            scripts = {}
+            for name, body in (("monitor", "exit 1"), ("pager", "cat"), ("clean", "cat")):
+                script = root / f"{name}.sh"
+                script.write_text(f'#!/bin/sh\necho {name} >> "{marker.as_posix()}"\n{body}\n', encoding="utf-8",
+                                  newline="\n")
+                script.chmod(0o755)
+                scripts[name] = script.as_posix()
+            # No inherited GIT_* variable reaches the marker repository, the user's configuration is not read, and
+            # Git's own trace records the processes each command starts.
             env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
-            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty), "GIT_TRACE2_EVENT": str(trace)})
 
             def git(*args):
                 try:
@@ -2392,269 +2034,73 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 except (OSError, subprocess.TimeoutExpired) as error:
                     self.skipTest(f"Git cannot be run: {error}")
 
-            # Every command main runs under the rule: the common prefix, then `--no-replace-objects`.
-            under_rule = (*prefix, "--no-replace-objects")
-            settings = ("-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "rerere.enabled=false",
-                        "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgSign=false")
+            def ran():
+                """The markers left and whether automatic maintenance or garbage collection started, then cleared."""
+                found = set(marker.read_text(encoding="utf-8").split()) if marker.exists() else set()
+                maintenance = False
+                if trace.exists():
+                    for line in trace.read_text(encoding="utf-8").splitlines():
+                        event = json.loads(line)
+                        argv = event.get("argv") or []
+                        if event.get("event") == "child_start" and ("maintenance" in argv or "gc" in argv):
+                            maintenance = True
+                    trace.unlink()
+                if marker.exists():
+                    marker.unlink()
+                return found, maintenance
 
-            def commit(message):
-                result = git(*under_rule, *settings, "commit", "-m", message, "--quiet", "--no-verify",
-                             "--no-gpg-sign")
-                self.assertEqual(result.returncode, 0, result.stderr)
-
-            def head():
-                result = git(*under_rule, "rev-parse", "--verify", "--quiet", "HEAD")
-                return result.stdout.strip() if result.returncode == 0 else None
-
-            def parent(number):
-                result = git(*under_rule, "rev-parse", "--verify", "--quiet", f"HEAD^{number}")
-                self.assertIn(result.returncode, (0, 1), result.stderr)
-                return result.stdout.strip() if result.returncode == 0 else None
-
-            def recorded_equals_index():
-                tree = git(*under_rule, "ls-tree", "-r", "-z", "--full-tree", "HEAD")
-                index = git(*under_rule, "ls-files", "-z", "--stage")
-                self.assertEqual((tree.returncode, index.returncode), (0, 0), tree.stderr + index.stderr)
-                entries = set()
-                for record in filter(None, tree.stdout.split(b"\0")):
-                    meta, path = record.split(b"\t", 1)
-                    mode, _, oid = meta.split(b" ")
-                    entries.add((mode, oid, path))
-                staged = set()
-                for record in filter(None, index.stdout.split(b"\0")):
-                    meta, path = record.split(b"\t", 1)
-                    mode, oid, _ = meta.split(b" ")
-                    staged.add((mode, oid, path))
-                return entries == staged
-
-            if git("-c", "init.defaultBranch=main", "init", "-q", ".").returncode:
+            rr_cache = repo / ".git" / "rr-cache"
+            under_rule = (*prefix, "--no-replace-objects", *settings)
+            if git("init", "-q", ".").returncode:
                 self.skipTest("this Git cannot initialise a repository")
-            self.assertEqual(git("config", "core.autocrlf", "false").returncode, 0)
-            # First commit, on an unborn `HEAD`: no parent.
+            for key, value in (("core.autocrlf", "false"), ("user.name", "t"), ("user.email", "t@example.invalid"),
+                               ("commit.gpgSign", "false"), ("filter.marker.clean", scripts["clean"]),
+                               ("core.fsmonitor", scripts["monitor"]), ("core.pager", scripts["pager"]),
+                               ("rerere.enabled", "true")):
+                self.assertEqual(git("config", key, value).returncode, 0)
+            hook = repo / ".git" / "hooks" / "pre-commit"
+            hook.write_text(f'#!/bin/sh\necho hook >> "{marker.as_posix()}"\n', encoding="utf-8", newline="\n")
+            hook.chmod(0o755)
+            (repo / ".gitattributes").write_bytes(b"*.txt filter=marker\n")
             (repo / "a.txt").write_bytes(b"one\n")
-            self.assertEqual(git(*under_rule, *settings, "add", "--", "a.txt").returncode, 0)
-            self.assertIsNone(head())
-            commit("one")
-            self.assertTrue(recorded_equals_index())
-            self.assertEqual((parent(1), parent(2)), (None, None))
-            # A later commit: its only parent is the commit recorded before it.
-            recorded = head()
+            ran()
+
+            # Positive controls: the plain commands run the fsmonitor, start maintenance and turn rerere on.
+            self.assertEqual(git("add", "--", ".gitattributes", "a.txt").returncode, 0)
+            control_add, _ = ran()
+            self.assertEqual(git("commit", "-q", "-m", "one").returncode, 0)
+            control_commit, control_maintenance = ran()
+            if "monitor" not in control_add | control_commit or not control_maintenance or not rr_cache.exists():
+                self.skipTest("this Git ran no fsmonitor, started no maintenance or left rerere off in the controls")
+            self.assertIn("hook", control_commit)
+            self.assertNotIn("pager", control_add | control_commit)
+            shutil.rmtree(rr_cache)
+
+            # The fixed forms run the configured filter and hook, and no fsmonitor, pager, maintenance or rerere.
             (repo / "a.txt").write_bytes(b"one\ntwo\n")
-            self.assertEqual(git(*under_rule, *settings, "add", "--", "a.txt").returncode, 0)
-            commit("two")
-            self.assertTrue(recorded_equals_index())
-            self.assertEqual((parent(1), parent(2)), (recorded, None))
-            # `HEAD` names a branch, as profile item 2 requires.
-            target = git(*under_rule, "symbolic-ref", "--quiet", "HEAD")
-            self.assertEqual((target.returncode, target.stdout.strip()), (0, b"refs/heads/main"))
-            # The Git directory holds at its top level only entries profile item 2 admits, of the kinds it names.
-            git_dir = repo / ".git"
-            for entry in sorted(os.listdir(git_dir)):
-                mode = os.lstat(git_dir / entry).st_mode
-                with self.subTest(entry=entry):
-                    if entry in allowlist["files"]:
-                        self.assertTrue(stat.S_ISREG(mode))
-                    elif entry in (*allowlist["directories"], *allowlist["info directory"]):
-                        self.assertTrue(stat.S_ISDIR(mode))
-                    elif entry in allowlist["empty"]:
-                        self.assertTrue(stat.S_ISDIR(mode))
-                        self.assertEqual(os.listdir(git_dir / entry), [])
-                    else:
-                        self.fail(f"the installed Git left {entry!r}, which profile item 2 does not admit")
-            if (git_dir / "info").exists():
-                for entry in os.listdir(git_dir / "info"):
-                    with self.subTest(info=entry):
-                        self.assertIn(entry, allowlist["info"])
-                        self.assertTrue(stat.S_ISREG(os.lstat(git_dir / "info" / entry).st_mode))
-            # An intent-to-add entry is left out of the commit but listed in the index, so the check finds a
-            # difference and main would stop for the session.
-            (repo / "b.txt").write_bytes(b"new\n")
-            self.assertEqual(git(*under_rule, *settings, "add", "-N", "--", "b.txt").returncode, 0)
+            self.assertEqual(git(*under_rule, "add", "--", "a.txt").returncode, 0)
+            fixed_add, add_maintenance = ran()
+            self.assertEqual(git(*under_rule, "commit", "-m", "two", "--quiet").returncode, 0)
+            fixed_commit, commit_maintenance = ran()
+            self.assertIn("clean", fixed_add)
+            self.assertIn("hook", fixed_commit)
+            self.assertEqual((fixed_add | fixed_commit) - {"clean", "hook"}, set())
+            self.assertFalse(add_maintenance or commit_maintenance, "a fixed form started automatic maintenance")
+            self.assertFalse(rr_cache.exists(), "a fixed form turned rerere on")
+
+            # With the skipping flags no hook runs; the filter still does, since skipping it would change what is
+            # recorded.
             (repo / "a.txt").write_bytes(b"one\ntwo\nthree\n")
-            self.assertEqual(git(*under_rule, *settings, "add", "--", "a.txt").returncode, 0)
-            something = git(*under_rule, "diff-index", "--cached", "--quiet", "--ita-invisible-in-index",
-                            "--no-ext-diff", "--no-textconv", "HEAD", "--")
-            self.assertEqual(something.returncode, 1, something.stderr)
-            recorded = head()
-            commit("three")
-            self.assertEqual((parent(1), parent(2)), (recorded, None))
-            self.assertFalse(recorded_equals_index())
-
-    def test_the_index_bits_case_variant_names_and_the_check_after_git_add_with_the_installed_git(self):
-        """Deviation D-4, allowed and refused behaviour with the installed Git, main's reads using only the reference's
-        forms with `--no-replace-objects`: a fresh repository's `ls-files -z -v` tags are all `H` and a space, while an
-        assume-unchanged entry shows another tag, which puts the repository outside profile item 2; the ASCII
-        case-insensitive comparison of profile item 8 finds a case-variant name; and the check after `git add` passes
-        for an ordinary edit, for a deleted claim file and for a file stored with CRLF line endings under automatic
-        conversion, and fails when an entry that is not a claim file's changes."""
-        reference = read(REFERENCE)
-        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
-            root = Path(os.path.realpath(temp))
-            repo, empty = root / "repo", root / "gitconfig"
-            repo.mkdir()
-            empty.write_bytes(b"")
-            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
-            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
-
-            def git(*args):
-                try:
-                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
-                                          capture_output=True, timeout=60)
-                except (OSError, subprocess.TimeoutExpired) as error:
-                    self.skipTest(f"Git cannot be run: {error}")
-
-            under_rule = (*prefix, "--no-replace-objects")
-            settings = ("-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "rerere.enabled=false",
-                        "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgSign=false")
-
-            def read_git(*args):
-                result = git(*under_rule, *args)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                return result.stdout
-
-            def add(*paths):
-                return git(*under_rule, *settings, "add", "--", *paths).returncode
-
-            def commit(message):
-                result = git(*under_rule, *settings, "commit", "-m", message, "--quiet", "--no-verify",
-                             "--no-gpg-sign")
-                self.assertEqual(result.returncode, 0, result.stderr)
-
-            def tags():
-                return [record[:2] for record in filter(None, read_git("ls-files", "-z", "-v").split(b"\0"))]
-
-            def listing():
-                """The index listing from the top level: each name with its entries' mode, object id and stage."""
-                entries = {}
-                for record in filter(None, read_git("ls-files", "-z", "--stage").split(b"\0")):
-                    meta, name = record.split(b"\t", 1)
-                    mode, oid, stage = meta.split(b" ")
-                    entries.setdefault(name, []).append((mode, oid, stage))
-                return entries
-
-            def case_variants(claims, names):
-                """Profile item 8: a name equal to a claim file's when ASCII letters are compared without regard to
-                case, but not byte for byte, or two claim files equal under that comparison."""
-                found = {name for claim in claims for name in names if name != claim and name.lower() == claim.lower()}
-                folded = [claim.lower() for claim in claims]
-                return found or len(set(folded)) != len(folded)
-
-            def on_disk(name):
-                """True or False when the claim file's existence is established with each component's directory entry
-                matching the claim's name exactly and no link; None otherwise, which fails the check."""
-                current = repo
-                components = name.decode("ascii").split("/")
-                for number, component in enumerate(components):
-                    try:
-                        if component not in os.listdir(current):
-                            return False
-                        mode = os.lstat(current / component).st_mode
-                    except OSError:
-                        return None
-                    current = current / component
-                    last = number == len(components) - 1
-                    if stat.S_ISLNK(mode) or (not last and not stat.S_ISDIR(mode)):
-                        return None
-                return stat.S_ISREG(mode) and os.lstat(current).st_nlink == 1 or None
-
-            def filter_driver(name):
-                record = read_git("check-attr", "-z", "filter", "--", name.decode("ascii")).split(b"\0")
-                return record[2]
-
-            def head_mode(name):
-                if git(*under_rule, "rev-parse", "--verify", "--quiet", "HEAD").returncode:
-                    return None
-                listed = read_git("ls-tree", "-z", "--full-tree", "HEAD", "--", name.decode("ascii"))
-                return listed.split(b" ", 1)[0] if listed else None
-
-            def checked_add(claims, staged=None):
-                """The fixed form of `git add`, then the check after `git add` as the reference states it; `staged`
-                stands in for an add that changes more than the claim's files."""
-                drivers = {claim: filter_driver(claim) for claim in claims}
-                before = listing()
-                exit_status = add(*(name.decode("ascii") for name in (staged or claims)))
-                after = listing()
-                if exit_status != 0:
-                    return False
-                others = lambda entries: {name: value for name, value in entries.items() if name not in claims}
-                if others(before) != others(after):
-                    return False
-                for claim in claims:
-                    exists = on_disk(claim)
-                    if exists is None:
-                        return False
-                    if not exists:
-                        if claim in after:
-                            return False
-                        continue
-                    entries = after.get(claim, [])
-                    if len(entries) != 1:
-                        return False
-                    mode, oid, stage = entries[0]
-                    expected = head_mode(claim)
-                    if stage != b"0" or mode != (expected if expected in (b"100644", b"100755") else b"100644"):
-                        return False
-                    # No driver is defined in this repository, so both attribute checks leave the filter unspecified.
-                    if (drivers[claim], filter_driver(claim)) != (b"unspecified", b"unspecified"):
-                        return False
-                    path = claim.decode("ascii")
-                    hashes = {read_git("hash-object", "--", path).strip(),
-                              read_git("hash-object", "--no-filters", "--", path).strip()}
-                    if oid not in hashes:
-                        return False
-                return True
-
-            if git("-c", "init.defaultBranch=main", "init", "-q", ".").returncode:
-                self.skipTest("this Git cannot initialise a repository")
-            self.assertEqual(git("config", "core.autocrlf", "false").returncode, 0)
-            (repo / "sub").mkdir()
-            (repo / "a.txt").write_bytes(b"one\n")
-            (repo / "sub" / "b.txt").write_bytes(b"bee\n")
-            (repo / "c.txt").write_bytes(b"crlf\r\nstored\r\n")
-            self.assertTrue(checked_add([b"a.txt", b"sub/b.txt", b"c.txt"]))
-            commit("one")
-            # Profile item 2: every tag of a fresh repository is `H` and a space.
-            self.assertEqual(tags(), [b"H "] * 3)
-            # An assume-unchanged entry shows another tag, so the repository is outside the profile until it is
-            # cleared.
-            self.assertEqual(git(*under_rule, "update-index", "--assume-unchanged", "--", "a.txt").returncode, 0)
-            self.assertNotEqual(set(tags()), {b"H "})
-            self.assertEqual(git(*under_rule, "update-index", "--no-assume-unchanged", "--", "a.txt").returncode, 0)
-            self.assertEqual(set(tags()), {b"H "})
-            # Profile item 8: a claim name that differs from an index entry's only in case, or two such claim names,
-            # are found; distinct names are not.
-            names = set(listing())
-            self.assertTrue(case_variants([b"A.TXT"], names))
-            self.assertTrue(case_variants([b"Sub/b.txt"], names))
-            self.assertTrue(case_variants([b"new.txt", b"New.txt"], names))
-            self.assertFalse(case_variants([b"a.txt", b"sub/b.txt", b"new.txt"], names))
-            # The check after `git add` passes for an ordinary edit, with the mode `HEAD`'s tree records.
-            (repo / "a.txt").write_bytes(b"one\ntwo\n")
-            self.assertTrue(checked_add([b"a.txt"]))
-            # It passes for a deleted claim file, which then has no entry.
-            (repo / "sub" / "b.txt").unlink()
-            self.assertTrue(checked_add([b"sub/b.txt"]))
-            self.assertNotIn(b"sub/b.txt", listing())
-            commit("two")
-            # It passes for a file stored with CRLF line endings under automatic conversion, accepting the hash of
-            # the unconverted bytes.
-            self.assertEqual(git("config", "core.autocrlf", "true").returncode, 0)
-            (repo / ".gitattributes").write_bytes(b"* text=auto\n")
-            (repo / "c.txt").write_bytes(b"crlf\r\nstored\r\nagain\r\n")
-            self.assertTrue(checked_add([b"c.txt"]))
-            staged = listing()[b"c.txt"][0][1]
-            self.assertEqual(staged, read_git("hash-object", "--no-filters", "--", "c.txt").strip())
-            # The converted hash alone would have failed the check for this file.
-            self.assertNotEqual(staged, read_git("hash-object", "--", "c.txt").strip())
-            # It fails when an entry that is not a claim file's changes between the listings around the add, here
-            # because the add stages a second path besides the claim's.
-            (repo / "a.txt").write_bytes(b"one\ntwo\nthree\n")
-            (repo / "c.txt").write_bytes(b"crlf\r\nchanged\r\n")
-            self.assertFalse(checked_add([b"a.txt"], staged=[b"a.txt", b"c.txt"]))
-            # The same edit passes when only the claim's files change.
-            (repo / "a.txt").write_bytes(b"one\ntwo\nthree\nfour\n")
-            self.assertTrue(checked_add([b"a.txt", b"c.txt"]))
+            skipping = ("-c", f"core.hooksPath={no_hooks.as_posix()}")
+            self.assertEqual(git(*under_rule, *skipping, "add", "--", "a.txt").returncode, 0)
+            skipped_add, _ = ran()
+            self.assertEqual(git(*under_rule, *skipping, "-c", "commit.gpgSign=false", "commit", "-m", "three",
+                                 "--quiet", "--no-verify", "--no-gpg-sign").returncode, 0)
+            skipped_commit, skipped_maintenance = ran()
+            self.assertIn("clean", skipped_add)
+            self.assertEqual((skipped_add | skipped_commit) - {"clean"}, set())
+            self.assertFalse(skipped_maintenance)
+            self.assertFalse(rr_cache.exists())
 
     def test_the_role_forms_run_no_filter_the_working_tree_would_run(self):
         """Adversarial review of C2 (BROKEN), finding F1, regression: in a throwaway repository whose attributes and local

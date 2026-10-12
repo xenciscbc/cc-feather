@@ -193,7 +193,7 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     )
 
     # C5 item 3: the setup document's summary of the automatic review guidance follows templates/review-auto.md (C1 item 1).
-    AUTO_SWITCH = "Before any `git add`, commit, tag or push, main performs it only inside the operation profile that the delegation skill's repository safety reference describes, names the hooks, filters and signing programs it would run and, for a push, its destination, and asks the user before running them; an operation outside that profile is left for the user to run."
+    AUTO_SWITCH = "Before any `git add`, commit, tag or push, main runs it only in the fixed form and after the checks that the delegation skill's repository safety reference describes, with the programs the user's Git configuration sets, and skips hooks only when the user asks."
 
     # C5 item 2.
     ENTRY = (
@@ -233,12 +233,14 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     def test_setup_document_summarises_the_current_automatic_review_guidance(self):
         section = self.section(self.text("docs/setup.md"), "\n## Automatic review switch\n")
         self.assertIn(self.AUTO_SWITCH, section)
-        # Repository safety deviation D-2 replaced the guidance's list of transport settings with the operation profile.
-        self.assertIn("Before any `git add`, commit, tag or push, main performs it only inside the operation profile that "
-                      "cc-feather:delegation's repository safety describes, names the hooks, filters and signing programs "
-                      "it would run and, for a push, its destination, and asks the user before running them; an operation "
-                      "outside that profile is left for the user to run.",
+        # Repository safety deviation D-6 replaced the guidance's operation profile and question with the fixed form,
+        # the checks, the programs the user's configuration sets and skipping hooks only when asked.
+        self.assertIn("Before any `git add`, commit, tag or push, main runs it only in the fixed form and after the checks "
+                      "that cc-feather:delegation's repository safety describes, with the programs the user's Git "
+                      "configuration sets, and skips hooks only when the user asks.",
                       self.text("templates/review-auto.md"))
+        for text in (section, self.text("templates/review-auto.md")):
+            self.assertNotIn("operation profile", text)
 
     def test_validation_entry_records_the_update_checks_live_scope_tag_and_pending_review(self):
         entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.21.0 repository safety\n")

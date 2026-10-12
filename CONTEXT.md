@@ -80,7 +80,7 @@ An independent attempt to break a Security-critical claim, made in the Automatic
 _Avoid_: pentest, red team, security review
 
 **Repository-chosen program**:
-A program that the reviewed repository's configuration, attributes or hooks select and Git may run, such as an fsmonitor, a textconv or external diff, a filter, a signing program or a hook. The reviewed repository's tracked content and its local Git metadata are both treated as attacker-controlled, so running one counts as executing the code under review.
+A program that the reviewed repository's configuration, attributes or hooks select and Git may run, such as an fsmonitor, a textconv or external diff, a filter, a signing program or a hook. The reviewed repository's working tree, with any configuration, hook or include file Git reads from it, and every change that neither the user nor main wrote are treated as attacker-controlled, while the Git directory's own configuration and metadata are the user's own; since such a program can load the working tree's content, running one counts as executing repository code.
 _Avoid_: git hook, safe git
 
 **Blocking finding**:
