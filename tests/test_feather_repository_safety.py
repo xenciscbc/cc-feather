@@ -570,8 +570,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "`core.sshCommand` can direct the connection here, and an HTTP server can redirect the push here, so the "
         "remaining defence against a push that runs this machine's receive hooks through such a name is that this "
         "machine runs no SSH or HTTP Git server reachable that way.",
-        "The profile was established from Git 2.43's documentation and source and is checked by outcome verification "
-        "with the installed Git; behaviour of other Git versions from 2.32 on that the profile does not anticipate "
+        "The profile was established from Git 2.43's documentation and source and checked by the 0.21.0 release's outcome verification "
+        "with that release's installed Git; behaviour of other Git versions from 2.32 on that the profile does not anticipate "
         "is residual risk, which the READMEs state.",
         "When the profile admits the operation and names programs, main names each program with the SHA-256 of its "
         "content, read under Paths and names (a hook file, or the repository file a configured command names; for a "
@@ -1242,9 +1242,9 @@ class RepositorySafetyTests(unittest.TestCase):
          "在條件內，主 Agent 會列出這個操作會執行的 hook、filter 與簽章程式，每一個附上內容的 SHA-256，push 時還有目的地與 "
          "ref，並問你要照列出的項目執行、略過 hook 與簽章，還是不執行這個操作；filter 與目的地只能執行或拒絕。"),
         ("Your answer covers exactly what main named, and what those programs load from the repository as it stood at "
-         "your answer, for the rest of the session; main asks again when anything it named changes, when `HEAD` or the "
+         "your answer plus later changes main or a role it dispatched wrote in this session, for the rest of the session; main asks again when anything it named changes, when `HEAD` or the "
          "stash moves, or when content it did not write may have reached them.",
-         "你的回答只涵蓋主 Agent 列出的項目，以及這些程式從你回答當時的儲存庫載入的內容，在這個 session 剩下的時間有效；"
+         "你的回答只涵蓋主 Agent 列出的項目，以及這些程式從你回答當時的儲存庫載入的內容，加上之後在這個 session 由主 Agent 或它派出的角色寫入的變更，在這個 session 剩下的時間有效；"
          "列出的項目有變化、`HEAD` 或 stash 移動，或不是它寫的內容可能已經進入這些程式時，主 Agent 會再問你。"),
         ("Main never asks you to approve configuration it cannot identify: it leaves any operation in a repository the "
          "profile does not admit, or whose state it cannot establish, for you to run yourself, and tells you what fell "
