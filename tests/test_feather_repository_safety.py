@@ -228,6 +228,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> config --list --show-origin --show-scope --no-includes",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         "git <prefix> hash-object -- '<path>'",
+        "git <prefix> rev-parse --verify <endpoint>^{commit}",
         *PROFILE_FORMS,
     )
     # Deviation D-2: the sentence that keeps the profile's forms to main's checks under item 6. It is not part of
@@ -469,7 +470,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "pass the name rule, `branch.<name>.remote` naming such a remote and `branch.<name>.merge` a ref name that "
         "passes it; and, as data the four operations do not act on, `remote.<name>.prune`, "
         "`remote.<name>.gh-resolved`, `branch.<name>.rebase`, `branch.<name>.vscode-merge-base`, `pull.rebase`, "
-        "`pull.ff`, `lfs.repositoryformatversion`, `user.name` and `user.email`.",
+        "`pull.ff` and `lfs.repositoryformatversion`; and `user.name` and `user.email`, which a commit or tag records "
+        "as its author, committer or tagger identity and which select no program.",
         "Any other key, such as one under `url.`, `http.`, `credential.`, `alias.`, `hook.`, `filter.`, `gc.`, "
         "`maintenance.`, `rerere.`, `push.`, `gpg.`, `commit.`, `tag.`, `submodule.` or `remote.<name>.vcs`, "
         "`core.sshCommand`, `core.askPass`, `core.fsmonitor` or `core.worktree`, puts the repository outside the "
