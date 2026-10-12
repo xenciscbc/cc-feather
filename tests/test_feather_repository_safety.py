@@ -232,6 +232,33 @@ class RepositorySafetyTests(unittest.TestCase):
     )
     # Item 4.4 as revised for deviation D-6: the hooks directory for the hooks snapshot, main's alone.
     HOOKS_FORM = "git <prefix> rev-parse --git-path hooks"
+    # Item 4.2's include-less read of the local and worktree scopes, the only whole listing.
+    CONFIG_LIST_FORM = "git <prefix> config --list --show-origin --show-scope --no-includes"
+    # Adversarial review of C1, finding F1: a read that follows includes (items 4.2, 4.3, 4.4 and item 6's promisor
+    # detection) reads only the keys a pattern names, never a whole listing.
+    CONFIG_KEYS_FORM = "git <prefix> config --includes --show-origin --show-scope --get-regexp '<pattern>'"
+    CONFIG_PATTERNS = {
+        "promisor": r"^(extensions\.partialclone|remote\..*\.(promisor|partialclonefilter))$",
+        "filter": r"^filter\..*\.(clean|smudge|process|required)$",
+        "hook": r"^hook\.",
+    }
+    CONFIG_KEYS = (
+        "A configuration read that follows includes never lists the whole configuration: it reads only the keys that "
+        "one of these patterns names, `'" + CONFIG_PATTERNS["promisor"] + "'` for a promisor remote, `'"
+        + CONFIG_PATTERNS["filter"] + "'` for the filter drivers that are defined and `'" + CONFIG_PATTERNS["hook"]
+        + "'` for the `hook.<name>` keys, so of a file an include reaches, nothing but those keys and their values is "
+        "printed.",
+        "Such a read exits 0 when a key matches, and 1 when the configuration sets none of those keys, which main records "
+        "as none declared or defined; any other exit leaves the answer not established, so main dispatches nothing, "
+        "performs no operation under Before add, commit, tag or push, and reports it.",
+    )
+    CONFIG_ROW = (
+        "| Configuration reads | `" + CONFIG_LIST_FORM + "` with `--local` and with `--worktree`, which follows no "
+        "include; and `" + CONFIG_KEYS_FORM + "`, in every scope, for only the keys of the effective configuration that "
+        "a pattern given below names |"
+    )
+    # The row that read the whole effective configuration, includes followed.
+    CONFIG_ROW_REMOVED = "and with `--includes` in place of `--no-includes`, in every scope, for the effective configuration"
     # Deviation D-6: the forms that only the removed operation profile and its checks after `git add` and after a commit
     # read (deviations D-2 to D-4), and the forms D-3 had already removed.
     FORMS_REMOVED = (
@@ -266,11 +293,15 @@ class RepositorySafetyTests(unittest.TestCase):
         HOOKS_FORM,
         "git <prefix> hash-object -- '<path>'",
         *WRITING_FORMS,
+        CONFIG_LIST_FORM,
+        CONFIG_KEYS_FORM,
     )
     # Finding F1: the forms only main runs; the table holds these and ROLE_FORMS and nothing else. Deviation D-6 keeps
-    # only the forms item 6's checks before the operation need and adds the hooks directory of item 4.4.
+    # only the forms item 6's checks before the operation need and adds the hooks directory of item 4.4. Adversarial
+    # review of C1, finding F1, adds the key read that follows includes.
     MAIN_ONLY_FORMS = (
-        "git <prefix> config --list --show-origin --show-scope --no-includes",
+        CONFIG_LIST_FORM,
+        CONFIG_KEYS_FORM,
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         HOOKS_FORM,
         "git <prefix> hash-object -- '<path>'",
@@ -376,11 +407,13 @@ class RepositorySafetyTests(unittest.TestCase):
     )
     # Item 4.2 as revised for deviation D-1: promisor detection from the effective configuration, and on an older Git
     # no dispatch and no way to proceed as configured.
+    # Adversarial review of C1, finding F1: the detection reads only the keys that declare a promisor remote.
     PROMISOR = (
-        "After the user has answered any question from this item, main reads the effective configuration with its "
-        "includes followed and all scopes, with origins, to find whether it declares a promisor remote "
+        "After the user has answered any question from this item, main reads, with includes followed and in all scopes, "
+        "with origins, only the keys of the effective configuration that declare a promisor remote "
         "(`extensions.partialClone`, or `remote.<name>.promisor` or `remote.<name>.partialclonefilter` for any remote), "
-        "and reads it again before every later dispatch as part of item 4.",
+        "by the pattern Safe Git invocation gives for them, to find whether the configuration declares one, and reads "
+        "them again before every later dispatch as part of item 4.",
         "When it declares one, main states the promisor remote and the installed Git version in every brief, and on Git "
         "2.45.0 or later every Git command main or a role runs in that checkout carries `--no-lazy-fetch`.",
         "On an older Git no object read can be guaranteed not to fetch a missing object, so main runs no Git command in "
@@ -411,12 +444,16 @@ class RepositorySafetyTests(unittest.TestCase):
         # Deviation D-6: the hooks snapshot is defined by itself, no longer by a list under item 6.
         "records a snapshot of what item 2 read, the hooks (the entries of the effective hooks directory, found with "
         "`rev-parse --git-path hooks` and listed from file-system metadata as Paths and names reads, and the "
-        "`hook.<name>` keys of the configuration) and `info/attributes`, and before every later dispatch and in every "
-        "comparison of the workspace after a call reads them again; a difference is reported and asked about before the "
-        "next dispatch;",
+        # Adversarial review of C1, finding F1: the `hook.<name>` keys are read by their pattern.
+        "`hook.<name>` keys of the configuration, read by the pattern Safe Git invocation gives for them, with includes "
+        "followed) and `info/attributes`, and before every later dispatch and in every comparison of the workspace after "
+        "a call reads them again; a difference is reported and asked about before the next dispatch;",
         "compares the workspace after each call under the same restrictions as item 3.",
+        # Adversarial review of C1, finding F1: only the keys that define a filter driver are read.
         "Before comparing any path under item 3, main checks the `filter` attribute of every path it will compare and, "
-        "after the user has answered any question from item 2, reads the effective configuration with its includes to "
+        "after the user has answered any question from item 2, reads, with includes followed, only the keys of the "
+        "effective configuration that define a filter driver (`filter.<driver>.clean`, `filter.<driver>.smudge`, "
+        "`filter.<driver>.process` or `filter.<driver>.required`), by the pattern Safe Git invocation gives for them, to "
         "find which drivers are defined.",
         "When any compared path's filter names a defined driver, main stops and asks the user for that call; until the "
         "user decides, the call is not dispatched and the claim is reported blocked.",
@@ -482,8 +519,8 @@ class RepositorySafetyTests(unittest.TestCase):
     )
     WRITING_BEFORE = (
         "Before the first such operation in a session, even one that comes before any dispatch, main runs the version "
-        "check of Main's preparation and, of its item 2, only the detection of a promisor remote, and no command under "
-        "this rule reads an object before that detection; on Git older than 2.45.0 in a checkout with a promisor remote, "
+        "check of Main's preparation and, of its item 2, only the detection of a promisor remote, which reads only the "
+        "keys that declare one, and no command under this rule reads an object before that detection; on Git older than 2.45.0 in a checkout with a promisor remote, "
         "main does not perform the operation and tells the user they may run it themselves.",
         "Main then establishes, with the common prefix and forms of Safe Git invocation and the metadata checks of Paths "
         "and names, never with `git status`, a working-tree diff or another command that compares or refreshes the "
@@ -926,9 +963,9 @@ class RepositorySafetyTests(unittest.TestCase):
         reference = read(REFERENCE)
         self.assertEqual(reference.count("proceed as configured"), 1)
         self.assertIn("There is no choice to proceed as configured", reference)
-        # The effective configuration read covers every scope.
-        self.assertIn("and with `--includes` in place of `--no-includes`, in every scope, for the effective "
-                      "configuration", section)
+        # The effective configuration read covers every scope; since finding F1 of C1's Adversarial review it reads only
+        # the keys a pattern names (test_a_read_that_follows_includes_reads_only_the_named_keys).
+        self.assertIn(f"`{self.CONFIG_KEYS_FORM}`, in every scope,", section)
         # Every sentence that names an older Git stops: nothing is dispatched or performed there.
         older = [s for s in self.sentences(reference) if re.search(r"older (?:Git|than)", s)]
         self.assertGreaterEqual(len(older), 4)
@@ -944,6 +981,57 @@ class RepositorySafetyTests(unittest.TestCase):
         for path in (REFERENCE, *sorted(AGENTS.glob("*.md"))):
             with self.subTest(place=path.name):
                 self.assertNotIn(self.LAZY_FETCH_REMOVED, " ".join(read(path).split()))
+
+    def test_a_read_that_follows_includes_reads_only_the_named_keys(self):
+        """Adversarial review of C1, finding F1, regression: every configuration read that follows includes (item 4.2's
+        promisor detection, item 4.3's filter drivers, item 4.4's hook keys and item 6's detection before an operation)
+        reads only the keys a stated pattern names, never a whole listing; the whole listing is read only without
+        includes, and an exit other than 0 or 1 leaves the answer not established."""
+        section = self.source("reference#Safe Git invocation")
+        rows = [line for line in section.splitlines() if line.startswith("| Configuration reads |")]
+        self.assertEqual(rows, [self.CONFIG_ROW])
+        self.assert_pinned({"reference#Safe Git invocation": self.CONFIG_KEYS})
+        reference = read(REFERENCE)
+        flat = " ".join(reference.split())
+        self.assertNotIn(self.CONFIG_ROW_REMOVED, flat)
+        # No form, anywhere in the reference, lists the configuration while following includes.
+        for span in re.findall(r"`(git <prefix> config [^`]*)`", reference):
+            with self.subTest(span=span):
+                if "--list" in span:
+                    self.assertIn("--no-includes", span)
+                    self.assertNotIn("--includes ", span.replace("--no-includes", ""))
+                else:
+                    self.assertEqual(span, self.CONFIG_KEYS_FORM)
+        self.assertNotRegex(flat, r"reads the effective configuration with its includes")
+        # Each place that follows includes says it reads only the keys it needs, by the pattern stated once.
+        preparation = self.source("reference#Main's preparation")
+        for phrase in ("only the keys of the effective configuration that declare a promisor remote",
+                       "`hook.<name>` keys of the configuration, read by the pattern Safe Git invocation gives for "
+                       "them, with includes followed",
+                       "only the keys of the effective configuration that define a filter driver"):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, " ".join(preparation.split()))
+        self.assertIn("only the detection of a promisor remote, which reads only the keys that declare one,",
+                      self.WRITING_BEFORE[0])
+        for name, pattern in self.CONFIG_PATTERNS.items():
+            with self.subTest(pattern=name):
+                self.assertEqual(flat.count(f"`'{pattern}'`"), 1)
+                re.compile(pattern)
+        # The patterns name exactly the keys item 4.2 and item 4.3 list.
+        promisor = re.compile(self.CONFIG_PATTERNS["promisor"])
+        filters = re.compile(self.CONFIG_PATTERNS["filter"])
+        for key in ("extensions.partialclone", "remote.origin.promisor", "remote.a.b.partialclonefilter"):
+            with self.subTest(key=key):
+                self.assertIsNotNone(promisor.search(key))
+        for key in ("remote.origin.url", "extensions.partialclonex", "user.email", "remote.origin.promisorx"):
+            with self.subTest(key=key):
+                self.assertIsNone(promisor.search(key))
+        for key in ("filter.lfs.clean", "filter.x.smudge", "filter.x.process", "filter.x.required"):
+            with self.subTest(key=key):
+                self.assertIsNotNone(filters.search(key))
+        for key in ("filter.x.other", "user.filter.clean", "diff.x.textconv"):
+            with self.subTest(key=key):
+                self.assertIsNone(filters.search(key))
 
     # Item 1: the glossary entry, which ADR 0011 and the reference use.
     # Item 7 as revised for deviation D-6: the entry states the threat model as D1 does, keeping the term's scope and its
@@ -1340,6 +1428,10 @@ class RepositorySafetyTests(unittest.TestCase):
          "**審查之前：**主 Agent 每個 session 檢查一次 Git 是否為 2.32 或更新版本，在不跟隨 include 的情況下讀取儲存庫設定，設定指向專案"
          "外或移動了工作樹時，會在派出前先問你；比對工作區會執行 filter 時，該次呼叫前也會問你；派出之間儲存庫的 Git 中繼資料"
          "有變化時，會再問你。"),
+        # Adversarial review of C1, finding F1: a read that follows includes reads only the keys main needs.
+        ("Where it must follow includes, it reads only the few settings it needs, those for a promisor remote, filter "
+         "drivers and hooks.",
+         "必須跟隨 include 時，主 Agent 只讀取它需要的少數設定，也就是 promisor remote、filter driver 與 hook 的設定。"),
         # Deviation D-1: promisor detection and the older-Git outcome, summarised from item 4.2.
         ("In a partial clone, a checkout with a promisor remote, main states the promisor remote and the Git version in "
          "every brief, and every Git command carries `--no-lazy-fetch` on Git 2.45.0 or later; on an older Git main "
@@ -1978,16 +2070,20 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 # Deviation D-3: under Before add, commit, tag or push every form carries `--no-replace-objects` after
                 # the common prefix, so each form also runs that way with the installed Git.
                 for variant in (form, form.replace("git <prefix> ", "git <prefix> --no-replace-objects ", 1)):
-                    command = variant
-                    for placeholder, value in substitutions.items():
-                        command = command.replace(placeholder, value)
-                    with self.subTest(form=variant):
-                        result = git(*shlex.split(command)[1:])
-                        # A `--quiet` form of item 6 answers with its exit code: 1 for an index that differs from the
-                        # tree. Any other failure, such as an unknown option, is an error.
-                        expected = (0, 1) if "--quiet" in form else (0,)
-                        self.assertIn(result.returncode, expected, result.stderr)
-                        self.assertEqual(ran(), set(), f"{command} ran a configured program")
+                    # Finding F1 of C1's Adversarial review: the key read runs with each pattern the reference states.
+                    patterns = RepositorySafetyTests.CONFIG_PATTERNS.values() if "<pattern>" in variant else ("",)
+                    for pattern in patterns:
+                        command = variant.replace("<pattern>", pattern)
+                        for placeholder, value in substitutions.items():
+                            command = command.replace(placeholder, value)
+                        with self.subTest(form=variant, pattern=pattern):
+                            result = git(*shlex.split(command)[1:])
+                            # A `--quiet` form of item 6 answers with its exit code: 1 for an index that differs from
+                            # the tree; a key read exits 1 when no key matches. Any other failure, such as an unknown
+                            # option, is an error.
+                            expected = (0, 1) if "--quiet" in form or "--get-regexp" in form else (0,)
+                            self.assertIn(result.returncode, expected, result.stderr)
+                            self.assertEqual(ran(), set(), f"{command} ran a configured program")
             # Each control that ran is one this check covered, so a form that dropped its option would be caught.
             self.assertTrue(controls <= {"monitor", "textconv", "extdiff"}, controls)
 
@@ -2196,23 +2292,101 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                     self.skipTest(f"Git cannot be run: {error}")
 
             self.assertEqual(git("init", "-q", ".").returncode, 0)
+            # Before any promisor setting exists, the key read exits 1: none declared.
+            detect = [*prefix, *shlex.split(RepositorySafetyTests.CONFIG_KEYS_FORM.replace(
+                "<pattern>", RepositorySafetyTests.CONFIG_PATTERNS["promisor"]))[2:]]
+            none = git(*detect)
+            if none.returncode not in (0, 1):
+                self.skipTest(f"this Git cannot read configuration keys with scopes: {none.stderr!r}")
+            self.assertEqual((none.returncode, none.stdout), (1, b""))
             # A file in the working tree, as a tracked file would be, supplies the setting through an include.
             (repo / "settings.cfg").write_bytes(b'[remote "origin"]\n\tpromisor = true\n')
             self.assertEqual(git("config", "include.path", "../settings.cfg").returncode, 0)
-            local = git(*prefix, "config", "--list", "--show-origin", "--show-scope", "--no-includes", "--local")
-            effective = git(*prefix, "config", "--list", "--show-origin", "--show-scope", "--includes")
+            local = git(*prefix, *shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:], "--local")
+            effective = git(*detect)
             if local.returncode or effective.returncode:
                 self.skipTest(f"this Git cannot read configuration with scopes: {(local.stderr or effective.stderr)!r}")
             self.assertIsNone(pattern.search(local.stdout.decode("utf-8")), "the include-less read found the setting")
-            found = [line for line in effective.stdout.decode("utf-8").splitlines() if pattern.search(line)]
+            # Finding F1 of C1's Adversarial review: the key read prints only the matching key.
+            found = effective.stdout.decode("utf-8").splitlines()
             self.assertEqual(len(found), 1, found)
             self.assertTrue(found[0].startswith("local\t"), found[0])
             self.assertIn("settings.cfg", found[0])
-            self.assertTrue(found[0].endswith("remote.origin.promisor=true"), found[0])
+            self.assertTrue(found[0].endswith("\tremote.origin.promisor true"), found[0])
             # The detection keys match the other two settings too, whatever the remote's name.
             for line in ("extensions.partialclone=origin", "remote.up-stream.partialclonefilter=blob:none"):
                 with self.subTest(line=line):
                     self.assertIsNotNone(pattern.search(line))
+
+    def test_a_read_that_follows_includes_prints_only_the_named_keys_of_every_file_it_reaches(self):
+        """Adversarial review of C1, finding F1, regression with the installed Git: in a repository isolated from the
+        user's configuration, whose local configuration includes a working-tree file that in turn includes a file
+        outside the repository, each key read the reference gives finds the promisor, filter-driver and hook keys at
+        every level and prints no other key, so an unrelated value in the outside file never appears, while a whole
+        listing that follows includes prints it (positive control). The outside file stays in this test's temporary
+        directory, and nothing is fetched: the repository has no remote to contact."""
+        reference = read(REFERENCE)
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, elsewhere, empty = root / "repo", root / "elsewhere", root / "gitconfig"
+            repo.mkdir()
+            elsewhere.mkdir()
+            empty.write_bytes(b"")
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+
+            def git(*args):
+                try:
+                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            if git("init", "-q", ".").returncode:
+                self.skipTest("this Git cannot initialise a repository")
+            marker = "feather-unrelated-" + os.urandom(8).hex()
+            outside = elsewhere / "outside.cfg"
+            outside.write_text(f'[remote "far"]\n\tpartialclonefilter = blob:none\n[filter "far"]\n\tsmudge = cat\n'
+                               f'[hook "far"]\n\tcommand = true\n[sample]\n\tnote = {marker}\n', encoding="utf-8",
+                               newline="\n")
+            # The working-tree file supplies a promisor setting and includes the outside file by its absolute path.
+            (repo / "tree.cfg").write_text(f'[remote "origin"]\n\tpromisor = true\n[include]\n\tpath = '
+                                           f'"{outside.as_posix()}"\n', encoding="utf-8", newline="\n")
+            for key, value in (("include.path", "../tree.cfg"), ("filter.near.clean", "cat")):
+                self.assertEqual(git("config", key, value).returncode, 0)
+
+            # Positive control: a whole listing that follows includes prints the outside file's unrelated value.
+            whole = git(*prefix, "config", "--list", "--show-origin", "--show-scope", "--includes")
+            self.assertEqual(whole.returncode, 0, whole.stderr)
+            self.assertIn(marker, whole.stdout.decode("utf-8"))
+            # The include-less listing of item 4.2 shows the include, not what it reaches.
+            local = git(*prefix, *shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:], "--local")
+            self.assertEqual(local.returncode, 0, local.stderr)
+            self.assertIn("include.path=../tree.cfg", local.stdout.decode("utf-8"))
+            self.assertNotIn(marker, local.stdout.decode("utf-8"))
+            self.assertNotIn("promisor", local.stdout.decode("utf-8"))
+
+            expected = {"promisor": {"remote.origin.promisor true", "remote.far.partialclonefilter blob:none"},
+                        "filter": {"filter.near.clean cat", "filter.far.smudge cat"},
+                        "hook": {"hook.far.command true"}}
+            for name, pattern in RepositorySafetyTests.CONFIG_PATTERNS.items():
+                command = RepositorySafetyTests.CONFIG_KEYS_FORM.replace("<pattern>", pattern)
+                with self.subTest(pattern=name):
+                    result = git(*prefix, *shlex.split(command)[2:])
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    output = result.stdout.decode("utf-8")
+                    self.assertNotIn(marker, output)
+                    entries = [line.split("\t") for line in output.splitlines()]
+                    # Each line is scope, origin and the key with its value, and every key is one the pattern names.
+                    self.assertTrue(all(len(entry) == 3 and entry[0] == "local" for entry in entries), entries)
+                    self.assertEqual({entry[2] for entry in entries}, expected[name])
+                    for entry in entries:
+                        self.assertIsNotNone(re.search(pattern, entry[2].split(" ", 1)[0]), entry)
+            # A pattern no key matches exits 1 and prints nothing, which the reference records as none declared.
+            unmatched = RepositorySafetyTests.CONFIG_KEYS_FORM.replace("<pattern>", r"^nothing\.")
+            none = git(*prefix, *shlex.split(unmatched)[2:])
+            self.assertEqual((none.returncode, none.stdout), (1, b""))
 
 
 if __name__ == "__main__":
