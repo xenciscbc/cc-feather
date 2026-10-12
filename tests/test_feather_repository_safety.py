@@ -191,6 +191,20 @@ class RepositorySafetyTests(unittest.TestCase):
         # contradicted the object-read, attribute-check and content-hashing forms and the safe-name rule.
         LISTED_NAMES,
     )
+    # Item 6 as revised for deviation D-2: the preparation forms the operation profile needs, main's alone, each run by
+    # the behaviour check below.
+    PROFILE_FORMS = (
+        "git <prefix> remote get-url --push --all <remote>",
+        "git <prefix> symbolic-ref --quiet HEAD",
+        "git <prefix> rev-parse --verify --quiet HEAD",
+        "git <prefix> rev-parse --verify --quiet refs/stash",
+        "git <prefix> rev-parse --verify --quiet <pseudo-ref>",
+        "git <prefix> ls-files -z --unmerged",
+        "git <prefix> ls-tree -z --full-tree <commit> -- '.gitmodules'",
+        "git <prefix> rev-parse --git-dir",
+        "git <prefix> rev-parse --git-path <name>",
+        "git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff --no-textconv <commit> --",
+    )
     # The per-operation forms (Implementation Decisions), each run by the behaviour check below.
     FORMS = (
         "git <prefix> ls-files -z --stage",
@@ -206,12 +220,22 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> check-attr -z <attribute> -- '<path>'",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         "git <prefix> hash-object -- '<path>'",
+        *PROFILE_FORMS,
     )
     # Finding F1: the forms only main runs, for its preparation; the table holds these and ROLE_FORMS and nothing else.
+    # Deviation D-2 adds the profile's forms, which only main's checks under item 6 use.
     MAIN_ONLY_FORMS = (
         "git <prefix> config --list --show-origin --show-scope --no-includes",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         "git <prefix> hash-object -- '<path>'",
+        *PROFILE_FORMS,
+    )
+    # Deviation D-2: the sentence that keeps the profile's forms to main's checks under item 6. It is not part of
+    # CONFINED, which the shell roles' paragraph carries word for word, because it names main's operations.
+    PROFILE_FORMS_MAIN_ONLY = (
+        "The forms for push URLs, the commit `HEAD` names, the stash and operation-state refs, unmerged entries, "
+        "`.gitmodules` in a commit, Git-directory paths and the index against a tree are for main's checks under Before "
+        "add, commit, tag or push only."
     )
     # Finding F1: the forms a role runs, exactly those its paragraph lists.
     ROLE_FORMS = (
@@ -279,8 +303,11 @@ class RepositorySafetyTests(unittest.TestCase):
         "INCONCLUSIVE.",
         "Main makes this one determination, asks whether the repository is trusted the first time a session needs to "
         "execute its code, and states the outcome in every brief of a role that may execute code.",
+        # Deviation D-2: the exception covers what an approved program loads, as item 6 states.
         "The only exception is a program the user approved by name under Before add, commit, tag or push, for the "
-        "operation and content that approval covers.",
+        "operation and content that approval covers, including what that program loads from the repository as it stood "
+        "at the answer and later changes written wholly by main or a role it dispatched in this session, as that section "
+        "states.",
         "Who wrote a change is decided only from what the user said in this conversation and the commits and edits main, "
         "or a role main dispatched, made in this session, never from Git metadata, a handoff or other repository "
         "content; a change of mixed origin counts as not written in this session.",
@@ -360,61 +387,256 @@ class RepositorySafetyTests(unittest.TestCase):
         "unexamined. When a review assignment's brief gives no allowlist, report it as a missing requirement instead of "
         "reading the repository."
     )
-    WRITING_PROMISOR = (
+    # Item 6 as revised for deviation D-2 (Adversarial review of C1, BROKEN, F1–F3; the plan reviews of D-2 and of the
+    # profile): main adds, commits, tags or pushes only in a fixed form and only inside an operation profile that admits
+    # nothing it does not name, and leaves everything else for the user to run. Every rule of the spec's item 6 is
+    # pinned whole here, in the order the section states it.
+    WRITING = (
+        "This rule adds a condition to main's existing authority under [review state](review-state.md)'s Commits "
+        "before the passes and Repository authority; it grants no authority, and a tag still needs the user's "
+        "authority for tagging.",
+        "Main performs `git add`, commit, tag or push only when the repository and the operation fall inside the "
+        "operation profile below, which admits nothing it does not name.",
+        "A setting, Git-directory entry or state outside the profile, or one main cannot establish, means main does "
+        "not perform the operation, names what fell outside the profile and tells the user they may run the "
+        "operation themselves.",
+        "Main never offers to run configuration it cannot identify as configured, since an answer to that would not "
+        "be an approval of named programs under the exception in Execution.",
+        "Inside the profile, the only programs the repository can choose that Git may run are the kinds the table "
+        "names, hooks, filters and signing programs, and each runs only under the user's answer for it by name.",
+        "Each operation runs only in its fixed form:",
+        "| `git add` | the claim's files only, as safe names after `--` | hooks; filter drivers selected for any "
+        "path in the index or being added | `-c core.hooksPath=` a directory outside the project with nothing in it, "
+        "and each `hook.<name>` the configuration defines disabled |",
+        "| commit | the whole argument list is the settings below, `-m` or `-F`, `--quiet` and the skipping flags; "
+        "no `-a`, `-i`, `-o`, pathspec, `--amend`, `--allow-empty`, `-e`, `-v`, `--status` or `--trailer` | hooks; "
+        "filter drivers selected for any path in the index; signing: `commit.gpgSign`, `gpg.program`, "
+        "`gpg.<format>.program`, `gpg.ssh.defaultKeyCommand` | as for `git add`, plus `--no-verify`, `--no-gpg-sign` "
+        "and `-c commit.gpgSign=false` |",
+        "| tag | annotated message by `-m` or `-F`, no editor | hooks; signing: `tag.gpgSign`, "
+        "`tag.forceSignAnnotated` and the signing programs above | as for `git add`, plus `--no-sign` and `-c "
+        "tag.gpgSign=false -c tag.forceSignAnnotated=false` |",
+        "| push | one remote named by main and an explicit refspec for each ref, with `--no-follow-tags`, "
+        "`--recurse-submodules=no` and `--no-signed` | hooks; and, not a program, every effective push URL of that "
+        "remote and each ref it updates | as for `git add`, plus `--no-verify` |",
+        "Every operation runs with the common prefix of Safe Git invocation, so fsmonitor is disabled with `-c "
+        "core.fsmonitor=` and no pager runs, and with `-c maintenance.auto=false -c gc.auto=0 -c "
+        "rerere.enabled=false`, because a commit otherwise starts `git maintenance run --auto`, whose garbage "
+        "collection can run a program such as `gc.recentObjectsHook`, and replays recorded resolutions through a "
+        "configured merge driver whenever the Git directory holds `rr-cache`.",
+        "A push also carries `-c push.gpgSign=false -c push.negotiate=false`, because signing a push runs the "
+        "signing program and negotiation starts a `git fetch` that reads a remote section named by the push URL "
+        "itself.",
+        "These settings stay as a second line of defence even where the profile already excludes what they guard "
+        "against, and a setting the user's own configuration enables is disabled by them too.",
+        "Before every such operation, including one that comes before the session's first dispatch, and after the "
+        "version check of Main's preparation, main first reads the local and worktree configuration without "
+        "includes, and an `include.*` or `includeIf.*` key there puts the repository outside the profile before Git "
+        "follows any include.",
+        "It then makes the checks of Main's preparation item 2 on the configuration read without includes, and any "
+        "condition that item would ask the user about puts the repository outside the profile, so main reports it "
+        "instead of asking.",
+        "Main then runs that item's detection of a promisor remote, and only then establishes the rest of the "
+        "profile, the state its answer depends on and what the operation will write.",
+        "No object is read and nothing else of the profile is established before that detection, so the checks "
+        "before it can only find the repository outside the profile.",
+        "Main does all of this with the common prefix and forms of Safe Git invocation and the metadata checks of "
+        "Paths and names, never with `git status`, a working-tree diff or another command that compares or refreshes "
+        "the working tree.",
+        "The repository and the operation are inside the profile only when all of these hold:",
+        "The version check of Main's preparation has run.",
+        "Git's top-level directory is the project, and its Git directory is the project's own `.git` directory, not "
+        "a gitfile, with no `commondir`, no `worktrees` entry, no `objects/info/alternates`, no file under `remotes` "
+        "or `branches` and no `modules` directory.",
+        "The index holds no gitlink and the tree `HEAD` names has no `.gitmodules`.",
+        "No promisor remote is declared, so a partial clone is outside the profile on every Git version.",
+        "Linked worktrees, alternates, partial clones and submodules are deferred to later work.",
+        "None of these operation states exists: a pseudo-ref `MERGE_HEAD`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, or "
+        "an entry `SQUASH_MSG`, `sequencer`, `rebase-merge` or `rebase-apply` in the Git directory.",
+        "The Git directory holds no `rr-cache` and no `MERGE_RR`, and the index has no unmerged entry.",
+        "Read first without includes, so that Git follows none, and then with origins and scopes, the local and "
+        "worktree configuration has no `include.*` or `includeIf.*` key, and every key in it is one of these, with a "
+        "value of the kind stated: `core.repositoryformatversion` 0 or 1; `extensions.objectformat` `sha1` or "
+        "`sha256`, and no other `extensions.*` key; `core.bare` false; `core.filemode`, `core.symlinks`, "
+        "`core.ignorecase`, `core.precomposeunicode` and `core.longpaths`, booleans; `core.logallrefupdates`, a "
+        "boolean or `always`; `core.autocrlf`, a boolean or `input`; `core.eol`, `lf`, `crlf` or `native`; "
+        "`core.safecrlf`, a boolean or `warn`; `core.hooksPath`, a relative path that passes the name rule of Paths "
+        "and names and names a path inside the project that, when it exists, is a directory, whose hooks are named "
+        "like any other; `remote.<name>.url` and `remote.<name>.pushurl`, and `remote.<name>.fetch` only as "
+        "`+refs/heads/*:refs/remotes/<name>/*`, or `+refs/heads/<branch>:refs/remotes/<name>/<branch>` as a "
+        "single-branch clone writes it, for the same name and a branch name that passes the name rule, since a push "
+        "updates local tracking refs through it; `branch.<name>.remote` and `branch.<name>.merge`, for names that "
+        "pass the name rule, `branch.<name>.remote` naming such a remote and `branch.<name>.merge` a ref name that "
+        "passes it; and, as data the four operations do not act on, `remote.<name>.prune`, "
+        "`remote.<name>.gh-resolved`, `branch.<name>.rebase`, `branch.<name>.vscode-merge-base`, `pull.rebase`, "
+        "`pull.ff`, `lfs.repositoryformatversion`, `user.name` and `user.email`.",
+        "Any other key, such as one under `url.`, `http.`, `credential.`, `alias.`, `hook.`, `filter.`, `gc.`, "
+        "`maintenance.`, `rerere.`, `push.`, `gpg.`, `commit.`, `tag.`, `submodule.` or `remote.<name>.vcs`, "
+        "`core.sshCommand`, `core.askPass`, `core.fsmonitor` or `core.worktree`, puts the repository outside the "
+        "profile.",
+        "The user's global and system configuration are trusted, as Scope and assurance states, but a setting there "
+        "that names a program or file by a relative path or by a path inside the project makes Git run or load "
+        "repository content, and an include there whose file lies inside the project brings repository content into "
+        "that configuration.",
+        "Main checks these settings in the global and system configuration: `core.hooksPath`, `core.attributesFile`, "
+        "`core.excludesFile`, every `include.path` and `includeIf.<condition>.path`, every `filter.<driver>.clean`, "
+        "`.smudge` and `.process`, `gpg.program`, `gpg.<format>.program`, `gpg.ssh.defaultKeyCommand`, every "
+        "`credential.helper` and `credential.<url>.helper`, `core.askPass` and `core.sshCommand`, taking the first "
+        "word of a command; any other key is trusted and its effects are residual risk.",
+        "A hook, filter or signing program reached this way is named like any other; any other program reached this "
+        "way, and any such include, puts the repository outside the profile.",
+        "A path embedded later in a command string, such as an `ssh -F` argument, and a conditional include in that "
+        "configuration whose condition the repository can satisfy, such as `hasconfig:remote.*.url:`, `onbranch:` or "
+        "`gitdir:`, bringing in another file of the user's own, are residual risk, which the READMEs state.",
+        "The hooks are the files not ending in `.sample` in the effective hooks directory, with `core.hooksPath` "
+        "from any scope applied, and the hooks the configuration of any scope defines under `hook.<name>`; main "
+        "names every one of them.",
+        "A `core.hooksPath` naming a directory that does not exist, as before a hook manager is installed, means no "
+        "hook from it.",
+        "For every path in the index and every path being added, main resolves the `filter` attribute with Git's own "
+        "attribute check, which applies the tracked `.gitattributes` files, `info/attributes` and the attributes "
+        "file the configuration names.",
+        "Each path whose filter names a driver defined in any scope, such as Git LFS defined in the user's global "
+        "configuration, has its driver named.",
+        "When the configuration of any scope enables signing for a commit or tag, main names the signing program, "
+        "which is the default `gpg`, `gpgsm` for the X.509 format or `ssh-keygen` for the SSH format, when none is "
+        "configured.",
+        "Each claim file's name passes the name rule of Paths and names, and no claim path is a gitlink in the index "
+        "or a directory on disk, since adding one can run the submodule's status.",
+        "For a commit, `git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff "
+        "--no-textconv <commit> --`, the index-against-a-tree form of Safe Git invocation, where `<commit>` is the "
+        "commit `HEAD` names or, for an unborn `HEAD`, the empty tree of the repository's object format, exits 1, so "
+        "Git itself finds something to commit with intent-to-add entries ignored.",
+        "On exit 0 main does not commit and reports it, and any other exit leaves the state not established, because "
+        "a commit with nothing to commit runs a status that refreshes each submodule's index and so runs that "
+        "submodule's own filters.",
+        "For a push, the remote's name passes the name rule of Paths and names and the remote is defined in the "
+        "local configuration.",
+        "Main resolves every effective push URL of that remote, after any `insteadOf` and `pushInsteadOf` rewriting "
+        "the trusted configuration applies, and every URL, as a whole string, has one of two shapes: `https://` or "
+        "`ssh://`, in exact lower case, then an authority of `host` or `user@host`, then `/` and a path; or the "
+        "scp-like `user@host:path`, in which `user@` is required, so that no drive-letter path such as `c:repo` or "
+        "`c:/dir` matches.",
+        "In both, the whole URL holds only ASCII letters, digits and `.`, `_`, `-`, `~` and `/`, besides the "
+        "scheme's `://`, at most one `@`, which ends `user`, and, in the scp-like shape only, the one `:` after the "
+        "host, so it carries no port, query, fragment, percent-encoding, backslash, whitespace or second `@`; `user` "
+        "begins with an ASCII letter or digit and holds only ASCII letters, digits, `.`, `_` and `-`; and the host "
+        "is at least two characters, made of dot-separated labels that each begin with an ASCII letter and hold only "
+        "ASCII letters, digits and hyphens, with no trailing dot, and is none of the loopback names `localhost`, "
+        "`localhost.localdomain`, `ip6-localhost`, `ip6-loopback` and `host.docker.internal`, no name ending in "
+        "`.localhost` and none of this machine's names, compared without regard to case.",
+        "This machine's names are the name the operating system's own `hostname` command reports, that name followed "
+        "by `.local`, and its fully qualified name when the system reports one.",
+        "These shapes exclude every IP literal however it is spelled.",
+        "Any other destination, such as a local path, a `file://` URL or a `<transport>::` remote-helper address, "
+        "can make Git run on this machine programs the profile does not name, such as the receive hooks of a "
+        "repository at that path, so it is outside the profile and the user's answer cannot override this.",
+        "No entry anywhere in the Git directory, the `.git` directory itself included, is a symbolic link, junction "
+        "or reparse point of any kind, and every entry anywhere in it is a directory or a regular file, so a socket, "
+        "FIFO or device puts the repository outside the profile; outside `objects`, every regular file has a link "
+        "count of 1.",
+        "Main establishes this with a walk of the whole Git directory using the metadata checks of Paths and names, "
+        "following no link and applying the link-count rule only outside `objects`.",
+        "Hard links under `objects`, which a local clone makes, are allowed, because Git writes new object files and "
+        "never writes content into an existing one.",
+        "Git creates `index`, `HEAD`, refs and `packed-refs` through a lock file it then renames, which a link at "
+        "the final name does not redirect but a directory link does, and it opens `COMMIT_EDITMSG` and the reflogs "
+        "under `logs` for writing in place without refusing a link, and a commit writes `COMMIT_EDITMSG` even with "
+        "`-m`; so a planted link would make main's own operation overwrite or append to a file outside the project "
+        "with text the local configuration supplies.",
+        "A message main passes with `-F` is a file main writes in its own scratch directory outside the project; "
+        "before the operation, each component of its path below the scratch directory passes the link check of Paths "
+        "and names, it is a regular file with a link count of 1, and its canonical path lies inside the scratch "
+        "directory's canonical path; the requirement of Paths and names that a canonical path lie inside the "
+        "project, which covers review reads, does not apply to it.",
+        "Safe Git invocation lists among main's preparation forms every read the profile needs: the configuration "
+        "reads with origins and scopes; `remote get-url --push --all <remote>` for the push URLs; `symbolic-ref "
+        "--quiet HEAD` and `rev-parse --verify --quiet HEAD` for the commit `HEAD` names or that it is unborn; "
+        "`rev-parse --verify --quiet refs/stash` for the stash ref; `rev-parse --verify --quiet` of each "
+        "operation-state pseudo-ref of profile item 2; `ls-files --unmerged` for any conflict and the index listing, "
+        "`ls-files --stage`, for gitlinks; `ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`, for that "
+        "file; the attribute check for filters; the comparison of the index with a tree in profile item 9; and "
+        "`rev-parse --git-path <name>` and `rev-parse --git-dir` for where each entry the profile checks in the Git "
+        "directory lives, including the operation-state pseudo-refs as files.",
+        "Main then establishes each such entry's existence, type, link count and directory entries from file-system "
+        "metadata without following links and without reading content, as profile item 11's walk does, in a script "
+        "outside the project run with `python -I` that receives the path on standard input and not as an argument, "
+        "since that path comes from command output.",
+        "This machine's names for profile item 10 come from the operating system's own `hostname` command, which is "
+        "not a Git command and reads nothing from the repository.",
+        "A host name that resolves to this machine is not detected and is residual risk, which the READMEs state: an "
+        "attacker can choose a public DNS name that resolves to a loopback address, the hosts file or the user's own "
+        "SSH configuration can map a name to this machine, trusted transport settings such as `http.proxy` or "
+        "`core.sshCommand` can direct the connection here, and an HTTP server can redirect the push here, so the "
+        "remaining defence against a push that runs this machine's receive hooks through such a name is that this "
+        "machine runs no SSH or HTTP Git server reachable that way.",
+        "The profile was established from Git 2.43's documentation and source and is checked by outcome verification "
+        "with the installed Git; behaviour of other Git versions from 2.32 on that the profile does not anticipate "
+        "is residual risk, which the READMEs state.",
+        "When the profile admits the operation and names programs, main names each program with the SHA-256 of its "
+        "content, read under Paths and names (a hook file, or the repository file a configured command names; for a "
+        "configured command naming no repository file, its command string), and for a push the destination URL and "
+        "refs, and asks the user to choose one of three answers:",
+        "This is the user's approval of those programs under the exception in Execution.",
+        "This is the user's explicit permission to skip hooks, and main offers it only when every named hook can be "
+        "disabled on the installed Git as the table shows.",
+        "This leaves the claim blocked as for a user instruction not to commit or push.",
+        "Filters and the destination cannot be skipped, because skipping would change what is written or where it is "
+        "sent, so for them the choices are only run or not perform.",
+        "When nothing is named and the operation is a push, main still asks about the destination.",
+        "When main cannot establish a program, its content or the effective destination, the operation is outside "
+        "the profile.",
+        "The answer covers exactly the programs, contents and destination main named, for the rest of the session; "
+        "when a later operation's names, a content hash or the destination differs, main asks again.",
+        "A content hash identifies only the file named, while a program may load other repository content, such as a "
+        "hook framework's configuration or a script's modules, so the question says the answer also covers what "
+        "those programs load from the repository as it stands at the answer, plus later changes written wholly by "
+        "main or a role it dispatched in this session, under the rule in Execution for who wrote a change.",
+        "The question also says that a named hook may send content to a destination profile item 10 does not check, "
+        "such as an LFS pre-push hook uploading to the server a tracked `.lfsconfig` names.",
+        "Main records, at the answer and after each of its own operations under this rule, the commit `HEAD` names, "
+        "or that it is unborn, and the stash ref, and asks again before an operation when any of these holds:",
+        "`HEAD` differs from the last commit main recorded;",
+        "the stash ref has changed since main recorded it;",
+        "what the operation will write includes staged content that main or a role in this session did not write, "
+        "which a commit would record and so make part of the recorded state;",
+        "main cannot establish any of this state, in which case it does not rely on the answer;",
+        "main ran, or was told of, a command since the answer that brought content into the index, the working tree "
+        "or the project's untracked files without being written by main or a role in this session, such as a merge, "
+        "cherry-pick, revert, stash apply or pop, a checkout or restore of paths, `git apply`, a submodule update or "
+        "a dependency install.",
+        "An operation's state, a pseudo-ref `MERGE_HEAD`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, an unmerged index "
+        "entry, or an entry `SQUASH_MSG`, `sequencer`, `rebase-merge` or `rebase-apply` in the Git directory, puts "
+        "the repository outside the profile under profile item 2, so a conflicted merge stops the operation even "
+        "when main's own commit would be what finally moves `HEAD`.",
+        "A change main can neither see in that state nor learn of, such as an edit made in another terminal, is "
+        "residual risk, which the READMEs state.",
+        "When an operation is outside the profile, the claim waits for the user to perform it, as for a user "
+        "instruction not to commit or push; the user's own commit then moves `HEAD`, so main's next operation under "
+        "this rule asks again.",
+        "The answer does not cross sessions and is not written into a handoff.",
+    )
+    # Item 6: the profile's eleven items, in order.
+    PROFILE_LABELS = ("Git and layout", "Operation state", "Local configuration",
+                      "Trusted configuration that reaches into the repository", "Hooks", "Filters", "Signing",
+                      "Claim paths", "Something to commit", "Push destination", "No write through a link")
+    # Item 6: the three answers inside the profile.
+    ANSWERS = ("Run them as named.", "Skip hooks and signing.", "Do not perform the operation.")
+    # Deviation D-2: the wording that listed transport settings by namespace and offered to run them as configured, and
+    # the promisor sentence that offered choices on an older Git, are gone from the reference.
+    WRITING_REMOVED = (
         "Before every such operation, including one that comes before the session's first dispatch, main detects a "
         "promisor remote as item 2 of Main's preparation describes; when there is one, on Git 2.45.0 or later the "
         "operation carries `--no-lazy-fetch`, and on an older Git main does not perform it and reports that item's "
-        "choices."
-    )
-    # Item 6 (R2-Q2, S6–S8, Q-S3, Q-S4, B7, plan review call 2's R2).
-    WRITING = (
-        "This rule adds a condition to main's existing authority under [review state](review-state.md)'s Commits before "
-        "the passes and Repository authority; it grants no authority, and a tag still needs the user's authority for "
-        "tagging.",
-        "Before each `git add`, commit, tag or push, main runs it only in its fixed form and first lists what the "
-        "repository's local Git metadata lets it run or use:",
-        "| `git add` | the claim's files only, as safe names after `--` | hooks; filter drivers on every tracked path and on "
-        "each untracked path being added | `-c core.hooksPath=` a directory outside the project with nothing in it, and "
-        "each configured `hook.<name>` disabled |",
-        "| commit | message by `-m` or `-F`, no editor, no `--trailer` | hooks; filter drivers on every tracked path; "
-        "signing: `commit.gpgSign`, `gpg.program`, `gpg.<format>.program`, `gpg.ssh.defaultKeyCommand` | as for `git "
-        "add`, plus `--no-verify`, `--no-gpg-sign` and `-c commit.gpgSign=false` |",
-        "| tag | annotated message by `-m` or `-F`, no editor | hooks; signing: `tag.gpgSign`, `tag.forceSignAnnotated` "
-        "and the signing programs above | as for `git add`, plus `--no-sign` and `-c tag.gpgSign=false -c "
-        "tag.forceSignAnnotated=false` |",
-        "| push | one remote named by main and an explicit refspec for each ref, with `--no-follow-tags` and "
-        "`--recurse-submodules=no` | hooks; the effective push URL of that remote and each ref it updates; every setting "
-        "in the local or worktree scope under `remote.<name>.*`, `url.*`, `http.*`, `credential.*`, `ssh.*`, "
-        "`protocol.*` and `push.*`, and `core.sshCommand`, `core.askPass` and `core.gitProxy` | as for `git add`, plus "
-        "`--no-verify`, `--no-signed` and `-c push.gpgSign=false` |",
-        "Hooks are files in the effective hooks directory that do not end in `.sample`, including one `core.hooksPath` "
-        "names in the local configuration, and hooks the configuration defines under `hook.<name>`; filters run during "
-        "the operation's index refresh even for paths it does not commit.",
-        "Main reads every list of this rule from the effective configuration with its includes followed, with each "
-        "setting's origin and scope, and a setting an include brings into the local or worktree scope counts as that "
-        "scope, so a setting a tracked file supplies through an include is listed like any other.",
-        "The push settings are listed by namespace, not by key, because any of them can change where content and "
-        "credentials go or which program runs while the URL stays the same.",
-        "Every operation also disables fsmonitor with `-c core.fsmonitor=`.",
-        # Item 6 as revised for deviation D-1 (N-1): an operation before the first dispatch is covered too.
-        WRITING_PROMISOR,
-        "A claim file whose name is unsafe under Paths and names is not added; main reports it and does not perform the "
-        "operation.",
-        "When the list is not empty, main names each program with the SHA-256 of its content, read under Paths and names "
-        "(a hook file, or the repository file a configured command names; for a configured command naming no repository "
-        "file, its command string), and for a push the destination URL and refs, and asks the user to choose one of "
-        "three answers:",
-        "This is the user's approval of those programs under the exception in Execution.",
-        "This is the user's explicit permission to skip hooks, and main offers it only when every listed hook can be "
-        "disabled on the installed Git as the table shows.",
-        "This leaves the claim blocked as for a user instruction not to commit or push.",
-        "Filters, transport settings and the destination cannot be skipped, because skipping would change what is "
-        "written or where it is sent, so for them the choices are only run or not perform.",
-        "When main cannot establish a program, its content or the effective destination, it does not perform the "
-        "operation and reports why.",
-        "The answer covers exactly the programs, contents and destination main named, for the rest of the session; when "
-        "a later operation's list, a content hash or the destination differs, main asks again.",
-        "The answer does not cross sessions and is not written into a handoff.",
+        "choices.",
+        "main runs it only in its fixed form and first lists what the repository's local Git metadata lets it run or "
+        "use:",
+        "The push settings are listed by namespace, not by key,",
+        "every setting in the local or worktree scope under `remote.<name>.*`, `url.*`, `http.*`, `credential.*`, "
+        "`ssh.*`, `protocol.*` and `push.*`, and `core.sshCommand`, `core.askPass` and `core.gitProxy`",
+        "Filters, transport settings and the destination cannot be skipped",
+        "Run them as configured.",
+        "When the list is not empty, main names each program",
     )
 
     def test_the_reference_states_its_scope_threat_model_and_assurance(self):
@@ -583,8 +805,158 @@ class RepositorySafetyTests(unittest.TestCase):
     def test_the_reference_states_mains_checks_before_add_commit_tag_or_push(self):
         self.assert_pinned({"reference#Before add, commit, tag or push": self.WRITING})
         section = self.source("reference#Before add, commit, tag or push")
-        for label in ("Run them as configured.", "Skip hooks and signing.", "Do not perform the operation."):
+        for label in self.ANSWERS:
             self.assertIn(f"- **{label}**", section)
+        # The profile's items are numbered 1 to 11 in the order the spec gives them, each with its label.
+        items = re.findall(r"^(\d+)\. \*([^*]+)\.\* ", section, re.M)
+        self.assertEqual(items, [(str(n), label) for n, label in enumerate(self.PROFILE_LABELS, 1)])
+        # The table has the spec's columns and one row for each of the four operations, and nothing else.
+        self.assertIn("\n| Operation | Fixed form | Programs main names for the user's answer | How hooks and signing are "
+                      "skipped when the user chooses to skip |\n", section)
+        rows = [line for line in section.splitlines()
+                if line.startswith("| ") and not line.startswith(("| ---", "| Operation |"))]
+        self.assertEqual([row.split(" | ", 1)[0] for row in rows], ["| `git add`", "| commit", "| tag", "| push"])
+
+    def test_the_profile_admits_nothing_it_does_not_name_and_checks_in_order(self):
+        """Deviation D-2, regression for the Adversarial review of C1 (BROKEN, F1–F3) and the plan reviews of D-2: the
+        operation runs only in its fixed form with the disabling settings; the include keys are refused before Git
+        follows any include, item 4.2's conditions are reported rather than asked about, and nothing else is established
+        before promisor detection; nothing outside the profile is offered to run as configured, and no lazy-fetch choice
+        remains for these operations, since a promisor remote puts the repository outside the profile."""
+        section = self.source("reference#Before add, commit, tag or push")
+        flat = " ".join(section.split())
+        order = ("after the version check of Main's preparation",
+                 "main first reads the local and worktree configuration without includes",
+                 "puts the repository outside the profile before Git follows any include",
+                 "It then makes the checks of Main's preparation item 2",
+                 "so main reports it instead of asking",
+                 "Main then runs that item's detection of a promisor remote",
+                 "and only then establishes the rest of the profile")
+        positions = [flat.index(phrase) for phrase in order]
+        self.assertEqual(positions, sorted(positions))
+        # The disabling settings stay as a second line of defence, and the push's fixed form refuses to sign.
+        for setting in ("`-c maintenance.auto=false -c gc.auto=0 -c rerere.enabled=false`",
+                        "`-c push.gpgSign=false -c push.negotiate=false`", "`-c core.fsmonitor=`"):
+            with self.subTest(setting=setting):
+                self.assertIn(setting, flat)
+        push = next(line for line in section.splitlines() if line.startswith("| push |"))
+        fixed_form, programs, skipping = push.strip("| ").split(" | ")[1:]
+        self.assertIn("`--no-signed`", fixed_form)
+        self.assertIn("not a program, every effective push URL of that remote", programs)
+        self.assertEqual(skipping, "as for `git add`, plus `--no-verify`")
+        # A partial clone is outside the profile on every Git version, so the section offers no lazy fetch and no
+        # choice that depends on the Git version.
+        self.assertNotIn("--no-lazy-fetch", section)
+        self.assertNotRegex(section, r"older (?:Git|than)")
+        self.assertIn("so a partial clone is outside the profile on every Git version.", flat)
+        # The removed wording is gone, and "as configured" appears only where it is refused.
+        reference = " ".join(read(REFERENCE).split())
+        for phrase in self.WRITING_REMOVED:
+            with self.subTest(removed=phrase[:60]):
+                self.assertNotIn(phrase, reference)
+        configured = [s for s in self.sentences(reference) if "as configured" in s]
+        self.assertEqual(len(configured), 2, configured)
+        for sentence in configured:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertRegex(sentence, r"never offers to run configuration it cannot identify as configured|"
+                                           r"There is no choice to proceed as configured")
+        # Every sentence of the section that names an answer or a choice keeps a named program or the destination as
+        # its object, never configuration main could not identify.
+        for sentence in self.sentences(section):
+            if re.search(r"\bapprov", sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertRegex(sentence, r"named programs|programs under the exception|never offers")
+
+    def test_the_profile_reads_only_the_forms_safe_git_invocation_lists_for_main(self):
+        """Deviation D-2 (F2 and the plan review's R2): every read the profile needs is one of main's preparation forms,
+        each with the common prefix, and no role runs them."""
+        git = self.source("reference#Safe Git invocation")
+        self.assert_whole_sentence(self.PROFILE_FORMS_MAIN_ONLY, git)
+        for form in self.PROFILE_FORMS:
+            with self.subTest(form=form):
+                self.assertIn(f"`{form}`", git)
+                self.assertNotIn(form, RoleRepositorySafetyTests.PARAGRAPH)
+        self.assertIn("with `--global` and with `--system` for Before add, commit, tag or push", git)
+        section = self.source("reference#Before add, commit, tag or push")
+        paragraph = next(p for p in section.split("\n\n")
+                         if p.startswith("Safe Git invocation lists among main's preparation forms every read"))
+        # The paragraph names each form by the words that identify it in the table.
+        named = {
+            "`remote get-url --push --all <remote>`": self.PROFILE_FORMS[0],
+            "`symbolic-ref --quiet HEAD`": self.PROFILE_FORMS[1],
+            "`rev-parse --verify --quiet HEAD`": self.PROFILE_FORMS[2],
+            "`rev-parse --verify --quiet refs/stash`": self.PROFILE_FORMS[3],
+            "`rev-parse --verify --quiet` of each operation-state pseudo-ref": self.PROFILE_FORMS[4],
+            "`ls-files --unmerged`": self.PROFILE_FORMS[5],
+            "`ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`": self.PROFILE_FORMS[6],
+            "`rev-parse --git-dir`": self.PROFILE_FORMS[7],
+            "`rev-parse --git-path <name>`": self.PROFILE_FORMS[8],
+            "the comparison of the index with a tree in profile item 9": self.PROFILE_FORMS[9],
+        }
+        self.assertEqual(sorted(named.values()), sorted(self.PROFILE_FORMS))
+        for phrase in named:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, paragraph)
+        # Profile item 9 names the same comparison form the table lists.
+        self.assertIn(f"`{self.PROFILE_FORMS[9]}`", section)
+        # A path from command output reaches the metadata script only on standard input.
+        self.assertIn("that receives the path on standard input and not as an argument, since that path comes from "
+                      "command output.", " ".join(paragraph.split()))
+
+    def test_a_push_destination_has_one_of_two_whole_string_shapes(self):
+        """Deviation D-2, regression for F1 and the plan review's B1, B2 and R1: a push is performed only to a URL of the
+        two shapes profile item 10 defines as a whole string, so a local path, a drive-letter path, a `file://` URL, a
+        remote-helper address, an IP literal, a loopback name or this machine's name is outside the profile. The rule
+        below follows the pinned sentences clause by clause; the examples are destination shapes, not exploits."""
+        rule = next(s for s in self.WRITING if s.startswith("In both, the whole URL holds only ASCII letters"))
+        for clause in ("at most one `@`, which ends `user`", "in the scp-like shape only, the one `:` after the host",
+                       "so it carries no port, query, fragment, percent-encoding, backslash, whitespace or second `@`",
+                       "`user` begins with an ASCII letter or digit and holds only ASCII letters, digits, `.`, `_` and "
+                       "`-`", "the host is at least two characters", "labels that each begin with an ASCII letter",
+                       "with no trailing dot", "no name ending in `.localhost`", "none of this machine's names",
+                       "compared without regard to case"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, rule)
+        shapes = next(s for s in self.WRITING if s.startswith("Main resolves every effective push URL"))
+        self.assertIn("`https://` or `ssh://`, in exact lower case", shapes)
+        self.assertIn("in which `user@` is required, so that no drive-letter path such as `c:repo` or `c:/dir` matches.",
+                      shapes)
+        loopback = ("localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback", "host.docker.internal")
+        for name in loopback:
+            self.assertIn(f"`{name}`", rule)
+        machine = ("devbox", "devbox.local", "devbox.corp.example.org")
+        user = r"[A-Za-z0-9][A-Za-z0-9._-]*"
+        label = r"[A-Za-z][A-Za-z0-9-]*"
+        host = rf"{label}(?:\.{label})*"
+        path = r"[A-Za-z0-9._~/-]*"
+
+        def admitted(url):
+            match = (re.fullmatch(rf"(?:https|ssh)://(?:{user}@)?(?P<host>{host})/{path}", url)
+                     or re.fullmatch(rf"{user}@(?P<host>{host}):{path}", url))
+            if not match:
+                return False
+            name = match.group("host").casefold()
+            return (len(name) >= 2 and name not in loopback and not name.endswith(".localhost")
+                    and name not in machine)
+
+        for url in ("https://github.com/owner/repo.git", "ssh://git@github.com/owner/repo.git",
+                    "git@github.com:owner/repo.git", "https://gitlab.example.org/group/sub/repo",
+                    "ssh://github.com/owner/repo", "git@ssh.github.com:owner/repo"):
+            with self.subTest(admitted=url):
+                self.assertTrue(admitted(url))
+        for url in ("c:repo", "c:/dir", "C:\\dir\\repo", "/srv/git/repo.git", "../repo", "repo",
+                    "file:///srv/git/repo.git", "\\\\server\\share\\repo", "//server/share/repo",
+                    "https://127.0.0.1/repo", "https://[::1]/repo", "https://2130706433/repo", "https://0x7f.1/repo",
+                    "git@localhost:repo", "https://LOCALHOST/repo", "https://Ip6-Loopback/repo",
+                    "https://host.docker.internal/repo", "https://app.localhost/repo", "https://devbox/repo",
+                    "git@DevBox.local:repo", "https://devbox.corp.example.org/repo",
+                    "ssh://git@ssh.github.com:443/owner/repo", "https://github.com/repo?x=1", "https://github.com/r%2e",
+                    "https://a@b@github.com/repo", "foo::https://github.com/repo", "HTTPS://github.com/repo",
+                    "http://github.com/repo", "git://github.com/repo", "github.com:owner/repo", "https://a/repo",
+                    "https://github.com./repo", "https://github.com", "git@github.com:own er/repo",
+                    "-x@github.com:repo", "https://github.com/repo#frag", "https://github.com\\repo"):
+            with self.subTest(refused=url):
+                self.assertFalse(admitted(url))
 
     def test_a_listed_name_reaches_a_command_line_only_as_a_safe_name(self):
         """Code review blocking finding B1, regression: the rule for names a listing prints agrees with the forms that
@@ -612,8 +984,9 @@ class RepositorySafetyTests(unittest.TestCase):
 
     def test_main_detects_a_promisor_remote_and_an_older_git_dispatches_nothing(self):
         """Deviation D-1, regression and abuse check: the Lazy fetch rule depends on main's detection of a promisor
-        remote, which follows includes; on Git older than 2.45.0 no review is dispatched, no operation under Before add,
-        commit, tag or push runs, and no choice proceeds as configured."""
+        remote, which follows includes; on Git older than 2.45.0 no review is dispatched and no choice proceeds as
+        configured. Deviation D-2: a promisor remote puts an operation under Before add, commit, tag or push outside the
+        operation profile on every Git version (test_the_profile_admits_nothing_it_does_not_name_and_checks_in_order)."""
         section = self.source("reference#Safe Git invocation")
         self.assertIn("\n- **Lazy fetch.** " + " ".join(self.LAZY_FETCH) + "\n", section)
         # The detection and its outcome belong to item 2 of Main's preparation, which item 4 reads again.
@@ -786,18 +1159,28 @@ class RepositorySafetyTests(unittest.TestCase):
             "safety](repository-safety.md)'s Before add, commit, tag or push, which adds a condition to this authority "
             "and grants none.",
         ),
+        # Deviation D-2: the guidance names the operation profile instead of a list of transport settings to ask about.
         "review-auto.md": (
-            "Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport settings the "
-            "repository's Git configuration would use and asks the user when that list is not empty, as "
-            "cc-feather:delegation's repository safety describes.",
+            "Before any `git add`, commit, tag or push, main performs it only inside the operation profile that "
+            "cc-feather:delegation's repository safety describes, names the hooks, filters and signing programs it would "
+            "run and, for a push, its destination, and asks the user before running them; an operation outside that "
+            "profile is left for the user to run.",
         ),
     }
+    AUTHORITY_REMOVED = (
+        "Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport settings",
+        "asks the user when that list is not empty",
+    )
 
     def test_repository_authority_and_auto_guidance_point_to_the_writing_checks(self):
         self.assert_pinned(self.AUTHORITY_POINTERS)
         for scope in ("user", "project"):
             with self.subTest(scope=scope):
                 self.assertIn(self.AUTHORITY_POINTERS["review-auto.md"][0], config._policy("auto", scope=scope))
+        for phrase in self.AUTHORITY_REMOVED:
+            with self.subTest(removed=phrase[:40]):
+                self.assertNotIn(phrase, self.source("review-auto.md"))
+        self.assertNotIn("transport", self.source("review-auto.md"))
 
     # Item 3: the command keeps only its listing, marking and tighter search rule, and the hard-link sentence is gone.
     COMMAND_KEPT = (
@@ -837,6 +1220,62 @@ class RepositorySafetyTests(unittest.TestCase):
                       "`CLAUDE.md`, imports and `.claude` settings, which happen outside these rules.",
                       self.source("ADR 0011"))
 
+    # Item 7 as revised for deviation D-2: the Before add, commit, tag or push bullet summarises item 6's profile, fixed
+    # forms and answers, and says that main leaves an operation the profile does not admit for the user to run.
+    README_WRITING = (
+        ("main performs a `git add`, commit, tag or push only inside a narrow operation profile that admits nothing it "
+         "does not name: a standalone, full, non-bare repository with no linked worktree, alternates, partial clone or "
+         "submodule, no operation in progress, no link or unusual entry in its Git directory and only listed local "
+         "configuration keys, and for a push only an `https://`, `ssh://` or `user@host:path` URL whose host is a "
+         "name, never a local path, an IP address, a loopback name or this machine's name.",
+         "**add、commit、tag 或 push 之前：**主 Agent 只在一組狹窄的操作條件（operation profile）內執行 `git add`、commit、"
+         "tag 或 push，條件沒有列出的一律不接受：獨立、完整、非 bare 的儲存庫，沒有 linked worktree、alternates、部分複製或 "
+         "submodule，沒有進行中的操作，Git 目錄中沒有連結或特殊項目，本機設定也只有列出的鍵；push 時只接受 host 是名稱的 "
+         "`https://`、`ssh://` 或 `user@host:path` URL，絕不接受本機路徑、IP 位址、loopback 名稱或這台機器的名稱。"),
+        ("Each operation runs in a fixed form that also disables automatic maintenance, rerere and, for a push, signing "
+         "and negotiation.",
+         "每個操作都以固定形式執行，同時停用自動維護與 rerere，push 時還停用簽章與 negotiation。"),
+        ("Inside the profile main names the hooks, filters and signing programs the operation would run, each with the "
+         "SHA-256 of its content, and for a push the destination and refs, and asks you whether to run them as named, "
+         "skip hooks and signing, or not perform the operation; filters and the destination can only be run or "
+         "declined.",
+         "在條件內，主 Agent 會列出這個操作會執行的 hook、filter 與簽章程式，每一個附上內容的 SHA-256，push 時還有目的地與 "
+         "ref，並問你要照列出的項目執行、略過 hook 與簽章，還是不執行這個操作；filter 與目的地只能執行或拒絕。"),
+        ("Your answer covers exactly what main named, and what those programs load from the repository as it stood at "
+         "your answer, for the rest of the session; main asks again when anything it named changes, when `HEAD` or the "
+         "stash moves, or when content it did not write may have reached them.",
+         "你的回答只涵蓋主 Agent 列出的項目，以及這些程式從你回答當時的儲存庫載入的內容，在這個 session 剩下的時間有效；"
+         "列出的項目有變化、`HEAD` 或 stash 移動，或不是它寫的內容可能已經進入這些程式時，主 Agent 會再問你。"),
+        ("Main never asks you to approve configuration it cannot identify: it leaves any operation in a repository the "
+         "profile does not admit, or whose state it cannot establish, for you to run yourself, and tells you what fell "
+         "outside the profile.",
+         "主 Agent 絕不請你核准它無法辨識的設定：條件不接受的儲存庫，或它無法確認狀態的操作，它都留給你自己執行，並告訴你"
+         "哪些項目不符合條件。"),
+    )
+    # Item 7 as revised for deviation D-2: item 6's residual risks, in the paragraph that states D6.
+    README_RESIDUAL = (
+        "So are a push that reaches this machine through a host name that resolves here, an HTTP redirect or a trusted "
+        "transport setting in your own configuration; a change main can neither see nor learn of after you approve a "
+        "program, such as an edit in another terminal; behaviour of Git versions other than the installed one that the "
+        "operation profile does not anticipate; a path embedded in a trusted command string, or a trusted conditional "
+        "include the repository can satisfy; and main's own Git operations other than `git add`, commit, tag and push, "
+        "such as fetch, pull, merge, checkout or stash, and opening a pull request with `gh`.",
+        "下列情況同樣是剩餘風險：push 經由解析到這台機器的 host 名稱、HTTP 重新導向，或你自己設定中可信的傳輸設定而到達"
+        "這台機器；你核准程式之後，主 Agent 既看不到也無從得知的變更，例如在另一個終端機中做的編輯；操作條件沒有預料到的、"
+        "已安裝版本以外的 Git 版本行為；嵌在可信指令字串中的路徑，或儲存庫能滿足其條件的可信條件式 include；以及主 Agent "
+        "自己在 `git add`、commit、tag 與 push 以外的 Git 操作，例如 fetch、pull、merge、checkout 或 stash，還有用 `gh` "
+        "開 pull request。",
+    )
+    # Deviation D-2: the summary that offered to run transport settings as configured and lazy-fetch choices for these
+    # operations, in both languages.
+    README_WRITING_REMOVED = {
+        "README.md": ("and for a push the destination and its transport settings", "whether to run them as configured",
+                      "filters, transport settings and the destination can only be run or declined",
+                      "In a partial clone each of these operations also carries `--no-lazy-fetch`",
+                      "offers the same four choices"),
+        "README.zh-TW.md": ("push 時還有目的地與傳輸設定", "照設定執行", "filter、傳輸設定與目的地只能執行或拒絕",
+                            "這些操作同樣帶 `--no-lazy-fetch`", "並給你同樣的四個選擇"),
+    }
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
     README = (
         ("Every review reads your repository under one set of rules, the [repository safety "
@@ -910,18 +1349,9 @@ class RepositorySafetyTests(unittest.TestCase):
         ("A role without a shell, such as analyst, scout or Explore, reads and searches only the checked files and "
          "directories main lists for it.",
          "沒有 shell 的角色，例如 analyst、scout 與 Explore，只讀取與搜尋主 Agent 為它列出、已檢查過的檔案與目錄。"),
-        ("main names the hooks, filters and signing programs the repository's Git configuration would run, each with "
-         "the SHA-256 of its content, and for a push the destination and its transport settings, and asks you whether to "
-         "run them as configured, skip hooks and signing, or not perform the operation; filters, transport settings and "
-         "the destination can only be run or declined.",
-         "**add、commit、tag 或 push 之前：**主 Agent 會列出儲存庫的 Git 設定會執行的 hook、filter 與簽章程式，每一個附上內容的 SHA-256，push 時還有目的地與"
-         "傳輸設定，並問你要照設定執行、略過 hook 與簽章，還是不執行這個操作；filter、傳輸設定與目的地只能執行或拒絕。"),
-        ("Your answer covers exactly what main named, for the rest of the session.",
-         "你的回答只涵蓋主 Agent 列出的項目，在這個 session 剩下的時間有效。"),
-        # Deviation D-1 (N-1): the same detection before every such operation.
-        ("In a partial clone each of these operations also carries `--no-lazy-fetch`, and on Git older than 2.45.0 main "
-         "does not perform it and offers the same four choices.",
-         "在部分複製中，這些操作同樣帶 `--no-lazy-fetch`；Git 早於 2.45.0 時，主 Agent 不執行該操作，並給你同樣的四個選擇。"),
+        # Item 6 as revised for deviation D-2: the operation profile, the fixed forms, the answers and the operations
+        # left for the user, replacing the summary that offered to run transport settings as configured.
+        *README_WRITING,
         ("These rules are instructions to the model, not a sandbox: no permission rule, hook or sandbox enforces them, "
          "and tests only keep the texts consistent.",
          "這些規則是給模型的指示，不是 sandbox：沒有任何權限規則、hook 或 sandbox 強制它們，測試只確保文字前後一致。"),
@@ -932,6 +1362,8 @@ class RepositorySafetyTests(unittest.TestCase):
          "before and outside these rules; both are residual risk.",
          "審查期間檔案被同時修改的情況不在防護範圍內，而 Claude Code 本身在 session 開始時會在專案中執行 Git，並載入專案的 "
          "`CLAUDE.md`、它匯入的檔案與 `.claude` 設定，這些都發生在這些規則之前、之外；兩者都是剩餘風險。"),
+        # Item 7 as revised for deviation D-2: item 6's residual risks, stated with D6.
+        README_RESIDUAL,
     )
     # The bullets of the README section, by label, each pinned in both languages.
     README_LABELS = (("Git commands", "Git 指令"), ("File reads", "讀取檔案"),
@@ -972,6 +1404,38 @@ class RepositorySafetyTests(unittest.TestCase):
             with self.subTest(readme=name):
                 self.assertLess(text.index(f"\n{before}\n"), text.index(f"\n{section}\n"))
                 self.assertLess(text.index(f"\n{section}\n"), text.index(f"\n{after}\n"))
+
+    def test_readmes_summarise_the_operation_profile_and_its_residual_risks(self):
+        """Deviation D-2, item 7: each README's Before add, commit, tag or push bullet states the profile, the fixed
+        forms, the answers and that main leaves an operation the profile does not admit for the user, and the paragraph
+        that states D6 names item 6's residual risks; both languages say the same, and the summary that offered to run
+        transport settings as configured is gone."""
+        for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
+                                               ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
+            section = self.source(f"{name}#section")
+            bullet = next(line for line in section.splitlines() if line.startswith(label))
+            paragraph = next(p for p in section.split("\n\n") if p.startswith(("These rules are instructions to the "
+                                                                               "model", "這些規則是給模型的指示")))
+            for pair in self.README_WRITING:
+                with self.subTest(readme=name, sentence=pair[index][:40]):
+                    self.assert_whole_sentence(pair[index], bullet)
+            with self.subTest(readme=name, residual=True):
+                self.assert_whole_sentence(self.README_RESIDUAL[index], paragraph)
+                # The residual risks follow the sentence that states D6 and keep the "instructions to the model" words.
+                self.assertEqual(self.README[-1], self.README_RESIDUAL)
+                self.assertLess(paragraph.index(self.README[-2][index]), paragraph.index(self.README_RESIDUAL[index]))
+                self.assertIn(self.README[-4][index], paragraph)
+            for phrase in self.README_WRITING_REMOVED[name]:
+                with self.subTest(readme=name, removed=phrase):
+                    self.assertNotIn(phrase, read(config.ROOT / name))
+        # Each residual risk item 7 lists is named in the English summary.
+        for risk in ("a host name that resolves here", "an HTTP redirect", "a trusted transport setting in your own "
+                     "configuration", "a change main can neither see nor learn of after you approve a program",
+                     "behaviour of Git versions other than the installed one", "a path embedded in a trusted command "
+                     "string", "a trusted conditional include the repository can satisfy", "main's own Git operations "
+                     "other than `git add`, commit, tag and push", "opening a pull request with `gh`"):
+            with self.subTest(risk=risk):
+                self.assertIn(risk, self.README_RESIDUAL[0])
 
     def test_readmes_point_to_the_section_from_the_commit_rule_table_and_probing(self):
         for english, chinese in self.README_POINTERS:
@@ -1472,6 +1936,8 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             self.assertEqual(git(*identity, "commit", "-q", "--no-verify", "-m", "one").returncode, 0)
             (repo / "a.txt").write_bytes(b"one\ntwo\n")
             self.assertEqual(git(*identity, "commit", "-q", "--no-verify", "-am", "two").returncode, 0)
+            # Deviation D-2: a remote the push-URL form reads; nothing contacts it.
+            self.assertEqual(git("config", "remote.origin.url", "https://example.invalid/repo.git").returncode, 0)
             for key, value in (("core.fsmonitor", scripts["monitor"]), ("diff.marker.textconv", scripts["textconv"]),
                                ("diff.external", scripts["extdiff"])):
                 self.assertEqual(git("config", key, value).returncode, 0)
@@ -1486,14 +1952,18 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 self.skipTest("this Git ran no configured program in the control reads")
 
             substitutions = {"<prefix>": " ".join(shlex.split(prefix)[1:]), "<commit> <commit>": "HEAD~1 HEAD",
-                             "<commit>": "HEAD", "<path>": "a.txt", "<attribute>": "diff"}
+                             "<commit>": "HEAD", "<path>": "a.txt", "<attribute>": "diff", "<remote>": "origin",
+                             "<pseudo-ref>": "MERGE_HEAD", "<name>": "COMMIT_EDITMSG"}
             for form in RepositorySafetyTests.FORMS:
                 command = form
                 for placeholder, value in substitutions.items():
                     command = command.replace(placeholder, value)
                 with self.subTest(form=form):
                     result = git(*shlex.split(command)[1:])
-                    self.assertEqual(result.returncode, 0, result.stderr)
+                    # A `--quiet` form of the profile answers with its exit code: 1 for a ref that does not exist or an
+                    # index that differs from the tree. Any other failure, such as an unknown option, is an error.
+                    expected = (0, 1) if "--quiet" in form else (0,)
+                    self.assertIn(result.returncode, expected, result.stderr)
                     self.assertEqual(ran(), set(), f"{command} ran a configured program")
             # Each control that ran is one this check covered, so a form that dropped its option would be caught.
             self.assertTrue(controls <= {"monitor", "textconv", "extdiff"}, controls)

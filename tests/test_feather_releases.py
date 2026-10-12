@@ -193,7 +193,7 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     )
 
     # C5 item 3: the setup document's summary of the automatic review guidance follows templates/review-auto.md (C1 item 1).
-    AUTO_SWITCH = "Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport settings the repository's Git configuration would use and asks the user when that list is not empty, as the delegation skill's repository safety reference describes."
+    AUTO_SWITCH = "Before any `git add`, commit, tag or push, main performs it only inside the operation profile that the delegation skill's repository safety reference describes, names the hooks, filters and signing programs it would run and, for a push, its destination, and asks the user before running them; an operation outside that profile is left for the user to run."
 
     # C5 item 2.
     ENTRY = (
@@ -233,8 +233,11 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     def test_setup_document_summarises_the_current_automatic_review_guidance(self):
         section = self.section(self.text("docs/setup.md"), "\n## Automatic review switch\n")
         self.assertIn(self.AUTO_SWITCH, section)
-        self.assertIn("Before any `git add`, commit, tag or push, main lists the hooks, filters, signing and transport "
-                      "settings the repository's Git configuration would use and asks the user when that list is not empty",
+        # Repository safety deviation D-2 replaced the guidance's list of transport settings with the operation profile.
+        self.assertIn("Before any `git add`, commit, tag or push, main performs it only inside the operation profile that "
+                      "cc-feather:delegation's repository safety describes, names the hooks, filters and signing programs "
+                      "it would run and, for a push, its destination, and asks the user before running them; an operation "
+                      "outside that profile is left for the user to run.",
                       self.text("templates/review-auto.md"))
 
     def test_validation_entry_records_the_update_checks_live_scope_tag_and_pending_review(self):
