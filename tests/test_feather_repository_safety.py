@@ -144,9 +144,11 @@ class RepositorySafetyTests(unittest.TestCase):
     # named ones being examples. They replace WORKING_TREE_REMOVED, whose closed list left other commands unnamed.
     CONFINED = (
         "No Git command is run to read a repository for a review except in a form these rules list.",
+        # Deviation D-4: content hashing also serves main's check after `git add`, which the sentence now names.
         "A role runs only the forms for the index, untracked, ignored and tree listings, object reads, comparing commits, "
-        "history, blame and attribute checks; configuration reads, the repository layout and content hashing are for "
-        "main's preparation only, and a role never runs `hash-object`.",
+        "history, blame and attribute checks; configuration reads and the repository layout are for main's preparation "
+        "only, content hashing for main's preparation and its check after `git add` only, and a role never runs "
+        "`hash-object`.",
         "A command that compares or refreshes the working tree is never run for a review; `git status`, `git diff` "
         "without two commits, `diff-files`, `diff-index` without `--cached` and `update-index` are examples, not a "
         "complete list.",
@@ -155,6 +157,12 @@ class RepositorySafetyTests(unittest.TestCase):
     WORKING_TREE_REMOVED = (
         "`git status`, working-tree diffs (`git diff` without two commits, `diff-files`, and `diff-index` without "
         "`--cached`) and the `--filters` and `--textconv` options are not used for a review."
+    )
+    # Deviation D-4: the wording that kept content hashing to main's preparation alone, before the check after `git add`
+    # used it, in the role sentence and in the table's row.
+    HASHING_REMOVED = (
+        "configuration reads, the repository layout and content hashing are for main's preparation only,",
+        "never with `-w`, only under Main's preparation |",
     )
     # Item 2 (G1–G7, C12, R2-Q5, S19): the common prefix and its rules.
     GIT = (
@@ -206,7 +214,13 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> ls-tree -z --full-tree <commit> -- '.gitmodules'",
         "git <prefix> rev-parse --git-dir",
         "git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff --no-textconv <commit> --",
+        # Deviation D-4: the index entries' tags for profile item 2's bits, and the claim files' modes in the tree
+        # `HEAD` names for the check after `git add`.
+        "git <prefix> ls-files -z -v",
+        "git <prefix> ls-tree -z --full-tree <commit> -- '<path>'",
     )
+    # Deviation D-4: the content-hashing form without conversion, main's alone, for the check after `git add`.
+    UNFILTERED_HASHING = "git <prefix> hash-object --no-filters -- '<path>'"
     # Deviation D-3: the forms that read each operation state, removed because profile item 2 now admits only the
     # entries it lists, which item 11's walk establishes.
     PROFILE_FORMS_REMOVED = (
@@ -228,14 +242,17 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> check-attr -z <attribute> -- '<path>'",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         "git <prefix> hash-object -- '<path>'",
+        UNFILTERED_HASHING,
         *PROFILE_FORMS,
     )
     # Finding F1: the forms only main runs, for its preparation; the table holds these and ROLE_FORMS and nothing else.
-    # Deviation D-2 adds the profile's forms, which only main's checks under item 6 use.
+    # Deviation D-2 adds the profile's forms, which only main's checks under item 6 use, and D-4 the hashing form
+    # without conversion.
     MAIN_ONLY_FORMS = (
         "git <prefix> config --list --show-origin --show-scope --no-includes",
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         "git <prefix> hash-object -- '<path>'",
+        UNFILTERED_HASHING,
         "git <prefix> rev-parse --verify <endpoint>^{commit}",
         *PROFILE_FORMS,
     )
@@ -243,8 +260,9 @@ class RepositorySafetyTests(unittest.TestCase):
     # CONFINED, which the shell roles' paragraph carries word for word, because it names main's operations.
     PROFILE_FORMS_MAIN_ONLY = (
         "The forms for push URLs, the commit `HEAD` names, the parents of a commit, the stash ref, unmerged entries, "
-        "`.gitmodules` in a commit, the Git directory and the index against a tree are for main's checks under Before "
-        "add, commit, tag or push only."
+        "the assume-unchanged and skip-worktree bits, `.gitmodules` in a commit, the modes of claim files in a commit, "
+        "the Git directory and the index against a tree are for main's checks under Before add, commit, tag or push "
+        "only."
     )
     # Deviation D-3 (plan review of D-3, N-1): every form main runs under item 6 carries `--no-replace-objects`.
     NO_REPLACE_OBJECTS_FORMS = (
@@ -425,13 +443,60 @@ class RepositorySafetyTests(unittest.TestCase):
         "the last target of the whole chain of symbolic refs, is `refs/heads/<branch>` for a branch name that passes "
         "the name rule of Paths and names, since a commit on an unborn branch creates its target wherever in the Git "
         "directory that names.",
-        "The index has no unmerged entry.",
+        # Deviation D-4 (outcome verification of D-3, NB-5): no index entry carries the assume-unchanged or
+        # skip-worktree bit, established from the tags of `ls-files -z -v`.
+        "The index has no unmerged entry, and no entry carries the assume-unchanged or skip-worktree bit: in the output "
+        "of `ls-files -z -v`, every record's tag is `H` followed by a space, and any other tag or a record main cannot "
+        "parse puts the repository outside the profile, since `git add` does not stage the working-tree content of an "
+        "entry with either bit, and a commit would then record other content than main wrote.",
+    )
+    # Deviation D-4 (plan review of D-4, B2-r2 and B2-r3): profile item 8 refuses a name that equals a claim file's when
+    # ASCII letters are compared without regard to case.
+    CLAIM_NAME_CASE = (
+        "In the index listing, no entry's name differs from a claim file's name but equals it when ASCII letters are "
+        "compared without regard to case, and no two claim files' names are equal under that comparison, whatever "
+        "`core.ignorecase` says, since Git can then record a claim file's content under another name."
+    )
+    # Deviation D-4 (plan review of D-4, B1, B2 and the findings of its later calls): the check after `git add`, its
+    # order, what it compares and its stop for the session, which security invariant item 8 states.
+    CHECK_AFTER_GIT_ADD = (
+        "After each `git add` under this rule, and before any later operation under this rule, main checks the result, "
+        "with the index entries listed from the top level with the index listing of Safe Git invocation immediately "
+        "before and after the add: the add exited 0; every entry whose name is not a claim file's name is unchanged, so "
+        "that no other entry was added, removed or altered; for each claim file that exists on disk, established from "
+        "file-system metadata with each component's directory entry matching the claim's name exactly, the index holds "
+        "exactly one entry of that name, compared byte for byte, at stage 0, whose mode is `100644` or `100755` and "
+        "equals the path's mode in the tree `HEAD` names, listed with the form for the modes of claim files in a commit, "
+        "when that tree has the path as a regular file, and is `100644` otherwise; for each claim file that does not "
+        "exist on disk, the index holds no entry of that name, and a claim file main can establish as neither existing "
+        "nor absent fails the check; and, only after those hold, for each claim file on disk whose path has no defined "
+        "filter driver, both in the attribute check before the add and in the same check repeated after it, the file "
+        "passes the checks of Paths and names that a hashed path passes, and the entry's object id equals either the "
+        "content hash main computes with the content-hashing form, which applies Git's own end-of-line conversion and "
+        "no program, or the hash of the file's unconverted bytes from that form with `--no-filters`.",
+        "For a path whose two attribute checks name the same approved driver, the object id is that filter's output and "
+        "is not compared; any other combination of the two checks fails.",
+        "A `git add` that exits other than 0, an exit status main cannot establish, or any other result means main "
+        "performs no further operation under this rule for the rest of the session and reports it, saying that the "
+        "index may now hold part of the claim's files, which a commit the user makes would also record, and that a "
+        "claim file ignore rules match is one cause; the claim then waits for the user as for an operation outside the "
+        "profile.",
     )
     # Deviation D-3: the item 2 that listed the operation states to refuse, which could not be shown complete.
     GIT_DIRECTORY_REMOVED = (
         "None of these operation states exists:",
         "The Git directory holds no `rr-cache` and no `MERGE_RR`",
         "*Operation state.*",
+    )
+    # Deviation D-4: the wording that D-4 extends, which no longer stands on its own: item 2's sentence that ended with
+    # unmerged entries, the `git add` row without the check after it, and the preparation forms' index listing that
+    # served only gitlinks and the check after a commit.
+    D4_REMOVED = (
+        "that names. The index has no unmerged entry.",
+        "| `git add` | the claim's files only, as safe names after `--` |",
+        "`ls-files --unmerged` for any conflict and the index listing, `ls-files --stage`, for gitlinks and for the "
+        "index entries the check after a commit compares;",
+        "`ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`, for that file;",
     )
     # Item 6's answer paragraph as revised for deviation D-3 (plan review of D-3, B1, N-1, N-2 and the advice and
     # findings of its later calls): the check after a commit, its stop for the session, the residual risk of the
@@ -479,8 +544,9 @@ class RepositorySafetyTests(unittest.TestCase):
         "Inside the profile, the only programs the repository can choose that Git may run are the kinds the table "
         "names, hooks, filters and signing programs, and each runs only under the user's answer for it by name.",
         "Each operation runs only in its fixed form:",
-        "| `git add` | the claim's files only, as safe names after `--` | hooks; filter drivers selected for any "
-        "path in the index or being added | `-c core.hooksPath=` a directory outside the project with nothing in it, "
+        # Deviation D-4: the check after `git add` follows each add.
+        "| `git add` | the claim's files only, as safe names after `--`, followed by the check after `git add` below | "
+        "hooks; filter drivers selected for any path in the index or being added | `-c core.hooksPath=` a directory outside the project with nothing in it, "
         "and each `hook.<name>` the configuration defines disabled |",
         # Deviation D-3: `--quiet` is required, since without it a commit prints a summary through a diff.
         "| commit | the whole argument list is the settings below, `-m` or `-F`, `--quiet`, which is required because "
@@ -579,6 +645,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "configured.",
         "Each claim file's name passes the name rule of Paths and names, and no claim path is a gitlink in the index "
         "or a directory on disk, since adding one can run the submodule's status.",
+        CLAIM_NAME_CASE,
         "For a commit, `git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff "
         "--no-textconv <commit> --`, the index-against-a-tree form of Safe Git invocation, where `<commit>` is the "
         "commit `HEAD` names or, for an unborn `HEAD`, the empty tree of the repository's object format, exits 1, so "
@@ -628,10 +695,16 @@ class RepositorySafetyTests(unittest.TestCase):
         "Safe Git invocation lists among main's preparation forms every read the profile needs: the configuration "
         "reads with origins and scopes; `remote get-url --push --all <remote>` for the push URLs; `symbolic-ref "
         "--quiet HEAD` and `rev-parse --verify --quiet HEAD` for the commit `HEAD` names or that it is unborn; "
-        "`rev-parse --verify --quiet refs/stash` for the stash ref; `ls-files --unmerged` for any conflict and the "
-        "index listing, `ls-files --stage`, for gitlinks and for the index entries the check after a commit compares; "
-        "`ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`, for that file; the tree listing, `ls-tree "
-        "-r`, of the new commit and `rev-parse --verify --quiet` of its first and second parent for the check after a "
+        # Deviation D-4: the forms the bits, profile item 8 and the check after `git add` read.
+        "`rev-parse --verify --quiet refs/stash` for the stash ref; `ls-files --unmerged` for any conflict, `ls-files "
+        "-z -v` for the assume-unchanged and skip-worktree bits, and the index listing, `ls-files --stage`, for "
+        "gitlinks, for the index entries the check after a commit compares, for the listings immediately before and "
+        "after each `git add` and for profile item 8's comparison of names, each listed from the top level; `ls-tree` "
+        "of the tree `HEAD` names, restricted to `.gitmodules`, for that file, and restricted to the claim files, for "
+        "their modes in the check after `git add`; the content-hashing form, and that form with `--no-filters`, for "
+        "each claim file whose path has no filter driver named, in that check, after the file passes the checks of "
+        "Paths and names, whose metadata reads, which follow no link, also establish each component's directory entry; "
+        "the tree listing, `ls-tree -r`, of the new commit and `rev-parse --verify --quiet` of its first and second parent for the check after a "
         "commit, with the index entries listed after the commit; the attribute check for filters; the comparison of "
         "the index with a tree in profile item 9; and `rev-parse --git-dir` for the Git directory.",
         "Under this rule each of these reads carries `--no-replace-objects` after the common prefix, as the check "
@@ -683,6 +756,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "or the project's untracked files without being written by main or a role in this session, such as a merge, "
         "cherry-pick, revert, stash apply or pop, a checkout or restore of paths, `git apply`, a submodule update or "
         "a dependency install.",
+        *CHECK_AFTER_GIT_ADD,
         *CHECK_AFTER_COMMIT,
         "An operation's state, a pseudo-ref `MERGE_HEAD`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, an unmerged index "
         "entry, or an entry `SQUASH_MSG`, `sequencer`, `rebase-merge` or `rebase-apply` in the Git directory, puts "
@@ -737,6 +811,11 @@ class RepositorySafetyTests(unittest.TestCase):
         section = self.source("reference#Safe Git invocation")
         rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| ---")][1:]
         spans = [span for row in rows for span in re.findall(r"`(git [^`]*)`", row)]
+        # Deviation D-4: the rows for content hashing and claim files' modes name main's check after `git add`, the
+        # operation, not a form.
+        mentions = [row.split(" | ", 1)[0] for row in rows if "`git add`" in row]
+        self.assertEqual(mentions, ["| Content hashing", "| Modes of claim files in a commit"])
+        spans = [span for span in spans if span != "git add"]
         self.assertGreaterEqual(len(spans), len(self.FORMS))
         for span in spans:
             with self.subTest(span=span):
@@ -868,9 +947,17 @@ class RepositorySafetyTests(unittest.TestCase):
                         "blame", "attribute checks"):
             with self.subTest(purpose=purpose):
                 self.assertIn(purpose, role)
-        self.assertIn("content hashing are for main's preparation only, and a role never runs `hash-object`.", main)
+        self.assertIn("content hashing for main's preparation and its check after `git add` only, and a role never runs "
+                      "`hash-object`.", main)
         hashing = next(row for row in rows if row.startswith("| Content hashing |"))
-        self.assertIn("only under Main's preparation", hashing)
+        self.assertIn("only under Main's preparation and in the check after `git add`", hashing)
+        # Deviation D-4: the row holds both hashing forms, and the wording that kept hashing to the preparation alone
+        # is gone.
+        self.assertEqual(re.findall(r"`(git <prefix> [^`]*)`", hashing),
+                         ["git <prefix> hash-object -- '<path>'", self.UNFILTERED_HASHING])
+        for phrase in self.HASHING_REMOVED:
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, reference)
         # The closed list of working-tree commands is gone; the sentence that replaces it names examples.
         self.assertNotIn(self.WORKING_TREE_REMOVED, " ".join(reference.split()))
         self.assertIn("are examples, not a complete list.", self.CONFINED[2])
@@ -940,11 +1027,13 @@ class RepositorySafetyTests(unittest.TestCase):
                 self.assertRegex(sentence, r"never offers to run configuration it cannot identify as configured|"
                                            r"There is no choice to proceed as configured")
         # Every sentence of the section that names an answer or a choice keeps a named program or the destination as
-        # its object, never configuration main could not identify.
+        # its object, never configuration main could not identify; the check after `git add` names a filter driver the
+        # user approved by name.
         for sentence in self.sentences(section):
             if re.search(r"\bapprov", sentence):
                 with self.subTest(sentence=sentence[:60]):
-                    self.assertRegex(sentence, r"named programs|programs under the exception|never offers")
+                    self.assertRegex(sentence, r"named programs|programs under the exception|never offers|"
+                                               r"^For a path whose two attribute checks name the same approved driver,")
 
     def test_the_profile_reads_only_the_forms_safe_git_invocation_lists_for_main(self):
         """Deviation D-2 (F2 and the plan review's R2): every read the profile needs is one of main's preparation forms,
@@ -971,6 +1060,8 @@ class RepositorySafetyTests(unittest.TestCase):
             "`ls-tree` of the tree `HEAD` names, restricted to `.gitmodules`": self.PROFILE_FORMS[7],
             "`rev-parse --git-dir` for the Git directory": self.PROFILE_FORMS[8],
             "the comparison of the index with a tree in profile item 9": self.PROFILE_FORMS[9],
+            "`ls-files -z -v` for the assume-unchanged and skip-worktree bits": self.PROFILE_FORMS[10],
+            "and restricted to the claim files, for their modes in the check after `git add`": self.PROFILE_FORMS[11],
         }
         self.assertEqual(sorted(named.values()), sorted(self.PROFILE_FORMS))
         flat_paragraph = " ".join(paragraph.split())
@@ -978,12 +1069,20 @@ class RepositorySafetyTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat_paragraph)
         # Deviation D-3: the check after a commit also reads the role forms for the tree and index listings, and every
-        # read under item 6 carries `--no-replace-objects`.
-        for phrase in ("the index listing, `ls-files --stage`, for gitlinks and for the index entries the check after a "
-                       "commit compares", "the tree listing, `ls-tree -r`, of the new commit",
+        # read under item 6 carries `--no-replace-objects`. Deviation D-4: the index listing also serves the listings
+        # around each `git add` and profile item 8, from the top level, and both hashing forms serve the check after
+        # `git add`, after the file passes the checks of Paths and names.
+        for phrase in ("the index listing, `ls-files --stage`, for gitlinks, for the index entries the check after a "
+                       "commit compares, for the listings immediately before and after each `git add` and for profile "
+                       "item 8's comparison of names, each listed from the top level",
+                       "the content-hashing form, and that form with `--no-filters`, for each claim file whose path has "
+                       "no filter driver named, in that check, after the file passes the checks of Paths and names,",
+                       "the tree listing, `ls-tree -r`, of the new commit",
                        "Under this rule each of these reads carries `--no-replace-objects` after the common prefix"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat_paragraph)
+        self.assertIn(f"`{self.UNFILTERED_HASHING}`", git)
+        self.assertNotIn(self.UNFILTERED_HASHING, RoleRepositorySafetyTests.PARAGRAPH)
         for form in ("git <prefix> ls-files -z --stage", "git <prefix> ls-tree -r -z --full-tree <commit>"):
             with self.subTest(form=form):
                 self.assertIn(f"`{form}`", git)
@@ -1100,6 +1199,64 @@ class RepositorySafetyTests(unittest.TestCase):
         commit = next(line for line in section.splitlines() if line.startswith("| commit |"))
         self.assertIn("`--quiet`, which is required because without it a commit prints a summary through a diff whose "
                       "drivers the profile does not check,", commit)
+
+    def test_main_checks_each_git_add_and_refuses_marked_or_case_variant_entries(self):
+        """Deviation D-4, regression for the outcome verification of D-3 (NB-5) and the plan review of D-4: profile item 2
+        refuses an index entry with the assume-unchanged or skip-worktree bit, established from the tags of `ls-files
+        -z -v`; profile item 8 refuses a name that equals a claim file's under an ASCII case-insensitive comparison;
+        and after each `git add` main checks the result, every other entry unchanged and each claim file's single
+        entry, name, mode and, where no filter is named, content, and a failed or unestablished check stops every
+        operation under the rule for the session."""
+        section = self.source("reference#Before add, commit, tag or push")
+        item_2 = next(line for line in section.splitlines() if line.startswith("2. "))
+        self.assert_whole_sentence(self.GIT_DIRECTORY[-1], item_2)
+        self.assertTrue(item_2.endswith(self.GIT_DIRECTORY[-1]))
+        for clause in ("every record's tag is `H` followed by a space,", "any other tag or a record main cannot parse "
+                       "puts the repository outside the profile,"):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, self.GIT_DIRECTORY[-1])
+        item_8 = next(line for line in section.splitlines() if line.startswith("8. "))
+        self.assertTrue(item_8.endswith(" " + self.CLAIM_NAME_CASE))
+        self.assertIn("whatever `core.ignorecase` says", self.CLAIM_NAME_CASE)
+        # The check after `git add` is its own paragraph, after the conditions for asking again and before the check
+        # after a commit.
+        paragraph = next(p for p in section.split("\n\n") if p.startswith("**The check after `git add`.** "))
+        self.assertEqual(paragraph, "**The check after `git add`.** " + " ".join(self.CHECK_AFTER_GIT_ADD))
+        flat = " ".join(section.split())
+        self.assertLess(flat.index("a submodule update or a dependency install."),
+                        flat.index("**The check after `git add`.**"))
+        self.assertLess(flat.index("**The check after `git add`.**"), flat.index("**The check after a commit.**"))
+        check, driver, stop = self.CHECK_AFTER_GIT_ADD
+        for clause in ("After each `git add` under this rule, and before any later operation under this rule,",
+                       "immediately before and after the add: the add exited 0;",
+                       "every entry whose name is not a claim file's name is unchanged,",
+                       "with each component's directory entry matching the claim's name exactly,",
+                       "exactly one entry of that name, compared byte for byte, at stage 0, whose mode is `100644` or "
+                       "`100755`", "and is `100644` otherwise;",
+                       "for each claim file that does not exist on disk, the index holds no entry of that name,",
+                       "a claim file main can establish as neither existing nor absent fails the check;",
+                       "and, only after those hold,",
+                       "both in the attribute check before the add and in the same check repeated after it,",
+                       "the file passes the checks of Paths and names that a hashed path passes,",
+                       "or the hash of the file's unconverted bytes from that form with `--no-filters`."):
+            with self.subTest(clause=clause):
+                self.assertIn(clause, check)
+        self.assertIn("any other combination of the two checks fails.", driver)
+        # The stop is the same as after a failed commit check: no further operation under the rule for the session.
+        self.assertIn("means main performs no further operation under this rule for the rest of the session", stop)
+        self.assertIn("means main performs no further operation under this rule for the rest of the session",
+                      self.CHECK_AFTER_COMMIT[2])
+        self.assertIn("A `git add` that exits other than 0, an exit status main cannot establish, or any other result",
+                      stop)
+        self.assertIn("a claim file ignore rules match is one cause;", stop)
+        # The `git add` row names the check, and the wording D-4 extends is gone.
+        row = next(line for line in section.splitlines() if line.startswith("| `git add` |"))
+        self.assertIn("| the claim's files only, as safe names after `--`, followed by the check after `git add` below |",
+                      row)
+        reference = read(REFERENCE)
+        for phrase in self.D4_REMOVED:
+            with self.subTest(removed=phrase[:60]):
+                self.assertNotIn(phrase, reference)
 
     def test_a_push_destination_has_one_of_two_whole_string_shapes(self):
         """Deviation D-2, regression for F1 and the plan review's B1, B2 and R1: a push is performed only to a URL of the
@@ -1460,6 +1617,21 @@ class RepositorySafetyTests(unittest.TestCase):
          "每次 commit 之後，主 Agent 會檢查 commit 記錄的內容是否就是 index 中的內容，以及它的父 commit 是否為主 Agent "
          "預期的那一個；兩者不符或無法確認時，主 Agent 在這個 session 剩下的時間不再執行任何 `git add`、commit、tag 或 "
          "push，並告訴你它無法排除的每個原因，這個 commit 則留在分支上供你檢查。"),
+        # Deviation D-4, item 7: a sparse checkout, any other marked index entry and a case-variant name are outside
+        # the profile, and a failed check after `git add` stops main's operations for the session.
+        ("The profile also leaves out a sparse checkout, whose index marks the paths it leaves out, any other index "
+         "entry marked assume-unchanged or skip-worktree, and a file main would add whose name differs only in letter "
+         "case from an index entry or another file it adds.",
+         "條件也不接受稀疏 checkout（sparse checkout，它的 index 會標記它略過的路徑）、其他標記為 assume-unchanged 或 "
+         "skip-worktree 的 index 項目，以及名稱與某個 index 項目或另一個要加入的檔案只差在英文字母大小寫的待加入檔案。"),
+        ("After each `git add` main checks that the index changed only in the claim's files and records each of them "
+         "under the name, mode and, where no filter applies, content main wrote; when it does not, or main cannot "
+         "establish it, main performs no further `git add`, commit, tag or push for the rest of the session and tells "
+         "you that the index may now hold part of the claim's files, which a commit you make would also record.",
+         "每次 `git add` 之後，主 Agent 會檢查 index 只有 claim 的檔案有變動，而且每個檔案都以主 Agent 寫入的名稱與模式"
+         "記錄，沒有套用 filter 時內容也與主 Agent 寫入的相同；不符或無法確認時，主 Agent 在這個 session 剩下的時間不再"
+         "執行任何 `git add`、commit、tag 或 push，並告訴你 index 現在可能含有 claim 的部分檔案，而你自己做的 commit 也"
+         "會把它們記錄進去。"),
     )
     # Item 7 as revised for deviation D-2: item 6's residual risks, in the paragraph that states D6.
     README_RESIDUAL = (
@@ -1644,6 +1816,10 @@ class RepositorySafetyTests(unittest.TestCase):
             for phrase in self.README_WRITING_REMOVED[name]:
                 with self.subTest(readme=name, removed=phrase):
                     self.assertNotIn(phrase, read(config.ROOT / name))
+            # Deviation D-4: the check after `git add` is summarised before the check after a commit.
+            with self.subTest(readme=name, order=True):
+                self.assertLess(bullet.index(self.README_WRITING[-1][index]), bullet.index(self.README_WRITING[-3][index]))
+        self.assertIn("a sparse checkout", self.README_WRITING[-2][0])
         # Each residual risk item 7 lists is named in the English summary.
         for risk in ("a host name that resolves here", "an HTTP redirect", "a trusted transport setting in your own "
                      "configuration", "a change main can neither see nor learn of after you approve a program",
@@ -1969,11 +2145,14 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         for span in spans:
             with self.subTest(span=span):
                 self.assertIn(span, self.R.FORMS)
-        # Every Git command the paragraph names in full is the prefix itself; nothing else starts with `git `.
+        # Every Git command the paragraph names in full is the prefix itself; nothing else starts with `git `, except
+        # `git add` in the one sentence that keeps content hashing to main's preparation and its check after `git add`
+        # (deviation D-4), which names main's operation, not a form a role runs.
         for span in re.findall(r"`(git [^`]*)`", self.PARAGRAPH):
             if not span.startswith("git <prefix> "):
                 with self.subTest(span=span):
-                    self.assertIn(span, (self.R.PREFIX, "git status", "git diff"))
+                    self.assertIn(span, (self.R.PREFIX, "git status", "git diff", "git add"))
+        self.assertEqual([s for s in self.sentences(self.PARAGRAPH) if "`git add`" in s], [self.R.CONFINED[1]])
         for match in re.finditer(r"<path>", self.PARAGRAPH):
             context = self.PARAGRAPH[max(0, match.start() - 10):match.end() + 1]
             with self.subTest(context=context):
@@ -2300,6 +2479,182 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             commit("three")
             self.assertEqual((parent(1), parent(2)), (recorded, None))
             self.assertFalse(recorded_equals_index())
+
+    def test_the_index_bits_case_variant_names_and_the_check_after_git_add_with_the_installed_git(self):
+        """Deviation D-4, allowed and refused behaviour with the installed Git, main's reads using only the reference's
+        forms with `--no-replace-objects`: a fresh repository's `ls-files -z -v` tags are all `H` and a space, while an
+        assume-unchanged entry shows another tag, which puts the repository outside profile item 2; the ASCII
+        case-insensitive comparison of profile item 8 finds a case-variant name; and the check after `git add` passes
+        for an ordinary edit, for a deleted claim file and for a file stored with CRLF line endings under automatic
+        conversion, and fails when an entry that is not a claim file's changes."""
+        reference = read(REFERENCE)
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, empty = root / "repo", root / "gitconfig"
+            repo.mkdir()
+            empty.write_bytes(b"")
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+
+            def git(*args):
+                try:
+                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            under_rule = (*prefix, "--no-replace-objects")
+            settings = ("-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "rerere.enabled=false",
+                        "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgSign=false")
+
+            def read_git(*args):
+                result = git(*under_rule, *args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return result.stdout
+
+            def add(*paths):
+                return git(*under_rule, *settings, "add", "--", *paths).returncode
+
+            def commit(message):
+                result = git(*under_rule, *settings, "commit", "-m", message, "--quiet", "--no-verify",
+                             "--no-gpg-sign")
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+            def tags():
+                return [record[:2] for record in filter(None, read_git("ls-files", "-z", "-v").split(b"\0"))]
+
+            def listing():
+                """The index listing from the top level: each name with its entries' mode, object id and stage."""
+                entries = {}
+                for record in filter(None, read_git("ls-files", "-z", "--stage").split(b"\0")):
+                    meta, name = record.split(b"\t", 1)
+                    mode, oid, stage = meta.split(b" ")
+                    entries.setdefault(name, []).append((mode, oid, stage))
+                return entries
+
+            def case_variants(claims, names):
+                """Profile item 8: a name equal to a claim file's when ASCII letters are compared without regard to
+                case, but not byte for byte, or two claim files equal under that comparison."""
+                found = {name for claim in claims for name in names if name != claim and name.lower() == claim.lower()}
+                folded = [claim.lower() for claim in claims]
+                return found or len(set(folded)) != len(folded)
+
+            def on_disk(name):
+                """True or False when the claim file's existence is established with each component's directory entry
+                matching the claim's name exactly and no link; None otherwise, which fails the check."""
+                current = repo
+                components = name.decode("ascii").split("/")
+                for number, component in enumerate(components):
+                    try:
+                        if component not in os.listdir(current):
+                            return False
+                        mode = os.lstat(current / component).st_mode
+                    except OSError:
+                        return None
+                    current = current / component
+                    last = number == len(components) - 1
+                    if stat.S_ISLNK(mode) or (not last and not stat.S_ISDIR(mode)):
+                        return None
+                return stat.S_ISREG(mode) and os.lstat(current).st_nlink == 1 or None
+
+            def filter_driver(name):
+                record = read_git("check-attr", "-z", "filter", "--", name.decode("ascii")).split(b"\0")
+                return record[2]
+
+            def head_mode(name):
+                if git(*under_rule, "rev-parse", "--verify", "--quiet", "HEAD").returncode:
+                    return None
+                listed = read_git("ls-tree", "-z", "--full-tree", "HEAD", "--", name.decode("ascii"))
+                return listed.split(b" ", 1)[0] if listed else None
+
+            def checked_add(claims, staged=None):
+                """The fixed form of `git add`, then the check after `git add` as the reference states it; `staged`
+                stands in for an add that changes more than the claim's files."""
+                drivers = {claim: filter_driver(claim) for claim in claims}
+                before = listing()
+                exit_status = add(*(name.decode("ascii") for name in (staged or claims)))
+                after = listing()
+                if exit_status != 0:
+                    return False
+                others = lambda entries: {name: value for name, value in entries.items() if name not in claims}
+                if others(before) != others(after):
+                    return False
+                for claim in claims:
+                    exists = on_disk(claim)
+                    if exists is None:
+                        return False
+                    if not exists:
+                        if claim in after:
+                            return False
+                        continue
+                    entries = after.get(claim, [])
+                    if len(entries) != 1:
+                        return False
+                    mode, oid, stage = entries[0]
+                    expected = head_mode(claim)
+                    if stage != b"0" or mode != (expected if expected in (b"100644", b"100755") else b"100644"):
+                        return False
+                    # No driver is defined in this repository, so both attribute checks leave the filter unspecified.
+                    if (drivers[claim], filter_driver(claim)) != (b"unspecified", b"unspecified"):
+                        return False
+                    path = claim.decode("ascii")
+                    hashes = {read_git("hash-object", "--", path).strip(),
+                              read_git("hash-object", "--no-filters", "--", path).strip()}
+                    if oid not in hashes:
+                        return False
+                return True
+
+            if git("-c", "init.defaultBranch=main", "init", "-q", ".").returncode:
+                self.skipTest("this Git cannot initialise a repository")
+            self.assertEqual(git("config", "core.autocrlf", "false").returncode, 0)
+            (repo / "sub").mkdir()
+            (repo / "a.txt").write_bytes(b"one\n")
+            (repo / "sub" / "b.txt").write_bytes(b"bee\n")
+            (repo / "c.txt").write_bytes(b"crlf\r\nstored\r\n")
+            self.assertTrue(checked_add([b"a.txt", b"sub/b.txt", b"c.txt"]))
+            commit("one")
+            # Profile item 2: every tag of a fresh repository is `H` and a space.
+            self.assertEqual(tags(), [b"H "] * 3)
+            # An assume-unchanged entry shows another tag, so the repository is outside the profile until it is
+            # cleared.
+            self.assertEqual(git(*under_rule, "update-index", "--assume-unchanged", "--", "a.txt").returncode, 0)
+            self.assertNotEqual(set(tags()), {b"H "})
+            self.assertEqual(git(*under_rule, "update-index", "--no-assume-unchanged", "--", "a.txt").returncode, 0)
+            self.assertEqual(set(tags()), {b"H "})
+            # Profile item 8: a claim name that differs from an index entry's only in case, or two such claim names,
+            # are found; distinct names are not.
+            names = set(listing())
+            self.assertTrue(case_variants([b"A.TXT"], names))
+            self.assertTrue(case_variants([b"Sub/b.txt"], names))
+            self.assertTrue(case_variants([b"new.txt", b"New.txt"], names))
+            self.assertFalse(case_variants([b"a.txt", b"sub/b.txt", b"new.txt"], names))
+            # The check after `git add` passes for an ordinary edit, with the mode `HEAD`'s tree records.
+            (repo / "a.txt").write_bytes(b"one\ntwo\n")
+            self.assertTrue(checked_add([b"a.txt"]))
+            # It passes for a deleted claim file, which then has no entry.
+            (repo / "sub" / "b.txt").unlink()
+            self.assertTrue(checked_add([b"sub/b.txt"]))
+            self.assertNotIn(b"sub/b.txt", listing())
+            commit("two")
+            # It passes for a file stored with CRLF line endings under automatic conversion, accepting the hash of
+            # the unconverted bytes.
+            self.assertEqual(git("config", "core.autocrlf", "true").returncode, 0)
+            (repo / ".gitattributes").write_bytes(b"* text=auto\n")
+            (repo / "c.txt").write_bytes(b"crlf\r\nstored\r\nagain\r\n")
+            self.assertTrue(checked_add([b"c.txt"]))
+            staged = listing()[b"c.txt"][0][1]
+            self.assertEqual(staged, read_git("hash-object", "--no-filters", "--", "c.txt").strip())
+            # The converted hash alone would have failed the check for this file.
+            self.assertNotEqual(staged, read_git("hash-object", "--", "c.txt").strip())
+            # It fails when an entry that is not a claim file's changes between the listings around the add, here
+            # because the add stages a second path besides the claim's.
+            (repo / "a.txt").write_bytes(b"one\ntwo\nthree\n")
+            (repo / "c.txt").write_bytes(b"crlf\r\nchanged\r\n")
+            self.assertFalse(checked_add([b"a.txt"], staged=[b"a.txt", b"c.txt"]))
+            # The same edit passes when only the claim's files change.
+            (repo / "a.txt").write_bytes(b"one\ntwo\nthree\nfour\n")
+            self.assertTrue(checked_add([b"a.txt", b"c.txt"]))
 
     def test_the_role_forms_run_no_filter_the_working_tree_would_run(self):
         """Adversarial review of C2 (BROKEN), finding F1, regression: in a throwaway repository whose attributes and local
