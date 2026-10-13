@@ -1,5 +1,6 @@
 """Project containment and content snapshots shared by public operations."""
 from dataclasses import dataclass
+import errno
 import hashlib
 import os
 from pathlib import Path
@@ -31,21 +32,96 @@ def git_environment() -> dict[str, str]:
     return environment
 
 
-# Every Git command starts with these: no configured pager runs, no optional index refresh is written, and the empty
-# core.fsmonitor value disables a configured fsmonitor whether Git reads the setting as a boolean or a hook path.
-GIT_COMMAND = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=")
+# Every Git command starts with these after the resolved executable: no configured pager runs, no optional index
+# refresh is written, and the empty core.fsmonitor value disables a configured fsmonitor whether Git reads the
+# setting as a boolean or a hook path.
+GIT_COMMAND = ("--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=")
+
+WINDOWS = os.name == "nt"
+# The only file name the resolver accepts. On Windows no PATHEXT applies: a git.cmd or git.bat is a batch file, which
+# cmd.exe parses again with its own quoting and expansion rules, so the arguments Git receives would no longer be the
+# ones given here.
+GIT_NAME = "git.exe" if WINDOWS else "git"
+_SEPARATORS = "\\/" if WINDOWS else "/"
+# An entry still holding a variable reference was never expanded; it names no directory the user meant.
+_UNEXPANDED = re.compile(r"%[^%]+%" if WINDOWS else r"\$(?:\{|[A-Za-z_])")
+
+
+def _fully_qualified(entry: str) -> bool:
+    """A path that names one directory whatever the current directory and drive are.
+
+    Windows: a drive letter followed by a separator, or a UNC path \\\\server\\share; never drive-relative (C:foo),
+    rooted without a drive (\\foo), or a device path (\\\\?\\, \\\\.\\). Decided from the text, not ntpath.isabs,
+    whose answer for rooted paths differs between Python versions. POSIX: starts with /."""
+    if not WINDOWS:
+        return entry.startswith("/")
+    if len(entry) >= 3 and entry[0].isascii() and entry[0].isalpha() and entry[1] == ":" and entry[2] in _SEPARATORS:
+        return True
+    if len(entry) < 5 or entry[0] not in _SEPARATORS or entry[1] not in _SEPARATORS or entry[2] in _SEPARATORS:
+        return False
+    parts = re.split(r"[\\/]", entry[2:])
+    return len(parts) >= 2 and parts[0] not in {"?", "."} and bool(parts[1])
+
+
+def git_search_path(value: str | None) -> list[str]:
+    """The PATH entries the resolver considers and the only ones Git's own PATH keeps, in their order.
+
+    An absent or empty PATH has none. On Windows one pair of surrounding double quotes is removed first. Empty,
+    relative, not fully qualified and unexpanded entries are skipped, so neither the current directory nor a
+    directory relative to it takes part."""
+    entries = []
+    for entry in (value or "").split(os.pathsep):
+        if WINDOWS and len(entry) >= 2 and entry[0] == entry[-1] == '"':
+            entry = entry[1:-1]
+        if entry and "\0" not in entry and _fully_qualified(entry) and not _UNEXPANDED.search(entry):
+            entries.append(entry)
+    return entries
+
+
+def _missing_git() -> FileNotFoundError:
+    """The error subprocess.run raises today when it cannot find a bare `git`, so every caller's handling holds."""
+    if WINDOWS:
+        return FileNotFoundError(errno.ENOENT, "The system cannot find the file specified", None, 2)
+    return FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), "git")
+
+
+def resolve_git(value: str | None) -> str:
+    """The Git executable the handoff tool starts: the first git_search_path entry holding GIT_NAME as a regular
+    file after following links, and on POSIX executable, returned as the entry joined with that name (not a link's
+    target). Raises FileNotFoundError when no entry has one. Asks neither the operating system nor Python to search
+    (no shutil.which, os.get_exec_path or os.defpath), starts no process and keeps no result between calls."""
+    for entry in git_search_path(value):
+        candidate = os.path.join(entry, GIT_NAME)
+        try:
+            found = stat.S_ISREG(os.stat(candidate).st_mode)
+        except (OSError, ValueError):
+            continue
+        if found and (WINDOWS or os.access(candidate, os.X_OK)):
+            return candidate
+    raise _missing_git()
 
 
 def run_git(directory: Path, *arguments: str, errors: str = "strict",
             no_lazy_fetch: bool = False) -> subprocess.CompletedProcess:
-    """The only place the handoff tool starts Git: `git <GIT_COMMAND> [--no-lazy-fetch] -C <directory> <arguments>`.
+    """The only place the handoff tool starts Git: `<git> <GIT_COMMAND> [--no-lazy-fetch] -C <directory> <arguments>`.
 
-    Needs no Store, so root discovery can use it. no_lazy_fetch is what lazy_fetch_guard returned for the operation.
-    Output is UTF-8 text decoded with `errors`; OSError and subprocess.TimeoutExpired propagate, and each caller
-    judges the return code."""
+    <git> is the absolute path resolve_git found in PATH, never a bare name; when it finds none, FileNotFoundError
+    propagates and no process starts. Git runs from its own directory with only the entries git_search_path keeps as
+    its PATH, so the process's current directory takes part neither in finding Git nor in Git's own lookups, and
+    <directory> is passed absolute. Needs no Store, so root discovery can use it. no_lazy_fetch is what
+    lazy_fetch_guard returned for the operation. Output is UTF-8 text decoded with `errors`; OSError and
+    subprocess.TimeoutExpired propagate, and each caller judges the return code."""
+    value = os.environ.get("PATH")
+    executable = resolve_git(value)
+    environment = git_environment()
+    environment["PATH"] = os.pathsep.join(git_search_path(value))
+    target = str(directory)
+    if not _fully_qualified(target):
+        target = os.path.abspath(target)
     options = (*GIT_COMMAND, "--no-lazy-fetch") if no_lazy_fetch else GIT_COMMAND
-    return subprocess.run([*options, "-C", str(directory), *arguments], capture_output=True, text=True,
-                          encoding="utf-8", errors=errors, timeout=5, env=git_environment())
+    return subprocess.run([executable, *options, "-C", target, *arguments], capture_output=True, text=True,
+                          encoding="utf-8", errors=errors, timeout=5, env=environment,
+                          cwd=os.path.dirname(executable))
 
 
 # The first Git release whose --no-lazy-fetch keeps a command from fetching a missing object from a promisor remote.

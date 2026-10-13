@@ -253,11 +253,19 @@ class GitTopLevelOutputTest(LinkBase):
         return code, json.loads(out.getvalue())
 
     def test_empty_top_level_output_is_uncertain_and_create_writes_nothing(self):
+        # Repository safety follow-ups C4 item 7: Git is the resolver's absolute path, here a stand-in that only
+        # PATH names, started from its own directory.
+        tools = self.base / "tools"
+        tools.mkdir()
+        (tools / storage.GIT_NAME).write_bytes(b"")
+        (tools / storage.GIT_NAME).chmod(0o755)
+        self.enterContext(mock.patch.dict(os.environ, {"PATH": str(tools)}))
+
         def empty_top_level(args, **kwargs):
             # Repository safety C4: discovery runs Git only through the helper's hardened prefix.
-            if args[:6] != ["git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-C"] \
-                    or args[-1] != "--show-toplevel":
-                raise AssertionError(f"Unexpected Git call: {args}")
+            if args[:6] != [str(tools / storage.GIT_NAME), "--no-pager", "--no-optional-locks", "-c",
+                            "core.fsmonitor=", "-C"] or args[-1] != "--show-toplevel" or kwargs["cwd"] != str(tools):
+                raise AssertionError(f"Unexpected Git call: {args} {kwargs.get('cwd')}")
             return subprocess.CompletedProcess(args, 0, "\n", "")
         original = os.path.realpath
 

@@ -24,7 +24,9 @@ sys.path.insert(0, str(SCRIPTS))
 
 from feather_handoff import cli, observations, storage  # noqa: E402
 
-PREFIX = ["git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor="]
+# The helper's options after the resolved Git executable; PREFIX_LENGTH counts the executable too.
+OPTIONS = ["--no-pager", "--no-optional-locks", "-c", "core.fsmonitor="]
+PREFIX_LENGTH = 1 + len(OPTIONS)
 FIELDS = {"goal": "g", "progress": "p", "next": "n", "updated": "2026-10-11T10:00:00+08:00"}
 UPDATED = "2026-10-11T11:00:00+08:00"
 CAPTURED = "2026-10-11T10:00:00+08:00"
@@ -32,6 +34,19 @@ CAPTURED = "2026-10-11T10:00:00+08:00"
 COMMIT_ENV = {"GIT_AUTHOR_NAME": "Fixture", "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
               "GIT_COMMITTER_NAME": "Fixture", "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
               "GIT_AUTHOR_DATE": "2026-10-11T10:00:00+08:00", "GIT_COMMITTER_DATE": "2026-10-11T10:00:00+08:00"}
+
+
+def stand_in_git(test: unittest.TestCase) -> str:
+    """For tests that replace the Git process: PATH names only a scratch directory holding a file the resolver
+    accepts, so the helper's first argument is that file's absolute path whether or not Git is installed. Returns it."""
+    temporary = tempfile.TemporaryDirectory()
+    test.addCleanup(temporary.cleanup)
+    tools = os.path.realpath(temporary.name)
+    executable = os.path.join(tools, storage.GIT_NAME)
+    Path(executable).write_bytes(b"")
+    os.chmod(executable, 0o755)
+    test.enterContext(mock.patch.dict(os.environ, {"PATH": tools}))
+    return executable
 
 
 class GitProcessStartTest(unittest.TestCase):
@@ -111,6 +126,7 @@ class GitHelperCallTest(unittest.TestCase):
         self.addCleanup(storage.reset_roots)
 
     def test_helper_prefixes_every_command_and_keeps_the_environment_protections(self):
+        executable = stand_in_git(self)
         completed = subprocess.CompletedProcess([], 0, "out\n", "")
         with mock.patch.object(storage.subprocess, "run", return_value=completed) as run, \
                 mock.patch.dict(os.environ, {"GIT_DIR": "elsewhere", "GIT_INDEX_FILE": "elsewhere"}):
@@ -118,19 +134,23 @@ class GitHelperCallTest(unittest.TestCase):
             self.assertIs(storage.run_git(self.project, "rev-parse", "--show-toplevel", errors="replace"), completed)
             storage.run_git(self.project, "ls-files", "--", ".feather/handoffs/")
         first, second = run.call_args_list
-        self.assertEqual(first.args[0], [*PREFIX, "-C", str(self.project), "rev-parse", "--show-toplevel"])
-        self.assertEqual(second.args[0], [*PREFIX, "-C", str(self.project), "ls-files", "--", ".feather/handoffs/"])
+        self.assertEqual(first.args[0], [executable, *OPTIONS, "-C", str(self.project), "rev-parse", "--show-toplevel"])
+        self.assertEqual(second.args[0], [executable, *OPTIONS, "-C", str(self.project), "ls-files", "--",
+                                          ".feather/handoffs/"])
         self.assertEqual({key: first.kwargs[key] for key in ("capture_output", "text", "encoding", "errors", "timeout")},
                          {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace", "timeout": 5})
         self.assertEqual(second.kwargs["errors"], "strict")
         for call in (first, second):
+            self.assertEqual(call.kwargs["cwd"], os.path.dirname(executable))
             environment = call.kwargs["env"]
+            self.assertEqual(environment["PATH"], os.path.dirname(executable))
             self.assertNotIn("GIT_DIR", environment)
             self.assertNotIn("GIT_INDEX_FILE", environment)
             self.assertEqual((environment["GIT_OPTIONAL_LOCKS"], environment["LC_ALL"]), ("0", "C"))
 
     def test_helper_raises_what_the_process_start_raises(self):
         # Each caller keeps its own handling of a missing Git and a timeout.
+        stand_in_git(self)
         for error in (FileNotFoundError("git"), subprocess.TimeoutExpired(["git"], 5)):
             with self.subTest(error=type(error).__name__), \
                     mock.patch.object(storage.subprocess, "run", side_effect=error), self.assertRaises(type(error)):
@@ -160,15 +180,18 @@ class GitHelperCallTest(unittest.TestCase):
             invoke("update", "--work", "w.md", payload={"version": created["version"], "tracking": "track"})
             invoke("compare", "--work", "w.md")
         self.assertEqual(created["status"], "ok", created)
-        commands = {tuple(call[len(PREFIX) + 2:]) for call in calls}
+        commands = {tuple(call[PREFIX_LENGTH + 2:]) for call in calls}
         # Discovery, the tracking probe and rules, and the observation each ran through the helper.
         for expected in (("rev-parse", "--show-toplevel"), ("rev-parse", "--is-inside-work-tree"),
                          ("ls-files", "--", ".feather/handoffs/"), ("check-ignore", "-v", "--", ".feather/handoffs/w.md"),
                          ("check-ignore", "-q", "--", ".feather/handoffs/w.md"), ("symbolic-ref", "--quiet", "HEAD"),
                          ("rev-parse", "--verify", "--quiet", "HEAD")):
             self.assertIn(expected, commands)
+        # Every call starts the resolver's absolute path, never a bare name.
+        executable = storage.resolve_git(os.environ.get("PATH"))
+        self.assertTrue(os.path.isabs(executable), executable)
         for call in calls:
-            self.assertEqual(call[:len(PREFIX) + 2], [*PREFIX, "-C", str(self.project)], call)
+            self.assertEqual(call[:PREFIX_LENGTH + 2], [executable, *OPTIONS, "-C", str(self.project)], call)
 
 
 class RepositoryChosenProgramTest(unittest.TestCase):
@@ -320,15 +343,19 @@ class FakeGit:
         self.project, self.version, self.config = project, version, config
         self.config_code, self.version_code = config_code, version_code
         self.calls: list[list[str]] = []
+        # The test's PATH names only stand_in_git's directory, so the helper must start that file from there.
+        self.directory = os.environ["PATH"]
+        self.prefix = [os.path.join(self.directory, storage.GIT_NAME), *OPTIONS]
 
     def split(self, args: list[str]) -> tuple[bool, list[str]]:
         """Whether the command carries --no-lazy-fetch, and its Git arguments after the -C directory."""
-        flagged = args[len(PREFIX)] == "--no-lazy-fetch"
-        start = len(PREFIX) + (1 if flagged else 0)
-        assert args[:len(PREFIX)] == PREFIX and args[start:start + 2] == ["-C", str(self.project)], args
+        flagged = args[PREFIX_LENGTH] == "--no-lazy-fetch"
+        start = PREFIX_LENGTH + (1 if flagged else 0)
+        assert args[:PREFIX_LENGTH] == self.prefix and args[start:start + 2] == ["-C", str(self.project)], args
         return flagged, args[start + 2:]
 
     def __call__(self, args, **kwargs):
+        assert (kwargs["cwd"], kwargs["env"]["PATH"]) == (self.directory, self.directory), kwargs
         args = list(args)
         self.calls.append(args)
         flagged, rest = self.split(args)
@@ -368,6 +395,7 @@ class PromisorDetectionTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.project = Path(os.path.realpath(temporary.name))
+        stand_in_git(self)
 
     def guard(self, fake: FakeGit):
         with mock.patch.object(storage.subprocess, "run", side_effect=fake):
@@ -419,8 +447,10 @@ class PromisorDetectionTest(unittest.TestCase):
             storage.run_git(self.project, "ls-files", "--", "x", no_lazy_fetch=True)
             storage.run_git(self.project, "ls-files", "--", "x")
         flagged, plain = (call.args[0] for call in run.call_args_list)
-        self.assertEqual(flagged, [*PREFIX, "--no-lazy-fetch", "-C", str(self.project), "ls-files", "--", "x"])
-        self.assertEqual(plain, [*PREFIX, "-C", str(self.project), "ls-files", "--", "x"])
+        executable = os.path.join(os.environ["PATH"], storage.GIT_NAME)
+        self.assertEqual(flagged, [executable, *OPTIONS, "--no-lazy-fetch", "-C", str(self.project), "ls-files", "--",
+                                   "x"])
+        self.assertEqual(plain, [executable, *OPTIONS, "-C", str(self.project), "ls-files", "--", "x"])
 
 
 class SimulatedPromisorTest(unittest.TestCase):
@@ -432,6 +462,7 @@ class SimulatedPromisorTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.project = Path(os.path.realpath(temporary.name))
+        stand_in_git(self)
         self.directory = self.project / ".feather/handoffs"
         self.ignore = self.project / ".gitignore"
         self.addCleanup(storage.reset_roots)
@@ -588,6 +619,7 @@ class SimulatedObservationPromisorTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.project = Path(os.path.realpath(temporary.name))
+        stand_in_git(self)
         self.addCleanup(storage.reset_roots)
 
     def observe(self, fake: FakeGit) -> dict:
@@ -633,7 +665,7 @@ class SimulatedObservationPromisorTest(unittest.TestCase):
             fake = ObservationGit(self.project)
 
             def failing(args, **kwargs):
-                if args[len(PREFIX) + 2:] == CONFIG_READ:
+                if args[PREFIX_LENGTH + 2:] == CONFIG_READ:
                     raise error
                 return fake(args, **kwargs)
             with self.subTest(error=type(error).__name__), \
@@ -791,11 +823,15 @@ class PartialCloneTest(unittest.TestCase):
                 self.assertFalse((clone / ".gitignore").exists(), "tracking must write nothing")
             else:
                 self.assertNotIn(created.get("cause_code"), {"promisor-remote", "promisor-unknown"}, created)
+                # Follow-ups C4 item 8: on Git 2.45.0 or later the save itself succeeds, not only without the cause.
+                self.assertEqual((code, created["status"]), (0, "ok"), created)
             code, updated = step(f"update {choice}", "update", "--work", name,
                                  payload={"version": created["version"], "tracking": choice,
                                           "fields": {"next": "m", "updated": UPDATED}})
             if old:
                 self.assertEqual((code, updated["cause_code"]), (2, "promisor-remote"), updated)
+            else:
+                self.assertEqual((code, updated["status"]), (0, "ok"), updated)
             code, compared = step(f"compare {choice}", "compare", "--work", name)
             self.assertEqual(compared["git"]["comparison"], "unchanged", compared)
         code, done = step("complete", "create", "--work", "done.md", payload={
@@ -804,6 +840,12 @@ class PartialCloneTest(unittest.TestCase):
             self.assertEqual((code, done["cause_code"]), (2, "promisor-remote"), done)
             code, archived = step("archive", "archive", "--work", "done.md", payload={"version": done["version"]})
             self.assertEqual((code, archived["archived"], archived["cause_code"]), (2, True, "promisor-remote"))
+        else:
+            # A completed save archives itself when nothing fails: the work is removed and history holds its entry.
+            self.assertEqual((code, done["status"], done["archived"]), (0, "ok", True), done)
+            self.assertFalse((clone / ".feather/handoffs/done.md").exists(), done)
+            history = (clone / ".feather/handoffs/history.md").read_text(encoding="utf-8")
+            self.assertIn(f"## done · 完成：{COMPLETED_AT}", history)
         step("read", "read", "--work", "default.md")
 
     def test_the_observation_show_ref_does_not_fetch_lazily(self):
@@ -858,7 +900,7 @@ class PartialCloneTest(unittest.TestCase):
             self.assertEqual(observed, {"state": "unknown", "reason": "promisor-remote"})
             self.assertEqual(show_refs, [])
         else:
-            self.assertEqual([call[len(PREFIX)] for call in show_refs], ["--no-lazy-fetch"])
+            self.assertEqual([call[PREFIX_LENGTH] for call in show_refs], ["--no-lazy-fetch"])
 
     def test_an_included_promisor_declaration_counts(self):
         # A repository with every object present whose local configuration includes a file declaring a promisor

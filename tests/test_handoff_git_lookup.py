@@ -1,0 +1,551 @@
+"""Repository safety follow-ups C4: the handoff tool finds Git only by an absolute path from fully qualified PATH
+entries, never through the current directory, and starts it with a cleaned PATH from Git's own directory.
+
+Trust boundary: the process's current directory, which may lie in a repository whose working tree is attacker-
+controlled, against the programs the handoff tool starts. PATH is the user's environment and stays trusted (F1);
+entries that depend on the current directory or drive, or were never expanded, are not. Every fixture lives in a
+scratch directory under the system temporary directory and is removed afterwards."""
+import ast
+import contextlib
+from datetime import datetime, timedelta, timezone
+import io
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "skills/handoff/scripts"
+TOOL = SCRIPTS / "handoff.py"
+sys.path.insert(0, str(SCRIPTS))
+
+from feather_handoff import cli, observations, storage  # noqa: E402
+
+WINDOWS = os.name == "nt"
+NAME = "git.exe" if WINDOWS else "git"
+FIELDS = {"goal": "g", "progress": "p", "next": "n", "updated": "2026-10-11T10:00:00+08:00"}
+UPDATED = "2026-10-11T11:00:00+08:00"
+COMPLETED_AT = "2026-10-11T12:00:00+08:00"
+COMMIT_ENV = {"GIT_AUTHOR_NAME": "Fixture", "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
+              "GIT_COMMITTER_NAME": "Fixture", "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
+              "GIT_AUTHOR_DATE": "2026-10-11T10:00:00+08:00", "GIT_COMMITTER_DATE": "2026-10-11T10:00:00+08:00"}
+# The variable that makes Windows leave the current directory out of a bare-name search; the host may set it.
+NO_CURRENT_DIRECTORY = "NODEFAULTCURRENTDIRECTORYINEXEPATH"
+WINDOWS_ONLY = "a Windows PATH shape; the POSIX rows cover POSIX"
+POSIX_ONLY = "a POSIX PATH shape; the Windows rows cover Windows"
+
+
+def scratch(test: unittest.TestCase) -> Path:
+    temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+    test.addCleanup(temporary.cleanup)
+    return Path(os.path.realpath(temporary.name))
+
+
+def plant(directory: Path, name: str = NAME, data: bytes = b"MZ", mode: int = 0o755) -> Path:
+    """A file the resolver would accept by name; on POSIX `mode` decides whether it is executable."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    path.write_bytes(data)
+    path.chmod(mode)
+    return path
+
+
+def qualified(entry: str) -> bool:
+    """The test's own statement of a fully qualified PATH entry, written independently of the resolver."""
+    if not WINDOWS:
+        return entry.startswith("/")
+    return bool(re.match(r"^[A-Za-z]:[\\/]", entry) or re.match(r"^[\\/]{2}(?![?.][\\/])[^\\/]+[\\/][^\\/]+", entry))
+
+
+def isolated_environment(root: Path) -> dict[str, str]:
+    """The test's environment without inherited GIT_* variables or the current-directory switch, isolated from the
+    user's global and system Git configuration."""
+    empty = root / "gitconfig"
+    empty.write_bytes(b"")
+    (root / "home").mkdir(exist_ok=True)
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.upper().startswith("GIT_") and key.upper() != NO_CURRENT_DIRECTORY}
+    environment.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty), "HOME": str(root / "home"),
+                        "XDG_CONFIG_HOME": str(root / "home")})
+    return environment
+
+
+@contextlib.contextmanager
+def no_search():
+    """Fails the resolver call if it starts a process or asks Python to search for a program."""
+    refused = AssertionError("the resolver must not start a process or search for a program")
+    with mock.patch.object(storage.subprocess, "run", side_effect=refused), \
+            mock.patch.object(subprocess, "Popen", side_effect=refused), \
+            mock.patch.object(shutil, "which", side_effect=refused), \
+            mock.patch.object(os, "get_exec_path", side_effect=refused):
+        yield
+
+
+class FixedDatetime(datetime):
+    """The same capture time in every run, so outputs compare byte for byte rather than normalised."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 10, 11, 10, 0, tzinfo=timezone(timedelta(hours=8)))
+
+
+class GitResolverSourceTest(unittest.TestCase):
+    """C4 item 1: the resolver asks neither the operating system nor Python to search, and adds no default path."""
+
+    def test_the_helper_module_uses_no_search_or_default_path(self):
+        source = (SCRIPTS / "feather_handoff" / "storage.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                names = [alias.name for alias in node.names] + [getattr(node, "module", None) or ""]
+                self.assertFalse(any(name.split(".")[0] in {"shutil", "ntpath"} for name in names), names)
+            elif isinstance(node, ast.Attribute):
+                self.assertNotIn(node.attr, {"which", "get_exec_path", "defpath", "isabs"}, ast.dump(node))
+
+
+class GitResolverTableTest(unittest.TestCase):
+    """C4 item 5: the resolver over PATH values built in a scratch directory, each with its expected result. The
+    process's current directory holds a Git, and so does `bin` below it, so every entry that the current directory
+    or drive could complete is a live trap rather than a missing directory."""
+
+    def setUp(self):
+        self.root = scratch(self)
+        self.cwd = self.root / "cwd"
+        plant(self.cwd)
+        plant(self.cwd / "bin")
+        self.good = self.root / "good"
+        plant(self.good)
+        previous = os.getcwd()
+        os.chdir(self.cwd)
+        self.addCleanup(os.chdir, previous)
+
+    def resolve(self, value: str | None) -> str | None:
+        with no_search():
+            try:
+                return storage.resolve_git(value)
+            except FileNotFoundError as error:
+                self.assertEqual(error.errno, 2)
+                return None
+
+    def check(self, rows):
+        for label, value, expected in rows:
+            with self.subTest(label, PATH=value):
+                if isinstance(expected, unittest.SkipTest):
+                    self.skipTest(str(expected))
+                self.assertEqual(self.resolve(value), expected)
+
+    @unittest.skipUnless(WINDOWS, WINDOWS_ONLY)
+    def test_windows_entry_shapes(self):
+        drive, rooted = os.path.splitdrive(str(self.cwd))
+        self.assertTrue(drive and drive[1] == ":", "the scratch directory is not on a drive letter")
+        zero = self.root / "zero"
+        plant(zero, data=b"")
+        (self.root / "dirgit" / NAME).mkdir(parents=True)
+        plant(self.root / "cmdonly", "git.cmd", b"@echo off\r\n")
+        plant(self.root / "cmdonly", "git.bat", b"@echo off\r\n")
+        literal = self.root / "%FEATHER_LOOKUP_DIR%"
+        plant(literal)
+        good = str(self.good)
+        unc = "\\\\localhost\\" + drive[0] + "$" + os.path.splitdrive(good)[1]
+        unc_expected = (os.path.join(unc, NAME) if os.path.isfile(os.path.join(unc, NAME))
+                        else unittest.SkipTest("the administrative share \\\\localhost\\" + drive[0] + "$ is not reachable"))
+        with mock.patch.dict(os.environ, {"FEATHER_LOOKUP_DIR": good}):
+            self.check([
+                ("drive-relative C:foo, completed by the drive's current directory", drive + "bin", None),
+                ("rooted without a drive, \\foo on the current drive", rooted, None),
+                (".", ".", None),
+                ("an empty entry", "", None),
+                ("empty entries only", ";;", None),
+                ("relative bin", "bin", None),
+                ("quoted entry, one pair of quotes removed", f'"{good}"', os.path.join(good, NAME)),
+                ("quoted entry with an empty inside", '""', None),
+                ("C:/ with forward slashes", self.good.as_posix(), os.path.join(self.good.as_posix(), NAME)),
+                ("trailing separator", good + "\\", good + "\\" + NAME),
+                ("unexpanded %VAR%", "%FEATHER_LOOKUP_DIR%", None),
+                ("fully qualified but unexpanded", str(literal), None),
+                ("UNC path", unc, unc_expected),
+            ])
+            self.check([
+                ("\\\\?\\ device path", "\\\\?\\" + good, None),
+                ("//?/ device path", "//?/" + self.good.as_posix(), None),
+                ("\\\\.\\ device path", "\\\\.\\" + good, None),
+                ("a directory named git.exe", str(self.root / "dirgit"), None),
+                ("only git.cmd and git.bat", str(self.root / "cmdonly"), None),
+                ("a zero-byte git.exe is a regular file", str(zero), str(zero / NAME)),
+                ("PATH absent", None, None),
+                ("first match wins", f"{good};{zero}", os.path.join(good, NAME)),
+                ("first match wins, reversed", f"{zero};{good}", str(zero / NAME)),
+                ("every skipped shape before a good entry",
+                 ";".join(["", ".", "bin", drive + "bin", rooted, "%FEATHER_LOOKUP_DIR%", str(literal),
+                           "\\\\?\\" + good, "\\\\.\\" + good, str(self.root / "dirgit"), str(self.root / "cmdonly"),
+                           good]), os.path.join(good, NAME)),
+            ])
+
+    @unittest.skipUnless(WINDOWS, WINDOWS_ONLY)
+    def test_windows_links_are_followed_but_not_returned(self):
+        linked = self.root / "linked"
+        linked.mkdir()
+        try:
+            os.symlink(self.good / NAME, linked / NAME)
+            (self.root / "linkdir").mkdir()
+            os.symlink(self.root / "dirgit-target", self.root / "linkdir" / NAME, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"symbolic links cannot be created here: {error}")
+        (self.root / "dirgit-target").mkdir()
+        self.check([("a link to a regular git.exe", str(linked), str(linked / NAME)),
+                    ("a link to a directory", str(self.root / "linkdir"), None)])
+
+    @unittest.skipIf(WINDOWS, POSIX_ONLY)
+    def test_posix_entry_shapes(self):
+        plant(self.root / "noexec", mode=0o644)
+        (self.root / "dirtarget").mkdir()
+        (self.root / "linkdir").mkdir()
+        os.symlink(self.root / "dirtarget", self.root / "linkdir" / NAME)
+        (self.root / "linkexe").mkdir()
+        os.symlink(self.good / NAME, self.root / "linkexe" / NAME)
+        literal = self.root / "$FEATHER_LOOKUP_DIR"
+        plant(literal)
+        good = str(self.good)
+        self.check([
+            ("a non-executable git", str(self.root / "noexec"), None),
+            ("a symbolic link to a directory", str(self.root / "linkdir"), None),
+            ("a symbolic link to an executable, returned as found", str(self.root / "linkexe"),
+             str(self.root / "linkexe" / NAME)),
+            ("PATH absent", None, None),
+            ("an empty entry", "", None),
+            ("empty entries only", "::", None),
+            (".", ".", None),
+            ("relative bin", "bin", None),
+            ("quotes are not removed on POSIX", f'"{good}"', None),
+            ("fully qualified but unexpanded", str(literal), None),
+            ("first match wins", f"{good}:{self.root / 'linkexe'}", str(self.good / NAME)),
+            ("every skipped shape before a good entry",
+             ":".join(["", ".", "bin", str(self.root / "noexec"), str(self.root / "linkdir"), str(literal), good]),
+             str(self.good / NAME)),
+        ])
+
+    def test_no_result_is_kept_between_calls(self):
+        other = self.root / "other"
+        plant(other)
+        self.assertEqual(self.resolve(str(self.good)), str(self.good / NAME))
+        self.assertEqual(self.resolve(str(other)), str(other / NAME))
+        self.assertIsNone(self.resolve(None))
+        self.assertEqual(self.resolve(str(self.good)), str(self.good / NAME))
+
+    def test_the_cleaned_path_keeps_exactly_the_considered_entries(self):
+        separator = os.pathsep
+        good = str(self.good)
+        skipped = ["", ".", "bin"] + ([os.path.splitdrive(good)[0] + "bin", os.path.splitdrive(good)[1],
+                                       "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + good, "\\\\.\\" + good] if WINDOWS else [])
+        kept = [good, str(self.root / "missing")]
+        value = separator.join(skipped[:2] + [f'"{kept[0]}"' if WINDOWS else kept[0]] + skipped[2:] + [kept[1]])
+        self.assertEqual(storage.git_search_path(value), kept)
+        self.assertEqual(storage.git_search_path(None), [])
+        self.assertEqual(storage.git_search_path(""), [])
+
+
+class InProcessBase(unittest.TestCase):
+    """Runs the tool's command line in this process, with the process's working directory holding a planted Git
+    that is never the directory passed to -C."""
+
+    def setUp(self):
+        self.root = scratch(self)
+        self.project = self.root / "project"
+        self.project.mkdir()
+        self.cwd = self.root / "cwd"
+        plant(self.cwd)
+        plant(self.cwd / "bin")
+        previous = os.getcwd()
+        os.chdir(self.cwd)
+        self.addCleanup(os.chdir, previous)
+        self.addCleanup(storage.reset_roots)
+        self.enterContext(mock.patch.object(observations, "datetime", FixedDatetime))
+
+    def invoke(self, args, payload=None, run=None) -> tuple[int, str]:
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["handoff", "--project", str(self.project), *args]), \
+                mock.patch.object(cli, "input_payload", return_value=payload), \
+                mock.patch.object(storage.subprocess, "run", side_effect=run), contextlib.redirect_stdout(out):
+            code = cli.main()
+        return code, out.getvalue()
+
+    def tree(self) -> dict[str, bytes]:
+        return {path.relative_to(self.project).as_posix(): path.read_bytes()
+                for path in sorted(self.project.rglob("*")) if path.is_file()}
+
+    def restore(self, files: dict[str, bytes]) -> None:
+        shutil.rmtree(self.project)
+        self.project.mkdir()
+        for name, data in files.items():
+            (self.project / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.project / name).write_bytes(data)
+        storage.reset_roots()
+
+
+class NoGitOutputTest(InProcessBase):
+    """C4 item 6, no Git: with no Git on PATH, and with PATH absent, every operation's whole output and effect equal
+    a baseline recorded by making subprocess.run raise the exception the resolver raises, and no process starts."""
+
+    def setUp(self):
+        super().setUp()
+        with self.assertRaises(FileNotFoundError) as raised, no_search():
+            storage.resolve_git(None)
+        original = raised.exception
+        self.missing = lambda: type(original)(original.errno, original.strerror, original.filename,  # noqa: E731
+                                              getattr(original, "winerror", None))
+        self.assertEqual((str(self.missing()), self.missing().args), (str(original), original.args))
+        # A PATH without Git, though it holds names a broader lookup would accept.
+        self.without = self.root / "nogit"
+        if WINDOWS:
+            plant(self.without, "git.cmd", b"@echo off\r\n")
+            plant(self.without, "git.bat", b"@echo off\r\n")
+            (self.without / NAME).mkdir()
+        else:
+            plant(self.without, mode=0o644)
+
+    def baseline(self, args, **kwargs):
+        raise self.missing()
+
+    def refused(self, args, **kwargs):
+        self.started.append(list(args))
+        raise AssertionError(f"a process started although no Git was resolved: {args}")
+
+    def fixture(self) -> tuple[dict[str, bytes], str, str]:
+        (self.project / "a.txt").write_bytes(b"a\n")
+        _, snapshot = self.invoke(["--exact-root", "snapshot"], {"paths": ["a.txt"]}, self.baseline)
+        _, created = self.invoke(["--exact-root", "create", "--work", "w.md"],
+                                 {"title": "w", "fields": FIELDS, "snapshot": json.loads(snapshot)["snapshot"]},
+                                 self.baseline)
+        _, done = self.invoke(["--exact-root", "create", "--work", "done.md"],
+                              {"title": "done", "fields": {**FIELDS, "updated": COMPLETED_AT, "status": "完成"}},
+                              self.baseline)
+        created, done = json.loads(created), json.loads(done)
+        self.assertEqual((created["cause_code"], done["cause_code"]), ("git-unavailable", "git-unavailable"))
+        self.assertTrue((self.project / ".feather/handoffs/done.md").is_file())
+        return self.tree(), created["version"], done["version"]
+
+    def test_every_operation_reports_what_it_reports_today(self):
+        files, version, done = self.fixture()
+        operations = [("list", ["list"], None), ("read", ["read", "--work", "w.md"], None),
+                      ("snapshot", ["snapshot"], {"paths": ["a.txt"]}), ("compare", ["compare", "--work", "w.md"], None),
+                      ("create", ["create", "--work", "new.md"], {"title": "n", "fields": FIELDS}),
+                      ("update", ["update", "--work", "w.md"],
+                       {"version": version, "fields": {"next": "m", "updated": UPDATED}}),
+                      ("archive", ["archive", "--work", "done.md"], {"version": done})]
+        for exact in (False, True):
+            for label, args, payload in operations:
+                args = (["--exact-root"] if exact else []) + args
+                with self.subTest(label, exact_root=exact):
+                    self.restore(files)
+                    expected = self.invoke(args, payload, self.baseline)
+                    effect = self.tree()
+                    self.assert_today(label, exact, json.loads(expected[1]))
+                    for case, environment in (("no Git on PATH", {"PATH": str(self.without)}), ("PATH absent", None)):
+                        self.restore(files)
+                        self.started = []
+                        with mock.patch.dict(os.environ, environment or {}):
+                            if environment is None:
+                                os.environ.pop("PATH", None)
+                            self.assertEqual(self.invoke(args, payload, self.refused), expected, case)
+                        self.assertEqual(self.started, [], case)
+                        self.assertEqual(self.tree(), effect, case)
+
+    def assert_today(self, label: str, exact: bool, result: dict):
+        """What today's handling of a missing Git reports, so the baseline is the documented one."""
+        self.assertEqual(result["root"]["state"], "explicit" if exact else "uncertain", result)
+        if label == "snapshot":
+            self.assertEqual(result["snapshot"]["git"], {"state": "unknown", "reason": "git-unavailable"})
+        elif label == "compare":
+            self.assertEqual(result["git"]["comparison"], "unknown", result)
+        elif label in {"create", "update", "archive"}:
+            if exact:
+                self.assertEqual((result["code"], result["cause_code"]), ("tracking-failed", "git-unavailable"))
+            else:
+                self.assertEqual(result["code"], "project-root-uncertain", result)
+        elif not exact:  # list and read keep readable results from an uncertain root
+            self.assertEqual((result["status"], result["operation_status"]), ("partial", "ok"), result)
+
+
+class GitCallTest(InProcessBase):
+    """C4 item 6, in process: every Git process the tool starts during its operations is the resolver's absolute
+    path, runs from that executable's directory, gets a PATH without any skipped entry, and takes an absolute -C
+    that is not the process's working directory."""
+
+    def setUp(self):
+        super().setUp()
+        real_path = os.environ.get("PATH")
+        try:
+            self.executable = storage.resolve_git(real_path)
+        except FileNotFoundError:
+            self.skipTest("no Git is found on PATH")
+        environment = isolated_environment(self.root)
+        try:
+            for args in (["init", "--quiet", "--initial-branch=main", "."], ["config", "core.autocrlf", "false"]):
+                subprocess.run([self.executable, *args], cwd=self.project, env=environment, check=True,
+                               capture_output=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as error:
+            self.skipTest(f"Git cannot set up the repository: {error}")
+        empty = self.root / "empty"
+        empty.mkdir()
+        if WINDOWS:
+            drive, rooted = os.path.splitdrive(str(self.cwd))
+            self.skipped = ["", ".", "bin", drive + "bin", rooted, "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + str(self.cwd),
+                            "\\\\.\\" + str(self.cwd), f'"{empty}"']
+        else:
+            self.skipped = ["", ".", "bin", "$HOME/bin"]
+        environment["PATH"] = os.pathsep.join([*self.skipped, real_path or ""])
+        self.enterContext(mock.patch.dict(os.environ, environment, clear=True))
+        self.expected = storage.resolve_git(os.environ["PATH"])
+        self.empty = str(empty)
+
+    def test_every_git_start_uses_the_resolved_path_its_directory_and_a_cleaned_path(self):
+        real, calls = subprocess.run, []
+
+        def recorded(args, **kwargs):
+            calls.append((list(args), kwargs))
+            return real(args, **kwargs)
+        (self.project / "a.txt").write_bytes(b"a\n")
+        _, snapshot = self.invoke(["snapshot"], {"paths": ["a.txt"]}, recorded)
+        _, created = self.invoke(["create", "--work", "w.md"],
+                                 {"title": "w", "fields": FIELDS, "snapshot": json.loads(snapshot)["snapshot"]},
+                                 recorded)
+        created = json.loads(created)
+        self.assertEqual((created["status"], created["root"]["state"], created["tracking"]), ("ok", "git", "ignored"),
+                         created)
+        _, updated = self.invoke(["update", "--work", "w.md"],
+                                 {"version": created["version"], "tracking": "track", "fields": {"updated": UPDATED}},
+                                 recorded)
+        self.assertEqual(json.loads(updated)["status"], "ok", updated)
+        for args in (["list"], ["read", "--work", "w.md"], ["compare", "--work", "w.md"]):
+            code, output = self.invoke(args, None, recorded)
+            self.assertEqual(code, 0, output)
+        code, done = self.invoke(["create", "--work", "done.md"],
+                                 {"title": "done", "fields": {**FIELDS, "updated": COMPLETED_AT, "status": "完成"}},
+                                 recorded)
+        self.assertEqual((code, json.loads(done)["archived"]), (0, True), done)
+        self.assertTrue(calls)
+        self.assertTrue(os.path.isabs(self.expected) and os.path.basename(self.expected).lower() == NAME, self.expected)
+        for args, kwargs in calls:
+            with self.subTest(args=args[5:]):
+                self.assertEqual(args[0], self.expected)
+                self.assertEqual(kwargs["cwd"], os.path.dirname(self.expected))
+                entries = kwargs["env"]["PATH"].split(os.pathsep)
+                self.assertTrue(all(qualified(entry) for entry in entries), entries)
+                self.assertFalse(set(self.skipped) & set(entries), entries)
+                if WINDOWS:
+                    self.assertIn(self.empty, entries, "a quoted entry is kept without its quotes")
+                target = args[args.index("-C") + 1]
+                self.assertEqual(target, str(self.project))
+                self.assertTrue(qualified(target))
+                self.assertNotEqual(os.path.normcase(target), os.path.normcase(os.getcwd()))
+
+
+class PlantedGitTest(unittest.TestCase):
+    """C4 item 6 through the tool's command line, as a separate process: a planted Git in the process's working
+    directory, which a bare-name start would run, never runs, and the operations report their normal results."""
+
+    def setUp(self):
+        self.root = scratch(self)
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        self.cwd = self.root / "cwd"
+        self.cwd.mkdir()
+        self.env = isolated_environment(self.root)
+
+    def git(self, *args):
+        try:
+            result = subprocess.run(["git", *args], cwd=self.repo, env={**self.env, **COMMIT_ENV},
+                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run: {error}")
+        self.assertEqual(result.returncode, 0, (args, result.stderr))
+        return result.stdout.decode("utf-8").strip()
+
+    def repository(self) -> str:
+        self.git("-c", "core.fsmonitor=", "init", "--quiet", "--initial-branch=main", ".")
+        self.git("config", "core.autocrlf", "false")
+        (self.repo / "a.txt").write_bytes(b"a\n")
+        self.git("-c", "core.fsmonitor=", "add", "--", "a.txt")
+        self.git("-c", "core.fsmonitor=", "-c", "commit.gpgSign=false", "commit", "--quiet", "--no-verify", "-m", "f")
+        return self.git("rev-parse", "HEAD")
+
+    def bare_name_start(self) -> subprocess.CompletedProcess:
+        """The positive control: a child process with the tool's environment and working directory starts `git
+        version` by its bare name, as the tool did before C4."""
+        code = ("import subprocess, sys\n"
+                "try:\n"
+                "    r = subprocess.run(['git', 'version'], capture_output=True, timeout=30)\n"
+                "except OSError as error:\n"
+                "    sys.exit(f'not started: {error}')\n"
+                "sys.stdout.buffer.write(r.stdout + r.stderr)\n")
+        return subprocess.run([sys.executable, "-I", "-c", code], cwd=self.cwd, env=self.env, capture_output=True,
+                              timeout=60)
+
+    def run_tool(self, *args, payload=None, expected=0) -> dict:
+        result = subprocess.run([sys.executable, "-B", str(TOOL), "--project", str(self.repo), *args], cwd=self.cwd,
+                                input=json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload else b"",
+                                capture_output=True, timeout=60, env=self.env)
+        stdout = result.stdout.decode("utf-8")
+        self.assertEqual(result.returncode, expected, stdout + result.stderr.decode("utf-8", "replace"))
+        return json.loads(stdout)
+
+    def operations(self, head: str):
+        self.assertNotEqual(os.path.normcase(str(self.cwd)), os.path.normcase(str(self.repo)))
+        root = {"requested": str(self.repo), "path": str(self.repo), "state": "git"}
+        listed = self.run_tool("list")
+        self.assertEqual((listed["status"], listed["root"]), ("missing", root), listed)
+        snapshot = self.run_tool("snapshot", payload={"paths": ["a.txt"]})
+        self.assertEqual(snapshot["snapshot"]["git"], {"state": "available", "head": head, "branch": "main"})
+        created = self.run_tool("create", "--work", "w.md", payload={"title": "w", "fields": FIELDS,
+                                                                     "snapshot": snapshot["snapshot"]})
+        self.assertEqual((created["status"], created["tracking"], created["root"]), ("ok", "ignored", root), created)
+        self.assertIn("/.feather/handoffs/", (self.repo / ".gitignore").read_text(encoding="utf-8"))
+        read = self.run_tool("read", "--work", "w.md")
+        self.assertEqual((read["status"], read["root"]), ("ok", root), read)
+        compared = self.run_tool("compare", "--work", "w.md")
+        self.assertEqual(compared["git"]["comparison"], "unchanged", compared)
+
+    @unittest.skipUnless(WINDOWS, "the planted git.exe is the Windows case; the POSIX test plants a marker script")
+    def test_windows_planted_git_exe_in_the_working_directory_never_runs(self):
+        whoami = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "whoami.exe"
+        if not whoami.is_file():
+            self.skipTest(f"no {whoami} to plant")
+        head = self.repository()
+        # whoami only reads; given Git's arguments it exits with an error instead of printing `git version`.
+        for directory in (self.cwd, self.cwd / "bin"):
+            directory.mkdir(exist_ok=True)
+            shutil.copyfile(whoami, directory / NAME)
+        self.env["PATH"] = os.pathsep.join(["", ".", "bin", self.env.get("PATH", "")])
+        # A copy outside System32 finds no message resources and prints only a blank line, so the control judges
+        # that a program started by the bare name and that it was not Git.
+        control = self.bare_name_start()
+        output = (control.stdout + control.stderr).decode("utf-8", "replace").strip()
+        if control.returncode or output.startswith("git version"):
+            self.skipTest(f"positive control: a bare-name start in this environment did not run the planted "
+                          f"git.exe ({output[:120]!r}); this run cannot show the tool avoids it")
+        self.operations(head)
+
+    @unittest.skipIf(WINDOWS, "the marker script is the POSIX case; the Windows test plants whoami.exe")
+    def test_posix_planted_git_script_in_the_working_directory_never_runs(self):
+        head = self.repository()
+        marker = self.root / "marker"
+        script = f'#!/bin/sh\necho planted >> "{marker}"\nexit 1\n'.encode("utf-8")
+        for directory in (self.cwd, self.cwd / "bin"):
+            plant(directory, data=script)
+        self.env["PATH"] = os.pathsep.join(["", ".", "bin", self.env.get("PATH", "")])
+        self.bare_name_start()
+        if not marker.exists():
+            self.skipTest("positive control: a bare-name start in this environment did not run the planted script")
+        marker.unlink()
+        self.operations(head)
+        self.assertFalse(marker.exists(), "an operation ran the planted git")
+
+
+if __name__ == "__main__":
+    unittest.main()
