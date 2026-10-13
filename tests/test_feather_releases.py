@@ -302,8 +302,7 @@ class RepositorySafetyFollowUpsReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_22_0(self):
-        self.assertEqual("0.22.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.23.0 ticket 06).
 
     def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
         for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
@@ -319,6 +318,69 @@ class RepositorySafetyFollowUpsReleaseTests(unittest.TestCase):
         self.assertNotIn("Setup update is required", entry)
         # Each Claim has its line in the review round.
         for claim in ("C1", "C2", "C3", "C4", "C5"):
+            with self.subTest(claim=claim):
+                self.assertEqual(entry.count(f"\n- {claim}: "), 1)
+
+
+class ClaimsAtImplementationReleaseTests(unittest.TestCase):
+    """0.23.0 ticket 06 (docs/specs/claims-at-implementation.md, Acceptance item 13): the release needs only the plugin
+    update, says how to go back, and records its validation, live compliance as untested and the review round."""
+
+    # The Updates sections, paired in both languages, at the start of the release notes.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.23.0 changes no role definition, guidance template or configuration tool, so existing installations need only the plugin update and a fresh session; no setup update is needed.",
+         "To go back to 0.22.0, reinstall the 0.22.0 plugin; no setup change is needed, since 0.23.0 changes no installed file or state."),
+        ("## 更新、移除與驗證\n",
+         "0.23.0 沒有改任何角色定義、指引範本或設定工具，所以既有安裝只要更新 plugin 再開新 session，不需要做 setup update。",
+         "要回到 0.22.0，重新安裝 0.22.0 的 plugin 即可；不需要變更 setup，因為 0.23.0 沒有改任何已安裝的檔案或 state。"),
+    )
+
+    ENTRY = (
+        "**No setup update is required.** This release changes no role definition, no guidance template and no configuration tool:",
+        "`git diff --stat v0.22.0` to the candidate lists no file under `templates/`",
+        "To go back to 0.22.0, reinstall the 0.22.0 plugin; no setup change is needed.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`",
+        "710 tests at af27343, the reviewed commit, in a detached worktree outside the project",
+        "`claude plugin validate . --json`",
+        "No live scenario ran with the 0.23.0 procedures:",
+        "live compliance is untested.",
+        "`v0.23.0` does not exist when this entry is written.",
+        "Review round, recorded after it (2026-10-13; the reviewed commit is af27343).",
+        "its 13 findings became the security invariants S1 to S12 and Residual R1",
+        "Residual risks, recorded by the user's decision:",
+        "the user's decision on it is pending when this entry is written.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_23_0(self):
+        self.assertEqual("0.23.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
+        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The newest release's notes come first, before 0.22.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertLess(section.index(sentences[0]), section.index(sentences[0].replace("0.23.0", "0.22.0", 1)))
+
+    def test_validation_entry_records_the_checks_live_scope_tag_and_review_round(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.23.0 claims at implementation\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("Setup update is required", entry)
+        # Each ticket has its line in the review round.
+        for claim in ("T01", "T02", "T03", "T04", "T05", "T06"):
             with self.subTest(claim=claim):
                 self.assertEqual(entry.count(f"\n- {claim}: "), 1)
 
