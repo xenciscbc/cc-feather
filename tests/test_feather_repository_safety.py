@@ -477,6 +477,20 @@ class RepositorySafetyTests(unittest.TestCase):
         "compares the workspace after each call under the same restrictions as item 3, except that it compares a path "
         "whose filter names a defined driver by its raw bytes and never runs the driver, as described below."
     )
+    # Adversarial review of C2 call 1, finding B2: `check-attr --cached` reads only the index's attributes, while
+    # `hash-object` applies the working tree's, so a compared path's filter is found, before and after a call, only with
+    # the attribute check without `--cached`; the linked-leading-directory residual risk applies to both alike.
+    FILTER_ATTRIBUTE_CHECK = (
+        "Main finds each compared path's filter, before a call and in the comparison after it, with the attribute check "
+        "without `--cached`, which reads the same attributes that content hashing applies, a `.gitattributes` in the "
+        "working tree included whether it is untracked or differs from the index, and never with `--cached`, which reads "
+        "only the index's attributes; a leading directory that is a link affects both reads alike, which is the residual "
+        "risk Scope and assurance states."
+    )
+    ATTRIBUTE_ROW = (
+        "| Attribute checks | `git <prefix> check-attr -z <attribute> -- '<path>'`, and with `--cached` for the index's "
+        "attributes; main finds a compared path's filter only without `--cached`, as Main's preparation states |"
+    )
     # C2 item 3 (S5, NB1): the content hash of item 3, which applies only built-in conversions to a path whose filter
     # names no defined driver, and the one exception on this machine, outcome 1.
     HASHING = (
@@ -495,6 +509,22 @@ class RepositorySafetyTests(unittest.TestCase):
         "the call proceed, the call is not dispatched and the claim is reported blocked, and main never assumes a choice "
         "the user has not made:"
     )
+    # Adversarial review of C2 call 1, finding B1: an origin the `--show-origin` read prints is judged by its canonical
+    # path, never by the printed text, which can be relative or reach a working-tree file through a link; an origin main
+    # cannot resolve or classify counts as one inside the working tree.
+    ORIGIN_RULE = (
+        "Main judges each origin that read prints by its canonical path, never by the printed text: an origin printed as "
+        "a relative path is resolved against the directory Git reports it relative to, the repository's top level, even "
+        "when Git runs in a subdirectory; every symbolic link, junction or other reparse point on the way is resolved; "
+        "and paths are compared under the file system's case rules, case-sensitively unless the file system is known to "
+        "be case-insensitive.",
+        "An origin whose canonical path lies inside the project and outside the canonical path of the Git directory is a "
+        "file inside the working tree, and an origin main cannot resolve or classify counts as one inside the working "
+        "tree, so that outcome 1 does not apply.",
+    )
+    # Adversarial review of C2 call 1, finding N3: after an unattributable difference only the driver reveals, no
+    # further path is hashed with a driver for that call.
+    NO_FURTHER_HASH = "Once main finds such a difference, it hashes no further path with a driver for that call."
     OUTCOME_RUN = (
         "Main hashes such a path with its driver only when all of these hold for that call, each established before the "
         "driver runs: in this session the user has said that the repository is trusted to run on this machine; the "
@@ -505,6 +535,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "names no defined driver, the content hash above, so that untracked or uncommitted content main cannot attribute "
         "fails this condition; and no key that defines a driver the compared paths' filters name has its origin in a "
         "file inside the working tree, as the read of the filter-driver keys, which carries `--show-origin`, shows.",
+        *ORIGIN_RULE,
         "Content of the reviewed commit that the change leaves unchanged, such as Git LFS files others committed earlier, "
         "is covered by the trust answer and does not fail these conditions, while a change under review that touches any "
         "path someone else wrote, whether or not its filter names a driver, fails them.",
@@ -514,6 +545,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "main cannot attribute that difference to the user or this session, as Execution decides who wrote a change, "
         "main treats the call as blocked, as outcome 2, offering the remaining choices, does not use the result and reports that the driver has already processed that content, which the "
         "trust answer covers.",
+        NO_FURTHER_HASH,
     )
     OUTCOME_BLOCKED = (
         "When outcome 1's conditions do not hold, main does not dispatch the call, reports the claim blocked and offers "
@@ -596,6 +628,9 @@ class RepositorySafetyTests(unittest.TestCase):
         "effective configuration that define a filter driver (`filter.<driver>.clean`, `filter.<driver>.smudge`, "
         "`filter.<driver>.process` or `filter.<driver>.required`), by the pattern Safe Git invocation gives for them, to "
         "find which drivers are defined.",
+        # Adversarial review of C2 call 1, finding B2: the filter is found with the attribute check content hashing agrees
+        # with, before and after a call.
+        FILTER_ATTRIBUTE_CHECK,
         # Repository safety follow-ups C2 item 3 (S5): the content hash names outcome 1's exception on this machine; the
         # stop that asked the user for every such call became the outcomes of FILTER_OUTCOMES.
         HASHING,
@@ -962,7 +997,8 @@ class RepositorySafetyTests(unittest.TestCase):
                                  for n, (label, sentences) in enumerate(self.OUTCOMES, 1)])
         self.assertEqual(paragraphs[comparing + 3], self.NO_OTHER_WAY)
         # The paragraph on comparing paths keeps its first sentence and no longer stops for every such call.
-        self.assertTrue(paragraphs[comparing].startswith(self.PREPARATION[self.PREPARATION.index(self.HASHING) - 1]))
+        self.assertTrue(paragraphs[comparing].startswith(
+            self.PREPARATION[self.PREPARATION.index(self.FILTER_ATTRIBUTE_CHECK) - 1]))
         flat = " ".join(read(REFERENCE).split())
         for sentence in self.PREPARATION_REMOVED:
             with self.subTest(removed=sentence[:60]):
@@ -989,11 +1025,33 @@ class RepositorySafetyTests(unittest.TestCase):
         self.assertIn("never from Git metadata, a handoff or other repository content; a change of mixed origin counts "
                       "as not written in this session.", self.EXECUTION[3])
         self.assert_pinned({"reference#Execution": (self.EXECUTION[3],)})
+        content, trust, driver_found = (run.index(s) for s in run if s.startswith(("Content of", "When the trust",
+                                                                                     "If hashing")))
         self.assertIn("a change under review that touches any path someone else wrote, whether or not its filter names "
-                      "a driver, fails them.", run[1])
-        self.assertIn("main asks it then, as Execution describes, and the one answer serves both", run[2])
+                      "a driver, fails them.", run[content])
+        self.assertIn("main asks it then, as Execution describes, and the one answer serves both", run[trust])
         self.assertIn("main treats the call as blocked, as outcome 2, offering the remaining choices, does not use the "
-                      "result and reports that the driver has already processed that content", run[3])
+                      "result and reports that the driver has already processed that content", run[driver_found])
+        # Finding B1: the origin rule follows the working-tree condition directly, judges the canonical path, resolves a
+        # relative origin against the top level and every link on the way, follows the file system's case rules, and
+        # fails closed for an origin main cannot resolve or classify.
+        self.assertEqual(run[1:1 + len(self.ORIGIN_RULE)], self.ORIGIN_RULE)
+        for phrase, sentence in (("by its canonical path, never by the printed text:", self.ORIGIN_RULE[0]),
+                                 ("an origin printed as a relative path is resolved against the directory Git reports it "
+                                  "relative to, the repository's top level, even when Git runs in a subdirectory;",
+                                  self.ORIGIN_RULE[0]),
+                                 ("every symbolic link, junction or other reparse point on the way is resolved;",
+                                  self.ORIGIN_RULE[0]),
+                                 ("compared under the file system's case rules", self.ORIGIN_RULE[0]),
+                                 ("inside the project and outside the canonical path of the Git directory is a file "
+                                  "inside the working tree,", self.ORIGIN_RULE[1]),
+                                 ("an origin main cannot resolve or classify counts as one inside the working tree, so "
+                                  "that outcome 1 does not apply.", self.ORIGIN_RULE[1])):
+            with self.subTest(origin=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        # Finding N3: no further driver run after an unattributable difference, stated right after the stop.
+        self.assertEqual(run[driver_found + 1:], (self.NO_FURTHER_HASH,))
+        self.assertIn("it hashes no further path with a driver for that call.", self.NO_FURTHER_HASH)
         # The hash outcome 1 uses for paths without a driver is the content hash of item 3, built-in conversions only.
         self.assertIn("the hash of a path whose filter names no defined driver applies only built-in conversions",
                       self.HASHING)
@@ -1009,7 +1067,7 @@ class RepositorySafetyTests(unittest.TestCase):
         self.assertIn("running a driver was written by the user or in this session, as Execution decides who wrote a "
                       "change,", run[0])
         self.assertIn("main cannot attribute that difference to the user or this session, as Execution decides who "
-                      "wrote a change,", run[3])
+                      "wrote a change,", run[driver_found])
         self.assertIn("again before it decides the call's outcome anew.", self.OUTCOME_CONFIGURATION[0])
         self.assertIn("item 4's snapshot", self.OUTCOME_CONFIGURATION[0])
         self.assertIn("main runs no driver on this machine for that call.", self.OUTCOME_ISOLATED[0])
@@ -1049,6 +1107,39 @@ class RepositorySafetyTests(unittest.TestCase):
                       "after a call reads them again;", next(s for s in self.PREPARATION if s.startswith("records a")))
         # No form hashes raw bytes with Git, so the comparison after a call has no Git form that could run a driver.
         self.assertNotIn("--no-filters", read(REFERENCE))
+
+    def test_a_compared_paths_filter_is_found_with_the_attributes_content_hashing_applies(self):
+        """Adversarial review of C2 call 1, finding B2, regression check: `check-attr --cached` reads only the index's
+        attributes and misses a `.gitattributes` that is untracked or changed in the working tree, while `hash-object`
+        applies the working tree's, so a driver could run where no outcome allowed one. Main finds each compared path's
+        filter, before a call and in the comparison after it, with the attribute check without `--cached`, stated right
+        after the sentence that checks the `filter` attribute, and the attribute-check row of Safe Git invocation says
+        so; no sentence lets main find the filter with `--cached`."""
+        self.assert_pinned({"reference#Main's preparation": (self.FILTER_ATTRIBUTE_CHECK,)})
+        section = self.source("reference#Main's preparation")
+        comparing = next(p for p in section.split("\n\n") if p.startswith("Before comparing any path under item 3,"))
+        first = self.PREPARATION[self.PREPARATION.index(self.FILTER_ATTRIBUTE_CHECK) - 1]
+        self.assertTrue(comparing.startswith(first + " " + self.FILTER_ATTRIBUTE_CHECK + " " + self.HASHING))
+        for phrase in ("before a call and in the comparison after it, with the attribute check without `--cached`,",
+                       "which reads the same attributes that content hashing applies,",
+                       "a `.gitattributes` in the working tree included whether it is untracked or differs from the "
+                       "index,",
+                       "and never with `--cached`, which reads only the index's attributes;",
+                       "a leading directory that is a link affects both reads alike, which is the residual risk Scope "
+                       "and assurance states."):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, self.FILTER_ATTRIBUTE_CHECK)
+        # The residual risk the sentence points to is the one C1 states for an attribute check without `--cached`.
+        self.assertIn("as an attribute check without `--cached` does, are residual risk too:", self.REVIEW_READ_SETTINGS[3])
+        rows = [line for line in self.source("reference#Safe Git invocation").splitlines()
+                if line.startswith("| Attribute checks |")]
+        self.assertEqual(rows, [self.ATTRIBUTE_ROW])
+        # Abuse check: every sentence of the reference that speaks of a filter attribute and `--cached` forbids
+        # `--cached` for finding the filter.
+        for sentence in self.reference_sentences():
+            if "--cached" in sentence and re.search(r"\bfilter\b", sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertRegex(sentence, r"never with `--cached`|only without `--cached`")
 
     def test_every_statement_that_no_repository_program_runs_names_outcome_1(self):
         """Repository safety follow-ups C2 items 3, 7 and 8 (S5, NB1): the Read-only rule and the sentence that no hash
@@ -1113,19 +1204,32 @@ class RepositorySafetyTests(unittest.TestCase):
                                  ("the change under review was written by you or in this session", english[0]),
                                  ("every difference from the reviewed commit that main can find without running the "
                                   "filter was written by you or in this session", english[0]),
-                                 ("no setting that defines the filter comes from a file in the working tree", english[0]),
+                                 # Adversarial review of C2 call 1, finding N6: the condition names the settings that
+                                 # define the driver, and the settings the filter program reads itself are residual risk.
+                                 ("no setting that defines the filter driver, the program Git runs, comes from a file in "
+                                  "the working tree;", english[0]),
                                  ("files others committed earlier that the change leaves unchanged do not stop it.",
                                   english[0]),
-                                 ("main stops the call, does not use the result", english[1]),
+                                 ("Settings the filter program reads itself, which an include can take from a "
+                                  "working-tree file, are not checked and remain the residual risk stated below.",
+                                  english[1]),
+                                 ("main stops the call, does not use the result", english[2]),
                                  # Code review call 1, B1: the choices follow both a failed condition and the stop.
                                  ("When those conditions do not all hold, or the filter shows such a difference, main "
                                   "does not dispatch the call, reports the claim blocked and offers you the choices:",
-                                  english[2]),
-                                 ("or leave the claim blocked.", english[2]),
-                                 ("main compares a filtered file by its raw bytes and never runs the filter", english[3]),
-                                 ("is reported as changed.", english[3])):
+                                  english[3]),
+                                 ("or leave the claim blocked.", english[3]),
+                                 ("main compares a filtered file by its raw bytes and never runs the filter", english[4]),
+                                 ("is reported as changed.", english[4])):
             with self.subTest(phrase=phrase[:40]):
                 self.assertIn(phrase, sentence)
+        # Finding N6: the residual risk "stated below" is the residual paragraph's sentence on settings a working-tree
+        # include sets, which follows the Before a review bullet in both languages.
+        for index, name in enumerate(("README.md", "README.zh-TW.md")):
+            text = read(config.ROOT / name)
+            with self.subTest(readme=name, residual="below"):
+                self.assertLess(text.index(self.README_FILTER[1][index]),
+                                text.index(self.README_REVIEW_READ_RESIDUAL[0][index]))
 
     def test_the_paragraph_for_roles_without_a_shell_stands_whole_once(self):
         # C2 item 4 copies this paragraph word for word into analyst, scout and Explore.
@@ -1959,12 +2063,18 @@ class RepositorySafetyTests(unittest.TestCase):
         ("When a call's comparison would run a filter, such as Git LFS, main runs it only when you have said in this "
          "session that the repository is trusted to run on this machine, the change under review was written by you or "
          "in this session, every difference from the reviewed commit that main can find without running the filter was "
-         "written by you or in this session, and no setting that defines the filter comes from a file in the working "
-         "tree; files others committed earlier that the change leaves unchanged do not stop it.",
+         "written by you or in this session, and no setting that defines the filter driver, the program Git runs, comes "
+         "from a file in the working tree; files others committed earlier that the change leaves unchanged do not stop "
+         "it.",
          "某次呼叫的比對會執行 filter（例如 Git LFS）時，主 Agent 只有在下列條件都成立時才執行它：你在這個 session 說過這個儲存庫"
          "可以在這台機器上執行；受審的變更是你寫的或在這個 session 寫的；主 Agent 不執行 filter 就能找到的、與受審 commit 的每個"
-         "差異，都是你寫的或在這個 session 寫的；而且定義這個 filter 的設定都不是來自工作樹內的檔案；別人先前 commit、這次變更沒有"
-         "改動的檔案不會擋下它。"),
+         "差異，都是你寫的或在這個 session 寫的；而且定義這個 filter driver（也就是 Git 執行的程式）的設定都不是來自工作樹內的"
+         "檔案；別人先前 commit、這次變更沒有改動的檔案不會擋下它。"),
+        # Adversarial review of C2 call 1, finding N6: the condition covers the settings that define the driver; settings
+        # the filter program reads itself stay the residual risk the README's residual paragraph states.
+        ("Settings the filter program reads itself, which an include can take from a working-tree file, are not checked "
+         "and remain the residual risk stated below.",
+         "filter 程式自己讀取的設定，可能經由 include 取自工作樹內的檔案，這些不受檢查，仍屬於下文所述的剩餘風險。"),
         ("If the filter then shows a difference neither you nor main wrote, main stops the call, does not use the result "
          "and tells you that the filter has already processed that content.",
          "如果 filter 接著揭露了不是你也不是主 Agent 寫的差異，主 Agent 會擋下該次呼叫、不使用結果，並告訴你 filter 已經處理過那些"
@@ -1990,11 +2100,15 @@ class RepositorySafetyTests(unittest.TestCase):
             # Code review call 1, B1: a dangling "Otherwise" after the stop read as blocking a call with no
             # unattributed difference.
             "Otherwise main does not dispatch the call",
+            # Adversarial review of C2 call 1, finding N6: "the filter" read as covering every setting the filter
+            # program reads.
+            "no setting that defines the filter comes from a file in the working tree",
         ),
         "README.zh-TW.md": (
             "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。",
             "比對工作區會執行 filter 時，該次呼叫前也會問你；",
             "否則主 Agent 不派出該次呼叫",
+            "而且定義這個 filter 的設定都不是來自工作樹內的檔案",
         ),
     }
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
