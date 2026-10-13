@@ -138,6 +138,38 @@ class RepositorySafetyTests(unittest.TestCase):
         "The handoff tool keeps its own link rule, under which only name-surrogate or unidentified reparse points are "
         "links and hard links are rejected, because it reads only records Feather writes.",
     )
+    # Repository safety follow-ups C1 items 1 and 2 (S2): settings the user's configuration takes from a working-tree file
+    # through an include, and attribute and ignore files Git reads through a linked leading directory, stated as residual
+    # risk for review reads, worded as the residual statement for main's operations (WRITING_RESIDUAL) and D3 (the path
+    # rules' guarantee in SCOPE) are. No control is added (F1).
+    REVIEW_READ_SETTINGS = (
+        "Apart from the keys that a configuration read following includes names, a setting that the user's "
+        "configuration takes from a file in the working tree through an include, such as an include of a tracked file, "
+        "is not checked, and for review reads that is residual risk, as it is for main's `git add`, commit, tag and push "
+        "under Before add, commit, tag or push.",
+        "Such a file can set any setting the common prefix does not override on the command line, for example "
+        "`core.attributesFile`, `core.excludesFile`, `core.autocrlf` or a further include, so that Git itself reads "
+        "paths outside the project, following links, or changes the built-in conversions that content hashing applies.",
+        "That affects every review read that consults attributes or ignore rules, for example attribute checks, "
+        "comparing commits, history, blame, the untracked and ignored listings and content hashing, and main's "
+        "configuration read that follows no include does not see it.",
+        "Attribute and ignore files that Git reads from the working tree through a leading directory that may be a "
+        "link, as an attribute check without `--cached` does, are residual risk too: they are files Git itself "
+        "consults, which are outside the guarantee of the path rules, and the version check of Main's preparation does "
+        "not cover a link in a leading directory.",
+    )
+    # C1 item 3 (S1, F1): review reads carry no `--no-replace-objects`; a replacement ref fetched from a repository the
+    # user does not control is attacker-controlled under D1, and newly accepted residual risk, not already covered.
+    REPLACEMENT_REFS = (
+        "Review reads do not carry `--no-replace-objects`, so a replacement ref can make a read, and the blob IDs main "
+        "compares, return replaced content while main's push sends the original objects.",
+        "A replacement ref fetched from a repository the user does not control, for example by a mirror or a wide "
+        "refspec, is a change neither the user nor main wrote that Git keeps as a ref, and so attacker-controlled under "
+        "the threat model above.",
+        "The user accepted this as residual risk on 2026-10-13; it is newly accepted, not covered by an earlier rule, "
+        "and the forms under Before add, commit, tag or push keep `--no-replace-objects` for main's checks and "
+        "operations under that rule, not for review reads.",
+    )
     # Item 2.7 (G7, deviation D-1): the Lazy fetch rule, carried whole by the shell roles' paragraph.
     LAZY_FETCH = (
         "In a checkout with a promisor remote, which main detects and states in every brief with the installed Git "
@@ -622,6 +654,40 @@ class RepositorySafetyTests(unittest.TestCase):
         for phrase in self.THREAT_REMOVED:
             with self.subTest(removed=phrase):
                 self.assertNotIn(phrase, reference)
+
+    def test_the_reference_states_the_residual_risks_of_review_reads(self):
+        """Repository safety follow-ups C1 items 1 to 3 and 6: Scope and assurance states, each in a paragraph of its
+        own after the residual risk of D6, the settings a working-tree include sets and the linked leading directories
+        (S2), and replacement refs as newly accepted residual risk (S1); the forms under Before add, commit, tag or push
+        keep `--no-replace-objects`, and no other sentence of the reference speaks of replacement refs, so none says that
+        review reads are protected from them or that they were already covered."""
+        self.assert_pinned({"reference#Scope and assurance": (*self.REVIEW_READ_SETTINGS, *self.REPLACEMENT_REFS)})
+        section = self.source("reference#Scope and assurance")
+        paragraphs = [" ".join(p.split()) for p in section.split("\n\n")]
+        settings = next(p for p in paragraphs if p.startswith("Apart from the keys that a configuration read"))
+        replacement = next(p for p in paragraphs if p.startswith("Review reads do not carry `--no-replace-objects`"))
+        self.assertEqual(settings, " ".join(self.REVIEW_READ_SETTINGS))
+        self.assertEqual(replacement, " ".join(self.REPLACEMENT_REFS))
+        # The existing statements stay: D3's guarantee and D6's residual risk come first, the handoff tool's link rule
+        # after.
+        d3 = next(sentence for sentence in self.SCOPE if sentence.startswith("The path rules guarantee"))
+        d6 = next(sentence for sentence in self.SCOPE if sentence.startswith("Claude Code itself runs Git"))
+        handoff = next(sentence for sentence in self.SCOPE if sentence.startswith("The handoff tool keeps"))
+        flat = " ".join(section.split())
+        self.assertLess(flat.index(d3), flat.index(d6))
+        self.assertLess(flat.index(d6), flat.index(settings))
+        self.assertLess(flat.index(settings), flat.index(replacement))
+        self.assertLess(flat.index(replacement), flat.index(handoff))
+        # Item 3: the forms under Before add, commit, tag or push keep `--no-replace-objects`.
+        keep = (self.WRITING_SETTINGS[0], self.WRITING_BEFORE[-1])
+        self.assert_pinned({"reference#Before add, commit, tag or push": keep,
+                            "reference#Safe Git invocation": (self.NO_REPLACE_OBJECTS_FORMS,)})
+        # Item 6: every sentence of the reference that names replacement refs or `--no-replace-objects` is one of these.
+        pinned = {" ".join(s.split()) for s in (*self.REPLACEMENT_REFS, *keep, self.NO_REPLACE_OBJECTS_FORMS)}
+        for sentence in (s for line in read(REFERENCE).splitlines() for s in self.sentences(line)):
+            if re.search(r"replacement ref|replace-objects", sentence, re.I):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, pinned)
 
     def test_the_reference_gives_the_common_prefix_once_with_its_rules(self):
         section = self.source("reference#Safe Git invocation")
@@ -1481,6 +1547,63 @@ class RepositorySafetyTests(unittest.TestCase):
          "動態探測依[儲存庫安全](#儲存庫安全)中執行儲存庫程式碼的規則：只有你在這個 session 說過這個儲存庫可以在你的機器上執"
          "行，而且變更是你寫的或在這個 session 寫的，才會在你的機器上進行，否則只在你指定的隔離環境中進行；沒有的話只做靜態攻擊。"),
     )
+
+    # Repository safety follow-ups C1 item 4: the residual risks of review reads, summarised in the paragraph that states
+    # D6, after the statement that D5 is not a sandbox, paired in both languages.
+    README_REVIEW_READ_RESIDUAL = (
+        ("Settings your configuration takes from a working-tree file through an include, such as `core.attributesFile`, "
+         "`core.excludesFile`, `core.autocrlf` or a further include, are residual risk for review reads too: they can "
+         "make Git read paths outside the project or change the built-in conversions applied when content is hashed, "
+         "which affects every review read that consults attributes or ignore rules, and main's configuration read "
+         "without includes does not see them.",
+         "你的設定透過 include 從工作樹內的檔案取用的設定，例如 `core.attributesFile`、`core.excludesFile`、"
+         "`core.autocrlf` 或再一層 include，對審查讀取同樣是剩餘風險：它們可能讓 Git 讀取專案外的路徑，或改變計算內容雜湊"
+         "時套用的內建轉換，影響每個會參考 attributes 或忽略規則的審查讀取，而主 Agent 不跟隨 include 的設定讀取看不到"
+         "它們。"),
+        ("So are attribute and ignore files that Git reads from the working tree through a leading directory that may be "
+         "a link.",
+         "Git 經由可能是連結的上層目錄，從工作樹讀取的 attributes 與忽略規則檔案也一樣。"),
+        ("Review reads do not carry `--no-replace-objects`, so a replacement ref can make what a review reads and what "
+         "main compares differ from what main's push sends.",
+         "審查讀取不帶 `--no-replace-objects`，所以 replacement ref 可能讓審查讀到的內容與主 Agent 比對的內容，和主 Agent "
+         "push 送出的內容不同。"),
+        ("A replacement ref fetched from a repository you do not control, for example by a mirror or a wide refspec, is "
+         "attacker-controlled; this residual risk was newly accepted on 2026-10-13, not covered by an earlier rule, so "
+         "avoid such a fetch in a repository you review.",
+         "從你無法控制的儲存庫抓取的 replacement ref，例如透過 mirror 或範圍寬的 refspec 抓取的，屬於攻擊者可控制；這項剩餘"
+         "風險是 2026-10-13 新接受的，先前的規則並未涵蓋，所以在你要審查的儲存庫中請避免這樣抓取。"),
+    )
+
+    def test_readmes_state_the_residual_risks_of_review_reads(self):
+        """Repository safety follow-ups C1 items 4 to 6: each README's paragraph that states D6 gains, in order after the
+        statement that D5 is not a sandbox and before the pointer to ADR 0011, the settings a working-tree include sets,
+        the linked leading directories and replacement refs as newly accepted residual risk, paired in both languages;
+        no other sentence of either README speaks of replacement refs or `--no-replace-objects`."""
+        for index, name in enumerate(("README.md", "README.zh-TW.md")):
+            section = self.source(f"{name}#section")
+            paragraph = next(p for p in section.split("\n\n") if p.startswith(("These rules are instructions to the "
+                                                                               "model", "這些規則是給模型的指示")))
+            for pair in self.README_REVIEW_READ_RESIDUAL:
+                with self.subTest(readme=name, residual=pair[index][:40]):
+                    self.assert_whole_sentence(pair[index], paragraph)
+            with self.subTest(readme=name, order=True):
+                positions = [paragraph.index(pair[index]) for pair in self.README_REVIEW_READ_RESIDUAL]
+                self.assertEqual(positions, sorted(positions))
+                self.assertLess(paragraph.index(self.README_RESIDUAL[1][index]), positions[0])
+                self.assertLess(positions[-1], paragraph.index("[ADR 0011]"))
+            # Item 6: the only sentences that speak of replacement refs are the pinned ones.
+            text = read(config.ROOT / name)
+            split = [s.strip() for line in text.splitlines()
+                     for s in (self.sentences(line) if index == 0 else re.split(r"(?<=。)", line)) if s.strip()]
+            pinned = {pair[index] for pair in self.README_REVIEW_READ_RESIDUAL}
+            for sentence in split:
+                if re.search(r"replacement ref|replace-objects", sentence, re.I):
+                    with self.subTest(readme=name, sentence=sentence[:60]):
+                        self.assertIn(sentence, pinned)
+        english = self.README_REVIEW_READ_RESIDUAL
+        self.assertIn("is attacker-controlled; this residual risk was newly accepted on 2026-10-13, not covered by an "
+                      "earlier rule", english[3][0])
+        self.assertIn("屬於攻擊者可控制；這項剩餘風險是 2026-10-13 新接受的，先前的規則並未涵蓋", english[3][1])
 
     def test_readmes_summarise_the_rules_in_both_languages(self):
         for english, chinese in self.README:
