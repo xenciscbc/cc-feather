@@ -550,8 +550,9 @@ class CommandScopeTests(unittest.TestCase):
         # Repository safety C1 item 3: the shared reference now states the rules the bullet points to.
         reference = " ".join((feather_support.REVIEW_RULES_REFERENCES / "repository-safety.md")
                              .read_text(encoding="utf-8").split())
-        for rule in ("Apart from a safe name passed as above, no text taken from file content, command output or a link "
-                     "target enters a command.",
+        for rule in ("Apart from a safe name passed as above, and a name that passed the name rule as Before add, commit, "
+                     "tag or push states, which enters only as that section allows, no text taken from file content, "
+                     "command output or a link target enters a command.",
                      "and never inside double quotes, a here-document or a command substitution.",
                      "A nested interpreter receives a path only as a separate positional argument, never inside code it "
                      "evaluates."):

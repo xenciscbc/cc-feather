@@ -388,6 +388,19 @@ class RepositorySafetyTests(unittest.TestCase):
         "git <prefix> blame --no-textconv <commit> -- '<path>'",
         "git <prefix> check-attr -z <attribute> -- '<path>'",
     )
+    # Repository safety follow-ups C3, Adversarial review call 1, finding NB3: the closing sentence of Paths and names
+    # names the names that Before add, commit, tag or push lets enter main's own operations, so it no longer says that
+    # nothing from content enters any command; the shell roles' paragraph keeps the sentence it replaced, since a role
+    # runs none of those operations.
+    PATHS_CLOSING = (
+        "Apart from a safe name passed as above, and a name that passed the name rule as Before add, commit, tag or push "
+        "states, which enters only as that section allows, no text taken from file content, command output or a link "
+        "target enters a command."
+    )
+    PATHS_CLOSING_REPLACED = (
+        "Apart from a safe name passed as above, no text taken from file content, command output or a link target "
+        "enters a command."
+    )
     # Item 3 (P1–P6, R1-Q3–Q10, S4, S17, B8, C3).
     PATHS = (
         "Before reading a path's content with the file tools or a shell tool, the reader establishes with file-system "
@@ -420,8 +433,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "trailing `/`.",
         "A ref name taken from the repository follows the name rule or is replaced by its object ID; only refs main or "
         "the role wrote itself are exempt.",
-        "Apart from a safe name passed as above, no text taken from file content, command output or a link target "
-        "enters a command.",
+        PATHS_CLOSING,
         "Searching or walking a directory, with the file tools or a shell tool, reads every file under it, so it is done "
         "only in a directory every descendant of which passed the checks above, ignored files and nested repositories "
         "included, and without following links; any other search names its files one by one.",
@@ -713,7 +725,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "themselves; the claim then waits for the user, as for a user instruction not to commit or push.",
         "Safe Git invocation lists among main's preparation forms the reads this rule needs: `rev-parse --verify --quiet "
         "HEAD` for the commit `HEAD` names or that it is unborn, the index listing, `ls-files --stage`, for gitlinks, "
-        "and the comparison of the index with a tree under Something to commit above.",
+        "the comparison of the index with a tree under Something to commit above, and the configuration read with "
+        "`--local` and without includes for the remote a push names.",
         "Under this rule each of these reads carries `--no-replace-objects` after the common prefix, like the operations "
         "themselves.",
     )
@@ -728,8 +741,9 @@ class RepositorySafetyTests(unittest.TestCase):
         "`--no-verify`, `--no-gpg-sign` and `-c commit.gpgSign=false` |",
         "| tag | annotated, its message only by `-F` with the message file, no editor | as for `git add`, plus "
         "`--no-sign` and `-c tag.gpgSign=false -c tag.forceSignAnnotated=false` |",
-        "| push | one remote named by main and an explicit refspec for each ref, with `--no-follow-tags`, "
-        "`--recurse-submodules=no` and `--no-signed` | as for `git add`, plus `--no-verify` |",
+        "| push | one remote that the Git directory's own configuration defines, named as Names below states, and an "
+        "explicit refspec for each ref, with `--no-follow-tags`, `--recurse-submodules=no` and `--no-signed` | as for "
+        "`git add`, plus `--no-verify` |",
     )
     # Repository safety follow-ups C3 item 2 (F3, S9): every message, whatever its source, reaches Git only from a file
     # main wrote with its file-writing tool in its scratch directory outside the project, passed by `-F` as a
@@ -742,11 +756,22 @@ class RepositorySafetyTests(unittest.TestCase):
         "here-document or a redirection, even when the host's own instructions show a here-document, and writes it as "
         "UTF-8 without a byte-order mark, in its own scratch directory outside the project, under a name that does not "
         "start with `-` and at a path that contains no single quote.",
+        # C3's Adversarial review call 1: the name is main's own choice from the name rule's characters (Windows
+        # PowerShell also reads U+2018 to U+201B as single quotes), and the link checks run before the file is written,
+        # always as a new file, as well as before the operation (NB1).
+        "Main chooses the file's name, and the name of any directory it creates for it below the scratch directory, "
+        "itself, only from the characters the name rule of Paths and names allows and never from content; the scratch "
+        "directory's own path is the host's.",
+        "Before it writes the file, main checks that each existing component of its path below the scratch directory "
+        "passes the link check of Paths and names and that the scratch directory's canonical path lies outside the "
+        "project's canonical path, and it always writes a new file at a path that does not yet exist, never over an "
+        "existing file.",
         "It passes the file's absolute path to `-F` only as a single-quoted literal.",
-        "Before the operation, each component of that path below the scratch directory passes the link check of Paths "
-        "and names, the file is a regular file with a link count of 1, and its canonical path lies inside the scratch "
-        "directory's canonical path, which lies outside the project's canonical path; the requirement of Paths and "
-        "names that a canonical path lie inside the project, which covers review reads, does not apply to it.",
+        "Before the operation, main checks again that each component of that path below the scratch directory passes "
+        "the link check of Paths and names, and checks that the file is a regular file with a link count of 1 and that "
+        "its canonical path lies inside the scratch directory's canonical path, which lies outside the project's "
+        "canonical path; the requirement of Paths and names that a canonical path lie inside the project, which covers "
+        "review reads, does not apply to it.",
     )
     # Repository safety follow-ups C3 items 3 and 6 (F3, S8, N1, N2): every tag, branch, remote and refspec passes the
     # name rule whatever its origin and enters as a single-quoted literal; a failing name stops the operation; and no
@@ -757,12 +782,26 @@ class RepositorySafetyTests(unittest.TestCase):
         "from file content such as a version, and enters the command only as a single-quoted literal.",
         "A refspec is one such name, or two such names joined by a single `:`, never with a leading `+`, and enters as "
         "one single-quoted literal.",
+        # C3's Adversarial review call 1, finding 1: a push names only a remote the Git directory's own configuration
+        # defines, never one whose name comes from content.
+        "The remote a push names must also be one that the Git directory's own configuration defines: a "
+        "`remote.<name>.url` key that main's configuration read with `--local` and without includes, the form Safe Git "
+        "invocation lists, prints in that scope, named exactly as that read prints it, since Git takes a name that is no "
+        "configured remote as a path or URL, which can reach a repository inside the working tree and run its hooks.",
+        "Main takes a remote's name only from the user or from that read, never from file content, a reviewed change or "
+        "other command output, even when it passes the name rule, and when the remote is not one so defined, main does "
+        "not push and tells the user they may run the push themselves.",
         "The exemption that Paths and names gives refs main wrote itself does not cover a name taken from content.",
         "When a name fails, including one the user gave, main does not perform the operation and tells the user they "
         "may run it themselves, as it does when it cannot establish the checks below.",
+        # C3's Adversarial review call 1: the `hook.<name>` keys the skipping form disables, which a read with includes
+        # followed may take from a working-tree file.
+        "Each `hook.<name>` that the skipping form disables passes the name rule of Paths and names as well and enters "
+        "only within a single-quoted `-c` literal; when one does not, main does not perform the operation and tells the "
+        "user, as for a name that fails.",
         "So no text taken from file content, command output, a link target or a reviewed change reaches the command "
         "line of main's `git add`, commit, tag or push, except a name that passed the name rule, as a single-quoted "
-        "literal.",
+        "literal or, for a `hook.<name>`, within one.",
     )
     WRITING = (
         "This rule adds a condition to main's existing authority under [review state](review-state.md)'s Commits "
@@ -785,6 +824,11 @@ class RepositorySafetyTests(unittest.TestCase):
         "A message main passes with `-F` is a file main writes in its own scratch directory outside the project; "
         "before the operation, each component of its path below the scratch directory passes the link check of Paths "
         "and names, it is a regular file with a link count of 1,",
+        # C3's Adversarial review call 1: the push row that let main name any remote, the check before the operation
+        # that ran only after the file was written, and the closing invariant without the `hook.<name>` keys.
+        "| push | one remote named by main and an explicit refspec for each ref,",
+        "Before the operation, each component of that path below the scratch directory passes the link check",
+        "except a name that passed the name rule, as a single-quoted literal.",
     )
     # Item 6: the checks before the operation, in order.
     BEFORE_LABELS = ("Claim paths", "Something to commit")
@@ -1447,10 +1491,11 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("UTF-8 without a byte-order mark, in its own scratch directory outside the project,", self.MESSAGES[1]),
                 ("under a name that does not start with `-` and at a path that contains no single quote.",
                  self.MESSAGES[1]),
-                ("the file's absolute path to `-F` only as a single-quoted literal.", self.MESSAGES[2]),
-                ("each component of that path below the scratch directory passes the link check of Paths and names, the "
-                 "file is a regular file with a link count of 1, and its canonical path lies inside the scratch "
-                 "directory's canonical path, which lies outside the project's canonical path;", self.MESSAGES[3])):
+                ("the file's absolute path to `-F` only as a single-quoted literal.", self.MESSAGES[4]),
+                ("main checks again that each component of that path below the scratch directory passes the link check "
+                 "of Paths and names, and checks that the file is a regular file with a link count of 1 and that its "
+                 "canonical path lies inside the scratch directory's canonical path, which lies outside the project's "
+                 "canonical path;", self.MESSAGES[5])):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, sentence)
         for sentence in self.reference_sentences():
@@ -1496,18 +1541,20 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("including a name main creates from file content such as a version,", self.NAMES[0]),
                 ("and enters the command only as a single-quoted literal.", self.NAMES[0]),
                 ("or two such names joined by a single `:`, never with a leading `+`,", self.NAMES[1]),
-                ("does not cover a name taken from content.", self.NAMES[2]),
+                ("does not cover a name taken from content.", self.NAMES[4]),
                 ("including one the user gave, main does not perform the operation and tells the user they may run it "
-                 "themselves,", self.NAMES[3]),
+                 "themselves,", self.NAMES[5]),
                 ("So no text taken from file content, command output, a link target or a reviewed change reaches the "
                  "command line of main's `git add`, commit, tag or push, except a name that passed the name rule, as a "
-                 "single-quoted literal.", self.NAMES[4])):
+                 "single-quoted literal or, for a `hook.<name>`, within one.", self.NAMES[7])):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, sentence)
         # The exemption the Names paragraph narrows is the one Paths and names states.
         self.assertIn("only refs main or the role wrote itself are exempt.", self.source("reference#Paths and names"))
-        # The push row still names one remote and an explicit refspec for each ref, which Names governs.
-        self.assertIn("| push | one remote named by main and an explicit refspec for each ref,", self.WRITING_ROWS[3])
+        # The push row names one remote the Git directory's own configuration defines and an explicit refspec for each
+        # ref, which Names governs.
+        self.assertIn("| push | one remote that the Git directory's own configuration defines, named as Names below "
+                      "states, and an explicit refspec for each ref,", self.WRITING_ROWS[3])
         for refspec in ("main", "origin", "v0.22.0", "feature/c3-text", "refs/heads/main", "main:main",
                         "v0.22.0:refs/tags/v0.22.0", "work/c3:work/c3"):
             with self.subTest(allowed=refspec):
@@ -1527,6 +1574,106 @@ class RepositorySafetyTests(unittest.TestCase):
         words = shlex.split(f"git tag -a -F '/scratch/m.txt' '{crafted}'")
         self.assertNotEqual(words[-1], crafted)
         self.assertIn(";", words)
+
+    def test_a_push_names_only_a_remote_the_git_directorys_own_configuration_defines(self):
+        """Repository safety follow-ups C3, Adversarial review call 1, finding 1 (BROKEN), regression: passing the name
+        rule is not enough for a remote, because Git takes a name that is no configured remote as a path or URL. The
+        Names paragraph states, after the refspec sentence, that the remote a push names is one a `remote.<name>.url` key
+        defines in the local configuration main reads without includes, named exactly as that read prints it; that main
+        takes a remote's name only from the user or that read, never from content, even when it passes the name rule;
+        and that otherwise main does not push and leaves the push to the user. The read is one Safe Git invocation lists,
+        and the paragraph listing the reads this rule needs names it. The name rule still applies to the remote, and tags
+        and branches keep it unchanged."""
+        section = self.source("reference#Before add, commit, tag or push")
+        names = " ".join(section.split("\n\n")[[p.startswith("**Names.** ") for p in section.split("\n\n")].index(True)]
+                         .split())
+        self.assertEqual(names, " ".join(self.NAMES))
+        for phrase, sentence in (
+                ("The remote a push names must also be one that the Git directory's own configuration defines:",
+                 self.NAMES[2]),
+                ("a `remote.<name>.url` key that main's configuration read with `--local` and without includes, the form "
+                 "Safe Git invocation lists, prints in that scope, named exactly as that read prints it,", self.NAMES[2]),
+                ("since Git takes a name that is no configured remote as a path or URL,", self.NAMES[2]),
+                ("Main takes a remote's name only from the user or from that read, never from file content, a reviewed "
+                 "change or other command output, even when it passes the name rule,", self.NAMES[3]),
+                ("when the remote is not one so defined, main does not push and tells the user they may run the push "
+                 "themselves.", self.NAMES[3])):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        # The remote rule follows the name rule and the refspec sentence, so a configured remote passes both.
+        self.assertLess(names.index(self.NAMES[0]), names.index(self.NAMES[2]))
+        self.assertLess(names.index(self.NAMES[1]), names.index(self.NAMES[2]))
+        self.assertIn("Every tag, branch and remote that main's `git add`, commit, tag or push names passes the name rule",
+                      self.NAMES[0])
+        # The read is one of the forms Safe Git invocation lists, and the reads this rule needs include it.
+        self.assertIn("`git <prefix> config --list --show-origin --show-scope --no-includes` with `--local`",
+                      self.source("reference#Safe Git invocation"))
+        self.assertIn("and the configuration read with `--local` and without includes for the remote a push names.",
+                      self.WRITING_BEFORE[6])
+        self.assertIn(self.WRITING_BEFORE[6], " ".join(section.split()))
+        # Absence pin: the push row that let main name any remote is gone.
+        self.assertNotIn("one remote named by main and an explicit refspec", " ".join(read(REFERENCE).split()))
+
+    def test_every_hook_name_the_skipping_form_disables_passes_the_name_rule(self):
+        """Repository safety follow-ups C3, Adversarial review call 1: the skipping form of `git add` puts each
+        `hook.<name>` the configuration defines, which a read with includes followed may take from a working-tree file,
+        on the command line, so each such name passes the name rule and enters only within a single-quoted `-c`
+        literal, and a name that fails stops the operation; the closing sentence of Names says so. Regression and abuse
+        check: a hook name crafted to break out of its quotes fails the rule, and a name that passes stays inside one
+        word."""
+        self.assertIn("each `hook.<name>` the configuration defines disabled", self.WRITING_ROWS[0])
+        for phrase in ("Each `hook.<name>` that the skipping form disables passes the name rule of Paths and names as "
+                       "well and enters only within a single-quoted `-c` literal;",
+                       "when one does not, main does not perform the operation and tells the user, as for a name that "
+                       "fails."):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, self.NAMES[6])
+        names = self.NAMES
+        self.assertTrue(names[5].startswith("When a name fails,"))
+        self.assertTrue(names[-1].endswith("as a single-quoted literal or, for a `hook.<name>`, within one."))
+        for name in ("lint", "pre-commit.format", "check_1"):
+            with self.subTest(allowed=name):
+                self.assertTrue(self.passes_the_name_rule(name))
+                self.assertEqual(shlex.split(f"git -c 'hook.{name}.x=false' add"),
+                                 ["git", "-c", f"hook.{name}.x=false", "add"])
+        for name in ("x' ; id ; '", "x$(id)", "a b", "-x", "x\ny"):
+            with self.subTest(refused=repr(name)):
+                self.assertFalse(self.passes_the_name_rule(name))
+        # Positive control: without the rule, such a name leaves its literal and adds a command separator.
+        self.assertIn(";", shlex.split("git -c 'hook.x' ; id ; '.x=false' add"))
+
+    def test_the_message_file_is_named_by_main_and_checked_before_it_is_written(self):
+        """Repository safety follow-ups C3, Adversarial review call 1, NB1 and the PowerShell quotes: main chooses the
+        message file's name, and that of any directory it creates for it, only from the characters the name rule allows,
+        never from content (Windows PowerShell also reads U+2018 to U+201B as single quotes, which the name rule
+        excludes); before it writes the file it checks the existing components below the scratch directory for links
+        and that the scratch directory lies outside the project, and it always writes a new file; before the operation
+        it checks again. The sentences stand in that order, between the sentence on writing the file and the one on
+        passing it to `-F`."""
+        messages = self.MESSAGES
+        for phrase, sentence in (
+                ("Main chooses the file's name, and the name of any directory it creates for it below the scratch "
+                 "directory, itself, only from the characters the name rule of Paths and names allows and never from "
+                 "content;", messages[2]),
+                ("the scratch directory's own path is the host's.", messages[2]),
+                ("Before it writes the file, main checks that each existing component of its path below the scratch "
+                 "directory passes the link check of Paths and names", messages[3]),
+                ("and that the scratch directory's canonical path lies outside the project's canonical path,",
+                 messages[3]),
+                ("and it always writes a new file at a path that does not yet exist, never over an existing file.",
+                 messages[3]),
+                ("Before the operation, main checks again that each component", messages[5])):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        paragraph = " ".join(messages)
+        positions = [paragraph.index(sentence) for sentence in messages]
+        self.assertEqual(positions, sorted(positions))
+        self.assertTrue(messages[1].startswith("Main writes the file with its file-writing tool,"))
+        self.assertTrue(messages[4].startswith("It passes the file's absolute path to `-F`"))
+        for quote in ("‘", "’", "‚", "‛", "'"):
+            with self.subTest(quote=repr(quote)):
+                self.assertFalse(self.passes_the_name_rule(f"message{quote}.txt"))
+        self.assertTrue(self.passes_the_name_rule("commit-message-1.txt"))
 
     def test_item_6_reads_only_the_forms_safe_git_invocation_lists_for_main(self):
         """Deviation D-6 (and D-2's F2): every read item 6 needs is one of main's forms, each with the common prefix,
@@ -1945,19 +2092,36 @@ class RepositorySafetyTests(unittest.TestCase):
     # and that hooks are skipped only when the user asks.
     # Repository safety follow-ups C3 item 4: the Before add, commit, tag or push bullet summarises the message file and
     # the name rule for tags, branches, remotes and refspecs, paired in both languages.
+    # C3's Adversarial review call 1: the message file is a new file under a name main chooses, checked for links before
+    # it is written and again before use; the name rule covers the hook names main disables; and a push names only a
+    # remote the Git directory's own local configuration defines (finding 1).
     README_TEXT_OFF = (
         ("Every commit and tag message, whatever its source and including attribution lines, goes into a file that main "
-         "writes with its file tool, never with a shell command, in its own scratch directory outside the project, and "
-         "that it checks for links before use, so no message is placed on a command line.",
-         "每則 commit 與 tag 訊息，不論來源，包括署名行，都由主 Agent 用它的檔案工具寫進專案外它自己的暫存目錄中的檔案，"
-         "絕不用 shell 指令寫入，使用前也會檢查這個檔案沒有經過連結，所以訊息絕不會放上命令列。"),
-        ("Each tag, branch, remote and refspec main names in these operations must pass the strict name rule for file "
-         "names, including a name made from file content such as a version, and enters the command only as a quoted "
-         "literal; when one does not, even a name you gave, main leaves the operation for you to run.",
-         "主 Agent 在這些操作中指定的每個 tag、branch、remote 與 refspec，包括從檔案內容產生的名稱（例如版本號），都必須"
-         "通過檔名的嚴格命名規則，並且只以加上引號的字面值放進指令；不通過時，即使是你給的名稱，主 Agent 也會把操作留給你"
-         "自己執行。"),
+         "writes with its file tool, never with a shell command, in its own scratch directory outside the project, as a "
+         "new file under a name main chooses itself, and that it checks for links before writing it and again before "
+         "use, so no message is placed on a command line.",
+         "每則 commit 與 tag 訊息，不論來源，包括署名行，都由主 Agent 用它的檔案工具寫進專案外它自己的暫存目錄中、以它自己"
+         "選定的名稱建立的新檔案，絕不用 shell 指令寫入，寫入前與使用前都會檢查這個檔案沒有經過連結，所以訊息絕不會放上命令列。"),
+        ("Each tag, branch, remote and refspec main names in these operations, and each hook name it disables when you "
+         "ask it to skip hooks, must pass the strict name rule for file names, including a name made from file content "
+         "such as a version, and enters the command only as a quoted literal; when one does not, even a name you gave, "
+         "main leaves the operation for you to run.",
+         "主 Agent 在這些操作中指定的每個 tag、branch、remote 與 refspec，以及你要求略過 hook 時它停用的每個 hook 名稱，"
+         "包括從檔案內容產生的名稱（例如版本號），都必須通過檔名的嚴格命名規則，並且只以加上引號的字面值放進指令；不通過時，"
+         "即使是你給的名稱，主 Agent 也會把操作留給你自己執行。"),
+        ("Main pushes only to a remote that the Git directory's own local configuration defines, read without includes, "
+         "and names it exactly as configured; it never uses a remote name taken from file content, command output or a "
+         "reviewed change, and otherwise leaves the push for you to run.",
+         "主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote，並完全照設定中的名稱"
+         "指定；它絕不使用取自檔案內容、指令輸出或受審變更的 remote 名稱，否則會把 push 留給你自己執行。"),
     )
+    # The sentences README_TEXT_OFF replaced, in both languages.
+    README_TEXT_OFF_REPLACED = {
+        "README.md": ("in its own scratch directory outside the project, and that it checks for links before use,",
+                      "Each tag, branch, remote and refspec main names in these operations must pass"),
+        "README.zh-TW.md": ("暫存目錄中的檔案，絕不用 shell 指令寫入，使用前也會檢查",
+                            "remote 與 refspec，包括從檔案內容產生的名稱"),
+    }
     README_WRITING = (
         ("since the Git directory's configuration is your own, main runs a `git add`, commit, tag or push with the "
          "programs your Git configuration sets, such as hooks and the frameworks they start, filters, and signing, "
@@ -2111,6 +2275,16 @@ class RepositorySafetyTests(unittest.TestCase):
             "而且定義這個 filter 的設定都不是來自工作樹內的檔案",
         ),
     }
+    # C3's Adversarial review call 1, finding NB3: the File reads bullet's last sentence, and the wording it replaced.
+    README_FILE_NAMES = (
+        "A file name from the repository enters a command only when it passes a strict name rule, and then only as a "
+        "quoted literal; text from file content, command output or a link target never does, except a name that passed "
+        "the same rule under Before add, commit, tag or push, entering only as a quoted literal as that bullet says.",
+        "來自儲存庫的檔名必須通過嚴格的命名規則，才會以加上引號的字面值放進指令；來自檔案內容、指令輸出或連結目標的文字絕不"
+        "放進指令，只有在「add、commit、tag 或 push 之前」通過同一規則的名稱例外，而且只照那一項所說，以加上引號的字面值"
+        "放進指令。",
+    )
+    README_FILE_NAMES_REPLACED = ("command output or a link target never does.", "連結目標的文字絕不放進指令。")
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
     README = (
         ("Every review reads your repository under one set of rules, the [repository safety "
@@ -2144,10 +2318,9 @@ class RepositorySafetyTests(unittest.TestCase):
          "內容的結論才算 INCONCLUSIVE。"),
         ("A directory is searched only when everything under it passed these checks.",
          "只有底下所有東西都通過檢查的目錄才會被搜尋。"),
-        ("A file name from the repository enters a command only when it passes a strict name rule, and then only as a "
-         "quoted literal; text from file content, command output or a link target never does.",
-         "來自儲存庫的檔名必須通過嚴格的命名規則，才會以加上引號的字面值放進指令；來自檔案內容、指令輸出或連結目標的文字絕不"
-         "放進指令。"),
+        # C3's Adversarial review call 1, finding NB3: the File reads bullet names the names that Before add, commit, tag
+        # or push lets enter.
+        README_FILE_NAMES,
         ("main, reviewer, verifier and adversary run repository code for a review, such as tests, builds, linters, type "
          "checkers and probes, only when you have said in this session that the repository is trusted to run on this "
          "machine and the change was written by you or in this session; otherwise only in an isolated environment you "
@@ -2369,7 +2542,7 @@ class RepositorySafetyTests(unittest.TestCase):
         chinese = [pair[1] for pair in self.README_TEXT_OFF]
         for phrase in ("whatever its source and including attribution lines", "main writes with its file tool, never "
                        "with a shell command,", "in its own scratch directory outside the project", "checks for links "
-                       "before use", "so no message is placed on a command line."):
+                       "before writing it and again before use", "so no message is placed on a command line."):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, english[0])
         for phrase in ("Each tag, branch, remote and refspec main names", "must pass the strict name rule for file names",
@@ -2385,6 +2558,76 @@ class RepositorySafetyTests(unittest.TestCase):
                        "只以加上引號的字面值放進指令", "即使是你給的名稱，主 Agent 也會把操作留給你自己執行。"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, chinese[1])
+
+    def test_readmes_state_the_message_file_checks_the_hook_names_and_the_configured_remote(self):
+        """Repository safety follow-ups C3, Adversarial review call 1 (finding 1, NB1, the `hook.<name>` keys): each
+        README's Before add, commit, tag or push bullet says that the message file is a new file under a name main
+        chooses, checked for links before it is written and again before use; that the hook names main disables pass
+        the name rule; and, after the name rule and before the note on skipping hooks, that main pushes only to a remote
+        the Git directory's own local configuration defines, read without includes, never to one named from content,
+        otherwise leaving the push to the user, paired in both languages. Absence pin: the replaced wording is gone."""
+        english = [pair[0] for pair in self.README_TEXT_OFF]
+        chinese = [pair[1] for pair in self.README_TEXT_OFF]
+        for phrase, sentence in (
+                ("as a new file under a name main chooses itself,", english[0]),
+                ("checks for links before writing it and again before use,", english[0]),
+                ("and each hook name it disables when you ask it to skip hooks, must pass the strict name rule",
+                 english[1]),
+                ("Main pushes only to a remote that the Git directory's own local configuration defines, read without "
+                 "includes, and names it exactly as configured;", english[2]),
+                ("it never uses a remote name taken from file content, command output or a reviewed change,", english[2]),
+                ("and otherwise leaves the push for you to run.", english[2]),
+                ("以它自己選定的名稱建立的新檔案", chinese[0]),
+                ("寫入前與使用前都會檢查這個檔案沒有經過連結", chinese[0]),
+                ("以及你要求略過 hook 時它停用的每個 hook 名稱", chinese[1]),
+                ("主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote，並完全照設定中的"
+                 "名稱指定；", chinese[2]),
+                ("它絕不使用取自檔案內容、指令輸出或受審變更的 remote 名稱", chinese[2]),
+                ("否則會把 push 留給你自己執行。", chinese[2])):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, sentence)
+        for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
+                                               ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
+            bullet = next(line for line in self.source(f"{name}#section").splitlines() if line.startswith(label))
+            with self.subTest(readme=name):
+                self.assert_whole_sentence(self.README_TEXT_OFF[2][index], bullet)
+                hooks = next(pair[index] for pair in self.README_WRITING if pair[0].startswith("Main skips hooks"))
+                self.assertLess(bullet.index(self.README_TEXT_OFF[1][index]), bullet.index(self.README_TEXT_OFF[2][index]))
+                self.assertLess(bullet.index(self.README_TEXT_OFF[2][index]), bullet.index(hooks))
+            text = read(config.ROOT / name)
+            for phrase in self.README_TEXT_OFF_REPLACED[name]:
+                with self.subTest(readme=name, removed=phrase[:40]):
+                    self.assertNotIn(phrase, text)
+
+    def test_the_file_reads_bullet_and_paths_and_names_name_the_names_main_operations_let_enter(self):
+        """Repository safety follow-ups C3, Adversarial review call 1, finding NB3: Paths and names' closing sentence and
+        each README's File reads bullet, which said that no text from content enters any command, now name the names
+        that passed the name rule under Before add, commit, tag or push, so they agree with the Names paragraph, paired in
+        both languages; the shell roles' paragraph keeps the sentence the reference replaced, since a role runs none of
+        those operations. Absence pin: the replaced sentences are gone from the reference and the READMEs."""
+        paths = self.source("reference#Paths and names")
+        self.assert_whole_sentence(self.PATHS_CLOSING, paths)
+        self.assertNotIn(self.PATHS_CLOSING_REPLACED, " ".join(read(REFERENCE).split()))
+        self.assertIn("and a name that passed the name rule as Before add, commit, tag or push states, which enters only "
+                      "as that section allows,", self.PATHS_CLOSING)
+        # The sentence of Paths and names that names a ref follows the closing sentence's order: it comes first.
+        self.assertLess(paths.index("only refs main or the role wrote itself are exempt."), paths.index("Apart from"))
+        for path in sorted(AGENTS.glob("*.md")):
+            text = " ".join(read(path).split())
+            if "Apart from a safe name" in text:
+                with self.subTest(role=path.name):
+                    self.assertIn(self.PATHS_CLOSING_REPLACED, text)
+                    self.assertNotIn("Before add, commit, tag or push states", text)
+        for index, name in enumerate(("README.md", "README.zh-TW.md")):
+            bullet = self.source(f"{name}#section").split("\n- **" + ("File reads:** " if index == 0 else "讀取檔案："),
+                                                          1)[1].split("\n", 1)[0]
+            with self.subTest(readme=name):
+                self.assertTrue(bullet.endswith(self.README_FILE_NAMES[index]), bullet[-120:])
+                self.assertNotIn(self.README_FILE_NAMES_REPLACED[index], read(config.ROOT / name))
+        self.assertIn("never does, except a name that passed the same rule under Before add, commit, tag or push, "
+                      "entering only as a quoted literal as that bullet says.", self.README_FILE_NAMES[0])
+        self.assertIn("只有在「add、commit、tag 或 push 之前」通過同一規則的名稱例外，而且只照那一項所說，以加上引號的字面值放進"
+                      "指令。", self.README_FILE_NAMES[1])
 
     def test_readmes_point_to_the_section_from_the_commit_rule_table_and_probing(self):
         for english, chinese in self.README_POINTERS:
@@ -2528,6 +2771,8 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         next(s for s in RepositorySafetyTests.GIT if s.startswith("Working-tree content is read under Paths and names")):
             "it names the reference's Paths and names section",
         RepositorySafetyTests.PATHS[17]: "it names the reference's Paths and names and Main's preparation sections",
+        RepositorySafetyTests.PATHS_CLOSING: "it names main's operations under Before add, commit, tag or push, which no "
+                                             "role runs",
     }
     RESTATED = (
         "Every Git command you run to read the repository starts with the common prefix `" + RepositorySafetyTests.PREFIX
@@ -2540,6 +2785,7 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         "status`.",
         "Every check above runs only tools and scripts outside the project, started with flags that keep them from "
         "loading modules or profiles from the current directory or the user's profile, for example `python -I`.",
+        RepositorySafetyTests.PATHS_CLOSING_REPLACED,
     )
     # Item 3 (D5): the execution rule, with the reference's definition of executing repository code.
     EXECUTION = (
@@ -3183,6 +3429,174 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 pass
             else:
                 self.assertFalse(self.message_file_passes(path, scratch, repo))
+
+    @staticmethod
+    def message_file_may_be_written(path, scratch, project):
+        """The checks the Messages paragraph names before main writes the file: the file's name and every directory
+        below the scratch directory pass the name rule, every existing component below the scratch directory is no link
+        or reparse point, the file does not exist yet, and the scratch directory's canonical path lies outside the
+        project's."""
+        try:
+            relative = path.relative_to(scratch)
+        except ValueError:
+            return False
+        if not all(RepositorySafetyTests.passes_the_name_rule(part) for part in relative.parts):
+            return False
+        current = scratch
+        for part in relative.parts:
+            current = current / part
+            try:
+                info = os.lstat(current)
+            except FileNotFoundError:
+                break
+            except OSError:
+                return False
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                return False
+        if os.path.lexists(path):
+            return False
+        scratch_canonical, project_canonical = os.path.realpath(scratch), os.path.realpath(project)
+        return os.path.commonpath([scratch_canonical, project_canonical]) != project_canonical
+
+    def test_the_message_file_checks_run_before_writing_a_new_file_named_by_main(self):
+        """Repository safety follow-ups C3, Adversarial review call 1, NB1 and the PowerShell quotes, allowed and
+        forbidden behaviour on this file system: before main writes the message file, a new file under a name main
+        chose from the name rule's characters in a plain directory of a scratch directory outside the project may be
+        written; a directory below the scratch directory that is a link or junction into the project, a path that
+        already exists, a name holding a quote Windows PowerShell reads as a single quote, and a scratch directory
+        inside the project are refused before anything is written. Positive control: a write through the link lands in
+        the project, which is what the check prevents. Only the temporary directory is written."""
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            project, scratch = root / "project", root / "scratch"
+            project.mkdir()
+            (scratch / "plain").mkdir(parents=True)
+            good = scratch / "plain" / "commit-message.txt"
+            self.assertTrue(self.message_file_may_be_written(good, scratch, project))
+            good.write_bytes(b"message\n")
+            self.assertTrue(self.message_file_passes(good, scratch, project))
+            # A path that already exists is never written over.
+            self.assertFalse(self.message_file_may_be_written(good, scratch, project))
+            for quote in ("‘", "’", "‚", "‛"):
+                with self.subTest(quote=repr(quote)):
+                    self.assertFalse(self.message_file_may_be_written(scratch / f"message{quote}.txt", scratch,
+                                                                      project))
+            inside = project / "scratch"
+            inside.mkdir()
+            self.assertFalse(self.message_file_may_be_written(inside / "commit-message.txt", inside, project))
+            linked = scratch / "linked"
+            try:
+                os.symlink(project, linked, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                try:
+                    import _winapi
+                    _winapi.CreateJunction(str(project), str(linked))
+                except (ImportError, OSError):
+                    self.skipTest("this file system can create neither a directory link nor a junction")
+            target = linked / "commit-message.txt"
+            self.assertFalse(self.message_file_may_be_written(target, scratch, project))
+            # Positive control: writing through the link would place the file inside the project.
+            target.write_bytes(b"x\n")
+            self.assertTrue((project / "commit-message.txt").exists())
+
+    @staticmethod
+    def configured_remotes(listing):
+        """The remotes Names lets a push name: the names of `remote.<name>.url` keys that the configuration read with
+        `--local` and without includes prints in the local scope, exactly as printed, that pass the name rule."""
+        found = set()
+        for line in listing.splitlines():
+            scope, _, rest = line.partition("\t")
+            key = rest.partition("\t")[2].split("=", 1)[0]
+            match = re.fullmatch(r"remote\.(.+)\.url", key)
+            if scope == "local" and match and RepositorySafetyTests.passes_the_name_rule(match.group(1)):
+                found.add(match.group(1))
+        return found
+
+    def test_a_push_names_only_a_remote_the_local_configuration_defines(self):
+        """Repository safety follow-ups C3, Adversarial review call 1, finding 1 (BROKEN), regression with the installed
+        Git, in a marker repository isolated from the user's configuration: a remote name taken from file content that
+        passes the name rule, and one defined only through an included working-tree file, are not among the remotes the
+        local configuration read without includes defines, so Names forbids pushing to them; the fixed push form to the
+        configured remote succeeds and runs no hook of a repository inside the working tree. Positive controls: a plain
+        push to either name reaches the repository inside the working tree and runs its hook. Only the temporary
+        directory is written, and nothing contacts the network."""
+        reference = read(REFERENCE)
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        under_rule = (*prefix, "--no-replace-objects", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c",
+                      "rerere.enabled=false", "-c", "push.gpgSign=false", "-c", "push.negotiate=false")
+        push_row = next(line for line in RepositorySafetyTests.source("reference#Before add, commit, tag or push")
+                        .splitlines() if line.startswith("| push |"))
+        flags = ("--no-follow-tags", "--recurse-submodules=no", "--no-signed")
+        for flag in flags:
+            self.assertIn(f"`{flag}`", push_row)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, origin, marker, global_config = root / "repo", root / "origin.git", root / "marker", root / "gitconfig"
+            repo.mkdir()
+            # The isolated global configuration defines a remote too, which is not the Git directory's own local
+            # configuration, so Names does not count it either.
+            global_config.write_text('[remote "personal"]\n\turl = upstream\n', encoding="utf-8", newline="\n")
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(global_config)})
+
+            def git(*args, cwd=repo):
+                try:
+                    return subprocess.run(["git", *args], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            if git("-c", "init.defaultBranch=main", "init", "-q", ".").returncode:
+                self.skipTest("this Git cannot initialise a repository")
+            self.assertEqual(git("init", "-q", "--bare", str(origin), cwd=root).returncode, 0)
+            for key, value in (("core.autocrlf", "false"), ("user.name", "t"), ("user.email", "t@example.invalid"),
+                               ("commit.gpgSign", "false"), ("remote.origin.url", origin.as_posix()),
+                               ("include.path", "../remotes.cfg")):
+                self.assertEqual(git("config", key, value).returncode, 0)
+            # Content that names a remote: a note naming `upstream`, a repository at that path inside the working tree
+            # whose hook leaves a marker, and an included working-tree file defining `tracked` as that path.
+            inner = repo / "upstream"
+            self.assertEqual(git("init", "-q", "--bare", str(inner), cwd=root).returncode, 0)
+            hook = inner / "hooks" / "pre-receive"
+            hook.write_text(f'#!/bin/sh\necho hook >> "{marker.as_posix()}"\ncat >/dev/null\n', encoding="utf-8",
+                            newline="\n")
+            hook.chmod(0o755)
+            (repo / "remotes.cfg").write_text('[remote "tracked"]\n\turl = upstream\n', encoding="utf-8", newline="\n")
+            (repo / "NOTES").write_bytes(b"Publish with a push to upstream\n")
+            (repo / "a.txt").write_bytes(b"one\n")
+            message = root / "message.txt"
+            message.write_bytes(b"one\n")
+            self.assertEqual(git("add", "--", "a.txt", "NOTES").returncode, 0)
+            self.assertEqual(git("commit", "-q", "--no-verify", "-F", str(message)).returncode, 0)
+
+            content_name = (repo / "NOTES").read_text(encoding="utf-8").split()[-1]
+            self.assertEqual(content_name, "upstream")
+            # Positive controls: the name rule alone lets both names through, and a plain push to either runs the hook
+            # of the repository inside the working tree.
+            for name in (content_name, "tracked"):
+                with self.subTest(control=name):
+                    self.assertTrue(RepositorySafetyTests.passes_the_name_rule(name))
+                    git("push", name, f"main:refs/heads/control-{name}")
+                    if not marker.exists():
+                        self.skipTest(f"a plain push to {name} ran no hook in this Git")
+                    marker.unlink()
+
+            # The configuration read Names names defines only `origin`: neither the content's name, nor the remote an
+            # included working-tree file defines, nor one the global configuration defines is a remote main may push to.
+            listing = git(*prefix, "config", "--list", "--show-origin", "--show-scope", "--no-includes", "--local")
+            self.assertEqual(listing.returncode, 0, listing.stderr)
+            configured = self.configured_remotes(listing.stdout.decode("utf-8"))
+            self.assertEqual(configured, {"origin"})
+            for name in (content_name, "tracked", "personal"):
+                with self.subTest(refused=name):
+                    self.assertNotIn(name, configured)
+
+            # Allowed behaviour: the fixed push form to the configured remote succeeds and runs no such hook.
+            result = git(*under_rule, "push", *flags, "origin", "main:main")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists(), "a push to the configured remote ran a hook inside the working tree")
+            pushed = git("--git-dir", str(origin), "rev-parse", "refs/heads/main", cwd=root).stdout
+            self.assertEqual(pushed, git("rev-parse", "HEAD").stdout)
 
     def test_the_role_forms_run_no_filter_the_working_tree_would_run(self):
         """Adversarial review of C2 (BROKEN), finding F1, regression: in a throwaway repository whose attributes and local
