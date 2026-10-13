@@ -2015,5 +2015,79 @@ class PreApprovalApprovalRuleTests(unittest.TestCase):
                       "the decision text is not rewritten")
 
 
+class SpecChecklistInvariantTests(unittest.TestCase):
+    """0.23.0 ticket 02 (docs/specs/claims-at-implementation.md, S1, S2, S3, S6 and Residual R1): the spec checklist is
+    the control that carries a spec's decisions and security invariants into its tickets, so each way a ticket can
+    lose one is decided by a sentence that makes it a blocker at plan review."""
+
+    source = staticmethod(feather_support.review_rules_source)
+
+    # Each scenario names the outcome and the sentences that decide it.
+    SCENARIOS = (
+        # S3 and Acceptance item 3.
+        ("a named ticket of a spec does not cite a security invariant or an Out of Scope line that limits what it may "
+         "change",
+         "a blocker at plan review, whether one ticket or several are named",
+         (("plan-review.md", "The checklist's scope, Out of Scope and citation parts run for any named tickets of a "
+                             "spec, a single named ticket included:"),
+          ("plan-review.md", "cites the spec's decisions and security invariants that apply to it, and an Out of Scope "
+                             "line of the spec that limits what a ticket may change is part of what that ticket must "
+                             "cite."),
+          ("plan-review.md", "A missing coverage or citation is a blocker, an uncited security invariant included."),
+          ("README.md#The spec as a checklist", "including any Out of Scope line that limits what it may change."),
+          ("README.zh-TW.md#spec 作為檢查清單", "包括限制它能改什麼的 Out of Scope 條目。"))),
+        # S2: the last unfinished ticket named alone.
+        ("the user names only the spec's last unfinished ticket",
+         "the coverage part runs over it with the finished tickets, which plan review receives for that check only",
+         (("plan-review.md", "for the coverage and invariant-citation checks only, the spec's other tickets, finished "
+                             "or not."),
+          ("plan-review.md", "The coverage part runs whenever the named tickets together with the finished ones are all "
+                             "of the spec's tickets, a single named ticket included:"),
+          ("README.md#The spec as a checklist", "so naming the last unfinished ticket alone runs this check too."))),
+        # S2: an invariant no ticket cites, found even when coverage does not run.
+        ("a security invariant of the spec is cited by none of its tickets and the named tickets are not the last ones",
+         "a blocker at that plan review, since the invariant check runs at every plan review over tickets of the spec",
+         (("plan-review.md", "Every plan review over tickets of a spec also checks that each of the spec's security "
+                             "invariants is cited by at least one of its tickets, named or not."),
+          ("plan-review.md", "A missing coverage or citation is a blocker, an uncited security invariant included."))),
+        # Citations: a `Spec:` line is not a citation.
+        ("a ticket's only link to its spec is its `Spec:` line",
+         "the ticket cites nothing of the spec, so the checklist finds what applies to it uncited, and its later reviews "
+         "do not read the spec",
+         (("plan-review.md", "a `Spec:` line, a parent reference or a shared directory is not a citation."),
+          ("plan-review.md", "so a ticket's reviews after plan review do not read the parts of the spec it does not "
+                             "cite."),
+          ("README.md#Citations", "A `Spec:` line, a parent reference or a shared directory is not a citation."),
+          ("README.zh-TW.md#引用", "`Spec:` 行、parent 參照或同一個目錄都不算引用。"))),
+        # S6: an unresolvable citation.
+        ("a ticket cites `D3` and the spec has no D3, or two parts named D3",
+         "a blocker at plan review",
+         (("plan-review.md", "A citation that does not resolve to exactly one part of the spec is a blocker."),
+          ("README.md#Citations", "a citation that does not resolve to exactly one part of the spec is a blocker at plan "
+                                  "review."))),
+        # S1: a spec's own listed Claims.
+        ("a spec lists its own claims and a security invariant that applies to one of them is neither in its text, a "
+         "part it cites nor a part the spec states holds for every claim",
+         "a blocker at plan review",
+         (("plan-review.md", "When a spec lists its own claims, plan review checks that every decision, Out of Scope "
+                             "line and security invariant that applies to a listed claim is in the claim's own text, a "
+                             "part it cites or a part the spec states holds for every claim; a missing one is a "
+                             "blocker."),)),
+        # Residual R1: no link, no checklist.
+        ("the user names a ticket with no `Spec:` line, parent reference or shared directory",
+         "it is its own plan and gets no checklist; the user's naming of it is the agreement",
+         (("plan-review.md", "A ticket with no link to a spec, no `Spec:` line, parent reference or shared directory, is "
+                             "its own plan and gets no checklist; the user's naming of it is the agreement."),
+          ("README.md#A ticket that belongs to no spec", "is its own plan and gets no checklist"),
+          ("README.zh-TW.md#不屬於任何 spec 的 ticket", "自成一份計畫，不做檢查清單"))),
+    )
+
+    def test_each_lost_invariant_is_a_blocker_by_its_sentence(self):
+        for scenario, outcome, deciding in self.SCENARIOS:
+            for place, sentence in deciding:
+                with self.subTest(scenario=scenario[:50], place=place, sentence=sentence[:50]):
+                    self.assertIn(sentence, self.source(place), outcome)
+
+
 if __name__ == "__main__":
     unittest.main()

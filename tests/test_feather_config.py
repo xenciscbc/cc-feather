@@ -3979,6 +3979,14 @@ class FeatherConfigTests(unittest.TestCase):
                                              "plan-review.md", "A ticket that belongs to no spec is its own plan"),
         "Example": ("例子", "makes one plan with three claims", "是一份有三個 claim 的計畫",
                     "plan-review.md", "The plan is what the user names"),
+        # Claims at implementation ticket 02: the spec as a checklist for plan review over tickets, and citations.
+        "The spec as a checklist": ("spec 作為檢查清單", "The spec is not part of the plan, only a checklist",
+                                    "spec 不是計畫的一部分，只是檢查清單", "plan-review.md",
+                                    "It uses the spec only as a checklist for what the tickets must carry"),
+        "Citations": ("引用", "is not a citation", "都不算引用", "plan-review.md",
+                      "a `Spec:` line, a parent reference or a shared directory is not a citation"),
+        "Checklist limits": ("檢查清單的限制", "the checklist runs at plan review", "檢查清單在計畫審查時執行",
+                             "plan-review.md", "a ticket's reviews after plan review do not read the parts of the spec"),
         "Already covered": ("已涵蓋", "that plan continues with no new plan review", "不重做計畫審查",
                             "plan-review.md", "otherwise that plan continues with no new plan review"),
         "Partial overlap": ("部分重疊", "gains no new automatic calls", "不會多出新的自動呼叫",
@@ -4788,6 +4796,195 @@ class ClaimsAtImplementationTests(unittest.TestCase):
         self.assertTrue(any("a single named ticket is the Plan with its spec as context" in line for line in lines))
         self.assertTrue(any("- **Treat every ticket as its own Plan even when the whole spec is named**" in line
                             for line in lines))
+
+
+class SpecChecklistTests(unittest.TestCase):
+    """0.23.0 ticket 02 (docs/specs/claims-at-implementation.md, Acceptance item 3 and the parts of items 11 and 12 for
+    this rule, Implementation Decisions "The checklist" and "Citations", S1, S2, S3, S6, S12 and Residual R1): plan review
+    over tickets of a spec uses the spec as a checklist, and a citation is explicit."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+
+    @classmethod
+    def text(cls, path):
+        return path.read_text(encoding="utf-8")
+
+    @classmethod
+    def plan_review_paragraphs(cls):
+        return cls.text(cls.REFERENCES / "plan-review.md").split("\n\n")
+
+    @classmethod
+    def checklist_paragraph(cls):
+        return next(block for block in cls.plan_review_paragraphs()
+                    if block.startswith("When the plan is one or more tickets of a spec,"))
+
+    @classmethod
+    def readme_bullets(cls, name):
+        text = cls.text(config.ROOT / name)
+        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
+                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+        return dict(feather_support.readme_rule_bullets(text, start, end))
+
+    # Acceptance item 3 and S2: what plan review over tickets receives, and what it judges per ticket and across them.
+    RECEIVES = (
+        "When the plan is one or more tickets of a spec, a single named ticket included, plan review receives the named "
+        "tickets and the spec and, for the coverage and invariant-citation checks only, the spec's other tickets, "
+        "finished or not.",
+        "It judges each named ticket's outcome, acceptance and dependencies and, when several are named, checks the "
+        "tickets against each other.",
+    )
+
+    # Acceptance item 3 and Implementation Decisions "The checklist": the spec is a checklist, not Plan content and
+    # not a Claim's acceptance.
+    CHECKLIST = (
+        "It uses the spec only as a checklist for what the tickets must carry: the spec is not part of the plan's "
+        "content, and it is not a claim's acceptance, so a ticket's reviews after plan review do not read the parts of "
+        "the spec it does not cite.",
+    )
+
+    # Acceptance item 3 and S3: the scope, Out of Scope and citation parts run for any named tickets of a spec.
+    PARTS = (
+        "The checklist's scope, Out of Scope and citation parts run for any named tickets of a spec, a single named "
+        "ticket included: every named ticket stays within the spec's scope and Out of Scope and cites the spec's "
+        "decisions and security invariants that apply to it, and an Out of Scope line of the spec that limits what a "
+        "ticket may change is part of what that ticket must cite.",
+    )
+
+    # S2: coverage whenever the named and finished tickets are all of the spec's tickets; every invariant cited.
+    COVERAGE = (
+        "The coverage part runs whenever the named tickets together with the finished ones are all of the spec's "
+        "tickets, a single named ticket included: together they must cover the spec's outcome.",
+        "Every plan review over tickets of a spec also checks that each of the spec's security invariants is cited by "
+        "at least one of its tickets, named or not.",
+    )
+
+    BLOCKER = (
+        "A missing coverage or citation is a blocker, an uncited security invariant included.",
+    )
+
+    # Implementation Decisions "Citations" and S6: the citation definition every later ticket uses.
+    CITATIONS = (
+        "A citation is explicit: a named section or heading, a numbered item or an identifier such as `C1 item 1`, `D3` "
+        "or `S2`, and a ticket that needs a whole section cites the section; a `Spec:` line, a parent reference or a "
+        "shared directory is not a citation.",
+        "A reviewer follows a citation to the cited part only.",
+        "A citation that does not resolve to exactly one part of the spec is a blocker.",
+    )
+
+    # S1: a spec's own listed Claims carry what applies to them.
+    LISTED_CLAIMS = (
+        "When a spec lists its own claims, plan review checks that every decision, Out of Scope line and security "
+        "invariant that applies to a listed claim is in the claim's own text, a part it cites or a part the spec states "
+        "holds for every claim; a missing one is a blocker.",
+    )
+
+    # Residual R1: a ticket with no link to a spec gets no checklist.
+    NO_SPEC = (
+        "A ticket with no link to a spec, no `Spec:` line, parent reference or shared directory, is its own plan and "
+        "gets no checklist; the user's naming of it is the agreement.",
+    )
+
+    # Step 2 supplies what the checklist needs.
+    STEP_2 = "For tickets of a spec, also supply the spec and the spec's other tickets, as described above."
+
+    def test_plan_review_over_tickets_uses_the_spec_as_a_checklist(self):
+        paragraph = self.checklist_paragraph()
+        for sentence in (self.RECEIVES + self.CHECKLIST + self.PARTS + self.COVERAGE + self.BLOCKER + self.CITATIONS
+                         + self.LISTED_CLAIMS + self.NO_SPEC):
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, paragraph)
+
+    def test_the_checklist_follows_the_named_plan_rules_and_precedes_classification(self):
+        # The checklist builds on the named-Plan cases and comes before the classification paragraph.
+        paragraphs = self.plan_review_paragraphs()
+        named = next(index for index, block in enumerate(paragraphs) if "A plan lists its claims" in block)
+        checklist = paragraphs.index(self.checklist_paragraph())
+        classify = next(index for index, block in enumerate(paragraphs) if block.startswith("Classify every plan's claims"))
+        self.assertEqual(checklist, named + 1)
+        self.assertEqual(classify, checklist + 1)
+        # The kept single-ticket sentence still points every named-ticket check at a single named ticket.
+        self.assertIn("so every check plan review makes for named tickets of a spec, a single named ticket included, "
+                      "applies to it too.", paragraphs[named])
+
+    def test_step_2_supplies_the_spec_and_its_other_tickets(self):
+        step = next(line for line in self.text(self.REFERENCES / "plan-review.md").splitlines() if line.startswith("2. "))
+        self.assertIn("Supply a stable plan with outcome, scope/exclusions, claims with their acceptance, ownership, "
+                      "dependencies and relevant rollback. " + self.STEP_2, step)
+
+    # Acceptance items 11 and 12 for this rule, S12 and Residual R1: both READMEs, paired.
+    README_BULLETS = (
+        ("The spec as a checklist", "spec 作為檢查清單",
+         "when the plan is tickets of a spec, a single ticket included, plan review receives the named tickets and the "
+         "spec and, only for the coverage and invariant checks below, the spec's other tickets, finished or not.",
+         "計畫是某份 spec 的 ticket 時（包括只指名一張），計畫審查會拿到指名的 ticket 與 spec；只為了下面的涵蓋與不變條件檢查，"
+         "也會拿到該 spec 的其他 ticket，不論是否完成。"),
+        ("The spec as a checklist", "spec 作為檢查清單",
+         "It judges each ticket's outcome, acceptance and dependencies, and the tickets against each other when several "
+         "are named.",
+         "它判斷每張 ticket 的結果、驗收條件與相依關係，指名多張時也檢查 ticket 彼此之間。"),
+        ("The spec as a checklist", "spec 作為檢查清單",
+         "The spec is not part of the plan, only a checklist: each named ticket must stay within the spec's scope and "
+         "Out of Scope and cite the spec's decisions and security invariants that apply to it, including any Out of "
+         "Scope line that limits what it may change.",
+         "spec 不是計畫的一部分，只是檢查清單：每張指名的 ticket 必須留在 spec 的範圍與 Out of Scope 之內，並引用 spec 中適用於它的"
+         "決定與安全不變條件，包括限制它能改什麼的 Out of Scope 條目。"),
+        ("The spec as a checklist", "spec 作為檢查清單",
+         "When the named tickets together with the finished ones are all of the spec's tickets, they must also cover the "
+         "spec's outcome, so naming the last unfinished ticket alone runs this check too.",
+         "指名的 ticket 加上已完成的 ticket 就是 spec 的全部 ticket 時，它們還必須涵蓋 spec 的結果，所以只指名最後一張未完成的 "
+         "ticket 也會做這項檢查。"),
+        ("The spec as a checklist", "spec 作為檢查清單",
+         "Every plan review over tickets of a spec also checks that each of the spec's security invariants is cited by at "
+         "least one of its tickets, named or not. A missing coverage or citation is a blocker.",
+         "每次針對 spec 的 ticket 做的計畫審查，也會檢查 spec 的每條安全不變條件至少被它的一張 ticket 引用，不論那張 ticket 是否"
+         "被指名。缺少涵蓋或引用都是阻擋事項。"),
+        ("The spec as a checklist", "spec 作為檢查清單",
+         "For a spec that lists its own claims, plan review checks that each decision, Out of Scope line and security "
+         "invariant applying to a listed claim is in the claim's own text, a part it cites or a part the spec says holds "
+         "for every claim; a missing one is a blocker.",
+         "spec 自己列了 claim 時，計畫審查會檢查適用於每個列出 claim 的決定、Out of Scope 條目與安全不變條件，都寫在該 claim "
+         "自己的文字、它引用的部分，或 spec 聲明適用於每個 claim 的部分；缺少就是阻擋事項。"),
+        ("Citations", "引用",
+         "a citation is explicit: a named section or heading, a numbered item or an identifier such as `C1 item 1`, `D3` "
+         "or `S2`; a ticket that needs a whole section cites the section. A `Spec:` line, a parent reference or a shared "
+         "directory is not a citation.",
+         "引用必須明確：具名的段落或標題、編號項目，或 `C1 item 1`、`D3`、`S2` 這類識別碼；需要整個段落的 ticket 就引用那個段落。"
+         "`Spec:` 行、parent 參照或同一個目錄都不算引用。"),
+        ("Citations", "引用",
+         "A reviewer follows a citation to the cited part only, and a citation that does not resolve to exactly one part "
+         "of the spec is a blocker at plan review.",
+         "審查者只會順著引用讀到被引用的那個部分；引用無法對應到 spec 中恰好一個部分時，在計畫審查就是阻擋事項。"),
+        # S12: the checklist's limits.
+        ("Checklist limits", "檢查清單的限制",
+         "the checklist runs at plan review, on the spec and tickets as written then; its coverage check runs only when "
+         "the named and finished tickets are all of the spec's tickets; the spec is not a claim's acceptance, so a "
+         "ticket's reviews after plan review read only the ticket and the spec parts it cites; and these rules are "
+         "instructions to the model, not enforced by any tool.",
+         "檢查清單在計畫審查時執行，看的是當時寫下的 spec 與 ticket；涵蓋檢查只在指名與已完成的 ticket 就是 spec 的全部 ticket "
+         "時執行；spec 不是 claim 的驗收條件，所以計畫審查之後，ticket 的各項審查只讀該 ticket 與它引用的 spec 部分；這些規則是"
+         "給模型的指示，沒有任何工具強制執行。"),
+        # Residual R1.
+        ("A ticket that belongs to no spec", "不屬於任何 spec 的 ticket",
+         ", with no `Spec:` line, parent reference or shared directory linking it to one, is its own plan and gets no "
+         "checklist: naming it is your agreement to it.",
+         "（沒有 `Spec:` 行、parent 參照或同一個目錄把它連到某份 spec）自成一份計畫，不做檢查清單：指名它就代表你同意它。"),
+    )
+
+    # The 0.22.0 bullet opening that Residual R1's statement replaces.
+    README_REPLACED = (
+        ("README.md", "- **A ticket that belongs to no spec** is its own plan."),
+        ("README.zh-TW.md", "- **不屬於任何 spec 的 ticket** 自成一份計畫。"),
+    )
+
+    def test_readmes_describe_the_checklist_its_limits_and_residual_r1_in_both_languages(self):
+        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        for label, zh_label, en, zh in self.README_BULLETS:
+            with self.subTest(label=label, sentence=en[:50]):
+                self.assertIn(en, english[label])
+                self.assertIn(zh, chinese[zh_label])
+        for name, sentence in self.README_REPLACED:
+            with self.subTest(readme=name, removed=sentence[:40]):
+                self.assertNotIn(sentence, self.text(config.ROOT / name))
 
 
 if __name__ == "__main__":
