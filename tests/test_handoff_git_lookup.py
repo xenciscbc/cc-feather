@@ -58,9 +58,11 @@ def plant(directory: Path, name: str = NAME, data: bytes = b"MZ", mode: int = 0o
 
 def qualified(entry: str) -> bool:
     """The test's own statement of a considered PATH entry, written independently of the resolver: on POSIX it
-    starts with / and does not lie in /proc or /dev/fd, whose paths name something different in every process."""
+    starts with /, has no `..` component, whose target depends on links before it, and does not lie in /proc or
+    /dev/fd, whose paths name something different in every process."""
     if not WINDOWS:
-        return entry.startswith("/") and not re.match(r"^/+(?:\./+)*(?:proc|dev/+(?:\./+)*fd)(?:/|$)", entry)
+        return (entry.startswith("/") and not re.search(r"(?:^|/)\.\.(?:/|$)", entry)
+                and not re.match(r"^/+(?:\./+)*(?:proc|dev/+(?:\./+)*fd)(?:/|$)", entry))
     return bool(re.match(r"^[A-Za-z]:[\\/]", entry) or re.match(r"^[\\/]{2}(?![?.][\\/])[^\\/]+[\\/][^\\/]+", entry))
 
 
@@ -168,6 +170,8 @@ class GitResolverTableTest(unittest.TestCase):
                 ("quoted entry with an empty inside", '""', None),
                 ("C:/ with forward slashes", self.good.as_posix(), os.path.join(self.good.as_posix(), NAME)),
                 ("trailing separator", good + "\\", good + "\\" + NAME),
+                # Windows resolves `..` from the text before following links, so a `..` entry is still considered.
+                ("a .. component, resolved from the text", good + "\\..\\good", good + "\\..\\good\\" + NAME),
                 ("unexpanded %VAR%", "%FEATHER_LOOKUP_DIR%", None),
                 ("fully qualified but unexpanded", str(literal), None),
                 ("UNC path", unc, unc_expected),
@@ -272,6 +276,38 @@ class GitResolverTableTest(unittest.TestCase):
         ])
         self.assertEqual(storage.git_search_path(":".join([entry for _, entry in traps] + [good])), [good])
 
+    @unittest.skipIf(WINDOWS, POSIX_ONLY)
+    def test_posix_dot_dot_entries(self):
+        """Regression for code review call 2 at 79e7c01: the kernel follows a symbolic link before it applies the
+        `..` after it, so with /var/run -> /run (Ubuntu, Debian, Fedora) /var/run/../proc/self/cwd is
+        /proc/self/cwd, which holds a Git here, although its text walks to /var/proc. Every entry with a `..`
+        component is skipped, wherever its text leads, including a directory that holds a Git."""
+        climbing = "/var/run/../proc/self/cwd"
+        if os.path.islink("/var/run") and os.path.isdir("/proc/self/cwd"):
+            # The live trap: a lookup that considered the entry would find the Git planted in the current directory.
+            self.assertTrue(os.path.samefile(climbing, self.cwd), f"{climbing} does not name the current directory")
+            self.assertTrue(os.path.isfile(os.path.join(climbing, NAME)), f"{climbing} is not a live trap")
+        good = str(self.good)
+        through_good = good + "/../good"
+        self.assertTrue(os.path.isfile(os.path.join(through_good, NAME)))
+        plant(self.root / "..good")
+        entries = [
+            ("/var/run/../proc/self/cwd, through the /var/run link", climbing),
+            ("/usr/../usr/bin", "/usr/../usr/bin"),
+            ("/proc/self/cwd/../..", "/proc/self/cwd/../.."),
+            ("/tmp/../tmp", "/tmp/../tmp"),
+            ("a directory holding a Git, reached through ..", through_good),
+            ("a trailing ..", good + "/.."),
+            ("a .. after repeated separators", good + "//..//good/"),
+        ]
+        self.check([(label, entry, None) for label, entry in entries] + [
+            ("every .. entry before a good entry", ":".join([entry for _, entry in entries] + [good]),
+             str(self.good / NAME)),
+            ("a component merely starting with .. is considered", str(self.root / "..good"),
+             str(self.root / "..good" / NAME)),
+        ])
+        self.assertEqual(storage.git_search_path(":".join([entry for _, entry in entries] + [good])), [good])
+
     def test_no_result_is_kept_between_calls(self):
         other = self.root / "other"
         plant(other)
@@ -286,7 +322,8 @@ class GitResolverTableTest(unittest.TestCase):
         skipped = ["", ".", "bin"] + ([os.path.splitdrive(good)[0] + "bin", os.path.splitdrive(good)[1],
                                        "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + good, "\\\\.\\" + good] if WINDOWS
                                       else ["/proc/self/cwd", "//proc//self/cwd/", "/proc/./thread-self/cwd",
-                                            "/dev/fd/3"])
+                                            "/dev/fd/3", "/var/run/../proc/self/cwd", "/usr/../usr/bin",
+                                            good + "/../good"])
         kept = [good, str(self.root / "missing")]
         value = separator.join(skipped[:2] + [f'"{kept[0]}"' if WINDOWS else kept[0]] + skipped[2:] + [kept[1]])
         self.assertEqual(storage.git_search_path(value), kept)
@@ -442,7 +479,8 @@ class GitCallTest(InProcessBase):
             self.skipped = ["", ".", "bin", drive + "bin", rooted, "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + str(self.cwd),
                             "\\\\.\\" + str(self.cwd), f'"{empty}"']
         else:
-            self.skipped = ["", ".", "bin", "$HOME/bin", "/proc/self/cwd", "//proc//self/cwd/", "/dev/fd/0"]
+            self.skipped = ["", ".", "bin", "$HOME/bin", "/proc/self/cwd", "//proc//self/cwd/", "/dev/fd/0",
+                            "/var/run/../proc/self/cwd", str(self.cwd) + "/../cwd"]
         environment["PATH"] = os.pathsep.join([*self.skipped, real_path or ""])
         self.enterContext(mock.patch.dict(os.environ, environment, clear=True))
         self.expected = storage.resolve_git(os.environ["PATH"])
@@ -596,6 +634,20 @@ class PlantedGitTest(unittest.TestCase):
         directory>, the first entry names the process's current directory, which holds a planted git. A start of
         /proc/self/cwd/git, and a bare-name start over that PATH, run the plant (positive controls); the tool's
         operations run Git from the second entry and never the plant."""
+        self.process_entry_never_runs_the_planted_git("/proc/self/cwd")
+
+    @unittest.skipIf(WINDOWS, "a POSIX link before `..`; Windows resolves `..` from the text")
+    def test_posix_dot_dot_through_a_link_never_runs_the_planted_git(self):
+        """Regression for code review call 2 at 79e7c01: with /var/run -> /run, PATH=/var/run/../proc/self/cwd
+        names the process's current directory, because the kernel follows the link before applying `..`."""
+        if not os.path.islink("/var/run"):
+            self.skipTest("/var/run is not a symbolic link on this system")
+        self.process_entry_never_runs_the_planted_git("/var/run/../proc/self/cwd")
+
+    def process_entry_never_runs_the_planted_git(self, entry: str):
+        """PATH=<entry>:<real Git's directory>, where <entry> names the process's current directory, which holds a
+        planted git: starting <entry>/git, and a bare-name start over that PATH, run the plant (positive controls);
+        the tool's operations run Git from the second entry and never the plant."""
         if not os.path.isdir("/proc/self/cwd"):
             self.skipTest("this system has no /proc/self/cwd")
         try:
@@ -605,8 +657,8 @@ class PlantedGitTest(unittest.TestCase):
         head = self.repository()
         marker = self.root / "marker"
         plant(self.cwd, data=f'#!/bin/sh\necho planted >> "{marker}"\nexit 1\n'.encode("utf-8"))
-        self.env["PATH"] = os.pathsep.join(["/proc/self/cwd", os.path.dirname(real)])
-        for program in ("/proc/self/cwd/git", "git"):
+        self.env["PATH"] = os.pathsep.join([entry, os.path.dirname(real)])
+        for program in (entry + "/git", "git"):
             self.bare_name_start(program)
             if not marker.exists():
                 self.skipTest(f"positive control: starting {program} here did not run the planted script")
@@ -617,9 +669,10 @@ class PlantedGitTest(unittest.TestCase):
 
 class GitExecPathTest(unittest.TestCase):
     """Adopted with the 001d047 finding: an inherited GIT_EXEC_PATH that is not a considered entry would make Git,
-    after -C, look up its git-* programs relative to the project, so the helper's Git processes do not get it; a
-    fully qualified one, the user's own, reaches Git unchanged. git_environment itself, which other code uses, is
-    unchanged."""
+    after -C, look up its git-* programs relative to the project or through the current directory, so the helper's
+    Git processes do not get it; a considered one, the user's own, reaches Git unchanged. The value is judged as is:
+    on Windows a quoted value is dropped, although a quoted PATH entry is considered without its quotes.
+    git_environment itself, which other code uses, is unchanged."""
 
     def setUp(self):
         self.root = scratch(self)
@@ -645,7 +698,9 @@ class GitExecPathTest(unittest.TestCase):
             drive, rooted = os.path.splitdrive(kept)
             dropped += [drive + "libexec", rooted, "%FEATHER_EXEC%", "\\\\?\\" + kept, f'"{kept}"']
         else:
-            dropped += ["$HOME/libexec", "/proc/self/cwd", "//proc/./self/cwd/", "/dev/fd/3"]
+            dropped += ["$HOME/libexec", "/proc/self/cwd", "//proc/./self/cwd/", "/dev/fd/3",
+                        "/var/run/../proc/self/cwd", "/usr/../usr/libexec/git-core", kept + "/../libexec",
+                        "/tmp/../tmp"]
         for value in dropped:
             with self.subTest("dropped", GIT_EXEC_PATH=value):
                 self.assertIsNone(self.started_with(value))

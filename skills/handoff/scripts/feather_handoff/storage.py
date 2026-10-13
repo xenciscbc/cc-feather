@@ -69,39 +69,38 @@ def _fully_qualified(entry: str) -> bool:
 _PROCESS_NAMESPACES = (("proc",), ("dev", "fd"))
 
 
+def _climbs(entry: str) -> bool:
+    """POSIX: the entry has a `..` component. The kernel follows a symbolic link before it applies the `..` after it,
+    so the text alone cannot tell where such an entry leads: with the /var/run -> /run link that many distributions
+    ship, /var/run/../proc/self/cwd is /proc/self/cwd. Windows resolves `..` from the text before it follows any
+    link, so a `..` component there leads where its text says."""
+    return not WINDOWS and ".." in entry.split("/")
+
+
 def _process_relative(entry: str) -> bool:
     """POSIX: the entry is /proc, /dev/fd or under one of them, judged from the text without resolving links.
 
-    Repeated separators and `.` components are ignored, and a `..` component removes the one before it; the entry
-    counts when the components walked so far start with one of the namespaces at any point of that walk, so neither
-    //proc//self/cwd, /proc/./self/cwd/, /usr/../proc/self/cwd nor /proc/self/cwd/../../usr/bin escapes."""
-    walked: list[str] = []
-    for part in entry.split("/"):
-        if part in {"", "."}:
-            continue
-        if part == "..":
-            if walked:
-                walked.pop()
-            continue
-        walked.append(part)
-        if any(tuple(walked[:len(namespace)]) == namespace for namespace in _PROCESS_NAMESPACES):
-            return True
-    return False
+    Repeated separators and `.` components are ignored, so neither //proc//self/cwd nor /proc/./self/cwd/ escapes.
+    Only meaningful for an entry without a `..` component; _considered skips every entry with one first."""
+    parts = [part for part in entry.split("/") if part not in {"", "."}]
+    return any(tuple(parts[:len(namespace)]) == namespace for namespace in _PROCESS_NAMESPACES)
 
 
 def _considered(entry: str) -> bool:
     """One directory the user named, the same for every process and current directory: nonempty, fully qualified,
-    expanded and, on POSIX, outside /proc and /dev/fd. Classifies PATH entries and GIT_EXEC_PATH alike."""
+    expanded and, on POSIX, without a `..` component and outside /proc and /dev/fd. Classifies PATH entries and
+    GIT_EXEC_PATH alike."""
     return (bool(entry) and "\0" not in entry and _fully_qualified(entry) and not _UNEXPANDED.search(entry)
-            and (WINDOWS or not _process_relative(entry)))
+            and (WINDOWS or not (_climbs(entry) or _process_relative(entry))))
 
 
 def git_search_path(value: str | None) -> list[str]:
     """The PATH entries the resolver considers and the only ones Git's own PATH keeps, in their order.
 
     An absent or empty PATH has none. On Windows one pair of surrounding double quotes is removed first. Empty,
-    relative, not fully qualified and unexpanded entries are skipped, and on POSIX every entry under /proc or
-    /dev/fd (see _process_relative), so neither the current directory nor a directory relative to it takes part."""
+    relative, not fully qualified and unexpanded entries are skipped, and on POSIX every entry with a `..`
+    component (see _climbs) and every entry under /proc or /dev/fd (see _process_relative), so neither the current
+    directory nor a directory relative to it takes part."""
     entries = []
     for entry in (value or "").split(os.pathsep):
         if WINDOWS and len(entry) >= 2 and entry[0] == entry[-1] == '"':
@@ -122,9 +121,10 @@ def resolve_git(value: str | None) -> str:
     """The Git executable the handoff tool starts: the first git_search_path entry holding GIT_NAME as a regular
     file after following links, and on POSIX executable, returned as the entry joined with that name (not a link's
     target). Entries git_search_path skips are never looked at: empty, relative and not fully qualified ones,
-    unexpanded ones, and on POSIX those under /proc or /dev/fd, which can name the current directory although they
-    start with /. Raises FileNotFoundError when no entry has one. Asks neither the operating system nor Python to
-    search (no shutil.which, os.get_exec_path or os.defpath), starts no process and keeps no result between calls."""
+    unexpanded ones, and on POSIX those with a `..` component or under /proc or /dev/fd, which can name the current
+    directory although they start with /. Raises FileNotFoundError when no entry has one. Asks neither the operating
+    system nor Python to search (no shutil.which, os.get_exec_path or os.defpath), starts no process and keeps no
+    result between calls."""
     for entry in git_search_path(value):
         candidate = os.path.join(entry, GIT_NAME)
         try:
@@ -143,11 +143,12 @@ def run_git(directory: Path, *arguments: str, errors: str = "strict",
     <git> is the absolute path resolve_git found in PATH, never a bare name; when it finds none, FileNotFoundError
     propagates and no process starts. Git runs from its own directory with only the entries git_search_path keeps as
     its PATH, so the process's current directory takes part neither in finding Git nor in Git's own lookups, and
-    <directory> is passed absolute. An inherited GIT_EXEC_PATH that the same classification would skip is dropped,
-    because Git would look up its git-* programs there relative to the project after -C; a considered one, the
-    user's own, stays. Needs no Store, so root discovery can use it. no_lazy_fetch is what lazy_fetch_guard returned
-    for the operation. Output is UTF-8 text decoded with `errors`; OSError and subprocess.TimeoutExpired propagate,
-    and each caller judges the return code."""
+    <directory> is passed absolute. An inherited GIT_EXEC_PATH stays only when its value, taken as is without
+    removing quotes, is an entry the resolver would consider; any other is dropped, because Git would look up its
+    git-* programs there, relative to the project after -C or through the process's current directory. Needs no
+    Store, so root discovery can use it. no_lazy_fetch is what lazy_fetch_guard returned for the operation. Output
+    is UTF-8 text decoded with `errors`; OSError and subprocess.TimeoutExpired propagate, and each caller judges the
+    return code."""
     value = os.environ.get("PATH")
     executable = resolve_git(value)
     environment = git_environment()
