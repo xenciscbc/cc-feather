@@ -60,6 +60,14 @@ _Avoid_: budget, retry limit
 The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work.
 _Avoid_: three-layer protection, pipeline
 
+**Review schedule**:
+Main's order for implementing and reviewing a Plan's Claims in auto, made when implementation starts for a Plan with more than one Claim: its Review groups with the reason for each, and the order of the rest. Plan review checks it, and an active handoff records it; it is not written into the spec or tickets, and it never adds, splits or merges Claims. Main may regroup Claims not yet started, stating why and telling the user, without another plan review.
+_Avoid_: delegation preview, plan
+
+**Review group**:
+Claims in a Review schedule that are implemented together and then reviewed at the same commit, because they are expected to write the same files or one's acceptance can only be checked with another done. Each member keeps its own verdicts and counts.
+_Avoid_: claim group, batch
+
 **Explicit request**:
 A user's direct request for one specific review or verification. It runs in either Review mode and runs only what was requested. In auto, a request for a step the Automatic flow is due to run is an automatic call, not an Explicit request. In auto, when it passes a step the Automatic flow had stopped, it clears the stop without resetting the count, and the Automatic flow resumes from there.
 _Avoid_: manual review
