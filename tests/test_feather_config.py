@@ -4739,9 +4739,11 @@ class ClaimsAtImplementationTests(unittest.TestCase):
             "spec it cites and, for a Claim a spec lists, the spec's parts that state they hold for every Claim.",
         ),
         "Security-critical claim": (
-            # Ticket 04 aligned the timing with off mode's classification before dispatch (S7).
+            # Ticket 04 aligned the timing with off mode's classification before dispatch or start, main's own work
+            # included (S7 as amended on 2026-10-13).
             "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
-            "before the Plan's first review and before its implementation is dispatched.",
+            "before the Plan's first review and before its implementation is dispatched or started, main's own work "
+            "included.",
             "A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
     }
@@ -4751,7 +4753,9 @@ class ClaimsAtImplementationTests(unittest.TestCase):
         "Plan": ("the spec serving only to check that they cover it",),
         "Claim": ("the parts of a spec it cites or that state they hold for every Claim",),
         "Security-critical claim": ("when main lists the Plan's Claims itself",
-                                    "is not thereby a Plan whose Claims main lists"),
+                                    "is not thereby a Plan whose Claims main lists",
+                                    # S7 as amended: the dispatch-only timing (HEAD c40d7b6).
+                                    "before its implementation is dispatched."),
     }
 
     def test_glossary_entries_state_the_rules_and_match_the_procedures(self):
@@ -4893,11 +4897,34 @@ class SpecChecklistTests(unittest.TestCase):
         "holds for every claim; a missing one is a blocker.",
     )
 
-    # Residual R1: a ticket with no link to a spec gets no checklist.
+    # Residual R1 (amended 2026-10-13, T02 Adversarial F1): a ticket with no link to a spec that the user does not
+    # name as a ticket of a spec either gets no checklist; one the user names as a spec's ticket is that spec's ticket.
     NO_SPEC = (
-        "A ticket with no link to a spec, no `Spec:` line, parent reference or shared directory, is its own plan and "
-        "gets no checklist; the user's naming of it is the agreement.",
+        "A ticket with no link to a spec, no `Spec:` line, parent reference or shared directory, that the user does not "
+        "name as a ticket of a spec either, is its own plan and gets no checklist; the user's naming of it is the "
+        "agreement.",
+        "A ticket the user names as a ticket of a spec is a ticket of that spec, as the recognition of a spec's tickets "
+        "above says.",
     )
+
+    # The unconditional R1 sentence the amendment replaced (HEAD c40d7b6).
+    NO_SPEC_REPLACED = (
+        "A ticket with no link to a spec, no `Spec:` line, parent reference or shared directory, is its own plan and "
+        "gets no checklist"
+    )
+
+    # The recognition the R1 sentence points to: the user naming a spec's tickets is one way to recognise them.
+    RECOGNITION = ("Recognise a spec's tickets by an explicit link such as a `Spec:` line or parent reference, a shared "
+                   "feature directory, or the user naming them;")
+
+    # Residual R1 in ADR 0012's consequences.
+    ADR_R1 = (
+        "A ticket with no link to a spec that the user does not name as a ticket of a spec either is its own Plan and "
+        "gets no checklist; the user's naming of it is the agreement.",
+        "A ticket the user names as a ticket of a spec is a ticket of that spec, as plan review's ticket recognition "
+        "says.",
+    )
+    ADR_R1_REPLACED = "A ticket with no link to a spec is its own Plan and gets no checklist"
 
     # Step 2 supplies what the checklist needs.
     STEP_2 = "For tickets of a spec, also supply the spec and the spec's other tickets, as described above."
@@ -4908,6 +4935,19 @@ class SpecChecklistTests(unittest.TestCase):
                          + self.LISTED_CLAIMS + self.NO_SPEC):
             with self.subTest(sentence=sentence[:60]):
                 self.assertIn(sentence, paragraph)
+
+    def test_residual_r1_excepts_a_ticket_the_user_names_as_a_spec_s_ticket(self):
+        # R1 as amended: the no-checklist rule covers only a ticket neither linked nor named as a spec's ticket.
+        text = self.text(self.REFERENCES / "plan-review.md")
+        self.assertNotIn(self.NO_SPEC_REPLACED, text)
+        self.assertIn(self.RECOGNITION, text)
+        self.assertLess(text.index(self.RECOGNITION), text.index(self.NO_SPEC[1]))
+        decision = self.text(config.ROOT / "docs" / "adr" / "0012-claims-are-decided-by-what-the-user-names.md")
+        consequences = decision.split("## Consequences", 1)[1]
+        for sentence in self.ADR_R1:
+            with self.subTest(adr=sentence[:60]):
+                self.assertIn(sentence, consequences)
+        self.assertNotIn(self.ADR_R1_REPLACED, decision)
 
     def test_the_checklist_follows_the_named_plan_rules_and_precedes_classification(self):
         # The checklist builds on the named-Plan cases and comes before the classification paragraph.
@@ -4969,26 +5009,35 @@ class SpecChecklistTests(unittest.TestCase):
          "A reviewer follows a citation to the cited part only, and a citation that does not resolve to exactly one part "
          "of the spec is a blocker at plan review.",
          "審查者只會順著引用讀到被引用的那個部分；引用無法對應到 spec 中恰好一個部分時，在計畫審查就是阻擋事項。"),
-        # S12: the checklist's limits.
+        # S12: the checklist's limits, with S13's exception (added 2026-10-13).
         ("Checklist limits", "檢查清單的限制",
          "the checklist runs at plan review, on the spec and tickets as written then; its coverage check runs only when "
          "the named and finished tickets are all of the spec's tickets; the spec is not a claim's acceptance, so a "
-         "ticket's reviews after plan review read only the ticket and the spec parts it cites; and these rules are "
-         "instructions to the model, not enforced by any tool.",
+         "ticket's reviews after plan review read only the ticket and the spec parts it cites, except that a ticket "
+         "implemented or reviewed without a READY for its plan in this session reads the whole spec, as What a review "
+         "reads says; and these rules are instructions to the model, not enforced by any tool.",
          "檢查清單在計畫審查時執行，看的是當時寫下的 spec 與 ticket；涵蓋檢查只在指名與已完成的 ticket 就是 spec 的全部 ticket "
-         "時執行；spec 不是 claim 的驗收條件，所以計畫審查之後，ticket 的各項審查只讀該 ticket 與它引用的 spec 部分；這些規則是"
-         "給模型的指示，沒有任何工具強制執行。"),
-        # Residual R1.
+         "時執行；spec 不是 claim 的驗收條件，所以計畫審查之後，ticket 的各項審查只讀該 ticket 與它引用的 spec 部分，但在這個 "
+         "session 沒有它的計畫的 READY 就被實作或審查的 ticket 會讀整份 spec，如「審查讀什麼」所述；這些規則是給模型的指示，沒有"
+         "任何工具強制執行。"),
+        # Residual R1 (amended 2026-10-13).
         ("A ticket that belongs to no spec", "不屬於任何 spec 的 ticket",
-         ", with no `Spec:` line, parent reference or shared directory linking it to one, is its own plan and gets no "
-         "checklist: naming it is your agreement to it.",
-         "（沒有 `Spec:` 行、parent 參照或同一個目錄把它連到某份 spec）自成一份計畫，不做檢查清單：指名它就代表你同意它。"),
+         ", with no `Spec:` line, parent reference or shared directory linking it to one and not named by you as a "
+         "ticket of a spec, is its own plan and gets no checklist: naming it is your agreement to it. A ticket you name "
+         "as a ticket of a spec is a ticket of that spec, as Finding the tickets says.",
+         "（沒有 `Spec:` 行、parent 參照或同一個目錄把它連到某份 spec，你也沒有把它指名為某份 spec 的 ticket）自成一份計畫，"
+         "不做檢查清單：指名它就代表你同意它。你指名為某份 spec 的 ticket，就是那份 spec 的 ticket，如「辨識 ticket」所述。"),
     )
 
-    # The 0.22.0 bullet opening that Residual R1's statement replaces.
+    # The 0.22.0 bullet opening that Residual R1's statement replaces, the unconditional R1 bullet and the
+    # exception-free checklist limit that the 2026-10-13 amendments replaced (HEAD c40d7b6).
     README_REPLACED = (
         ("README.md", "- **A ticket that belongs to no spec** is its own plan."),
         ("README.zh-TW.md", "- **不屬於任何 spec 的 ticket** 自成一份計畫。"),
+        ("README.md", "parent reference or shared directory linking it to one, is its own plan and gets no checklist"),
+        ("README.zh-TW.md", "同一個目錄把它連到某份 spec）自成一份計畫"),
+        ("README.md", "read only the ticket and the spec parts it cites; and these rules"),
+        ("README.zh-TW.md", "只讀該 ticket 與它引用的 spec 部分；這些規則"),
     )
 
     def test_readmes_describe_the_checklist_its_limits_and_residual_r1_in_both_languages(self):
@@ -5032,7 +5081,27 @@ class ReadingSetTests(unittest.TestCase):
         "claim; no other part of a spec is supplied, and the whole spec only when the spec itself is the claim"
     )
 
-    READS = "A claim's reading set is what its implementation and every review of it read: " + CORE + "."
+    # S13 (added 2026-10-13): the exception the shared sentence gains, pointing to review state's Reading set.
+    S13_EXCEPTION = (", except for a ticket of a spec implemented or reviewed without a READY for its plan in this "
+                     "session, as ")
+    S13_POINTER = {
+        "code-review.md": "[review state](review-state.md)'s Reading set describes",
+        "outcome-verification.md": "[review state](review-state.md)'s Reading set describes",
+        "adversarial-review.md": "[review state](review-state.md)'s Reading set describes",
+        "review-state.md": "described below",
+        "SKILL.md": "[review state](references/review-state.md)'s Reading set describes",
+    }
+
+    # The unconditional ending the exception replaced (HEAD c40d7b6).
+    UNCONDITIONAL = "the whole spec only when the spec itself is the claim."
+
+    @classmethod
+    def core(cls, place):
+        return cls.CORE + cls.S13_EXCEPTION + cls.S13_POINTER[place]
+
+    @classmethod
+    def reads(cls, place):
+        return "A claim's reading set is what its implementation and every review of it read: " + cls.core(place) + "."
 
     # Code review finding B1 (FIX): a claim of a plan that is neither a spec nor tickets of a spec keeps reading the
     # whole plan, its shared decisions and Out of Scope lines included.
@@ -5097,9 +5166,34 @@ class ReadingSetTests(unittest.TestCase):
 
     ADVERSARIAL = (
         "The security invariants and test targets the brief carries are exactly those written in " + SOURCES + ", never "
-        "another claim's, together with any target the user's own command arguments name as step 3 allows, and the "
-        "brief also carries every finding or disposition main gave the claim's implementer, with any secret, credential "
-        "or real data masked as step 7 requires."
+        "another claim's except as the next sentence adds for a composed review, together with any target the user's "
+        "own command arguments name as step 3 allows, and the brief also carries every finding or disposition main gave "
+        "the claim's implementer, with any secret, credential or real data masked as step 7 requires."
+    )
+
+    # The exception-free wording the composed-review exception replaced (HEAD c40d7b6).
+    ADVERSARIAL_REPLACED = "never another claim's, together with any target"
+
+    # S4's composed-review sentence (added 2026-10-13, T03 Adversarial F1): step 2 carries the accepted claim's
+    # invariants and targets, from this session's record or, without recorded content, from its text and cited parts
+    # at its accepted commit; recorded and labelled; step 6 accepts HELD only if they are covered; step 9 points to it.
+    COMPOSED = (
+        "When the claim owns the composed review of a revision whose changes share security assumptions with an already "
+        "accepted claim, as step 9 describes, its brief also carries that accepted claim's security invariants and test "
+        "targets, taken from that claim's reading set as recorded in this session or, when this session holds no "
+        "recorded content for it (only a hash, or no record, as for a claim accepted in an earlier session), from that "
+        "claim's text and the parts it cites at the commit where it was accepted, checked against any recorded hash; "
+        "main records them with the owning claim's reading set, labelled with their source, and accepts a HELD only if "
+        "they are covered too, as step 6 describes."
+    )
+    COMPOSED_HELD = (
+        "For a composed review, this check also covers the accepted claim's security invariants and test targets that "
+        "step 2 adds: a HELD is accepted only if they are covered too, and one that leaves any of them uncovered is "
+        "treated as INCONCLUSIVE with each uncovered one open."
+    )
+    COMPOSED_STEP_9 = (
+        "The new claim's brief also carries the accepted claim's security invariants and test targets, as step 2 "
+        "describes, and its HELD is accepted only if they are covered too, as step 6 describes."
     )
 
     # Replaced pre-fix wording (HEAD e26c9d0): invariants and targets taken from the whole reading set, which for a
@@ -5126,9 +5220,12 @@ class ReadingSetTests(unittest.TestCase):
     )
 
     # S5: review state records and confirms the reading set.
+    REVIEW_STATE_READS = ("A claim's reading set is what its implementation and every review of it read: " + CORE
+                          + S13_EXCEPTION + S13_POINTER["review-state.md"] + ".")
+
     READING_SET = (
-        "- **Reading set.** " + READS,
-        READS + " " + WHOLE_PLAN,
+        "- **Reading set.** " + REVIEW_STATE_READS,
+        REVIEW_STATE_READS + " " + WHOLE_PLAN,
         "Citations are as [plan review](plan-review.md) defines them, and a `Spec:` line, a parent reference or a shared "
         "directory brings in no part of a spec.",
         "A Security-critical claim's security invariants and test targets are those written in " + SOURCES + "; a claim "
@@ -5136,12 +5233,27 @@ class ReadingSetTests(unittest.TestCase):
         "When plan review returns READY, main records each claim's reading set, by content or by hash; when no READY was "
         "given for the claim in this session, as in off mode, after a waived plan review or for an explicit call, main "
         "records it at the claim's first dispatch in this session.",
+        # S5 as amended (2026-10-13): briefs use only the recorded set, except as S4's composed-review sentence adds.
         "Before dispatching the claim's implementation or any of its reviews, main confirms that the reading set is "
-        "unchanged, and the briefs use only the recorded reading set.",
+        "unchanged, and the briefs use only the recorded reading set, except as [adversarial review]"
+        "(adversarial-review.md) step 2 adds for a claim that owns a composed review.",
         "The status and note main writes under Ticket status are not a change to the reading set.",
         "A change the user did not authorise is a material deviation, as [plan review](plan-review.md) step 5 describes; "
         "after a change the user authorises, main records the changed reading set before the claim's next dispatch.",
     )
+
+    # S13 (added 2026-10-13): without a READY for its plan in this session, a ticket of a spec reads the whole spec,
+    # recorded and compared as its reading set, while its invariants and targets stay those S4 names.
+    S13 = (
+        "When a ticket of a spec is implemented or reviewed without a READY for its plan in this session, as in off mode, "
+        "after a waived plan review or for an explicit call, the checklist has not passed, so its implementation and "
+        "every review of it read the whole spec as context, as before cc-feather 0.23.0, and main records and compares "
+        "the ticket and the whole spec as its reading set, while its security invariants and test targets stay those "
+        "named above."
+    )
+
+    # The exception-free S5 sentence the composed-review exception replaced (HEAD c40d7b6).
+    S5_REPLACED = "and the briefs use only the recorded reading set."
 
     PLAN_REVIEW_READY = ("Main records each claim's reading set at that READY, as [review state](review-state.md)'s "
                          "Reading set describes.")
@@ -5149,7 +5261,7 @@ class ReadingSetTests(unittest.TestCase):
     # Acceptance item 4: the implementing Assignment's brief carries the same material.
     IMPLEMENTING = (
         "The brief of an Assignment that implements a claim carries the claim's reading set, as [review state]"
-        "(references/review-state.md)'s Reading set describes: " + CORE + ".",
+        "(references/review-state.md)'s Reading set describes: " + CORE + S13_EXCEPTION + S13_POINTER["SKILL.md"] + ".",
         WHOLE_PLAN,
         "Citations are as [plan review](references/plan-review.md) defines them.",
         "This is the same material the claim's code review, outcome verification and Adversarial review read; main "
@@ -5166,11 +5278,11 @@ class ReadingSetTests(unittest.TestCase):
     def test_each_review_states_what_a_claim_s_reviews_read(self):
         for name in self.REVIEWS:
             step = self.step(name, 2)
-            for sentence in (self.SUPPLY[name], self.READS, self.CITES, self.RECORDED):
+            for sentence in (self.SUPPLY[name], self.reads(name), self.CITES, self.RECORDED):
                 with self.subTest(procedure=name, sentence=sentence[:60]):
                     self.assertIn(sentence, step)
             with self.subTest(procedure=name, part="order"):
-                self.assertLess(step.index(self.SUPPLY[name]), step.index(self.READS))
+                self.assertLess(step.index(self.SUPPLY[name]), step.index(self.reads(name)))
 
     def test_a_claim_of_a_non_spec_plan_reads_the_whole_plan(self):
         # B1: the whole plan, right after the material it widens and before the citation rule, in every place a
@@ -5181,16 +5293,55 @@ class ReadingSetTests(unittest.TestCase):
         places["SKILL.md"] = skill.split("## Dispatch", 1)[1].split("\n## ", 1)[0]
         for name, text in places.items():
             with self.subTest(place=name):
-                self.assertIn(self.CORE + ". " + self.WHOLE_PLAN + " Citations are as ", text)
+                self.assertIn(self.core(name) + ". " + self.WHOLE_PLAN + " Citations are as ", text)
+
+    def test_the_whole_spec_rule_names_s13_s_exception_everywhere(self):
+        # S13: every place that states the shared material gains the exception; the unconditional ending is gone.
+        places = {name: self.text(self.REFERENCES / name) for name in self.REVIEWS + ("review-state.md",)}
+        places["SKILL.md"] = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        for name, text in places.items():
+            with self.subTest(place=name):
+                self.assertIn(self.core(name), text)
+                self.assertNotIn(self.UNCONDITIONAL, text)
+
+    def test_a_ticket_without_a_ready_reads_the_whole_spec(self):
+        # S13: stated once, in review state's Reading set, after the no-READY recording rule it extends and before
+        # the confirmation it feeds; its invariants and targets stay those S4 names.
+        bullet = feather_support.review_rules_source("review-state.md#Reading set")
+        self.assertIn(self.S13, bullet)
+        self.assertLess(bullet.index(self.READING_SET[4]), bullet.index(self.S13))
+        self.assertLess(bullet.index(self.S13), bullet.index(self.READING_SET[5]))
+        self.assertLess(bullet.index(self.READING_SET[3]), bullet.index(self.S13))
+        self.assertNotIn(self.S5_REPLACED, bullet)
+
+    def test_a_composed_review_carries_the_accepted_claim_s_invariants_and_targets(self):
+        # S4's composed-review sentence: step 2 carries them right after the exception it adds, step 6 checks HELD
+        # against them, and step 9 points to both.
+        step_2 = self.step("adversarial-review.md", 2)
+        self.assertIn(self.ADVERSARIAL + " " + self.COMPOSED, step_2)
+        self.assertNotIn(self.ADVERSARIAL_REPLACED, step_2)
+        step_6 = self.step("adversarial-review.md", 6)
+        self.assertIn(self.COMPOSED_HELD, step_6)
+        self.assertLess(step_6.index("Before accepting a HELD, main checks it against every security invariant"),
+                        step_6.index(self.COMPOSED_HELD))
+        step_9 = self.step("adversarial-review.md", 9)
+        self.assertIn(self.COMPOSED_STEP_9, step_9)
+        # The other procedures keep "never another claim's" without the composed-review exception.
+        for name in ("code-review.md", "outcome-verification.md"):
+            with self.subTest(procedure=name):
+                self.assertNotIn("composed review", self.step(name, 2))
 
     def test_the_single_ticket_spec_as_context_is_gone(self):
         for name, sentence in self.REPLACED:
             with self.subTest(procedure=name, removed=sentence[:50]):
                 self.assertNotIn(sentence, self.text(self.REFERENCES / name))
         for name in self.REVIEWS + ("plan-review.md", "review-state.md"):
+            # S13 (added 2026-10-13) reads the whole spec as context only for a ticket without a READY for its plan in
+            # this session; that one sentence is the only place the phrase may return.
+            text = self.text(self.REFERENCES / name).replace(self.S13, "")
             with self.subTest(procedure=name, removed="spec as context"):
-                self.assertNotIn("spec as context", self.text(self.REFERENCES / name))
-                self.assertNotIn("spec supplied as context", self.text(self.REFERENCES / name))
+                self.assertNotIn("spec as context", text)
+                self.assertNotIn("spec supplied as context", text)
         # The kept single-ticket sentence still reads as one: the Plan, its one Claim, and the named-ticket checks.
         self.assertIn("A single named ticket is the plan and its one claim; plan review treats it as a named ticket of "
                       "its spec,", self.text(self.REFERENCES / "plan-review.md"))
@@ -5282,10 +5433,32 @@ class ReadingSetTests(unittest.TestCase):
          "that limits it, and, only for a claim a spec lists, the parts the spec says hold for every claim.",
          "claim 的程式碼審查、結果驗證與對抗式審查，以及實作它的角色，讀的是同一組閱讀範圍：claim 所寫的文字與它引用的 spec 部分，"
          "包括限制它的 Out of Scope 條目；只有 spec 自己列出的 claim，才另外讀 spec 聲明適用於每個 claim 的部分。"),
+        # S13 (added 2026-10-13): the whole spec for a ticket without a READY for its plan in this session.
         ("What a review reads", "審查讀什麼",
-         "The whole spec is read only when the spec itself is the claim; a ticket's `Spec:` line records where the ticket "
-         "came from and brings no part of the spec in.",
-         "只有 spec 本身就是 claim 時才讀整份 spec；ticket 的 `Spec:` 行只記錄 ticket 從哪裡來，不會帶進 spec 的任何部分。"),
+         "The whole spec is read only when the spec itself is the claim, except as the next sentence says; a ticket's "
+         "`Spec:` line records where the ticket came from and brings no part of the spec in. When a ticket of a spec is "
+         "implemented or reviewed without a READY for its plan in this session, as in `off`, after a waived plan review "
+         "or for an explicit call, the checklist has not passed, so its implementer and reviewers read the whole spec as "
+         "context, as before 0.23.0, and main records and compares the ticket and the whole spec as its reading set, "
+         "while its security invariants and test targets stay those named below.",
+         "只有 spec 本身就是 claim 時才讀整份 spec，下一句所說的情況除外；ticket 的 `Spec:` 行只記錄 ticket 從哪裡來，不會帶進 "
+         "spec 的任何部分。某份 spec 的 ticket 在這個 session 沒有它的計畫的 READY 就被實作或審查時（例如 `off`、豁免了計畫審查，"
+         "或明確要求的呼叫），檢查清單並未通過，所以實作者與審查者會把整份 spec 當作背景來讀，和 0.23.0 之前一樣，主 Agent 也把"
+         "該 ticket 與整份 spec 當作它的閱讀範圍來記錄與比對；它的安全不變條件與測試目標仍是下面所說的那些。"),
+        # S4's composed-review sentence (added 2026-10-13).
+        ("What a review reads", "審查讀什麼",
+         "The one exception is a composed review: when a claim owns the composed review of changes that share security "
+         "assumptions with an already accepted claim, its Adversarial review brief also carries that accepted claim's "
+         "security invariants and test targets, taken from that claim's reading set as recorded in this session or, "
+         "without recorded content (only a hash, or no record, as for a claim accepted in an earlier session), from that "
+         "claim's text and the parts it cites at the commit where it was accepted, checked against any recorded hash; "
+         "main records them with the owning claim's reading set, labelled with their source, and accepts HELD only if "
+         "they are covered too.",
+         "唯一的例外是組合後版本的審查：某個 claim 負責審查與已驗收的 claim 共用安全假設的變更組合後的版本時，它的對抗式審查 "
+         "brief 也會帶上那個已驗收 claim 的安全不變條件與測試目標，取自這個 session 記錄的該 claim 閱讀範圍；沒有記錄內容時"
+         "（只有雜湊，或沒有記錄，例如在先前 session 驗收的 claim），則取自該 claim 驗收時那個 commit 上它的文字與它引用的部分，"
+         "並與任何已記錄的雜湊核對；主 Agent 把它們連同負責審查的 claim 的閱讀範圍一起記錄，並標明來源，而且只有它們也都涵蓋到時"
+         "才接受 HELD。"),
         # B1: a non-spec plan's claim reads the whole plan.
         ("What a review reads", "審查讀什麼",
          "For a claim of a plan that is neither a spec nor tickets of a spec, such as a plan file, a plan-mode plan or a "
@@ -5334,6 +5507,9 @@ class ReadingSetTests(unittest.TestCase):
         # Replaced pre-fix wording (HEAD e26c9d0): the invariants and targets as everything the reading set holds.
         ("README.md", "exactly those written there"),
         ("README.zh-TW.md", "恰好就是寫在這組範圍裡的那些"),
+        # The unconditional whole-spec sentence S13's exception replaced (HEAD c40d7b6).
+        ("README.md", "The whole spec is read only when the spec itself is the claim;"),
+        ("README.zh-TW.md", "只有 spec 本身就是 claim 時才讀整份 spec；"),
     )
 
     def test_readmes_state_what_a_review_reads_in_both_languages(self):
@@ -5418,16 +5594,24 @@ class DraftingSpecTests(unittest.TestCase):
         "checklist does, not only the claim's reading set."
     )
 
-    # S7: off mode classifies before dispatch (kept), and an executor's reported Security-critical change is routed.
-    OFF_MODE = "In off mode, main classifies before dispatching the implementation, so that Security-critical work is " \
-               "routed to security-executor."
+    # S7 (amended 2026-10-13): off mode classifies before dispatching or starting the implementation, main's own work
+    # included, and an executor's reported Security-critical change is routed.
+    OFF_MODE = "In off mode, main classifies a plan's claims before dispatching or starting their implementation, " \
+               "main's own work included, so that Security-critical work is routed to security-executor."
     EXECUTOR_REPORT = "In either mode, a Security-critical change an executor reports goes to security-executor."
 
     SKILL_OFF_MODE = (
         "A Security-critical claim is a claim whose outcome includes a Security-critical change; classify claims as "
-        "[plan review](references/plan-review.md) describes, in off mode too, before dispatching their implementation."
+        "[plan review](references/plan-review.md) describes, in off mode too, before dispatching or starting their "
+        "implementation, main's own work included."
     )
     SKILL_EXECUTOR_REPORT = "In off mode too, a Security-critical change an executor reports goes to security-executor."
+
+    # The dispatch-only off-mode wording S7's amendment replaced (HEAD c40d7b6).
+    OFF_MODE_REPLACED = (
+        ("plan-review.md", "In off mode, main classifies before dispatching the implementation"),
+        ("SKILL.md", "in off mode too, before dispatching their implementation."),
+    )
 
     # Replaced 0.22.0 wording: marking in any plan main writes.
     REPLACED = "Main marks each Security-critical claim in a plan it writes."
@@ -5449,6 +5633,15 @@ class DraftingSpecTests(unittest.TestCase):
                          if block.startswith("For requested security analysis or a Security-critical change,"))
         self.assertIn(self.SKILL_OFF_MODE, skill)
         self.assertIn(self.SKILL_EXECUTOR_REPORT, paragraph)
+
+    def test_off_mode_classification_covers_starting_main_s_own_work(self):
+        # S7 as amended: the dispatch-only wording is gone from both places that stated it.
+        texts = {"plan-review.md": self.text(self.REFERENCES / "plan-review.md"),
+                 "SKILL.md": self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")}
+        for name, sentence in self.OFF_MODE_REPLACED:
+            with self.subTest(place=name, removed=sentence[:50]):
+                self.assertNotIn(sentence, texts[name])
+        self.assertIn(self.OFF_MODE, self.classification_paragraph())
 
     # S4, writing side: accepted controls and test targets go where the claim's reading set reaches.
     WRITTEN_INTO_THE_CLAIM = (
@@ -5508,10 +5701,10 @@ class DraftingSpecTests(unittest.TestCase):
         ("Main marks each Security-critical claim when it writes a plan it proposes itself, such as the plan that "
          "unplanned work needs, whatever its form; it classifies the claims of any other plan, such as a spec you wrote "
          "or one main drafted for you, before its first plan review in the session or, for implemented work, before its "
-         "code review, and in `off` before dispatching their implementation.",
+         "code review, and in `off` before dispatching or starting their implementation, main's own work included.",
          "主 Agent 寫自己提出的計畫時（例如沒有計畫的工作所需要的計畫，不論形式），會在其中標出每個安全關鍵 claim；其他計畫（例如你寫的 "
          "spec，或主 Agent 替你草擬的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類，`off` 下則在派出"
-         "實作前分類。"),
+         "或開始實作前分類，主 Agent 自己做的工作也一樣。"),
         ("Classifying a ticket's claim reads the ticket and its whole spec, not only the parts it cites.",
          "分類 ticket 的 claim 時，會讀該 ticket 與它的整份 spec，不只它引用的部分。"),
         ("A Security-critical change an executor reports also goes to security-executor.",
@@ -5526,6 +5719,9 @@ class DraftingSpecTests(unittest.TestCase):
     README_REPLACED = (
         ("README.md", "Main marks each Security-critical claim in a plan it writes"),
         ("README.zh-TW.md", "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim"),
+        # S7 as amended: the dispatch-only off-mode timing (HEAD c40d7b6).
+        ("README.md", "in `off` before dispatching their implementation."),
+        ("README.zh-TW.md", "`off` 下則在派出實作前分類。"),
     )
 
     def test_readmes_state_the_drafting_rule_and_when_claims_are_classified_in_both_languages(self):
@@ -5557,7 +5753,8 @@ class DraftingSpecTests(unittest.TestCase):
     GLOSSARY = {
         "Security-critical claim": (
             "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
-            "before the Plan's first review and before its implementation is dispatched.",
+            "before the Plan's first review and before its implementation is dispatched or started, main's own work "
+            "included.",
             "A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
         "Claim": ("A spec lists Claims only when the user asked for them.",),

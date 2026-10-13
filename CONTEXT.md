@@ -21,7 +21,7 @@ A change to a security guarantee at a trust boundary, or to the implementation o
 _Avoid_: security boundary change, sensitive change
 
 **Security-critical claim**:
-A Claim whose outcome includes a Security-critical change. It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, before the Plan's first review and before its implementation is dispatched. A spec main drafts at the user's request is not a Plan main proposes itself.
+A Claim whose outcome includes a Security-critical change. It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, before the Plan's first review and before its implementation is dispatched or started, main's own work included. A spec main drafts at the user's request is not a Plan main proposes itself.
 _Avoid_: security claim
 
 **Claim**:
