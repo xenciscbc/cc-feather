@@ -37,6 +37,8 @@ For requested security analysis or a Security-critical change, give analyst a re
 
 Give the child a goal, relevant context, scope/exclusions, constraints, expected deliverable and acceptance checks. Assign exclusive file ownership for writes and capture the relevant pre-dispatch state for later comparison. Tell every child to complete its own assignment without delegating; writers must preserve other contributors' changes.
 
+The brief of an Assignment that implements a claim carries the claim's reading set, as [review state](references/review-state.md)'s Reading set describes: the text the claim is written in and the parts of a spec it cites, an Out of Scope line that limits what the claim may change included, and, only for a claim a spec lists, the spec's parts that state they hold for every claim; no other part of a spec is supplied, and the whole spec only when the spec itself is the claim. Citations are as [plan review](references/plan-review.md) defines them. This is the same material the claim's code review, outcome verification and Adversarial review read; main confirms it unchanged before dispatch and supplies only the reading set it recorded. For a Security-critical claim, the brief carries exactly the security invariants and test targets written in that reading set, and any finding or disposition main gives the implementer also goes to the claim's code review, outcome verification and Adversarial review.
+
 Parallelize only independent work without shared mutable conflicts. Isolate overlapping checkout risks in separate worktrees or serialize writers. Wait for the previous owner to stop before taking over or reassigning its files; pass its findings and current state to the next owner.
 
 ## Accept or recover

@@ -3987,6 +3987,9 @@ class FeatherConfigTests(unittest.TestCase):
                       "a `Spec:` line, a parent reference or a shared directory is not a citation"),
         "Checklist limits": ("檢查清單的限制", "the checklist runs at plan review", "檢查清單在計畫審查時執行",
                              "plan-review.md", "a ticket's reviews after plan review do not read the parts of the spec"),
+        # Claims at implementation ticket 03: what a claim's reviews and implementation read.
+        "What a review reads": ("審查讀什麼", "read the same reading set", "讀的是同一組閱讀範圍",
+                                "code-review.md", "A claim's reading set is what its implementation and every review of it read"),
         "Already covered": ("已涵蓋", "that plan continues with no new plan review", "不重做計畫審查",
                             "plan-review.md", "otherwise that plan continues with no new plan review"),
         "Partial overlap": ("部分重疊", "gains no new automatic calls", "不會多出新的自動呼叫",
@@ -4985,6 +4988,264 @@ class SpecChecklistTests(unittest.TestCase):
         for name, sentence in self.README_REPLACED:
             with self.subTest(readme=name, removed=sentence[:40]):
                 self.assertNotIn(sentence, self.text(config.ROOT / name))
+
+
+class ReadingSetTests(unittest.TestCase):
+    """0.23.0 ticket 03 (docs/specs/claims-at-implementation.md, Acceptance item 4, the `Spec:` part of item 10 and the
+    parts of items 11 and 12 for this rule, Implementation Decisions "Where the rules live" and "Citations", Testing
+    Decisions, S1, S3, S4, S5 and S12): what a Claim's reviews and implementation read."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+    REVIEWS = ("code-review.md", "outcome-verification.md", "adversarial-review.md")
+
+    @classmethod
+    def text(cls, path):
+        return path.read_text(encoding="utf-8")
+
+    @classmethod
+    def step(cls, name, number):
+        return next(line for line in cls.text(cls.REFERENCES / name).splitlines() if line.startswith(f"{number}. "))
+
+    @classmethod
+    def readme_bullets(cls, name):
+        text = cls.text(config.ROOT / name)
+        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
+                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+        return dict(feather_support.readme_rule_bullets(text, start, end))
+
+    # Acceptance item 4, S1 and S3: the material, stated in the same words wherever a brief is built from it.
+    CORE = (
+        "the text the claim is written in and the parts of a spec it cites, an Out of Scope line that limits what the "
+        "claim may change included, and, only for a claim a spec lists, the spec's parts that state they hold for every "
+        "claim; no other part of a spec is supplied, and the whole spec only when the spec itself is the claim"
+    )
+
+    READS = "A claim's reading set is what its implementation and every review of it read: " + CORE + "."
+
+    # Implementation Decisions "Citations": ticket 02's definition, used by reference.
+    CITES = (
+        "Citations are as [plan review](plan-review.md) defines them, so a `Spec:` line, a parent reference or a shared "
+        "directory brings in no part of a spec, and the brief tells the role to follow a citation to the cited part only."
+    )
+
+    # S5: confirmed unchanged before dispatch; briefs use only the recorded set.
+    RECORDED = (
+        "Before dispatch, main confirms that the reading set is unchanged and supplies only the reading set it recorded, "
+        "as [review state](review-state.md)'s Reading set describes."
+    )
+
+    # The step-2 sentences that now name the reading set where the single ticket's spec was context.
+    SUPPLY = {
+        "code-review.md": "Supply the claim as identified for the plan (see [plan review](plan-review.md)), its reading "
+                          "set, the base revision to diff against, the file scope including untracked new files, and the "
+                          "acceptance results.",
+        "outcome-verification.md": "Supply the exact claim as identified for the plan (see [plan review](plan-review.md)) "
+                                   "with the claim's acceptance checks, its reading set, the relevant diff or paths and the "
+                                   "commands main ran.",
+        # Kept and pinned: the Adversarial review brief keeps carrying the invariants and targets (S4).
+        "adversarial-review.md": "Supply the claim as identified for the plan (see [plan review](plan-review.md)), the "
+                                 "commit under attack and its base revision, the claim's security invariants, each test "
+                                 "target with where it runs (host, container or virtual machine), the environment "
+                                 "variables it starts with, how to start and reset it, its synthetic data, its allowed "
+                                 "effects and the dependencies it can reach, any isolated environment the user named for "
+                                 "it, and the gaps earlier calls for this claim left open.",
+    }
+
+    # S4: exactly the invariants and targets in the reading set, and main's findings to the implementer go to reviewers.
+    SECURITY_CRITICAL = (
+        "For a Security-critical claim, the security invariants and test targets the brief carries are exactly those "
+        "written in its reading set, and the brief also carries every finding or disposition main gave the claim's "
+        "implementer, masked and limited as [Adversarial review](adversarial-review.md) step 7 sets for findings it "
+        "passes to code review or outcome verification."
+    )
+
+    ADVERSARIAL = (
+        "The security invariants and test targets the brief carries are exactly those written in the claim's reading "
+        "set, together with any target the user's own command arguments name as step 3 allows, and the brief also "
+        "carries every finding or disposition main gave the claim's implementer, with any secret, credential or real "
+        "data masked as step 7 requires."
+    )
+
+    # S4: a cited part is part of the approved plan for Adversarial review's targets.
+    APPROVED_PLAN = "A spec part the claim cites counts as part of the plan the user approved, for these targets."
+    KEPT_PROVENANCE = ("Every target in a brief traces to a plan the user approved or to the user's own command "
+                       "arguments.")
+
+    KEPT_INVARIANTS = "The brief for a Security-critical claim also carries its security invariants."
+
+    # Replaced 0.22.0 wording: the single ticket's spec as context, in the procedures.
+    REPLACED = (
+        ("code-review.md", "when the plan is a single ticket, its spec as context"),
+        ("code-review.md", "the plan or spec it implements"),
+        ("outcome-verification.md", "its spec as context when the plan is a single ticket"),
+        ("plan-review.md", "with its spec supplied as context to plan review, code review and outcome verification"),
+    )
+
+    # S5: review state records and confirms the reading set.
+    READING_SET = (
+        "- **Reading set.** " + READS,
+        "Citations are as [plan review](plan-review.md) defines them, and a `Spec:` line, a parent reference or a shared "
+        "directory brings in no part of a spec.",
+        "A Security-critical claim's security invariants and test targets are those written in its reading set.",
+        "When plan review returns READY, main records each claim's reading set, by content or by hash; when no READY was "
+        "given for the claim in this session, as in off mode, after a waived plan review or for an explicit call, main "
+        "records it at the claim's first dispatch in this session.",
+        "Before dispatching the claim's implementation or any of its reviews, main confirms that the reading set is "
+        "unchanged, and the briefs use only the recorded reading set.",
+        "The status and note main writes under Ticket status are not a change to the reading set.",
+        "A change the user did not authorise is a material deviation, as [plan review](plan-review.md) step 5 describes; "
+        "after a change the user authorises, main records the changed reading set before the claim's next dispatch.",
+    )
+
+    PLAN_REVIEW_READY = ("Main records each claim's reading set at that READY, as [review state](review-state.md)'s "
+                         "Reading set describes.")
+
+    # Acceptance item 4: the implementing Assignment's brief carries the same material.
+    IMPLEMENTING = (
+        "The brief of an Assignment that implements a claim carries the claim's reading set, as [review state]"
+        "(references/review-state.md)'s Reading set describes: " + CORE + ".",
+        "Citations are as [plan review](references/plan-review.md) defines them.",
+        "This is the same material the claim's code review, outcome verification and Adversarial review read; main "
+        "confirms it unchanged before dispatch and supplies only the reading set it recorded.",
+        "For a Security-critical claim, the brief carries exactly the security invariants and test targets written in "
+        "that reading set, and any finding or disposition main gives the implementer also goes to the claim's code "
+        "review, outcome verification and Adversarial review.",
+    )
+
+    # Acceptance item 10, the `Spec:` part.
+    TRACKER = ("- Each ticket starts with a `Spec: docs/specs/<feature-slug>.md` line linking it to its spec; that line "
+               "records where the ticket came from and is not a citation of the whole spec.")
+
+    def test_each_review_states_what_a_claim_s_reviews_read(self):
+        for name in self.REVIEWS:
+            step = self.step(name, 2)
+            for sentence in (self.SUPPLY[name], self.READS, self.CITES, self.RECORDED):
+                with self.subTest(procedure=name, sentence=sentence[:60]):
+                    self.assertIn(sentence, step)
+            with self.subTest(procedure=name, part="order"):
+                self.assertLess(step.index(self.SUPPLY[name]), step.index(self.READS))
+
+    def test_the_single_ticket_spec_as_context_is_gone(self):
+        for name, sentence in self.REPLACED:
+            with self.subTest(procedure=name, removed=sentence[:50]):
+                self.assertNotIn(sentence, self.text(self.REFERENCES / name))
+        for name in self.REVIEWS + ("plan-review.md", "review-state.md"):
+            with self.subTest(procedure=name, removed="spec as context"):
+                self.assertNotIn("spec as context", self.text(self.REFERENCES / name))
+                self.assertNotIn("spec supplied as context", self.text(self.REFERENCES / name))
+        # The kept single-ticket sentence still reads as one: the Plan, its one Claim, and the named-ticket checks.
+        self.assertIn("A single named ticket is the plan and its one claim; plan review treats it as a named ticket of "
+                      "its spec,", self.text(self.REFERENCES / "plan-review.md"))
+
+    def test_security_critical_briefs_carry_exactly_the_invariants_and_targets_in_the_reading_set(self):
+        for name in ("code-review.md", "outcome-verification.md"):
+            step = self.step(name, 2)
+            with self.subTest(procedure=name):
+                self.assertIn(self.KEPT_INVARIANTS + " " + self.SECURITY_CRITICAL, step)
+        step = self.step("adversarial-review.md", 2)
+        self.assertIn(self.ADVERSARIAL, step)
+        self.assertLess(step.index(self.SUPPLY["adversarial-review.md"]), step.index(self.ADVERSARIAL))
+        step_3 = self.step("adversarial-review.md", 3)
+        self.assertIn(self.KEPT_PROVENANCE + " " + self.APPROVED_PLAN, step_3)
+
+    def test_review_state_records_and_confirms_the_reading_set(self):
+        bullet = feather_support.review_rules_source("review-state.md#Reading set")
+        for sentence in self.READING_SET:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, bullet)
+        # The bullet sits in Validity and completion, after what a pass covers.
+        text = self.text(self.REFERENCES / "review-state.md")
+        section = text.split("## Validity and completion", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(bullet, section)
+        self.assertLess(section.index("- **What a pass covers.**"), section.index("- **Reading set.**"))
+        self.assertIn(self.PLAN_REVIEW_READY, self.step("plan-review.md", 5))
+
+    def test_the_implementing_brief_carries_the_same_material(self):
+        skill = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        dispatch = skill.split("## Dispatch", 1)[1].split("\n## ", 1)[0]
+        for sentence in self.IMPLEMENTING:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, dispatch)
+
+    def test_every_claim_parts_are_read_only_for_a_listed_claim(self):
+        # S1: wherever this rule names the parts that hold for every Claim, it limits them to a Claim a spec lists.
+        places = {name: self.text(self.REFERENCES / name) for name in self.REVIEWS + ("review-state.md",)}
+        places["SKILL.md"] = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        for name, text in places.items():
+            with self.subTest(place=name):
+                self.assertGreater(text.count("hold for every claim"), 0)
+                self.assertEqual(text.count("hold for every claim"),
+                                 text.count("only for a claim a spec lists, the spec's parts that state they hold for "
+                                            "every claim"))
+        claim = feather_support.glossary_entries(self.text(config.ROOT / "CONTEXT.md"))["Claim"]
+        self.assertIn("for a Claim a spec lists, the spec's parts that state they hold for every Claim", claim)
+
+    def test_the_tracker_note_says_a_spec_line_is_not_a_citation(self):
+        line = next(line for line in self.text(config.ROOT / "docs" / "agents" / "issue-tracker.md").splitlines()
+                    if line.startswith("- Each ticket starts with"))
+        self.assertTrue(line.startswith(self.TRACKER), line)
+
+    # Acceptance items 11 and 12 for this rule, and S12: both READMEs, paired.
+    README_BULLETS = (
+        ("What a review reads", "審查讀什麼",
+         "a claim's code review, outcome verification and Adversarial review, and the implementer of it, read the same "
+         "reading set: the text the claim is written in and the spec parts it cites, including any Out of Scope line "
+         "that limits it, and, only for a claim a spec lists, the parts the spec says hold for every claim.",
+         "claim 的程式碼審查、結果驗證與對抗式審查，以及實作它的角色，讀的是同一組閱讀範圍：claim 所寫的文字與它引用的 spec 部分，"
+         "包括限制它的 Out of Scope 條目；只有 spec 自己列出的 claim，才另外讀 spec 聲明適用於每個 claim 的部分。"),
+        ("What a review reads", "審查讀什麼",
+         "The whole spec is read only when the spec itself is the claim; a ticket's `Spec:` line records where the ticket "
+         "came from and brings no part of the spec in.",
+         "只有 spec 本身就是 claim 時才讀整份 spec；ticket 的 `Spec:` 行只記錄 ticket 從哪裡來，不會帶進 spec 的任何部分。"),
+        ("What a review reads", "審查讀什麼",
+         "For a Security-critical claim, the security invariants and test targets the briefs carry are exactly those "
+         "written there, and any finding main gives the implementer also goes to the reviewers.",
+         "安全關鍵 claim 的 brief 所帶的安全不變條件與測試目標，恰好就是寫在這組範圍裡的那些；主 Agent 給實作者的任何發現，"
+         "也會交給審查者。"),
+        ("What a review reads", "審查讀什麼",
+         "Main records the reading set when plan review returns READY, or at the claim's first dispatch in a session "
+         "without one, and confirms it is unchanged before each implementation or review; a change you did not "
+         "authorise is a material deviation, while the ticket status and note main writes are not a change.",
+         "主 Agent 在計畫審查回傳 READY 時記錄這組閱讀範圍，這個 session 沒有 READY 時則在該 claim 第一次派出時記錄，並在每次"
+         "實作或審查前確認它沒有改變；未經你授權的變更是重大偏離，主 Agent 自己寫的 ticket 狀態與註記則不算變更。"),
+        # S12: the limit of this rule.
+        ("What a review reads", "審查讀什麼",
+         "These are instructions to the model: a role can still open the whole spec file, and only its brief keeps it to "
+         "the cited parts.",
+         "這些是給模型的指示：角色仍可能打開整份 spec 檔案，只有它的 brief 讓它停在被引用的部分。"),
+        ("A single ticket", "單一 ticket",
+         "that ticket is the plan and its one claim. Plan review treats it",
+         "該 ticket 就是計畫，也是它唯一的 claim。計畫審查把它當作"),
+        ("Example", "例子",
+         "\"Implement ticket 02\" in a fresh session makes ticket 02 the plan and its one claim, whose reviews read ticket "
+         "02 and the parts of `login.md` it cites.",
+         "在新 session 中「實作 ticket 02」，則 ticket 02 是計畫，也是它唯一的 claim，它的審查讀 ticket 02 與它引用的 "
+         "`login.md` 部分。"),
+    )
+
+    # Replaced 0.22.0 README wording: the single ticket's spec as context, and the example's `login.md` as context.
+    README_REPLACED = (
+        ("README.md", "with its spec given as context to plan review, code review and outcome verification"),
+        ("README.md", "with `login.md` as context"),
+        ("README.zh-TW.md", "其 spec 作為背景提供給計畫審查、程式碼審查與結果驗證"),
+        ("README.zh-TW.md", "`login.md` 作為背景"),
+    )
+
+    def test_readmes_state_what_a_review_reads_in_both_languages(self):
+        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        for label, zh_label, en, zh in self.README_BULLETS:
+            with self.subTest(label=label, sentence=en[:50]):
+                self.assertIn(en, english[label])
+                self.assertIn(zh, chinese[zh_label])
+        for name, sentence in self.README_REPLACED:
+            with self.subTest(readme=name, removed=sentence[:40]):
+                self.assertNotIn(sentence, self.text(config.ROOT / name))
+        # The new bullet follows the citation definition it relies on.
+        for name, citations, reads in (("README.md", "- **Citations:**", "- **What a review reads:**"),
+                                       ("README.zh-TW.md", "- **引用：**", "- **審查讀什麼：**")):
+            text = self.text(config.ROOT / name)
+            with self.subTest(readme=name, part="order"):
+                self.assertLess(text.index(citations), text.index(reads))
 
 
 if __name__ == "__main__":
