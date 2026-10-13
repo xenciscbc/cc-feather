@@ -301,9 +301,11 @@ class RepositorySafetyTests(unittest.TestCase):
         "as none declared or defined; any other exit leaves the answer not established, so main dispatches nothing, "
         "performs no operation under Before add, commit, tag or push, and reports it.",
     )
+    # Code review call 3 of C2, NB-1 and NB-2: the include-less read of every scope, for outcome 1 only.
     CONFIG_ROW = (
         "| Configuration reads | `" + CONFIG_LIST_FORM + "` with `--local` and with `--worktree`, which follows no "
-        "include; and `" + CONFIG_KEYS_FORM + "`, in every scope, for only the keys of the effective configuration that "
+        "include, and, for outcome 1 of Main's preparation only, without a scope option, which reads every scope and, "
+        "since it follows no include either, may list the whole configuration; and `" + CONFIG_KEYS_FORM + "`, in every scope, for only the keys of the effective configuration that "
         "a pattern given below names |"
     )
     # The row that read the whole effective configuration, includes followed.
@@ -521,10 +523,11 @@ class RepositorySafetyTests(unittest.TestCase):
         "the call proceed, the call is not dispatched and the claim is reported blocked, and main never assumes a choice "
         "the user has not made:"
     )
-    # Adversarial review of C2 call 1, finding B1: an origin the `--show-origin` read prints is judged by its canonical
-    # path, never by the printed text, which can be relative or reach a working-tree file through a link; an origin main
-    # cannot resolve or classify counts as one inside the working tree.
-    ORIGIN_RULE = (
+    # Code review call 3 of C2, findings NB-1 and NB-2: the origin rule of Adversarial review call 1's finding B1 judged
+    # each origin by its canonical path under the file system's case rules; a committed link the user's include names, a
+    # chained include of a file under the Git directory, or a wrong case rule classified a working-tree origin as outside
+    # the working tree, so outcome 1 failed open. It is gone, case rule included.
+    ORIGIN_RULE_REMOVED = (
         "Main judges each origin that read prints by its canonical path, never by the printed text: an origin printed as "
         "a relative path is resolved against the directory Git reports it relative to, the repository's top level, even "
         "when Git runs in a subdirectory; every symbolic link, junction or other reparse point on the way is resolved; "
@@ -533,6 +536,23 @@ class RepositorySafetyTests(unittest.TestCase):
         "An origin whose canonical path lies inside the project and outside the canonical path of the Git directory is a "
         "file inside the working tree, and an origin main cannot resolve or classify counts as one inside the working "
         "tree, so that outcome 1 does not apply.",
+    )
+    # Code review call 3 of C2, NB-1 and NB-2 as main disposed them: outcome 1 compares the read of the filter-driver keys
+    # that follows includes with the read of every scope that follows none, entry for entry, and needs no path judgement;
+    # any key an include supplies for a driver the compared paths name, wherever the included file lies, is a difference.
+    INCLUDE_RULE = (
+        "Main compares the two reads entry for entry and never judges where an included file lies, so a key for such a "
+        "driver that an include supplies is a difference whether the included file lies in the working tree, in the Git "
+        "directory or outside the project; any difference, or a read whose result main cannot establish, means outcome "
+        "1 does not apply.",
+        "A user whose settings for such a driver come through an include therefore gets the choices of outcome 2, for "
+        "example to move those settings into the configuration file itself, as outcome 3.",
+    )
+    # Code review call 3 of C2, NB-1: the condition outcome 1 replaced, which an include of a committed link or a chained
+    # include of a file under the Git directory passed.
+    OUTCOME_RUN_REMOVED = (
+        "and no key that defines a driver the compared paths' filters name has its origin in a file inside the working "
+        "tree, as the read of the filter-driver keys, which carries `--show-origin`, shows.",
     )
     # Adversarial review of C2 call 1, finding N3: after an unattributable difference only the driver reveals, no
     # further path is hashed with a driver for that call.
@@ -545,9 +565,12 @@ class RepositorySafetyTests(unittest.TestCase):
         "running a driver was written by the user or in this session, as Execution decides who wrote a change, "
         "established only from the untracked listing of those paths, the index listing compared with the reviewed commit's tree listing and, for a path whose filter "
         "names no defined driver, the content hash above, so that untracked or uncommitted content main cannot attribute "
-        "fails this condition; and no key that defines a driver the compared paths' filters name has its origin in a "
-        "file inside the working tree, as the read of the filter-driver keys, which carries `--show-origin`, shows.",
-        *ORIGIN_RULE,
+        "fails this condition; and, for every driver the compared paths' filters name, the read of the filter-driver "
+        "keys, which follows includes and carries `--show-origin`, and the configuration read of every scope that "
+        "follows no include, the form Safe Git invocation lists for outcome 1, both made for that call, report exactly "
+        "the same entries for that driver, each with the same scope, origin, key and value and in the same order, so "
+        "that no key that defines the driver is added, changed or overridden by any include.",
+        *INCLUDE_RULE,
         "Content of the reviewed commit that the change leaves unchanged, such as Git LFS files others committed earlier, "
         "is covered by the trust answer and does not fail these conditions, while a change under review that touches any "
         "path someone else wrote, whether or not its filter names a driver, fails them.",
@@ -1060,9 +1083,13 @@ class RepositorySafetyTests(unittest.TestCase):
                        "reviewed commit's tree listing and, for a path whose filter names no defined driver, the content "
                        "hash above,",
                        "so that untracked or uncommitted content main cannot attribute fails this condition;",
-                       "no key that defines a driver the compared paths' filters name has its origin in a file inside "
-                       "the working tree",
-                       "`--show-origin`"):
+                       # Code review call 3 of C2, NB-1 and NB-2: the two reads, both made for the call, agree exactly.
+                       "for every driver the compared paths' filters name, the read of the filter-driver keys, which "
+                       "follows includes and carries `--show-origin`, and the configuration read of every scope that "
+                       "follows no include,",
+                       "both made for that call, report exactly the same entries for that driver, each with the same "
+                       "scope, origin, key and value and in the same order,",
+                       "so that no key that defines the driver is added, changed or overridden by any include."):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, run[0])
         # Authorship is Execution's and never Git metadata, a handoff or repository content.
@@ -1076,23 +1103,41 @@ class RepositorySafetyTests(unittest.TestCase):
         self.assertIn("main asks it then, as Execution describes, and the one answer serves both", run[trust])
         self.assertIn("main treats the call as blocked, as outcome 2, offering the remaining choices, does not use the "
                       "result and reports that the driver has already processed that content", run[driver_found])
-        # Finding B1: the origin rule follows the working-tree condition directly, judges the canonical path, resolves a
-        # relative origin against the top level and every link on the way, follows the file system's case rules, and
-        # fails closed for an origin main cannot resolve or classify.
-        self.assertEqual(run[1:1 + len(self.ORIGIN_RULE)], self.ORIGIN_RULE)
-        for phrase, sentence in (("by its canonical path, never by the printed text:", self.ORIGIN_RULE[0]),
-                                 ("an origin printed as a relative path is resolved against the directory Git reports it "
-                                  "relative to, the repository's top level, even when Git runs in a subdirectory;",
-                                  self.ORIGIN_RULE[0]),
-                                 ("every symbolic link, junction or other reparse point on the way is resolved;",
-                                  self.ORIGIN_RULE[0]),
-                                 ("compared under the file system's case rules", self.ORIGIN_RULE[0]),
-                                 ("inside the project and outside the canonical path of the Git directory is a file "
-                                  "inside the working tree,", self.ORIGIN_RULE[1]),
-                                 ("an origin main cannot resolve or classify counts as one inside the working tree, so "
-                                  "that outcome 1 does not apply.", self.ORIGIN_RULE[1])):
-            with self.subTest(origin=phrase[:50]):
+        # Code review call 3 of C2, NB-1 and NB-2: the include rule follows the condition directly, compares the two
+        # reads entry for entry with no path judgement, so an include anywhere is a difference, fails closed for a read
+        # that cannot be established, and gives a user whose driver settings come through an include outcome 2's choices.
+        self.assertEqual(run[1:1 + len(self.INCLUDE_RULE)], self.INCLUDE_RULE)
+        for phrase, sentence in (("Main compares the two reads entry for entry and never judges where an included file "
+                                  "lies,", self.INCLUDE_RULE[0]),
+                                 ("is a difference whether the included file lies in the working tree, in the Git "
+                                  "directory or outside the project;", self.INCLUDE_RULE[0]),
+                                 ("any difference, or a read whose result main cannot establish, means outcome 1 does "
+                                  "not apply.", self.INCLUDE_RULE[0]),
+                                 ("gets the choices of outcome 2, for example to move those settings into the "
+                                  "configuration file itself, as outcome 3.", self.INCLUDE_RULE[1])):
+            with self.subTest(include=phrase[:50]):
                 self.assertIn(phrase, sentence)
+        # The read of every scope that follows no include is a form Safe Git invocation lists, for outcome 1 only.
+        self.assertIn("for outcome 1 of Main's preparation only, without a scope option, which reads every scope",
+                      self.CONFIG_ROW)
+        self.assertIn(self.CONFIG_ROW, self.source("reference#Safe Git invocation").splitlines())
+        # Absence pins: the canonical-path origin rule, its case rule and the working-tree origin condition are gone.
+        for sentence in (*self.ORIGIN_RULE_REMOVED, *self.OUTCOME_RUN_REMOVED):
+            with self.subTest(removed=sentence[:60]):
+                self.assertNotIn(" ".join(sentence.split()), flat)
+        for phrase in ("by its canonical path, never by the printed text", "compared under the file system's case rules",
+                       "an origin main cannot resolve or classify", "has its origin in a file inside the working tree"):
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, flat)
+        # No path judgement and no case rule remain in Main's preparation; the case rule of Paths and names (C1) is the
+        # only one in the reference.
+        preparation = " ".join(section.split())
+        for word in ("canonical", "case-sensitively", "case-insensitive", "case rules"):
+            with self.subTest(preparation_without=word):
+                self.assertNotIn(word, preparation)
+        self.assertEqual(flat.count("case-sensitively unless the file system is known to be case-insensitive"), 1)
+        self.assertIn("comparing case-sensitively unless the file system is known to be case-insensitive;",
+                      self.PATHS[1])
         # Finding N3: no further driver run after an unattributable difference, stated right after the stop.
         self.assertEqual(run[driver_found + 1:], (self.NO_FURTHER_HASH,))
         self.assertIn("it hashes no further path with a driver for that call.", self.NO_FURTHER_HASH)
@@ -1250,8 +1295,10 @@ class RepositorySafetyTests(unittest.TestCase):
                                   "filter was written by you or in this session", english[0]),
                                  # Adversarial review of C2 call 1, finding N6: the condition names the settings that
                                  # define the driver, and the settings the filter program reads itself are residual risk.
-                                 ("no setting that defines the filter driver, the program Git runs, comes from a file in "
-                                  "the working tree;", english[0]),
+                                 # Code review call 3 of C2, NB-1: the settings come directly from the user's
+                                 # configuration files, never through an include, wherever the included file lies.
+                                 ("every setting that defines the filter driver, the program Git runs, comes directly "
+                                  "from your configuration files, not through any include;", english[0]),
                                  ("files others committed earlier that the change leaves unchanged do not stop it.",
                                   english[0]),
                                  ("Settings the filter program reads itself, which an include can take from a "
@@ -2227,13 +2274,13 @@ class RepositorySafetyTests(unittest.TestCase):
         ("When a call's comparison would run a filter, such as Git LFS, main runs it only when you have said in this "
          "session that the repository is trusted to run on this machine, the change under review was written by you or "
          "in this session, every difference from the reviewed commit that main can find without running the filter was "
-         "written by you or in this session, and no setting that defines the filter driver, the program Git runs, comes "
-         "from a file in the working tree; files others committed earlier that the change leaves unchanged do not stop "
-         "it.",
+         "written by you or in this session, and every setting that defines the filter driver, the program Git runs, "
+         "comes directly from your configuration files, not through any include; files others committed earlier that "
+         "the change leaves unchanged do not stop it.",
          "某次呼叫的比對會執行 filter（例如 Git LFS）時，主 Agent 只有在下列條件都成立時才執行它：你在這個 session 說過這個儲存庫"
          "可以在這台機器上執行；受審的變更是你寫的或在這個 session 寫的；主 Agent 不執行 filter 就能找到的、與受審 commit 的每個"
-         "差異，都是你寫的或在這個 session 寫的；而且定義這個 filter driver（也就是 Git 執行的程式）的設定都不是來自工作樹內的"
-         "檔案；別人先前 commit、這次變更沒有改動的檔案不會擋下它。"),
+         "差異，都是你寫的或在這個 session 寫的；而且定義這個 filter driver（也就是 Git 執行的程式）的設定都直接寫在你的設定檔中，"
+         "沒有任何一項經由 include 取得；別人先前 commit、這次變更沒有改動的檔案不會擋下它。"),
         # Adversarial review of C2 call 1, finding N6: the condition covers the settings that define the driver; settings
         # the filter program reads itself stay the residual risk the README's residual paragraph states.
         ("Settings the filter program reads itself, which an include can take from a working-tree file, are not checked "
@@ -2267,12 +2314,16 @@ class RepositorySafetyTests(unittest.TestCase):
             # Adversarial review of C2 call 1, finding N6: "the filter" read as covering every setting the filter
             # program reads.
             "no setting that defines the filter comes from a file in the working tree",
+            # Code review call 3 of C2, NB-1: a condition on where a setting's file lies, which a link or a chained
+            # include defeated.
+            "no setting that defines the filter driver, the program Git runs, comes from a file in the working tree",
         ),
         "README.zh-TW.md": (
             "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。",
             "比對工作區會執行 filter 時，該次呼叫前也會問你；",
             "否則主 Agent 不派出該次呼叫",
             "而且定義這個 filter 的設定都不是來自工作樹內的檔案",
+            "的設定都不是來自工作樹內的檔案",
         ),
     }
     # C3's Adversarial review call 1, finding NB3: the File reads bullet's last sentence, and the wording it replaced.
@@ -3787,6 +3838,114 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             unmatched = RepositorySafetyTests.CONFIG_KEYS_FORM.replace("<pattern>", r"^nothing\.")
             none = git(*prefix, *shlex.split(unmatched)[2:])
             self.assertEqual((none.returncode, none.stdout), (1, b""))
+
+    def test_outcome_1s_two_reads_differ_exactly_when_an_include_supplies_a_driver_key(self):
+        """Code review call 3 of C2, findings NB-1 and NB-2, regression and abuse check with the installed Git: in a
+        repository isolated from the user's configuration, outcome 1 compares, for each driver, the entries of the read
+        of the filter-driver keys that follows includes with those of the read of every scope that follows none. A key
+        written directly in the Git directory's configuration or in the global file gives the same entries in both
+        reads, so outcome 1 may apply. A key that an include supplies differs, wherever the included file lies: a
+        working-tree file, a file under the Git directory reached by a chained include from a working-tree file (NB-1 b,
+        whose origin a path judgement would place inside the Git directory), a file outside the project that the
+        global file includes, an include that overrides or repeats a key written directly, and, where this system lets
+        the test create one, an included path through a working-tree link to a directory under the Git directory
+        (NB-1 a). Nothing is fetched: the
+        repository has no remote, and every file stays in this test's temporary directory."""
+        reference = read(REFERENCE)
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        pattern = RepositorySafetyTests.CONFIG_PATTERNS["filter"]
+        keys_read = shlex.split(RepositorySafetyTests.CONFIG_KEYS_FORM.replace("<pattern>", pattern))[2:]
+        # The read of every scope is the listing form without a scope option, as the Configuration reads row states.
+        every_scope_read = shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:]
+        self.assertIn("without a scope option, which reads every scope", RepositorySafetyTests.CONFIG_ROW)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, elsewhere, home, global_file = root / "repo", root / "elsewhere", root / "home", root / "gitconfig"
+            for directory in (repo, elsewhere, home):
+                directory.mkdir()
+            global_file.write_bytes(b"")
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(global_file), "HOME": str(home),
+                        "XDG_CONFIG_HOME": str(home)})
+
+            def git(*args):
+                try:
+                    return subprocess.run(["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL,
+                                          capture_output=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            def entries(args, separator, driver):
+                """The read's entries for the driver, each its scope, origin, key and value, in the order printed."""
+                result = git(*prefix, *args)
+                self.assertIn(result.returncode, (0, 1), result.stderr)
+                found = []
+                for line in result.stdout.decode("utf-8").splitlines():
+                    scope, origin, rest = line.split("\t", 2)
+                    key, value = rest.split(separator, 1)
+                    if re.search(pattern, key) and key.startswith(f"filter.{driver}."):
+                        found.append((scope, origin, key, value))
+                return found
+
+            def reads(driver):
+                return entries(keys_read, " ", driver), entries(every_scope_read, "=", driver)
+
+            if git("init", "-q", ".").returncode:
+                self.skipTest("this Git cannot initialise a repository")
+            # Written directly in the Git directory's configuration and in the global file: the reads agree.
+            for args in (("config", "filter.direct.clean", "cat"), ("config", "filter.untouched.smudge", "cat"),
+                         ("config", "--global", "filter.glob.smudge", "cat")):
+                self.assertEqual(git(*args).returncode, 0)
+            for driver, scope in (("direct", "local"), ("untouched", "local"), ("glob", "global")):
+                with self.subTest(direct=driver):
+                    included, direct = reads(driver)
+                    self.assertTrue(direct, f"the read of every scope found no key for {driver}")
+                    self.assertEqual(direct[0][0], scope)
+                    self.assertEqual(included, direct)
+
+            # A working-tree file the local configuration includes defines one driver, overrides a key written directly
+            # and repeats the global key with the same value, and it includes a file under the Git directory, as
+            # .git/lfs/objects holds content others committed, which defines a further driver (NB-1 b).
+            payload = repo / ".git" / "lfs" / "objects" / "aa" / "payload"
+            payload.parent.mkdir(parents=True)
+            payload.write_text('[filter "chained"]\n\tclean = cat\n', encoding="utf-8", newline="\n")
+            (repo / "tree.cfg").write_text('[filter "tree"]\n\tclean = cat\n[filter "direct"]\n\tclean = other\n'
+                                           '[filter "glob"]\n\tsmudge = cat\n[include]\n\tpath = '
+                                           '.git/lfs/objects/aa/payload\n', encoding="utf-8", newline="\n")
+            # The global file includes a file outside the project.
+            (elsewhere / "far.cfg").write_text('[filter "far"]\n\tclean = cat\n', encoding="utf-8", newline="\n")
+            for args in (("config", "include.path", "../tree.cfg"),
+                         ("config", "--global", "include.path", (elsewhere / "far.cfg").as_posix())):
+                self.assertEqual(git(*args).returncode, 0)
+            for driver in ("tree", "chained", "far", "direct", "glob"):
+                with self.subTest(include=driver):
+                    included, direct = reads(driver)
+                    self.assertTrue(included, f"the read that follows includes found no key for {driver}")
+                    self.assertNotEqual(included, direct)
+            # NB-1 b: the chained include's origin names a file under the Git directory, which the removed path
+            # judgement placed outside the working tree; the comparison needs no such judgement.
+            chained, _ = reads("chained")
+            self.assertTrue(chained[0][1].endswith(".git/lfs/objects/aa/payload"), chained)
+            # A driver no include touches still agrees, so an unrelated include does not block it.
+            included, direct = reads("untouched")
+            self.assertEqual(included, direct)
+
+            # NB-1 a: the user's include names a working-tree path through a link (a junction on Windows, else a
+            # symbolic link) to a directory under the Git directory, whose canonical path lies in the Git directory.
+            target = repo / ".git" / "lfs" / "objects" / "bb"
+            target.mkdir(parents=True)
+            (target / "payload").write_text('[filter "linked"]\n\tclean = cat\n', encoding="utf-8", newline="\n")
+            link = repo / "linked"
+            with self.subTest(include="linked"):
+                feather_support.make_directory_link(link, target)
+                try:
+                    self.assertEqual(git("config", "--add", "include.path", "../linked/payload").returncode, 0)
+                    included, direct = reads("linked")
+                    self.assertTrue(included, "the read that follows includes found no key through the link")
+                    self.assertEqual(direct, [])
+                    self.assertNotEqual(included, direct)
+                finally:
+                    feather_support.remove_directory_link(link)
 
 
 if __name__ == "__main__":
