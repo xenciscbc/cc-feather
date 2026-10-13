@@ -499,8 +499,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "driver runs: in this session the user has said that the repository is trusted to run on this machine; the "
         "change under review was written by the user or in this session, as Execution decides who wrote a change; every "
         "difference from the reviewed commit among the paths the comparison covers that main can establish without "
-        "running a driver was written by the user or in this session, established only from the untracked listing of "
-        "those paths, the index listing compared with the reviewed commit's tree listing and, for a path whose filter "
+        "running a driver was written by the user or in this session, as Execution decides who wrote a change, "
+        "established only from the untracked listing of those paths, the index listing compared with the reviewed commit's tree listing and, for a path whose filter "
         "names no defined driver, the content hash above, so that untracked or uncommitted content main cannot attribute "
         "fails this condition; and no key that defines a driver the compared paths' filters name has its origin in a "
         "file inside the working tree, as the read of the filter-driver keys, which carries `--show-origin`, shows.",
@@ -510,13 +510,13 @@ class RepositorySafetyTests(unittest.TestCase):
         "When the trust question has not yet been asked in this session, main asks it then, as Execution describes, and "
         "the one answer serves both Execution and this outcome.",
         "If hashing with the driver then shows that a path whose filter names it differs from the reviewed commit and "
-        "main cannot attribute that difference, main treats the call as blocked, as outcome 2, offering the remaining "
-        "choices, does not use the result and reports that the driver has already processed that content, which the "
+        "main cannot attribute that difference to the user or this session, as Execution decides who wrote a change, "
+        "main treats the call as blocked, as outcome 2, offering the remaining choices, does not use the result and reports that the driver has already processed that content, which the "
         "trust answer covers.",
     )
     OUTCOME_BLOCKED = (
-        "Otherwise main does not dispatch the call, reports the claim blocked and offers the user the remaining choices: "
-        "change the configuration, as outcome 3; name an isolated environment, as outcome 4; or leave the claim blocked, "
+        "When outcome 1's conditions do not hold, main does not dispatch the call, reports the claim blocked and offers "
+        "the user the remaining choices: change the configuration, as outcome 3; name an isolated environment, as outcome 4; or leave the claim blocked, "
         "which is the default.",
     )
     OUTCOME_CONFIGURATION = (
@@ -545,8 +545,9 @@ class RepositorySafetyTests(unittest.TestCase):
     AFTER_CALL = (
         "For a path whose filter names a defined driver, the comparison after a call under item 5 never runs the driver, "
         "whichever outcome the call had: before the call main records the path's raw bytes with a hash it computes "
-        "itself, not with Git, from a read under Paths and names, and after the call it reads and hashes the raw bytes "
-        "again.",
+        "itself, not with Git, from a read under Paths and names, and after the call it reads the `filter` attributes of "
+        "the compared paths and the filter-driver keys again before it hashes any path, then reads and hashes the raw "
+        "bytes again.",
         "A path whose raw bytes changed is reported as changed; one whose raw bytes are unchanged keeps the result of the "
         "comparison before the call.",
         "A path whose filter names a defined driver only after the call, for example because `.gitattributes` or "
@@ -956,6 +957,14 @@ class RepositorySafetyTests(unittest.TestCase):
                       "user has not made:", self.FILTER_INTRO)
         self.assertIn("before any driver runs", self.FILTER_INTRO)
         self.assertIn("or leave the claim blocked, which is the default.", self.OUTCOME_BLOCKED[0])
+        # Code review call 1: outcome 2 names what it follows from, and every attribution in outcome 1 is Execution's.
+        self.assertTrue(self.OUTCOME_BLOCKED[0].startswith("When outcome 1's conditions do not hold, main does not "
+                                                           "dispatch the call,"))
+        self.assertNotIn("Otherwise main does not dispatch the call", flat)
+        self.assertIn("running a driver was written by the user or in this session, as Execution decides who wrote a "
+                      "change,", run[0])
+        self.assertIn("main cannot attribute that difference to the user or this session, as Execution decides who "
+                      "wrote a change,", run[3])
         self.assertIn("again before it decides the call's outcome anew.", self.OUTCOME_CONFIGURATION[0])
         self.assertIn("item 4's snapshot", self.OUTCOME_CONFIGURATION[0])
         self.assertIn("main runs no driver on this machine for that call.", self.OUTCOME_ISOLATED[0])
@@ -980,7 +989,10 @@ class RepositorySafetyTests(unittest.TestCase):
         self.assertEqual(paragraphs[after - 1], self.NO_OTHER_WAY)
         self.assertTrue(paragraphs[after + 1].startswith("For a review assignment of a role without a shell,"))
         for phrase in ("the comparison after a call under item 5 never runs the driver, whichever outcome the call had:",
-                       "with a hash it computes itself, not with Git, from a read under Paths and names,"):
+                       "with a hash it computes itself, not with Git, from a read under Paths and names,",
+                       # Code review call 1: a path that names a driver only after the call is found before any hash.
+                       "after the call it reads the `filter` attributes of the compared paths and the filter-driver "
+                       "keys again before it hashes any path,"):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, self.AFTER_CALL[0])
         self.assertIn("one whose raw bytes are unchanged keeps the result of the comparison before the call.",
@@ -1060,6 +1072,10 @@ class RepositorySafetyTests(unittest.TestCase):
                                  ("files others committed earlier that the change leaves unchanged do not stop it.",
                                   english[0]),
                                  ("main stops the call, does not use the result", english[1]),
+                                 # Code review call 1, B1: the choices follow both a failed condition and the stop.
+                                 ("When those conditions do not all hold, or the filter shows such a difference, main "
+                                  "does not dispatch the call, reports the claim blocked and offers you the choices:",
+                                  english[2]),
                                  ("or leave the claim blocked.", english[2]),
                                  ("main compares a filtered file by its raw bytes and never runs the filter", english[3]),
                                  ("is reported as changed.", english[3])):
@@ -1752,13 +1768,13 @@ class RepositorySafetyTests(unittest.TestCase):
          "and tells you that the filter has already processed that content.",
          "如果 filter 接著揭露了不是你也不是主 Agent 寫的差異，主 Agent 會擋下該次呼叫、不使用結果，並告訴你 filter 已經處理過那些"
          "內容。"),
-        ("Otherwise main does not dispatch the call, reports the claim blocked and offers you the choices: change the "
-         "attribute or the filter, after which main reads them again, and main tells you that changing `.gitattributes` "
+        ("When those conditions do not all hold, or the filter shows such a difference, main does not dispatch the call, "
+         "reports the claim blocked and offers you the choices: change the attribute or the filter, after which main reads them again, and main tells you that changing `.gitattributes` "
          "makes the workspace differ from the reviewed commit and that disabling a filter in the Git directory's "
          "configuration also changes what main's later `git add` stores; name an isolated environment, where the "
          "comparison, the review and every filter run happen; or leave the claim blocked.",
-         "否則主 Agent 不派出該次呼叫，回報 claim 為 blocked，並給你這些選擇：修改 attribute 或 filter，之後主 Agent 會重新讀取"
-         "它們，並告訴你修改 `.gitattributes` 會讓工作區與受審 commit 不同，而在 Git 目錄的設定中停用 filter 也會改變主 Agent 之後 "
+         "上述條件不全成立，或 filter 揭露了這樣的差異時，主 Agent 不派出該次呼叫，回報 claim 為 blocked，並給你這些選擇：修改 "
+         "attribute 或 filter，之後主 Agent 會重新讀取它們，並告訴你修改 `.gitattributes` 會讓工作區與受審 commit 不同，而在 Git 目錄的設定中停用 filter 也會改變主 Agent 之後 "
          "`git add` 存入的內容；指定隔離環境，讓比對、審查與每次 filter 執行都在那裡進行；或讓 claim 維持 blocked。"),
         ("After a call, main compares a filtered file by its raw bytes and never runs the filter, and a file that a "
          "filter covers only after the call is reported as changed.",
@@ -1770,10 +1786,14 @@ class RepositorySafetyTests(unittest.TestCase):
             "contacts no remote and runs no program the repository chose, such as an fsmonitor, a textconv or external "
             "diff, a filter, a signing program or a hook.",
             "asks you before a call whose comparison would run a filter,",
+            # Code review call 1, B1: a dangling "Otherwise" after the stop read as blocking a call with no
+            # unattributed difference.
+            "Otherwise main does not dispatch the call",
         ),
         "README.zh-TW.md": (
             "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。",
             "比對工作區會執行 filter 時，該次呼叫前也會問你；",
+            "否則主 Agent 不派出該次呼叫",
         ),
     }
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
