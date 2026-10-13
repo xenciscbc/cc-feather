@@ -434,8 +434,10 @@ class RepositorySafetyTests(unittest.TestCase):
     # checks. It is not part of CONFINED, which the shell roles' paragraph carries word for word, because it names main's
     # operations.
     MAIN_ONLY_SENTENCE = (
-        # Deviation D-2 of the repository safety follow-ups adds the read of a remote's URL key.
-        "The form for the hooks directory is for main's preparation only, and the forms for the commit `HEAD` names, "
+        # Deviation D-2 of the repository safety follow-ups adds the read of a remote's URL key, and deviation D-1 the
+        # attribute checks without an index.
+        "The forms for the hooks directory and for attribute checks without an index are for main's preparation "
+        "only, and the forms for the commit `HEAD` names, "
         "the index against a tree and a remote's URL key are for main's checks under Before add, commit, tag or push "
         "only."
     )
@@ -567,16 +569,161 @@ class RepositorySafetyTests(unittest.TestCase):
     # Adversarial review of C2 call 1, finding B2: `check-attr --cached` reads only the index's attributes, while
     # `hash-object` applies the working tree's, so a compared path's filter is found, before and after a call, only with
     # the attribute check without `--cached`; the linked-leading-directory residual risk applies to both alike.
+    # Adversarial review call 3 of C2 and deviation D-1: the attribute check no longer claims to read the same
+    # attributes as content hashing in every case, nor that a linked leading directory affects both alike, and it
+    # runs in the form without an index.
     FILTER_ATTRIBUTE_CHECK = (
         "Main finds each compared path's filter, before a call and in the comparison after it, with the attribute check "
-        "without `--cached`, which reads the same attributes that content hashing applies, a `.gitattributes` in the "
-        "working tree included whether it is untracked or differs from the index, and never with `--cached`, which reads "
-        "only the index's attributes; a leading directory that is a link affects both reads alike, which is the residual "
-        "risk Scope and assurance states."
+        "without `--cached` and without an index, the form Safe Git invocation lists for it and the paragraph below "
+        "describes, which reads a `.gitattributes` in the working tree whether it is untracked or differs from the "
+        "index, and never with `--cached`, which reads only the index's attributes; attribute files that Git reads "
+        "through a leading directory that may be a link are the residual risk Scope and assurance states."
+    )
+    # The claims Adversarial review call 3 of C2 disproved: the attribute check without `--cached` falls back to the
+    # index's copy of a `.gitattributes` the working tree lacks or that reaches 100 MiB, while `hash-object` never reads
+    # the index, so it does not read the same attributes as content hashing in every case.
+    FILTER_ATTRIBUTE_CHECK_REMOVED = (
+        "which reads the same attributes that content hashing applies",
+        "a leading directory that is a link affects both reads alike",
+        "affects both reads alike",
+        "reads the same attributes that content hashing applies",
+    )
+    # Deviation D-1 as amended on 2026-10-13: main's attribute check that finds a compared path's filter, before a call
+    # and in the comparison after it, runs with `GIT_INDEX_FILE` naming a new absolute path in main's scratch directory
+    # at which nothing exists, so it has no index copy to fall back to; the variable reaches that one command only, and
+    # any failure leaves the filter not established.
+    INDEX_FREE_REASON = (
+        "Main runs that attribute check without an index because, with one, the attribute check falls back to the "
+        "index's copy of a `.gitattributes` whenever Git cannot open the working tree's file, for example because it is "
+        "missing, is a link Git does not follow or, on Windows with `core.longpaths` false, has too long a path, or "
+        "whenever the file reaches 100 MiB, while content hashing never reads the index, so the two could disagree about "
+        "whether a path's filter names a driver."
+    )
+    INDEX_FREE_MECHANISM = (
+        "So main runs it with `GIT_INDEX_FILE` naming a new absolute path in its own scratch directory outside the "
+        "project, at which nothing exists, so that Git reads an empty index, has no index copy to fall back to and reads "
+        "the same attribute files that content hashing reads, provided both commands run in the same working directory, "
+        "with the same common prefix and otherwise the same environment."
+    )
+    INDEX_FREE_HASHING = (
+        "Main hashes a compared path with `hash-object` in the same working directory and with the same common prefix "
+        "as the attribute check that found that path's filter, and never with the variable."
+    )
+    INDEX_FREE_SCOPE = (
+        "Main sets the variable only in that one command's own environment, as an assignment written before `git` in a "
+        "POSIX shell, never with `export`, for the session or through another program such as `env`, `sh -c` or "
+        "`xargs`, and no other form carries it, `hash-object`, the index listing and every form under Before add, "
+        "commit, tag or push included, so neither a driver that content hashing runs nor any later Git command inherits "
+        "it; when main cannot limit the variable so, the filter is not established."
+    )
+    INDEX_FREE_PATH = (
+        "The index path is absolute, in the drive-letter form on Windows, such as `R:/\u2026`, never in an MSYS form "
+        "such as `/r/\u2026`, contains no single quote and enters only as the form's single-quoted literal; main chooses "
+        "its name, and the name of any directory it creates for it below the scratch directory, itself, only from the "
+        "characters the name rule of Paths and names allows and never from content, and the scratch directory lies "
+        "outside the project, established as for a message file under Before add, commit, tag or push."
+    )
+    INDEX_FREE_ABSENT = (
+        "Just before each run, main checks that each existing component of the index path below the scratch directory "
+        "passes the link check of Paths and names, as for a message file under Before add, commit, tag or push, and, "
+        "with metadata that does not follow links, that nothing exists at the same path string; when something exists "
+        "there, main chooses a new name or treats the filter as not established."
+    )
+    INDEX_FREE_FAILURE = (
+        "An attribute check in this form that exits non-zero, prints output main cannot read, or whose index path "
+        "already exists leaves the filter not established: before a call, main treats the call as blocked, as outcome 2 "
+        "below, and in the comparison after a call, the comparison's result is not established."
+    )
+    INDEX_FREE = (INDEX_FREE_REASON, INDEX_FREE_MECHANISM, INDEX_FREE_HASHING, INDEX_FREE_SCOPE, INDEX_FREE_PATH,
+                  INDEX_FREE_ABSENT, INDEX_FREE_FAILURE)
+    # Deviation D-1: outcome 1 requires every attribute check that finds a compared path's filter to run in that form,
+    # and the comparison after a call runs its attribute check in the same form.
+    OUTCOME_RUN_INDEX_FREE = (
+        "Every attribute check that finds a compared path's filter for that call runs in the form without an index "
+        "stated before these outcomes, and none leaves a filter not established."
+    )
+    AFTER_CALL_INDEX_FREE = (
+        "The attribute check in this comparison runs in the same form without an index, and when it leaves a compared "
+        "path's filter not established, main reports the comparison's result as not established."
+    )
+    # Deviation D-1, dropped after plan review on 2026-10-13: the precondition that every `.gitattributes` the index
+    # lists be a checked working-tree file under 100 MiB, its union reading of the index listing, its exception for
+    # possible entries that fail the name rule, and its notes on a sparse checkout's cone and on removing a
+    # `.gitattributes` from the index, as an earlier, uncommitted implementation wrote them. None may return.
+    INDEX_ATTRIBUTES_REMOVED = (
+        "The attribute check that finds a compared path's filter and content hashing do not always read the same "
+        "attributes: the attribute check falls back to the index's copy of a `.gitattributes` whenever Git cannot open "
+        "or stat the working tree's file or the file reaches 100 MiB, while content hashing reads only the working "
+        "tree's file, so the two can disagree about whether a path's filter names a driver.",
+        "So, before main hashes any path, with Git or by itself, before a call or in the comparison after it, main "
+        "establishes from the index listing and reads under Paths and names that every `.gitattributes` the index "
+        "lists, at any stage and in any directory, the name compared without regard to case, exists in the working tree "
+        "as a regular file that passes Paths and names, is smaller than 100 MiB and has been read in full under Paths "
+        "and names.",
+        "Before a call, when that does not hold, main hashes no path and treats the call as blocked, as outcome 2 below, "
+        "whether or not any compared path's filter names a driver; after a call, it reports the call's result as not "
+        "established and hashes nothing, as the comparison after a call states.",
+        "For this check, main reads the index listing, the NUL-separated form Safe Git invocation lists, as the union of "
+        "every entry any reading of the host's display allows, as it reads the configuration listing: the host shows "
+        "NUL as a space and a path name can hold spaces, tabs and newlines, so a path name can mimic an entry; any text "
+        "that could be an entry counts as one, and main never drops a possible entry, which can only add files to "
+        "check.",
+        "The one exception is a possible entry whose path fails the name rule of Paths and names, as every reading that "
+        "joins two entries into one does, since the joined text holds a tab: Git applies a `.gitattributes` only to "
+        "paths in its own directory and below, and falls back to the index's copy only under the exact path it looks "
+        "up, while main hashes only paths whose names pass that rule, so such an entry cannot change the attributes of "
+        "a path main hashes and needs no file in the working tree.",
+        "Output that main cannot read as such a union of possible entries leaves the check not established, so it does "
+        "not hold.",
+        "In a sparse checkout, a `.gitattributes` outside the cone is listed by the index but absent from the working "
+        "tree, so it makes such hashing block.",
+        "The condition on the index's `.gitattributes` files stated before these outcomes holds for that call as well.",
+        "A `.gitattributes` that the user removes for this choice must be removed from the index too, since one that the "
+        "index still lists but the working tree lacks makes hashing block, as stated before these outcomes.",
+        "Before it hashes any path in this comparison, main establishes again, from an index listing read after the "
+        "call, the condition on the index's `.gitattributes` files stated before the outcomes, and when it does not hold "
+        "reports the call's result as not established and hashes nothing.",
+    )
+    # Phrases of that precondition, so that no rewording of it returns either.
+    INDEX_ATTRIBUTES_REMOVED_PHRASES = (
+        "the condition on the index's `.gitattributes` files",
+        "every `.gitattributes` the index lists",
+        "outside the cone",
+        "sparse checkout",
+        "must be removed from the index too",
+        "smaller than 100 MiB",
+        "is smaller than 100 MiB",
+        "needs no file in the working tree",
+        "the name compared without regard to case",
+        "makes hashing block",
+        "makes such hashing block",
+        "do not always read the same attributes",
     )
     ATTRIBUTE_ROW = (
         "| Attribute checks | `git <prefix> check-attr -z <attribute> -- '<path>'`, and with `--cached` for the index's "
-        "attributes; main finds a compared path's filter only without `--cached`, as Main's preparation states |"
+        "attributes; main finds a compared path's filter only without `--cached` and only in the form without an index "
+        "below, as Main's preparation states |"
+    )
+    # The row before deviation D-1's form without an index.
+    ATTRIBUTE_ROW_REMOVED = (
+        "main finds a compared path's filter only without `--cached`, as Main's preparation states |"
+    )
+    # Deviation D-1: the forms without an index, for main's preparation only, the single path and the batch.
+    INDEX_FREE_ASSIGNMENT = "GIT_INDEX_FILE='<absolute path>' "
+    INDEX_FREE_FORMS = (
+        INDEX_FREE_ASSIGNMENT + "git <prefix> check-attr -z filter -- '<path>'",
+        INDEX_FREE_ASSIGNMENT + "git <prefix> check-attr -z --stdin filter",
+    )
+    INDEX_FREE_ROW = (
+        "| Attribute checks without an index | `" + INDEX_FREE_FORMS[0] + "`, and for a batch of names `"
+        + INDEX_FREE_FORMS[1] + "`, never with `--cached`, `--source` or `-a`, for main's preparation only, to find a "
+        "compared path's filter as Main's preparation states |"
+    )
+    # Deviation D-1: how the assignment before `git` relates to the common prefix and to `--no-lazy-fetch`.
+    INDEX_FREE_PREFIX = (
+        "In the forms without an index, the assignment written before `git` belongs to the shell command, not to Git's "
+        "command line, so the Git command itself still starts with the common prefix, and in a checkout with a promisor "
+        "remote on Git 2.45.0 or later `--no-lazy-fetch` still follows `git`, as Lazy fetch states."
     )
     # C2 item 3 (S5, NB1): the content hash of item 3, which applies only built-in conversions to a path whose filter
     # names no defined driver, and the one exception on this machine, outcome 1.
@@ -645,6 +792,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "the same entries for that driver, each with the same scope, origin, key and value and in the same order, so "
         "that no key that defines the driver is added, changed or overridden by any include.",
         *INCLUDE_RULE,
+        OUTCOME_RUN_INDEX_FREE,
         "Content of the reviewed commit that the change leaves unchanged, such as Git LFS files others committed earlier, "
         "is covered by the trust answer and does not fail these conditions, while a change under review that touches any "
         "path someone else wrote, whether or not its filter names a driver, fails them.",
@@ -690,6 +838,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "itself, not with Git, from a read under Paths and names, and after the call it reads the `filter` attributes of "
         "the compared paths and the filter-driver keys again before it hashes any path, then reads and hashes the raw "
         "bytes again.",
+        AFTER_CALL_INDEX_FREE,
         "A path whose raw bytes changed is reported as changed; one whose raw bytes are unchanged keeps the result of the "
         "comparison before the call.",
         "A path whose filter names a defined driver only after the call, for example because `.gitattributes` or "
@@ -750,6 +899,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "A tracked symbolic link is compared by its target text, read from metadata without following it; any other "
         "compared path that fails Paths and names means equality cannot be established, so main reports the claim "
         "blocked and asks the user.",
+        # Adversarial review call 3 of C2 and deviation D-1: the attribute check without an index.
+        *INDEX_FREE,
         "For a review assignment of a role without a shell, main gives an allowlist: the files that passed Paths and "
         "names and the directories every descendant of which, ignored files and nested repositories included, passed it.",
         "The role reads only listed files and searches only listed directories.",
@@ -1055,8 +1206,10 @@ class RepositorySafetyTests(unittest.TestCase):
         # Repository-chosen program.
         section = self.source("reference#Safe Git invocation")
         rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| ---")][1:]
-        spans = [span for row in rows for span in re.findall(r"`(git [^`]*)`", row)]
-        self.assertGreaterEqual(len(spans), len(self.FORMS))
+        # Deviation D-1: a form without an index carries its assignment before `git`, then the same prefix.
+        spans = [span.removeprefix(self.INDEX_FREE_ASSIGNMENT) for row in rows
+                 for span in re.findall(r"`((?:GIT_INDEX_FILE='<absolute path>' )?git [^`]*)`", row)]
+        self.assertGreaterEqual(len(spans), len(self.FORMS) + len(self.INDEX_FREE_FORMS))
         for span in spans:
             with self.subTest(span=span):
                 self.assertTrue(span.startswith("git <prefix> "))
@@ -1156,11 +1309,13 @@ class RepositorySafetyTests(unittest.TestCase):
         section = self.source("reference#Main's preparation")
         paragraphs = section.split("\n\n")
         comparing = next(i for i, p in enumerate(paragraphs) if p.startswith("Before comparing any path under item 3,"))
-        self.assertEqual(paragraphs[comparing + 1], self.FILTER_INTRO)
-        items = re.findall(r"^(\d+)\. \*([^*]+)\.\* (.*)$", paragraphs[comparing + 2], re.M)
+        # Deviation D-1: the paragraph on the attribute check without an index comes between it and the outcomes.
+        self.assertEqual(paragraphs[comparing + 1], " ".join(self.INDEX_FREE))
+        self.assertEqual(paragraphs[comparing + 2], self.FILTER_INTRO)
+        items = re.findall(r"^(\d+)\. \*([^*]+)\.\* (.*)$", paragraphs[comparing + 3], re.M)
         self.assertEqual(items, [(str(n), label, " ".join(sentences))
                                  for n, (label, sentences) in enumerate(self.OUTCOMES, 1)])
-        self.assertEqual(paragraphs[comparing + 3], self.NO_OTHER_WAY)
+        self.assertEqual(paragraphs[comparing + 4], self.NO_OTHER_WAY)
         # The paragraph on comparing paths keeps its first sentence and no longer stops for every such call.
         self.assertTrue(paragraphs[comparing].startswith(
             self.PREPARATION[self.PREPARATION.index(self.FILTER_ATTRIBUTE_CHECK) - 1]))
@@ -1301,10 +1456,13 @@ class RepositorySafetyTests(unittest.TestCase):
                        "keys again before it hashes any path,"):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, self.AFTER_CALL[0])
+        # Deviation D-1: the attribute check in this comparison runs without an index, and its failure leaves the
+        # comparison's result not established.
+        self.assertEqual(self.AFTER_CALL[1], self.AFTER_CALL_INDEX_FREE)
         self.assertIn("one whose raw bytes are unchanged keeps the result of the comparison before the call.",
-                      self.AFTER_CALL[1])
+                      self.AFTER_CALL[2])
         self.assertIn("`.gitattributes` or `info/attributes` changed during it, has no raw-byte record and is reported "
-                      "as changed without hashing.", self.AFTER_CALL[2])
+                      "as changed without hashing.", self.AFTER_CALL[3])
         # Item 4's snapshot, read again in every comparison after a call, includes `info/attributes`.
         self.assertIn("and `info/attributes`, and before every later dispatch and in every comparison of the workspace "
                       "after a call reads them again;", next(s for s in self.PREPARATION if s.startswith("records a")))
@@ -1323,26 +1481,208 @@ class RepositorySafetyTests(unittest.TestCase):
         comparing = next(p for p in section.split("\n\n") if p.startswith("Before comparing any path under item 3,"))
         first = self.PREPARATION[self.PREPARATION.index(self.FILTER_ATTRIBUTE_CHECK) - 1]
         self.assertTrue(comparing.startswith(first + " " + self.FILTER_ATTRIBUTE_CHECK + " " + self.HASHING))
-        for phrase in ("before a call and in the comparison after it, with the attribute check without `--cached`,",
-                       "which reads the same attributes that content hashing applies,",
-                       "a `.gitattributes` in the working tree included whether it is untracked or differs from the "
+        for phrase in ("before a call and in the comparison after it, with the attribute check without `--cached` "
+                       "and without an index, the form Safe Git invocation lists for it",
+                       "which reads a `.gitattributes` in the working tree whether it is untracked or differs from the "
                        "index,",
                        "and never with `--cached`, which reads only the index's attributes;",
-                       "a leading directory that is a link affects both reads alike, which is the residual risk Scope "
-                       "and assurance states."):
+                       "attribute files that Git reads through a leading directory that may be a link are the residual "
+                       "risk Scope and assurance states."):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, self.FILTER_ATTRIBUTE_CHECK)
         # The residual risk the sentence points to is the one C1 states for an attribute check without `--cached`.
         self.assertIn("as an attribute check without `--cached` does, are residual risk too:", self.REVIEW_READ_SETTINGS[3])
+        # Adversarial review call 3 of C2 and deviation D-1: no sentence claims that the attribute check reads the same
+        # attributes as content hashing in every case, or that a linked leading directory affects both reads alike.
+        flat = " ".join(read(REFERENCE).split())
+        for phrase in self.FILTER_ATTRIBUTE_CHECK_REMOVED:
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, flat)
+        self.assertNotIn("both reads alike", flat)
+        # The one sentence that says the two read the same attribute files is the one that names the form without an
+        # index and its proviso of the same working directory, common prefix and environment.
+        same = [s for s in self.reference_sentences() if re.search(r"same attribute", s)]
+        self.assertEqual(same, [" ".join(self.INDEX_FREE_MECHANISM.split())])
+        self.assertIn("provided both commands run in the same working directory, with the same common prefix and "
+                      "otherwise the same environment.", self.INDEX_FREE_MECHANISM)
         rows = [line for line in self.source("reference#Safe Git invocation").splitlines()
                 if line.startswith("| Attribute checks |")]
         self.assertEqual(rows, [self.ATTRIBUTE_ROW])
+        self.assertNotIn(self.ATTRIBUTE_ROW_REMOVED, read(REFERENCE))
         # Abuse check: every sentence of the reference that speaks of a filter attribute and `--cached` forbids
         # `--cached` for finding the filter.
         for sentence in self.reference_sentences():
             if "--cached" in sentence and re.search(r"\bfilter\b", sentence):
                 with self.subTest(sentence=sentence[:60]):
                     self.assertRegex(sentence, r"never with `--cached`|only without `--cached`")
+
+    def test_mains_attribute_check_runs_without_an_index(self):
+        """Adversarial review call 3 of C2 (BROKEN) and deviation D-1 as amended, regression: the attribute check
+        without `--cached` falls back to the index's copy of a `.gitattributes` that Git cannot open in the working tree,
+        or that reaches 100 MiB, while `hash-object` never reads the index, so outcome 1's conditions could be judged on
+        attributes hashing does not use. Main's attribute check that finds a compared path's filter, before a call and in
+        the comparison after it, runs with `GIT_INDEX_FILE` naming a new absolute path in main's scratch directory at
+        which nothing exists; the variable is set for that one command only, as an assignment before `git`, and no other
+        form carries it; any failure leaves the filter not established, which blocks the call or leaves the comparison
+        after it not established. The form joins Safe Git invocation's table for main's preparation only, and the
+        dropped precondition on the index's `.gitattributes` files is gone."""
+        self.assert_pinned({"reference#Main's preparation": (*self.INDEX_FREE, self.OUTCOME_RUN_INDEX_FREE,
+                                                              self.AFTER_CALL_INDEX_FREE),
+                            "reference#Safe Git invocation": (self.INDEX_FREE_PREFIX, self.MAIN_ONLY_SENTENCE)})
+        reason, mechanism, hashing, scope, path, absent, failure = self.INDEX_FREE
+        for phrase, sentence in (
+                # The reason: Git's fallback to the index's copy, which content hashing does not share.
+                ("the attribute check falls back to the index's copy of a `.gitattributes` whenever Git cannot open the "
+                 "working tree's file,", reason),
+                ("or whenever the file reaches 100 MiB, while content hashing never reads the index,", reason),
+                ("on Windows with `core.longpaths` false, has too long a path,", reason),
+                # The mechanism: a new absolute path in main's scratch directory at which nothing exists.
+                ("So main runs it with `GIT_INDEX_FILE` naming a new absolute path in its own scratch directory outside "
+                 "the project, at which nothing exists,", mechanism),
+                ("has no index copy to fall back to", mechanism),
+                ("provided both commands run in the same working directory, with the same common prefix and otherwise "
+                 "the same environment.", mechanism),
+                ("in the same working directory and with the same common prefix as the attribute check that found that "
+                 "path's filter, and never with the variable.", hashing),
+                # The variable's scope: that one command only, never exported, for the session or through a program.
+                ("Main sets the variable only in that one command's own environment, as an assignment written before "
+                 "`git` in a POSIX shell,", scope),
+                ("never with `export`, for the session or through another program such as `env`, `sh -c` or `xargs`,",
+                 scope),
+                ("no other form carries it, `hash-object`, the index listing and every form under Before add, commit, "
+                 "tag or push included,", scope),
+                ("so neither a driver that content hashing runs nor any later Git command inherits it;", scope),
+                ("when main cannot limit the variable so, the filter is not established.", scope),
+                # The path: absolute, drive-letter form, no single quote, a name main chooses, outside the project.
+                ("The index path is absolute, in the drive-letter form on Windows,", path),
+                ("never in an MSYS form such as `/r/…`,", path),
+                ("contains no single quote and enters only as the form's single-quoted literal;", path),
+                ("only from the characters the name rule of Paths and names allows and never from content,", path),
+                ("and the scratch directory lies outside the project, established as for a message file under Before "
+                 "add, commit, tag or push.", path),
+                # Checked just before each run, without following links, never reused.
+                ("Just before each run,", absent),
+                ("passes the link check of Paths and names,", absent),
+                ("with metadata that does not follow links, that nothing exists at the same path string;", absent),
+                ("main chooses a new name or treats the filter as not established.", absent),
+                # Fail closed before and after a call.
+                ("that exits non-zero, prints output main cannot read, or whose index path already exists leaves the "
+                 "filter not established:", failure),
+                ("before a call, main treats the call as blocked, as outcome 2 below,", failure),
+                ("in the comparison after a call, the comparison's result is not established.", failure),
+                ("runs in the form without an index stated before these outcomes, and none leaves a filter not "
+                 "established.", self.OUTCOME_RUN_INDEX_FREE),
+                ("runs in the same form without an index,", self.AFTER_CALL_INDEX_FREE),
+                ("main reports the comparison's result as not established.", self.AFTER_CALL_INDEX_FREE),
+                # The assignment before `git` and the common prefix.
+                ("the assignment written before `git` belongs to the shell command, not to Git's command line,",
+                 self.INDEX_FREE_PREFIX),
+                ("so the Git command itself still starts with the common prefix,", self.INDEX_FREE_PREFIX),
+                ("on Git 2.45.0 or later `--no-lazy-fetch` still follows `git`, as Lazy fetch states.",
+                 self.INDEX_FREE_PREFIX),
+                ("The forms for the hooks directory and for attribute checks without an index are for main's "
+                 "preparation only,", self.MAIN_ONLY_SENTENCE)):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        # Placement: the paragraph follows the one on comparing paths and comes before the outcomes; outcome 1 names the
+        # form right after the include rule; the comparison after a call names it right after the sentence that reads
+        # the attributes again; the prefix sentence follows the sentence on main's forms.
+        self.assertEqual(self.OUTCOME_RUN[1 + len(self.INCLUDE_RULE)], self.OUTCOME_RUN_INDEX_FREE)
+        self.assertEqual(self.AFTER_CALL[1], self.AFTER_CALL_INDEX_FREE)
+        section = self.source("reference#Main's preparation")
+        self.assertIn("\n\n" + " ".join(self.INDEX_FREE) + "\n\n" + self.FILTER_INTRO + "\n", section)
+        safe = self.source("reference#Safe Git invocation")
+        self.assertIn(self.MAIN_ONLY_SENTENCE + " " + self.INDEX_FREE_PREFIX + " " + self.NO_REPLACE_OBJECTS_FORMS,
+                      " ".join(safe.split()))
+        # The table row: both forms, for main's preparation only, never with `--cached`, `--source` or `-a`, right after
+        # the attribute-check row, which points to it.
+        lines = safe.splitlines()
+        rows = [line for line in lines if line.startswith("| Attribute checks without an index |")]
+        self.assertEqual(rows, [self.INDEX_FREE_ROW])
+        self.assertEqual(lines[lines.index(self.ATTRIBUTE_ROW) + 1], self.INDEX_FREE_ROW)
+        self.assertIn("only in the form without an index below,", self.ATTRIBUTE_ROW)
+        for form in self.INDEX_FREE_FORMS:
+            with self.subTest(form=form):
+                self.assertTrue(form.startswith(self.INDEX_FREE_ASSIGNMENT + "git <prefix> check-attr -z "))
+                self.assertNotRegex(form, r"--cached|--source|--all|\s-a\b")
+                self.assertNotIn(form, self.ROLE_FORMS)
+                self.assertNotIn(form, RoleRepositorySafetyTests.PARAGRAPH)
+        # Abuse check: the variable appears only in these forms and the sentence that names it, never in a role's
+        # paragraph, in the hashing row or under Before add, commit, tag or push, and never exported, set for a session
+        # or passed through another program.
+        reference = read(REFERENCE)
+        spans = re.findall(r"`([^`]*GIT_INDEX_FILE[^`]*)`", reference)
+        self.assertEqual(set(spans) - {"GIT_INDEX_FILE"}, set(self.INDEX_FREE_FORMS))
+        carrying = [s for s in self.reference_sentences() if "GIT_INDEX_FILE" in s]
+        self.assertEqual([s for s in carrying if not s.startswith("| ")], [" ".join(mechanism.split())])
+        self.assertEqual([line for line in reference.splitlines() if "GIT_INDEX_FILE" in line and line.startswith("|")],
+                         [self.INDEX_FREE_ROW])
+        self.assertNotIn("GIT_INDEX_FILE", self.source("reference#Before add, commit, tag or push"))
+        self.assertNotIn("GIT_INDEX_FILE", RoleRepositorySafetyTests.PARAGRAPH)
+        hashing_row = next(line for line in lines if line.startswith("| Content hashing |"))
+        self.assertNotIn("GIT_INDEX_FILE", hashing_row)
+        self.assertNotRegex(reference, r"export\s+GIT_INDEX_FILE|env\s+GIT_INDEX_FILE|set\s+GIT_INDEX_FILE|"
+                                       r"\$env:GIT_INDEX_FILE|setx\s")
+        # Absence pins: the dropped precondition, its union reading of the index listing, its exception, its notes on a
+        # sparse checkout and on removing a `.gitattributes` from the index, and every claim that the attribute check
+        # reads the same attributes as content hashing.
+        flat = " ".join(reference.split())
+        for sentence in self.INDEX_ATTRIBUTES_REMOVED:
+            with self.subTest(removed=sentence[:60]):
+                self.assertNotIn(" ".join(sentence.split()), flat)
+        for phrase in (*self.INDEX_ATTRIBUTES_REMOVED_PHRASES, *self.FILTER_ATTRIBUTE_CHECK_REMOVED):
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, flat)
+        self.assertNotRegex(flat, r"(?:attribute check|check-attr)[^.]*reads the same attributes")
+        # C3's union reading of the configuration listing stays, and the index listing is not read so for this rule.
+        self.assertIn("Main therefore reads this listing as the union of every entry any reading of the display allows: "
+                      "any text that could be an entry counts as one, and main never drops a possible entry.",
+                      " ".join(safe.split()))
+        self.assertEqual(flat.count("as the union of every entry any reading of the"), 1)
+        # Every sentence of the reference that names 100 MiB is the reason sentence.
+        for sentence in self.reference_sentences():
+            if "100 MiB" in sentence:
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertEqual(sentence, " ".join(reason.split()))
+
+    def test_readmes_summarise_the_attribute_check_without_an_index(self):
+        """Deviation D-1 as amended: both READMEs' Before a review bullet summarise, paired, that main checks which
+        filter applies without letting Git fall back to the index's copy of a `.gitattributes`, with a variable set for
+        that one command only, and that a failed check blocks the call or leaves its result not established; the earlier
+        summary of the dropped precondition is gone."""
+        english, chinese = zip(*self.README_FILTER_INDEX_FREE)
+        for phrase, sentence in (
+                ("Main checks which filter applies to a file without letting Git fall back to the index's copy of a "
+                 "`.gitattributes`,", english[0]),
+                ("while hashing a file never reads the index:", english[0]),
+                ("it points `GIT_INDEX_FILE` at a path in its own scratch directory where nothing exists, set for that "
+                 "one command only, so no filter and no other Git command inherits it.", english[0]),
+                ("When that check fails, the call is blocked, or after a call its result is not established.",
+                 english[1]),
+                ("不讓 Git 改用 index 中 `.gitattributes` 的副本", chinese[0]),
+                ("計算檔案雜湊從不讀取 index", chinese[0]),
+                ("而且只為那一個指令設定，所以 filter 與其他任何 Git 指令都不會繼承它。", chinese[0]),
+                ("這項檢查失敗時，該次呼叫會被擋下，呼叫之後則是結果無法確認。", chinese[1])):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, sentence)
+        for index, (name, label) in enumerate((("README.md", "- **Before a review:** "),
+                                               ("README.zh-TW.md", "- **審查之前：**"))):
+            before = next(line for line in self.source(f"{name}#section").splitlines() if line.startswith(label))
+            after_call = self.README_FILTER[4][index]
+            pair = [sentence[index] for sentence in self.README_FILTER_INDEX_FREE]
+            for sentence in pair:
+                with self.subTest(readme=name, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, before)
+            # The summary follows the sentence on the comparison after a call, in order.
+            self.assertLess(before.index(after_call), before.index(pair[0]))
+            self.assertLess(before.index(pair[0]), before.index(pair[1]))
+            # The variable is named only in that sentence of the README.
+            text = read(config.ROOT / name)
+            self.assertEqual(text.count("GIT_INDEX_FILE"), 1)
+            # Absence pins: the earlier summary of the dropped precondition, in both languages.
+            for phrase in self.README_FILTER_INDEX_REMOVED[name]:
+                with self.subTest(readme=name, removed=phrase[:40]):
+                    self.assertNotIn(phrase, text)
 
     def test_every_statement_that_no_repository_program_runs_names_outcome_1(self):
         """Repository safety follow-ups C2 items 3, 7 and 8 (S5, NB1): the Read-only rule and the sentence that no hash
@@ -1479,6 +1819,12 @@ class RepositorySafetyTests(unittest.TestCase):
         spans = {span for row in rows for span in re.findall(r"`(git <prefix> [^`]*)`", row)}
         self.assertEqual(spans, {*self.ROLE_FORMS, *self.MAIN_ONLY_FORMS})
         self.assertEqual(set(self.ROLE_FORMS) & set(self.MAIN_ONLY_FORMS), set())
+        # Deviation D-1: the only other forms are the attribute checks without an index, main's alone; no row holds any
+        # other Git command line.
+        assigned = {span for row in rows for span in re.findall(r"`(GIT_INDEX_FILE=[^`]*)`", row)}
+        self.assertEqual(assigned, set(self.INDEX_FREE_FORMS))
+        others = {span for row in rows for span in re.findall(r"`([^`]*\bgit [^`]*)`", row)}
+        self.assertEqual(others, {*self.ROLE_FORMS, *self.MAIN_ONLY_FORMS, *self.INDEX_FREE_FORMS})
         # The role sentence names each role form's purpose before main's, and main's after "for main's preparation".
         role, main = self.CONFINED[1].split("; configuration reads", 1)
         for purpose in ("index", "untracked", "ignored", "tree listings", "object reads", "comparing commits", "history",
@@ -2488,6 +2834,43 @@ class RepositorySafetyTests(unittest.TestCase):
         "**審查之前：**主 Agent 每個 session 檢查一次 Git 是否為 2.32 或更新版本，在不跟隨 include 的情況下讀取儲存庫設定，設定指向專案"
         "外或移動了工作樹時，會在派出前先問你；派出之間儲存庫的 Git 中繼資料有變化時，會再問你。",
     )
+    # Deviation D-1 as amended (Adversarial review call 3 of C2): main's attribute check without an index, with the
+    # variable set for that one command only, and its failure, summarised in the Before a review bullet, paired.
+    README_FILTER_INDEX_FREE = (
+        ("Main checks which filter applies to a file without letting Git fall back to the index's copy of a "
+         "`.gitattributes`, which Git otherwise reads when the working tree's copy is missing, cannot be opened or "
+         "reaches 100 MiB, while hashing a file never reads the index: it points `GIT_INDEX_FILE` at a path in its own "
+         "scratch directory where nothing exists, set for that one command only, so no filter and no other Git command "
+         "inherits it.",
+         "主 Agent 檢查某個檔案適用哪個 filter 時，不讓 Git 改用 index 中 `.gitattributes` 的副本；工作樹中的副本不存在、無法開啟或"
+         "大小達到 100 MiB 時，Git 原本會改用它，而計算檔案雜湊從不讀取 index：主 Agent 把 `GIT_INDEX_FILE` 指向它自己暫存目錄中"
+         "一個不存在任何東西的路徑，而且只為那一個指令設定，所以 filter 與其他任何 Git 指令都不會繼承它。"),
+        ("When that check fails, the call is blocked, or after a call its result is not established.",
+         "這項檢查失敗時，該次呼叫會被擋下，呼叫之後則是結果無法確認。"),
+    )
+    # Deviation D-1, dropped after plan review: the earlier, uncommitted summary of the precondition on every
+    # `.gitattributes` the index lists, a sparse checkout's cone and removing a `.gitattributes` from the index.
+    README_FILTER_INDEX_REMOVED = {
+        "README.md": (
+            "Because Git's attribute check falls back to the index's copy of a `.gitattributes` that it cannot open in "
+            "the working tree or that reaches 100 MiB, while hashing a file reads only the working tree's copy, main "
+            "hashes no file, before or after a call, unless every `.gitattributes` the index lists is in the working "
+            "tree as a checked regular file smaller than 100 MiB; otherwise the call is blocked, or after a call its "
+            "result is not established.",
+            "So, with sparse checkout, a `.gitattributes` outside the cone blocks such a call, and removing a "
+            "`.gitattributes` to change the configuration means removing it from the index too.",
+            "every `.gitattributes` the index lists", "smaller than 100 MiB", "sparse checkout", "outside the cone",
+            "removing it from the index too",
+        ),
+        "README.zh-TW.md": (
+            "由於工作樹中的 `.gitattributes` 無法開啟或大小達到 100 MiB 時，Git 的 attribute 檢查會改用 index 中的副本，而計算檔案"
+            "雜湊只讀取工作樹中的檔案，所以除非 index 列出的每個 `.gitattributes` 都以通過檢查、小於 100 MiB 的一般檔案存在於工作樹"
+            "中，主 Agent 在呼叫之前或之後都不對任何檔案計算雜湊；否則該次呼叫會被擋下，呼叫之後則是結果無法確認。",
+            "因此，sparse checkout 範圍（cone）之外的 `.gitattributes` 會擋下這樣的呼叫，而為了修改設定移除 `.gitattributes` 時，"
+            "也必須把它從 index 中移除。",
+            "index 列出的每個 `.gitattributes`", "小於 100 MiB", "sparse checkout", "範圍（cone）", "從 index 中移除",
+        ),
+    }
     # C2 item 5: the outcomes and the comparison after a call, summarised in the Before a review bullet, paired.
     README_FILTER = (
         ("When a call's comparison would run a filter, such as Git LFS, main runs it only when you have said in this "
@@ -2520,6 +2903,7 @@ class RepositorySafetyTests(unittest.TestCase):
         ("After a call, main compares a filtered file by its raw bytes and never runs the filter, and a file that a "
          "filter covers only after the call is reported as changed.",
          "呼叫之後，主 Agent 以原始位元組比對有 filter 的檔案，絕不執行 filter；呼叫之後才由 filter 涵蓋的檔案一律回報為已變更。"),
+        *README_FILTER_INDEX_FREE,
     )
     # C2 item 7: the README sentences the exception and the outcomes replace, in both languages.
     README_FILTER_REMOVED = {
@@ -4020,6 +4404,244 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                     result = git(*shlex.split(command)[1:])
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertFalse(ran(), f"{command} ran the configured filter")
+
+    def test_the_attribute_check_without_an_index_agrees_with_content_hashing(self):
+        """Adversarial review call 3 of C2 (BROKEN) and deviation D-1 as amended, regression with the installed Git: in
+        throwaway repositories whose root `.gitattributes` names a marker clean driver for `*.bin` and whose tracked
+        `sub/.gitattributes` unsets it, the attribute check without `--cached` falls back to the index's `-filter` when
+        `sub/.gitattributes` is missing from the working tree or is exactly 100 MiB, and on Windows with `core.longpaths`
+        false when a tracked `.gitattributes` has an absolute path of 260 characters or more while the path it covers
+        is shorter, while `hash-object` runs the root's driver (positive controls); the reference's forms without an
+        index, with `GIT_INDEX_FILE` added to that one command's environment only, report the root's driver in each case.
+        With a `sub/.gitattributes` that is untracked or differs from the index, they report no driver and `hash-object`
+        runs none. They write nothing at the index path or its `.lock`, leave `.git/index` byte for byte unchanged and
+        run no driver, and an empty file already at the index path makes the check fail (fail closed). Only the scratch
+        directory is written and nothing contacts a remote."""
+        reference = read(REFERENCE)
+        prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
+        single, batch = RepositorySafetyTests.INDEX_FREE_FORMS
+        for form in (single, batch):
+            self.assertIn(f"`{form}`", reference)
+        mib_100 = 100 * 1024 * 1024
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            marker, empty, scratch = root / "marker", root / "gitconfig", root / "scratch"
+            empty.write_bytes(b"")
+            scratch.mkdir()
+            script = root / "clean.sh"
+            script.write_text(f'#!/bin/sh\necho clean >> "{marker.as_posix()}"\ncat\n', encoding="utf-8", newline="\n")
+            script.chmod(0o755)
+            # No inherited GIT_* variable, GIT_INDEX_FILE included, reaches the throwaway repositories, and the user's
+            # configuration is not read.
+            base = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            base.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty), "HOME": str(root),
+                         "XDG_CONFIG_HOME": str(root)})
+            identity = ("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "core.fsmonitor=",
+                        "-c", "commit.gpgSign=false", "-c", "core.longpaths=true")
+            names = iter(f"index-{n}" for n in range(1000))
+
+            def run(repo, words, env, data=None):
+                try:
+                    return subprocess.run(words, cwd=repo, env=env, input=data, capture_output=True, timeout=120)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git cannot be run: {error}")
+
+            def git(repo, *args):
+                self.assertNotIn("GIT_INDEX_FILE", base)
+                return run(repo, ["git", *args], base, b"")
+
+            def ran():
+                found = marker.exists()
+                if found:
+                    marker.unlink()
+                return found
+
+            def build(name, files, tracked):
+                repo = root / name
+                repo.mkdir()
+                self.assertEqual(git(repo, "init", "-q", ".").returncode, 0)
+                self.assertEqual(git(repo, "config", "core.autocrlf", "false").returncode, 0)
+                for relative, content in files.items():
+                    target = repo / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content)
+                added = git(repo, *identity, "add", "--", *tracked)
+                self.assertEqual(added.returncode, 0, added.stderr)
+                committed = git(repo, *identity, "commit", "-q", "--no-verify", "-m", "one")
+                self.assertEqual(committed.returncode, 0, committed.stderr)
+                # The driver is defined only after the commit, so committing ran no driver.
+                self.assertEqual(git(repo, "config", "filter.marker.clean", script.as_posix()).returncode, 0)
+                return repo
+
+            def value_of(output):
+                fields = output.split(b"\0")
+                return fields[2].decode("ascii")
+
+            def plain(repo, path):
+                """The attribute check without `--cached`, with the index: the form a role runs."""
+                result = git(repo, *prefix, "check-attr", "-z", "filter", "--", path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return value_of(result.stdout)
+
+            def hashed(repo, path):
+                """`hash-object` as the reference lists it, in the same working directory and with the same prefix, and
+                whether it ran the driver; its environment lacks the variable."""
+                ran()
+                result = git(repo, *prefix, "hash-object", "--", path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return ran(), result.stderr.decode("utf-8", "replace")
+
+            def index_free(repo, path, form=single, index=None):
+                """The form without an index, as the reference writes it, with the assignment applied to this one
+                command's environment only, as a POSIX shell applies an assignment written before `git`. Returns the
+                completed process."""
+                index = index or scratch / next(names)
+                if index.name.startswith("index-"):
+                    # A new path main chose, at which nothing exists, checked without following links.
+                    self.assertFalse(os.path.lexists(index))
+                literal = form.replace("<absolute path>", index.as_posix()).replace("<path>", path)
+                words = shlex.split(literal.replace("<prefix>", " ".join(shlex.quote(word) for word in prefix)))
+                variable, _, value = words[0].partition("=")
+                self.assertEqual(variable, "GIT_INDEX_FILE")
+                # The drive-letter form on Windows, never an MSYS path, with no single quote.
+                self.assertEqual(Path(value), index)
+                self.assertTrue(os.path.isabs(value))
+                self.assertNotIn("'", value)
+                if os.name == "nt":
+                    self.assertRegex(value, r"^[A-Za-z]:/")
+                self.assertEqual(words[1], "git")
+                env = dict(base, GIT_INDEX_FILE=value)
+                before = (repo / ".git" / "index").read_bytes()
+                ran()
+                result = run(repo, ["git", *words[2:]], env, (path + "\0").encode("ascii") if "--stdin" in form else b"")
+                # The check runs no driver, writes nothing at the index path or its `.lock`, and leaves `.git/index`
+                # byte for byte unchanged.
+                self.assertFalse(ran(), "the attribute check without an index ran the driver")
+                if index.name.startswith("index-"):
+                    self.assertFalse(os.path.lexists(index), "the check created the index file")
+                self.assertFalse(os.path.lexists(str(index) + ".lock"), "the check created a lock file")
+                self.assertEqual((repo / ".git" / "index").read_bytes(), before)
+                self.assertNotIn("GIT_INDEX_FILE", base)
+                return result
+
+            def observe(repo, path):
+                """(the plain check's value, the single and batch values without an index, whether hashing ran the
+                driver, hashing's stderr)."""
+                values = []
+                for form in (single, batch):
+                    result = index_free(repo, path, form)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    values.append(value_of(result.stdout))
+                did_run, stderr = hashed(repo, path)
+                return plain(repo, path), values, did_run, stderr
+
+            gitattributes = {".gitattributes": b"*.bin filter=marker\n", "sub/.gitattributes": b"*.bin -filter\n",
+                             "a.bin": b"root\n", "sub/a.bin": b"one\n"}
+            repo = build("tracked", gitattributes, tuple(gitattributes))
+            # The environment can run the driver: hashing a path the root's attribute covers runs it.
+            if not hashed(repo, "a.bin")[0]:
+                self.skipTest("this environment did not run the marker clean driver")
+            # Allowed behaviour: with the working tree's file present, all agree that no driver applies.
+            self.assertEqual(observe(repo, "sub/a.bin")[:3], ("unset", ["unset", "unset"], False))
+            attributes = repo / "sub" / ".gitattributes"
+            content = attributes.read_bytes()
+
+            # (a) Missing from the working tree.
+            attributes.unlink()
+            with self.subTest(case="missing"):
+                value, values, did_run, _ = observe(repo, "sub/a.bin")
+                # Positive control: the plain check falls back to the index's `-filter` while hashing runs the driver.
+                self.assertEqual((value, did_run), ("unset", True))
+                self.assertEqual(values, ["marker", "marker"])
+
+            # (b) Exactly 100 MiB.
+            with open(attributes, "wb") as handle:
+                handle.write(content)
+                handle.truncate(mib_100)
+            self.assertEqual(attributes.stat().st_size, mib_100)
+            with self.subTest(case="100 MiB"):
+                value, values, did_run, _ = observe(repo, "sub/a.bin")
+                if value != "unset":
+                    self.skipTest("this Git reads a 100 MiB attribute file, so it has no fallback to show")
+                self.assertTrue(did_run)
+                self.assertEqual(values, ["marker", "marker"])
+            attributes.unlink()
+            attributes.write_bytes(content)
+
+            # (e) Fail closed: an empty file already at the index path makes the check fail.
+            existing = scratch / "existing-index"
+            existing.write_bytes(b"")
+            result = index_free(repo, "sub/a.bin", single, existing)
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(existing.read_bytes(), b"")
+
+            # (d) Reverse controls: an untracked `sub/.gitattributes`, and one that differs from the index.
+            untracked = build("untracked", {".gitattributes": b"*.bin filter=marker\n", "sub/a.bin": b"one\n"},
+                              (".gitattributes", "sub/a.bin"))
+            (untracked / "sub" / ".gitattributes").write_bytes(b"*.bin -filter\n")
+            differs = build("differs", {".gitattributes": b"*.bin filter=marker\n", "sub/.gitattributes": b"# none\n",
+                                        "sub/a.bin": b"one\n"}, (".gitattributes", "sub/.gitattributes", "sub/a.bin"))
+            (differs / "sub" / ".gitattributes").write_bytes(b"*.bin -filter\n")
+            for name, other in (("untracked", untracked), ("differs", differs)):
+                with self.subTest(case=name):
+                    value, values, did_run, _ = observe(other, "sub/a.bin")
+                    self.assertEqual(values, ["unset", "unset"])
+                    self.assertFalse(did_run)
+                    self.assertEqual(value, "unset")
+
+            # (c) Windows only, `core.longpaths` false: a tracked `<D>/.gitattributes` whose absolute path reaches 260
+            # characters while `<D>/x.bin` stays under 260.
+            with self.subTest(case="long path"):
+                if os.name != "nt":
+                    self.skipTest("the 260-character limit with core.longpaths false applies only to Git for Windows")
+                long_repo = root / "long"
+                base_length = len(str(long_repo)) + 1
+                target = 262 - len(".gitattributes") - 1 - base_length
+                if target < 10:
+                    self.skipTest("the scratch directory's path is too long for this case")
+                # Components of 40 letters joined by `/`, `target` characters in all, none empty.
+                directory = "".join("/" if i % 41 == 40 and i < target - 1 else "d" for i in range(target))
+                self.assertEqual(len(directory), target)
+                self.assertNotIn("//", directory)
+                gitattributes_path = str(long_repo / directory / ".gitattributes")
+                covered = str(long_repo / directory / "x.bin")
+                self.assertGreaterEqual(len(gitattributes_path), 260)
+                self.assertLess(len(covered), 260)
+                extended = "\\\\?\\"
+                long_repo.mkdir()
+                self.assertEqual(git(long_repo, "init", "-q", ".").returncode, 0)
+                self.assertEqual(git(long_repo, "config", "core.autocrlf", "false").returncode, 0)
+                (long_repo / ".gitattributes").write_bytes(b"*.bin filter=marker\n")
+                os.makedirs(extended + str(long_repo / directory))
+                with open(extended + gitattributes_path, "wb") as handle:
+                    handle.write(b"*.bin -filter\n")
+                with open(extended + covered, "wb") as handle:
+                    handle.write(b"one\n")
+                path = f"{directory}/x.bin"
+                added = git(long_repo, *identity, "add", "--", ".gitattributes", f"{directory}/.gitattributes", path)
+                self.assertEqual(added.returncode, 0, added.stderr)
+                committed = git(long_repo, *identity, "commit", "-q", "--no-verify", "-m", "one")
+                self.assertEqual(committed.returncode, 0, committed.stderr)
+                self.assertEqual(git(long_repo, "config", "core.longpaths", "false").returncode, 0)
+                self.assertEqual(git(long_repo, "config", "filter.marker.clean", script.as_posix()).returncode, 0)
+                try:
+                    # Main's file read, through the extended path, reads that `.gitattributes`.
+                    with open(extended + gitattributes_path, "rb") as handle:
+                        self.assertEqual(handle.read(), b"*.bin -filter\n")
+                    value, values, did_run, stderr = observe(long_repo, path)
+                    # Positive control: Git cannot open the file, so the plain check falls back to the index's
+                    # `-filter`, while hashing warns that the name is too long and runs the root's driver.
+                    self.assertEqual(value, "unset")
+                    self.assertIn("Filename too long", stderr)
+                    self.assertTrue(did_run)
+                    self.assertEqual(values, ["marker", "marker"])
+                finally:
+                    def writable(function, failed, _):
+                        os.chmod(failed, stat.S_IWRITE)
+                        function(failed)
+
+                    shutil.rmtree(extended + str(long_repo), onerror=writable)
+                self.assertFalse(long_repo.exists())
 
     def test_promisor_detection_reads_the_effective_configuration(self):
         """Deviation D-1, regression: a promisor setting that a tracked file supplies through an include is invisible to
