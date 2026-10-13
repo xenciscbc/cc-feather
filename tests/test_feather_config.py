@@ -4010,8 +4010,15 @@ class FeatherConfigTests(unittest.TestCase):
         "Where files live": ("檔案位置", "cc-feather does not decide where specs live", "不由 cc-feather 決定",
                              "plan-review.md", "Where specs live and whether tickets are committed are the project's choice"),
         # Repository safety C1 item 7: the Repository safety section's bullets summarise the shared reference.
-        "Git commands": ("Git 指令", "runs no program the repository chose", "不執行儲存庫選定的程式",
-                         "repository-safety.md", "runs no Repository-chosen program"),
+        # Repository safety follow-ups C2 item 3: the statement names outcome 1's exception on this machine.
+        "Git commands": ("Git 指令",
+                         "runs no program the repository chose, such as an fsmonitor, a textconv or external diff, a "
+                         "filter, a signing program or a hook, with one exception on this machine:",
+                         "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook；只有一個例外，"
+                         "發生在這台機器上：",
+                         "repository-safety.md",
+                         "runs no Repository-chosen program, with one exception on this machine: main's content hashing "
+                         "under outcome 1 of Main's preparation"),
         "File reads": ("讀取檔案", "has a single hard link", "只有一個硬連結",
                        "repository-safety.md", "that its link count is 1."),
         "Running repository code": ("執行儲存庫程式碼", "the repository is trusted to run on this machine",

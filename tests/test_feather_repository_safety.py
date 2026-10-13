@@ -220,6 +220,23 @@ class RepositorySafetyTests(unittest.TestCase):
         "only under Main's preparation and in the check after `git add`",
         "hash-object --no-filters",
     )
+    # Repository safety follow-ups C2 item 3 (S5, NB1): the Read-only rule states the one exception on this machine,
+    # main's content hashing under outcome 1, which runs the driver and lets it do what it does. They replace
+    # READ_ONLY_REMOVED, which said without exception that no Repository-chosen program runs.
+    READ_ONLY = (
+        "The command writes no index, object, ref, configuration or working-tree file, contacts no remote and runs no "
+        "Repository-chosen program, with one exception on this machine: main's content hashing under outcome 1 of Main's "
+        "preparation, which runs the filter driver that a compared path's filter names and lets it do what it does, "
+        "including writing into the Git directory, as Git LFS does, and processing a difference from the reviewed commit "
+        "that only the driver can reveal and that main cannot attribute, before main blocks the call.",
+        "Apart from that exception, only main's operations under Before add, commit, tag or push write, and Git's own "
+        "index refresh is not an exception.",
+    )
+    READ_ONLY_REMOVED = (
+        "The command writes no index, object, ref, configuration or working-tree file, contacts no remote and runs no "
+        "Repository-chosen program; only main's operations under Before add, commit, tag or push write, and Git's own "
+        "index refresh is not an exception."
+    )
     # Item 2 (G1–G7, C12, R2-Q5, S19): the common prefix and its rules.
     GIT = (
         "Every Git command main or a role runs to read a repository for a review starts with this common prefix, and the "
@@ -228,9 +245,8 @@ class RepositorySafetyTests(unittest.TestCase):
         "installed Git reads the setting as a boolean or as a hook path.",
         "The command runs with `--no-optional-locks` and `--no-pager`, so no index refresh is written and no configured "
         "pager runs.",
-        "The command writes no index, object, ref, configuration or working-tree file, contacts no remote and runs no "
-        "Repository-chosen program; only main's operations under Before add, commit, tag or push write, and Git's own "
-        "index refresh is not an exception.",
+        # Repository safety follow-ups C2 item 3 (S5): the Read-only rule names outcome 1's exception on this machine.
+        *READ_ONLY,
         "History and differences are read only between commits or objects, with `--no-ext-diff --no-textconv`; `blame` "
         "always names a commit and uses `--no-textconv`; `cat-file` and `show` are never given `--filters` or "
         "`--textconv`.",
@@ -455,6 +471,96 @@ class RepositorySafetyTests(unittest.TestCase):
         "again; name an isolated environment for the review; or do not proceed, which leaves the claim blocked.",
         "There is no choice to proceed as configured;",
     )
+    # Repository safety follow-ups C2 item 2 (S4, S6, B4): item 5 compares a driver path by its raw bytes.
+    ITEM_5 = (
+        "compares the workspace after each call under the same restrictions as item 3, except that it compares a path "
+        "whose filter names a defined driver by its raw bytes and never runs the driver, as described below."
+    )
+    # C2 item 3 (S5, NB1): the content hash of item 3, which applies only built-in conversions to a path whose filter
+    # names no defined driver, and the one exception on this machine, outcome 1.
+    HASHING = (
+        "Each path passes Paths and names before its content is hashed, the hash of a path whose filter names no defined "
+        "driver applies only built-in conversions such as end-of-line handling, and no hash is written to the object "
+        "database; the one exception on this machine is outcome 1 below, under which hashing a path whose filter names a "
+        "defined driver runs that driver and lets it do what it does, including writing into the Git directory, as Git "
+        "LFS does, and processing a difference from the reviewed commit that only the driver can reveal and that main "
+        "cannot attribute, before main blocks the call."
+    )
+    # C2 item 1 (F2, S4, S7, B1, NB1, NB3, NB4): when a compared path's filter names a defined driver, main determines
+    # one of four outcomes for the call, and only outcome 1 runs a driver on this machine.
+    FILTER_INTRO = (
+        "When any compared path's filter names a defined driver, hashing that path runs the driver, a Repository-chosen "
+        "program, so main determines for that call, before any driver runs, one of these outcomes; until an outcome lets "
+        "the call proceed, the call is not dispatched and the claim is reported blocked, and main never assumes a choice "
+        "the user has not made:"
+    )
+    OUTCOME_RUN = (
+        "Main hashes such a path with its driver only when all of these hold for that call, each established before the "
+        "driver runs: in this session the user has said that the repository is trusted to run on this machine; the "
+        "change under review was written by the user or in this session, as Execution decides who wrote a change; every "
+        "difference from the reviewed commit among the paths the comparison covers that main can establish without "
+        "running a driver was written by the user or in this session, established only from the untracked listing of "
+        "those paths, the index listing compared with the reviewed commit's tree listing and, for a path whose filter "
+        "names no defined driver, the content hash above, so that untracked or uncommitted content main cannot attribute "
+        "fails this condition; and no key that defines a driver the compared paths' filters name has its origin in a "
+        "file inside the working tree, as the read of the filter-driver keys, which carries `--show-origin`, shows.",
+        "Content of the reviewed commit that the change leaves unchanged, such as Git LFS files others committed earlier, "
+        "is covered by the trust answer and does not fail these conditions, while a change under review that touches any "
+        "path someone else wrote, whether or not its filter names a driver, fails them.",
+        "When the trust question has not yet been asked in this session, main asks it then, as Execution describes, and "
+        "the one answer serves both Execution and this outcome.",
+        "If hashing with the driver then shows that a path whose filter names it differs from the reviewed commit and "
+        "main cannot attribute that difference, main treats the call as blocked, as outcome 2, offering the remaining "
+        "choices, does not use the result and reports that the driver has already processed that content, which the "
+        "trust answer covers.",
+    )
+    OUTCOME_BLOCKED = (
+        "Otherwise main does not dispatch the call, reports the claim blocked and offers the user the remaining choices: "
+        "change the configuration, as outcome 3; name an isolated environment, as outcome 4; or leave the claim blocked, "
+        "which is the default.",
+    )
+    OUTCOME_CONFIGURATION = (
+        "The user removes or changes the attribute or the driver; main then reads the `filter` attributes of the "
+        "compared paths, the filter-driver keys and item 4's snapshot again before it decides the call's outcome anew.",
+        "When it offers this choice, main tells the user that changing `.gitattributes` makes the workspace differ from "
+        "the reviewed commit, and that disabling a driver in the Git directory's configuration also changes what main's "
+        "later `git add` stores.",
+    )
+    OUTCOME_ISOLATED = (
+        "The user names an isolated environment; the comparison, the review it prepares and every driver run happen "
+        "there, and main runs no driver on this machine for that call.",
+    )
+    # The outcomes in order, each a numbered item with its label.
+    OUTCOMES = (("Run under Execution", OUTCOME_RUN), ("Blocked", OUTCOME_BLOCKED),
+                ("Configuration changed", OUTCOME_CONFIGURATION), ("Isolated environment", OUTCOME_ISOLATED))
+    # C2 item 4: no outcome runs a driver on this machine outside outcome 1.
+    NO_OTHER_WAY = (
+        "No outcome runs a driver on this machine outside outcome 1, and outcome 4 runs one only in the isolated "
+        "environment the user names."
+    )
+    FILTER_OUTCOMES = (FILTER_INTRO, *OUTCOME_RUN, *OUTCOME_BLOCKED, *OUTCOME_CONFIGURATION, *OUTCOME_ISOLATED,
+                       NO_OTHER_WAY)
+    # C2 item 2 (S4, S6, B4): the comparison after a call compares a driver path's raw bytes and never runs the driver;
+    # a path that names a driver only after the call has no record and is reported changed.
+    AFTER_CALL = (
+        "For a path whose filter names a defined driver, the comparison after a call under item 5 never runs the driver, "
+        "whichever outcome the call had: before the call main records the path's raw bytes with a hash it computes "
+        "itself, not with Git, from a read under Paths and names, and after the call it reads and hashes the raw bytes "
+        "again.",
+        "A path whose raw bytes changed is reported as changed; one whose raw bytes are unchanged keeps the result of the "
+        "comparison before the call.",
+        "A path whose filter names a defined driver only after the call, for example because `.gitattributes` or "
+        "`info/attributes` changed during it, has no raw-byte record and is reported as changed without hashing.",
+        "Like the answer to the trust question, these raw-byte hashes are session state, never handoff content.",
+    )
+    # C2 items 1 to 3 and 7: the sentences of Main's preparation the outcomes replace.
+    PREPARATION_REMOVED = (
+        "compares the workspace after each call under the same restrictions as item 3.",
+        "When any compared path's filter names a defined driver, main stops and asks the user for that call; until the "
+        "user decides, the call is not dispatched and the claim is reported blocked.",
+        "Each path passes Paths and names before its content is hashed, the hash applies only built-in conversions such "
+        "as end-of-line handling, and no hash is written to the object database.",
+    )
     # Item 4 (R2-Q1, R2-Q5, R2-Q6, Q-S2, S1–S3, S5, S9, S14–S16).
     PREPARATION = (
         "Before the first Git command it runs in a session for a repository, whether for a review or under Before add, "
@@ -480,17 +586,17 @@ class RepositorySafetyTests(unittest.TestCase):
         "`hook.<name>` keys of the configuration, read by the pattern Safe Git invocation gives for them, with includes "
         "followed) and `info/attributes`, and before every later dispatch and in every comparison of the workspace after "
         "a call reads them again; a difference is reported and asked about before the next dispatch;",
-        "compares the workspace after each call under the same restrictions as item 3.",
+        # Repository safety follow-ups C2 item 2 (S4, S6): the comparison after a call never runs a driver.
+        ITEM_5,
         # Adversarial review of C1, finding F1: only the keys that define a filter driver are read.
         "Before comparing any path under item 3, main checks the `filter` attribute of every path it will compare and, "
         "after the user has answered any question from item 2, reads, with includes followed, only the keys of the "
         "effective configuration that define a filter driver (`filter.<driver>.clean`, `filter.<driver>.smudge`, "
         "`filter.<driver>.process` or `filter.<driver>.required`), by the pattern Safe Git invocation gives for them, to "
         "find which drivers are defined.",
-        "When any compared path's filter names a defined driver, main stops and asks the user for that call; until the "
-        "user decides, the call is not dispatched and the claim is reported blocked.",
-        "Each path passes Paths and names before its content is hashed, the hash applies only built-in conversions such "
-        "as end-of-line handling, and no hash is written to the object database.",
+        # Repository safety follow-ups C2 item 3 (S5): the content hash names outcome 1's exception on this machine; the
+        # stop that asked the user for every such call became the outcomes of FILTER_OUTCOMES.
+        HASHING,
         "A tracked symbolic link is compared by its target text, read from metadata without following it; any other "
         "compared path that fails Paths and names means equality cannot be established, so main reports the claim "
         "blocked and asks the user.",
@@ -785,6 +891,180 @@ class RepositorySafetyTests(unittest.TestCase):
 
     def test_the_reference_states_mains_preparation_and_the_allowlist(self):
         self.assert_pinned({"reference#Main's preparation": self.PREPARATION})
+
+    @staticmethod
+    def reference_sentences():
+        """The reference's sentences line by line, each without its bullet's bold label or its numbered item's number
+        and italic label, so that a table row or a list item never joins the sentence before it."""
+        label = re.compile(r"^(?:- \*\*[^*]+\*\* |\d+\. (?:\*[^*]+\* )?)")
+        return [s for line in read(REFERENCE).splitlines() for s in feather_support.sentences(label.sub("", line))]
+
+    def test_a_filter_comparison_reaches_one_of_four_outcomes(self):
+        """Repository safety follow-ups C2 items 1, 4 and 8 (F2): when a compared path's filter names a defined driver,
+        main determines one of four outcomes for the call, in a paragraph and numbered list of their own after the
+        paragraph on comparing paths; outcome 1 follows Execution with every condition established before the driver
+        runs, an unattributable difference only the driver finds blocks the call, outcome 3 reads the configuration again
+        before deciding, outcome 4 runs no driver on this machine, and no choice is assumed. Abuse check: every sentence
+        of the reference that speaks of a driver is one of the pinned ones, so no other sentence lets one run."""
+        self.assert_pinned({"reference#Main's preparation": self.FILTER_OUTCOMES})
+        section = self.source("reference#Main's preparation")
+        paragraphs = section.split("\n\n")
+        comparing = next(i for i, p in enumerate(paragraphs) if p.startswith("Before comparing any path under item 3,"))
+        self.assertEqual(paragraphs[comparing + 1], self.FILTER_INTRO)
+        items = re.findall(r"^(\d+)\. \*([^*]+)\.\* (.*)$", paragraphs[comparing + 2], re.M)
+        self.assertEqual(items, [(str(n), label, " ".join(sentences))
+                                 for n, (label, sentences) in enumerate(self.OUTCOMES, 1)])
+        self.assertEqual(paragraphs[comparing + 3], self.NO_OTHER_WAY)
+        # The paragraph on comparing paths keeps its first sentence and no longer stops for every such call.
+        self.assertTrue(paragraphs[comparing].startswith(self.PREPARATION[self.PREPARATION.index(self.HASHING) - 1]))
+        flat = " ".join(read(REFERENCE).split())
+        for sentence in self.PREPARATION_REMOVED:
+            with self.subTest(removed=sentence[:60]):
+                self.assertNotIn(sentence, flat)
+        self.assertNotIn("main stops and asks the user for that call", flat)
+        # Outcome 1: D5 in full, each condition established before the driver runs, authorship as Execution decides it,
+        # only reads that run no driver, and no driver defined from a working-tree file.
+        run = self.OUTCOME_RUN
+        for phrase in ("only when all of these hold for that call, each established before the driver runs:",
+                       "in this session the user has said that the repository is trusted to run on this machine;",
+                       "the change under review was written by the user or in this session, as Execution decides who "
+                       "wrote a change;",
+                       "among the paths the comparison covers that main can establish without running a driver",
+                       "established only from the untracked listing of those paths, the index listing compared with the "
+                       "reviewed commit's tree listing and, for a path whose filter names no defined driver, the content "
+                       "hash above,",
+                       "so that untracked or uncommitted content main cannot attribute fails this condition;",
+                       "no key that defines a driver the compared paths' filters name has its origin in a file inside "
+                       "the working tree",
+                       "`--show-origin`"):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, run[0])
+        # Authorship is Execution's and never Git metadata, a handoff or repository content.
+        self.assertIn("never from Git metadata, a handoff or other repository content; a change of mixed origin counts "
+                      "as not written in this session.", self.EXECUTION[3])
+        self.assert_pinned({"reference#Execution": (self.EXECUTION[3],)})
+        self.assertIn("a change under review that touches any path someone else wrote, whether or not its filter names "
+                      "a driver, fails them.", run[1])
+        self.assertIn("main asks it then, as Execution describes, and the one answer serves both", run[2])
+        self.assertIn("main treats the call as blocked, as outcome 2, offering the remaining choices, does not use the "
+                      "result and reports that the driver has already processed that content", run[3])
+        # The hash outcome 1 uses for paths without a driver is the content hash of item 3, built-in conversions only.
+        self.assertIn("the hash of a path whose filter names no defined driver applies only built-in conversions",
+                      self.HASHING)
+        # Outcomes 2 to 4, and no choice assumed: the stop remains the default.
+        self.assertIn("the call is not dispatched and the claim is reported blocked, and main never assumes a choice the "
+                      "user has not made:", self.FILTER_INTRO)
+        self.assertIn("before any driver runs", self.FILTER_INTRO)
+        self.assertIn("or leave the claim blocked, which is the default.", self.OUTCOME_BLOCKED[0])
+        self.assertIn("again before it decides the call's outcome anew.", self.OUTCOME_CONFIGURATION[0])
+        self.assertIn("item 4's snapshot", self.OUTCOME_CONFIGURATION[0])
+        self.assertIn("main runs no driver on this machine for that call.", self.OUTCOME_ISOLATED[0])
+        # Abuse check: every sentence of the reference that names a driver is pinned.
+        pinned = {" ".join(s.split()) for s in (*self.CONFIG_KEYS, *self.READ_ONLY, *self.PREPARATION,
+                                                *self.FILTER_OUTCOMES, *self.AFTER_CALL, self.WRITING_SETTINGS[0])}
+        for sentence in self.reference_sentences():
+            if re.search(r"\bdrivers?\b", sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, pinned)
+
+    def test_the_comparison_after_a_call_never_runs_a_driver(self):
+        """Repository safety follow-ups C2 items 2 and 8 (S4, S6, B4): item 5 compares a path whose filter names a
+        defined driver by its raw bytes, hashed outside Git from a read under Paths and names, whatever outcome the call
+        had; an unchanged path keeps the result from before the call, and a path that names a driver only after the call
+        is reported changed without hashing."""
+        section = self.source("reference#Main's preparation")
+        item = next(line for line in section.splitlines() if line.startswith("5. "))
+        self.assertEqual(item, "5. " + self.ITEM_5)
+        paragraphs = section.split("\n\n")
+        after = paragraphs.index(" ".join(self.AFTER_CALL))
+        self.assertEqual(paragraphs[after - 1], self.NO_OTHER_WAY)
+        self.assertTrue(paragraphs[after + 1].startswith("For a review assignment of a role without a shell,"))
+        for phrase in ("the comparison after a call under item 5 never runs the driver, whichever outcome the call had:",
+                       "with a hash it computes itself, not with Git, from a read under Paths and names,"):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, self.AFTER_CALL[0])
+        self.assertIn("one whose raw bytes are unchanged keeps the result of the comparison before the call.",
+                      self.AFTER_CALL[1])
+        self.assertIn("`.gitattributes` or `info/attributes` changed during it, has no raw-byte record and is reported "
+                      "as changed without hashing.", self.AFTER_CALL[2])
+        # Item 4's snapshot, read again in every comparison after a call, includes `info/attributes`.
+        self.assertIn("and `info/attributes`, and before every later dispatch and in every comparison of the workspace "
+                      "after a call reads them again;", next(s for s in self.PREPARATION if s.startswith("records a")))
+        # No form hashes raw bytes with Git, so the comparison after a call has no Git form that could run a driver.
+        self.assertNotIn("--no-filters", read(REFERENCE))
+
+    def test_every_statement_that_no_repository_program_runs_names_outcome_1(self):
+        """Repository safety follow-ups C2 items 3, 7 and 8 (S5, NB1): the Read-only rule and the sentence that no hash
+        is written to the object database name the one exception on this machine, main's content hashing under outcome
+        1, and what it lets the driver do; the sentences they replace are gone. A role still never runs `hash-object`,
+        so the roles' own read-only definition stays true without the exception."""
+        section = self.source("reference#Safe Git invocation")
+        self.assertIn("\n- **Read-only.** " + " ".join(self.READ_ONLY) + "\n", section)
+        self.assert_pinned({"reference#Main's preparation": (self.HASHING,)})
+        for sentence in (self.READ_ONLY[0], self.HASHING):
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIn("one exception on this machine", sentence)
+                self.assertIn("outcome 1", sentence)
+                self.assertIn("lets it do what it does, including writing into the Git directory, as Git LFS does, and "
+                              "processing a difference from the reviewed commit that only the driver can reveal and that "
+                              "main cannot attribute, before main blocks the call.", sentence)
+        reference = read(REFERENCE)
+        for sentence in self.reference_sentences():
+            if re.search(r"runs no Repository-chosen program|no hash is written", sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn(sentence, {" ".join(self.READ_ONLY[0].split()), " ".join(self.HASHING.split())})
+        flat = " ".join(reference.split())
+        self.assertNotIn(self.READ_ONLY_REMOVED, flat)
+        self.assertNotIn("runs no Repository-chosen program;", flat)
+        self.assertIn("and a role never runs `hash-object`.", self.CONFINED[1])
+        self.assertIn(self.CONFINED[1], RoleRepositorySafetyTests.PARAGRAPH)
+
+    def test_readmes_state_the_filter_outcomes_and_the_exception(self):
+        """Repository safety follow-ups C2 items 3, 5 and 7: each README's Git commands bullet names outcome 1's
+        exception on this machine, and its Before a review bullet summarises the outcomes and the comparison after a
+        call in place of the stop before every such call, paired in both languages; the replaced wording is gone and no
+        other sentence says that a review runs no program the repository chose."""
+        for index, (name, labels) in enumerate((("README.md", ("- **Git commands:** ", "- **Before a review:** ")),
+                                                ("README.zh-TW.md", ("- **Git 指令：**", "- **審查之前：**")))):
+            section = self.source(f"{name}#section")
+            git, before = (next(line for line in section.splitlines() if line.startswith(label)) for label in labels)
+            with self.subTest(readme=name, bullet="Git commands"):
+                self.assertTrue(git.startswith("- " + self.README_GIT_COMMANDS[1] if index
+                                               else labels[0] + self.README_GIT_COMMANDS[0]))
+            with self.subTest(readme=name, bullet="Before a review"):
+                summary = (self.README_BEFORE_REVIEW[index], *(pair[index] for pair in self.README_FILTER))
+                for sentence in summary:
+                    self.assert_whole_sentence(sentence, before)
+                positions = [before.index(sentence) for sentence in summary]
+                self.assertEqual(positions, sorted(positions))
+                follows = ("Where it must follow includes", "必須跟隨 include 時")[index]
+                self.assertLess(positions[-1], before.index(follows))
+            text = read(config.ROOT / name)
+            for phrase in self.README_FILTER_REMOVED[name]:
+                with self.subTest(readme=name, removed=phrase[:40]):
+                    self.assertNotIn(phrase, text)
+            # Every sentence that says a review runs no program the repository chose names the exception.
+            split = [s.strip() for line in text.splitlines()
+                     for s in (self.sentences(line) if index == 0 else re.split(r"(?<=。)", line)) if s.strip()]
+            claim = ("runs no program the repository chose", "不執行儲存庫選定的程式")[index]
+            exception = ("with one exception on this machine:", "只有一個例外，發生在這台機器上：")[index]
+            claims = [s for s in split if claim in s]
+            self.assertEqual(len(claims), 1, claims)
+            self.assertIn(exception, claims[0])
+        english = [pair[0] for pair in self.README_FILTER]
+        for phrase, sentence in (("the repository is trusted to run on this machine", english[0]),
+                                 ("the change under review was written by you or in this session", english[0]),
+                                 ("every difference from the reviewed commit that main can find without running the "
+                                  "filter was written by you or in this session", english[0]),
+                                 ("no setting that defines the filter comes from a file in the working tree", english[0]),
+                                 ("files others committed earlier that the change leaves unchanged do not stop it.",
+                                  english[0]),
+                                 ("main stops the call, does not use the result", english[1]),
+                                 ("or leave the claim blocked.", english[2]),
+                                 ("main compares a filtered file by its raw bytes and never runs the filter", english[3]),
+                                 ("is reported as changed.", english[3])):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, sentence)
 
     def test_the_paragraph_for_roles_without_a_shell_stands_whole_once(self):
         # C2 item 4 copies this paragraph word for word into analyst, scout and Explore.
@@ -1435,6 +1715,67 @@ class RepositorySafetyTests(unittest.TestCase):
                             "這些操作同樣帶 `--no-lazy-fetch`", "並給你同樣的四個選擇", "Git 目錄中沒有連結或特殊項目",
                             "特殊項目"),
     }
+    # Repository safety follow-ups C2 item 3 (S5, NB1): the Git commands bullet names outcome 1's exception on this
+    # machine, paired in both languages.
+    README_GIT_COMMANDS = (
+        "every Git command a review runs disables fsmonitor, optional locks and the pager, writes nothing, contacts no "
+        "remote and runs no program the repository chose, such as an fsmonitor, a textconv or external diff, a filter, "
+        "a signing program or a hook, with one exception on this machine: when main may run a filter for a call, as "
+        "Before a review describes, its content hashing runs that filter and lets it do what it does, including writing "
+        "into the Git directory, as Git LFS does, and processing a difference from the reviewed commit that only the "
+        "filter can reveal and that neither you nor main wrote, before main stops the call.",
+        "**Git 指令：**審查執行的每個 Git 指令都會停用 fsmonitor、選用鎖定與分頁程式，不寫入任何東西、不連線遠端，也不執行儲存庫選定的程式，"
+        "例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook；只有一個例外，發生在這台機器上：主 Agent 依「審查之前」所說"
+        "可以為某次呼叫執行 filter 時，它計算內容雜湊會執行那個 filter，並讓它照常運作，包括寫入 Git 目錄（Git LFS 就會這樣），以及"
+        "在主 Agent 擋下該次呼叫之前，處理只有 filter 才能揭露、不是你也不是主 Agent 寫的、與受審 commit 的差異。",
+    )
+    # C2 item 5: the Before a review bullet's first sentence without the stop before a call that would run a filter.
+    README_BEFORE_REVIEW = (
+        "main checks once per session that Git is 2.32 or later, reads the repository's configuration without following "
+        "includes and asks you before dispatching when it points outside the project or moves the work tree, and asks "
+        "again when the repository's Git metadata changes between dispatches.",
+        "**審查之前：**主 Agent 每個 session 檢查一次 Git 是否為 2.32 或更新版本，在不跟隨 include 的情況下讀取儲存庫設定，設定指向專案"
+        "外或移動了工作樹時，會在派出前先問你；派出之間儲存庫的 Git 中繼資料有變化時，會再問你。",
+    )
+    # C2 item 5: the outcomes and the comparison after a call, summarised in the Before a review bullet, paired.
+    README_FILTER = (
+        ("When a call's comparison would run a filter, such as Git LFS, main runs it only when you have said in this "
+         "session that the repository is trusted to run on this machine, the change under review was written by you or "
+         "in this session, every difference from the reviewed commit that main can find without running the filter was "
+         "written by you or in this session, and no setting that defines the filter comes from a file in the working "
+         "tree; files others committed earlier that the change leaves unchanged do not stop it.",
+         "某次呼叫的比對會執行 filter（例如 Git LFS）時，主 Agent 只有在下列條件都成立時才執行它：你在這個 session 說過這個儲存庫"
+         "可以在這台機器上執行；受審的變更是你寫的或在這個 session 寫的；主 Agent 不執行 filter 就能找到的、與受審 commit 的每個"
+         "差異，都是你寫的或在這個 session 寫的；而且定義這個 filter 的設定都不是來自工作樹內的檔案；別人先前 commit、這次變更沒有"
+         "改動的檔案不會擋下它。"),
+        ("If the filter then shows a difference neither you nor main wrote, main stops the call, does not use the result "
+         "and tells you that the filter has already processed that content.",
+         "如果 filter 接著揭露了不是你也不是主 Agent 寫的差異，主 Agent 會擋下該次呼叫、不使用結果，並告訴你 filter 已經處理過那些"
+         "內容。"),
+        ("Otherwise main does not dispatch the call, reports the claim blocked and offers you the choices: change the "
+         "attribute or the filter, after which main reads them again, and main tells you that changing `.gitattributes` "
+         "makes the workspace differ from the reviewed commit and that disabling a filter in the Git directory's "
+         "configuration also changes what main's later `git add` stores; name an isolated environment, where the "
+         "comparison, the review and every filter run happen; or leave the claim blocked.",
+         "否則主 Agent 不派出該次呼叫，回報 claim 為 blocked，並給你這些選擇：修改 attribute 或 filter，之後主 Agent 會重新讀取"
+         "它們，並告訴你修改 `.gitattributes` 會讓工作區與受審 commit 不同，而在 Git 目錄的設定中停用 filter 也會改變主 Agent 之後 "
+         "`git add` 存入的內容；指定隔離環境，讓比對、審查與每次 filter 執行都在那裡進行；或讓 claim 維持 blocked。"),
+        ("After a call, main compares a filtered file by its raw bytes and never runs the filter, and a file that a "
+         "filter covers only after the call is reported as changed.",
+         "呼叫之後，主 Agent 以原始位元組比對有 filter 的檔案，絕不執行 filter；呼叫之後才由 filter 涵蓋的檔案一律回報為已變更。"),
+    )
+    # C2 item 7: the README sentences the exception and the outcomes replace, in both languages.
+    README_FILTER_REMOVED = {
+        "README.md": (
+            "contacts no remote and runs no program the repository chose, such as an fsmonitor, a textconv or external "
+            "diff, a filter, a signing program or a hook.",
+            "asks you before a call whose comparison would run a filter,",
+        ),
+        "README.zh-TW.md": (
+            "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。",
+            "比對工作區會執行 filter 時，該次呼叫前也會問你；",
+        ),
+    }
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
     README = (
         ("Every review reads your repository under one set of rules, the [repository safety "
@@ -1447,11 +1788,8 @@ class RepositorySafetyTests(unittest.TestCase):
          "對工作區的比對，主 Agent 與每個角色都遵守它，不論 claim 如何分類，也包括沒有變更的相依項目。"),
         # Deviation D-6: the threat model as D1 states it.
         *README_THREAT,
-        ("every Git command a review runs disables fsmonitor, optional locks and the pager, writes nothing, contacts no "
-         "remote and runs no program the repository chose, such as an fsmonitor, a textconv or external diff, a filter, "
-         "a signing program or a hook.",
-         "**Git 指令：**審查執行的每個 Git 指令都會停用 fsmonitor、選用鎖定與分頁程式，不寫入任何東西、不連線遠端，也不執行儲存庫選定的程式，"
-         "例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。"),
+        # Repository safety follow-ups C2 item 3 (S5): the Git commands bullet names outcome 1's exception.
+        README_GIT_COMMANDS,
         # Finding F1: the closed set of forms and main's content hashing, and every command that compares or refreshes
         # the working tree forbidden, not only `git status` and working-tree diffs.
         ("It runs only the Git forms the reference lists, and only main hashes working-tree content, while it prepares a "
@@ -1487,13 +1825,9 @@ class RepositorySafetyTests(unittest.TestCase):
         ("When main may not run the primary acceptance itself, it records it as not run, code review proceeds on the code "
          "and verification is still dispatched.",
          "主 Agent 不能自己執行主要驗收時，會記為未執行，程式碼審查仍就程式碼進行，結果驗證也照樣派出。"),
-        ("main checks once per session that Git is 2.32 or later, reads the repository's configuration without "
-         "following includes and asks you before dispatching when it points outside the project or moves the work tree, "
-         "asks you before a call whose comparison would run a filter, and asks again when the repository's Git metadata "
-         "changes between dispatches.",
-         "**審查之前：**主 Agent 每個 session 檢查一次 Git 是否為 2.32 或更新版本，在不跟隨 include 的情況下讀取儲存庫設定，設定指向專案"
-         "外或移動了工作樹時，會在派出前先問你；比對工作區會執行 filter 時，該次呼叫前也會問你；派出之間儲存庫的 Git 中繼資料"
-         "有變化時，會再問你。"),
+        # Repository safety follow-ups C2 item 5: the stop before a call that would run a filter became the outcomes.
+        README_BEFORE_REVIEW,
+        *README_FILTER,
         # Adversarial review of C1, finding F1: a read that follows includes reads only the keys main needs.
         ("Where it must follow includes, it reads only the few settings it needs, those for a promisor remote, filter "
          "drivers and hooks.",
@@ -1809,8 +2143,13 @@ class RoleRepositorySafetyTests(unittest.TestCase):
     # one (RESTATED). Every other sentence the reference pins for these rules appears in the paragraph whole.
     NOT_CARRIED = {
         RepositorySafetyTests.GIT[0]: "it refers to the reference's forms table, which the paragraph cannot link",
-        RepositorySafetyTests.GIT[3]: "it names main's operations under Before add, commit, tag or push, never a role's",
-        RepositorySafetyTests.GIT[5]: "it names the reference's Paths and names section",
+        # Repository safety follow-ups C2 item 3: the Read-only rule, now two sentences, names main's content hashing
+        # under outcome 1 and main's operations, never a role's; a role never runs `hash-object`.
+        RepositorySafetyTests.READ_ONLY[0]: "it names main's content hashing under outcome 1, which no role runs",
+        RepositorySafetyTests.READ_ONLY[1]: "it names main's operations under Before add, commit, tag or push, never a "
+                                            "role's",
+        next(s for s in RepositorySafetyTests.GIT if s.startswith("Working-tree content is read under Paths and names")):
+            "it names the reference's Paths and names section",
         RepositorySafetyTests.PATHS[17]: "it names the reference's Paths and names and Main's preparation sections",
     }
     RESTATED = (
