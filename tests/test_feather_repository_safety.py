@@ -9,6 +9,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -681,6 +682,53 @@ class RepositorySafetyTests(unittest.TestCase):
         "Under this rule each of these reads carries `--no-replace-objects` after the common prefix, like the operations "
         "themselves.",
     )
+    # Repository safety follow-ups C3 item 1 (F3): the fixed forms take a commit's and an annotated tag's message by
+    # `-F` only.
+    WRITING_ROWS = (
+        "| `git add` | the claim's files only, as safe names after `--` | `-c core.hooksPath=` a directory outside the "
+        "project with nothing in it, and each `hook.<name>` the configuration defines disabled |",
+        "| commit | the whole argument list is the settings below, `-F` with the message file, `--quiet`, which is "
+        "required because without it a commit prints a summary through a diff, and any skipping flags; no `-a`, `-i`, "
+        "`-o`, pathspec, `--amend`, `--allow-empty`, `-e`, `-v`, `--status` or `--trailer` | as for `git add`, plus "
+        "`--no-verify`, `--no-gpg-sign` and `-c commit.gpgSign=false` |",
+        "| tag | annotated, its message only by `-F` with the message file, no editor | as for `git add`, plus "
+        "`--no-sign` and `-c tag.gpgSign=false -c tag.forceSignAnnotated=false` |",
+        "| push | one remote named by main and an explicit refspec for each ref, with `--no-follow-tags`, "
+        "`--recurse-submodules=no` and `--no-signed` | as for `git add`, plus `--no-verify` |",
+    )
+    # Repository safety follow-ups C3 item 2 (F3, S9): every message, whatever its source, reaches Git only from a file
+    # main wrote with its file-writing tool in its scratch directory outside the project, passed by `-F` as a
+    # single-quoted literal after the section's link, file-type, link-count and canonical-path checks.
+    MESSAGES = (
+        "**Messages.** Every commit and annotated tag takes its message only from a file by `-F`, so main never places "
+        "a message on a command line; this holds for every message, whatever its source, so main never decides whether "
+        "a message is trusted, and attribution lines go into the file as well.",
+        "Main writes the file with its file-writing tool, never with a shell command such as `echo`, `printf`, a "
+        "here-document or a redirection, even when the host's own instructions show a here-document, and writes it as "
+        "UTF-8 without a byte-order mark, in its own scratch directory outside the project, under a name that does not "
+        "start with `-` and at a path that contains no single quote.",
+        "It passes the file's absolute path to `-F` only as a single-quoted literal.",
+        "Before the operation, each component of that path below the scratch directory passes the link check of Paths "
+        "and names, the file is a regular file with a link count of 1, and its canonical path lies inside the scratch "
+        "directory's canonical path, which lies outside the project's canonical path; the requirement of Paths and "
+        "names that a canonical path lie inside the project, which covers review reads, does not apply to it.",
+    )
+    # Repository safety follow-ups C3 items 3 and 6 (F3, S8, N1, N2): every tag, branch, remote and refspec passes the
+    # name rule whatever its origin and enters as a single-quoted literal; a failing name stops the operation; and no
+    # other text from content reaches these command lines.
+    NAMES = (
+        "**Names.** Every tag, branch and remote that main's `git add`, commit, tag or push names passes the name rule "
+        "of Paths and names, with `/` allowed between components, whatever its origin, including a name main creates "
+        "from file content such as a version, and enters the command only as a single-quoted literal.",
+        "A refspec is one such name, or two such names joined by a single `:`, never with a leading `+`, and enters as "
+        "one single-quoted literal.",
+        "The exemption that Paths and names gives refs main wrote itself does not cover a name taken from content.",
+        "When a name fails, including one the user gave, main does not perform the operation and tells the user they "
+        "may run it themselves, as it does when it cannot establish the checks below.",
+        "So no text taken from file content, command output, a link target or a reviewed change reaches the command "
+        "line of main's `git add`, commit, tag or push, except a name that passed the name rule, as a single-quoted "
+        "literal.",
+    )
     WRITING = (
         "This rule adds a condition to main's existing authority under [review state](review-state.md)'s Commits "
         "before the passes and Repository authority; it grants no authority, and a tag still needs the user's "
@@ -688,23 +736,20 @@ class RepositorySafetyTests(unittest.TestCase):
         WRITING_CONFIGURED,
         *WRITING_RESIDUAL,
         "Each operation runs only in its fixed form:",
-        "| `git add` | the claim's files only, as safe names after `--` | `-c core.hooksPath=` a directory outside the "
-        "project with nothing in it, and each `hook.<name>` the configuration defines disabled |",
-        "| commit | the whole argument list is the settings below, `-m` or `-F`, `--quiet`, which is required because "
-        "without it a commit prints a summary through a diff, and any skipping flags; no `-a`, `-i`, `-o`, pathspec, "
-        "`--amend`, `--allow-empty`, `-e`, `-v`, `--status` or `--trailer` | as for `git add`, plus `--no-verify`, "
-        "`--no-gpg-sign` and `-c commit.gpgSign=false` |",
-        "| tag | annotated message by `-m` or `-F`, no editor | as for `git add`, plus `--no-sign` and `-c "
-        "tag.gpgSign=false -c tag.forceSignAnnotated=false` |",
-        "| push | one remote named by main and an explicit refspec for each ref, with `--no-follow-tags`, "
-        "`--recurse-submodules=no` and `--no-signed` | as for `git add`, plus `--no-verify` |",
+        *WRITING_ROWS,
         *WRITING_SETTINGS,
+        *MESSAGES,
+        *NAMES,
+        *WRITING_BEFORE,
+    )
+    # Repository safety follow-ups C3 items 1 and 2: the commit and tag rows that took a message by `-m` or `-F`, and
+    # the sentence on the message file that the Messages paragraph replaced.
+    WRITING_ROWS_REMOVED = (
+        "| commit | the whole argument list is the settings below, `-m` or `-F`, `--quiet`,",
+        "| tag | annotated message by `-m` or `-F`, no editor |",
         "A message main passes with `-F` is a file main writes in its own scratch directory outside the project; "
         "before the operation, each component of its path below the scratch directory passes the link check of Paths "
-        "and names, it is a regular file with a link count of 1, and its canonical path lies inside the scratch "
-        "directory's canonical path; the requirement of Paths and names that a canonical path lie inside the "
-        "project, which covers review reads, does not apply to it.",
-        *WRITING_BEFORE,
+        "and names, it is a regular file with a link count of 1,",
     )
     # Item 6: the checks before the operation, in order.
     BEFORE_LABELS = ("Claim paths", "Something to commit")
@@ -1239,6 +1284,146 @@ class RepositorySafetyTests(unittest.TestCase):
         # Item 2 names the same comparison form the table lists.
         self.assertIn(f"`{self.WRITING_FORMS[1]}`", section)
 
+    # A `-m` option, or `--message` and `-am`, as a command line would carry it.
+    MESSAGE_OPTION = re.compile(r"(?<![\w-])(?:-m|-am|--message)(?![\w-])")
+
+    def test_the_fixed_forms_take_a_message_only_by_f(self):
+        """Repository safety follow-ups C3 items 1, 4 and 5 (F3): the commit and tag rows of the fixed forms take the
+        message by `-F` with the message file only. Absence pin: no row, and no sentence of the section, names `-m`,
+        the replaced rows and message sentence are gone, and no procedure, command, skill or role template under
+        skills/ or templates/ shows a commit or tag with `-m`."""
+        section = self.source("reference#Before add, commit, tag or push")
+        rows = [line for line in section.splitlines()
+                if line.startswith("| ") and not line.startswith(("| ---", "| Operation |"))]
+        self.assertEqual(rows, list(self.WRITING_ROWS))
+        commit = next(row for row in rows if row.startswith("| commit |"))
+        tag = next(row for row in rows if row.startswith("| tag |"))
+        self.assertIn("the whole argument list is the settings below, `-F` with the message file, `--quiet`,", commit)
+        self.assertIn("| tag | annotated, its message only by `-F` with the message file, no editor |", tag)
+        for row in rows:
+            with self.subTest(row=row[:20]):
+                self.assertNotRegex(row, self.MESSAGE_OPTION)
+        self.assertNotRegex(section, self.MESSAGE_OPTION)
+        flat = " ".join(read(REFERENCE).split())
+        for phrase in self.WRITING_ROWS_REMOVED:
+            with self.subTest(removed=phrase[:50]):
+                self.assertNotIn(" ".join(phrase.split()), flat)
+        # Item 4: no other shipped procedure, command, skill or template shows a commit or tag message by `-m`.
+        shown = re.compile(r"`(?:-m|-am|--message)`|\b(?:commit|tag)\b[^\n|]{0,80}?(?<![\w-])(?:-m|-am|--message)"
+                           r"(?![\w-])")
+        places = sorted((*(config.ROOT / "skills").rglob("*.md"), *(config.ROOT / "templates").rglob("*.md")))
+        self.assertIn(REFERENCE, places)
+        for path in places:
+            with self.subTest(place=str(path.relative_to(config.ROOT))):
+                self.assertNotRegex(read(path), shown)
+
+    def test_every_message_reaches_git_from_a_checked_file_main_wrote(self):
+        """Repository safety follow-ups C3 items 2 and 6 (F3, S9): the Messages paragraph follows the settings paragraph
+        and states that every message, whatever its source and with its attribution lines, goes through a file main
+        writes with its file-writing tool, never by a shell command, as UTF-8 without a byte-order mark, in its scratch
+        directory outside the project, under a name not starting with `-`, passed as a single-quoted literal, after the
+        link, file-type, link-count and canonical-path checks. Abuse check: every sentence of the reference that names a
+        here-document forbids it, and every sentence of the section that speaks of a message is pinned."""
+        section = self.source("reference#Before add, commit, tag or push")
+        paragraphs = section.split("\n\n")
+        messages = paragraphs.index(" ".join(self.MESSAGES))
+        self.assertTrue(paragraphs[messages - 1].startswith(self.WRITING_SETTINGS[0]))
+        self.assertTrue(paragraphs[messages - 1].endswith(self.WRITING_SETTINGS[-1]))
+        self.assertEqual(paragraphs[messages + 1], " ".join(self.NAMES))
+        self.assertTrue(paragraphs[messages + 2].startswith("**Before the operation.** "))
+        for phrase, sentence in (
+                ("takes its message only from a file by `-F`, so main never places a message on a command line;",
+                 self.MESSAGES[0]),
+                ("this holds for every message, whatever its source, so main never decides whether a message is trusted,",
+                 self.MESSAGES[0]),
+                ("and attribution lines go into the file as well.", self.MESSAGES[0]),
+                ("Main writes the file with its file-writing tool, never with a shell command such as `echo`, `printf`, a "
+                 "here-document or a redirection, even when the host's own instructions show a here-document,",
+                 self.MESSAGES[1]),
+                ("UTF-8 without a byte-order mark, in its own scratch directory outside the project,", self.MESSAGES[1]),
+                ("under a name that does not start with `-` and at a path that contains no single quote.",
+                 self.MESSAGES[1]),
+                ("the file's absolute path to `-F` only as a single-quoted literal.", self.MESSAGES[2]),
+                ("each component of that path below the scratch directory passes the link check of Paths and names, the "
+                 "file is a regular file with a link count of 1, and its canonical path lies inside the scratch "
+                 "directory's canonical path, which lies outside the project's canonical path;", self.MESSAGES[3])):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        for sentence in self.reference_sentences():
+            if "here-document" in sentence:
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertIn("never", sentence)
+        pinned = {" ".join(s.split()) for s in (*self.WRITING, *self.WRITING_ROWS)}
+        for sentence in (s for line in section.splitlines() if not line.startswith("|") for s in self.sentences(line)):
+            if re.search(r"\bmessages?\b", sentence):
+                with self.subTest(sentence=sentence[:60]):
+                    self.assertTrue(any(sentence in rule for rule in pinned), sentence)
+
+    @staticmethod
+    def passes_the_name_rule(name):
+        """The name rule of Paths and names, as test_the_safe_name_rule_leaves_nothing_for_a_shell_to_interpret checks
+        it, with `/` between components."""
+        allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+        reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)), *(f"LPT{n}" for n in range(1, 10))}
+        if not name or name.startswith("/"):
+            return False
+        return all(component and component not in (".", "..") and not component.startswith("-")
+                   and set(component) <= allowed and not component.endswith((".", " "))
+                   and component.split(".", 1)[0].upper() not in reserved for component in name.split("/"))
+
+    @classmethod
+    def passes_as_a_refspec(cls, refspec):
+        """A refspec under Names: one name, or two names joined by a single `:`, never with a leading `+`."""
+        parts = refspec.split(":")
+        return len(parts) <= 2 and all(cls.passes_the_name_rule(part) for part in parts)
+
+    def test_every_name_in_mains_git_operations_passes_the_name_rule(self):
+        """Repository safety follow-ups C3 items 3 and 6 (F3, S8, N1, N2): the Names paragraph follows Messages and
+        states that every tag, branch, remote and refspec passes the name rule whatever its origin, a name made from
+        file content included, and enters only as a single-quoted literal; the exemption for refs main wrote does not
+        cover a name taken from content; a failing name, even the user's, stops the operation; and nothing else from
+        content reaches these command lines. Regression and abuse check: a version string crafted to break out of the
+        quotes, a forced or deleting refspec and a name with a revision suffix fail the rule, while the names main
+        ordinarily uses pass and stay one word as single-quoted literals."""
+        self.assert_pinned({"reference#Before add, commit, tag or push": self.NAMES})
+        for phrase, sentence in (
+                ("Every tag, branch and remote that main's `git add`, commit, tag or push names passes the name rule of "
+                 "Paths and names, with `/` allowed between components, whatever its origin,", self.NAMES[0]),
+                ("including a name main creates from file content such as a version,", self.NAMES[0]),
+                ("and enters the command only as a single-quoted literal.", self.NAMES[0]),
+                ("or two such names joined by a single `:`, never with a leading `+`,", self.NAMES[1]),
+                ("does not cover a name taken from content.", self.NAMES[2]),
+                ("including one the user gave, main does not perform the operation and tells the user they may run it "
+                 "themselves,", self.NAMES[3]),
+                ("So no text taken from file content, command output, a link target or a reviewed change reaches the "
+                 "command line of main's `git add`, commit, tag or push, except a name that passed the name rule, as a "
+                 "single-quoted literal.", self.NAMES[4])):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        # The exemption the Names paragraph narrows is the one Paths and names states.
+        self.assertIn("only refs main or the role wrote itself are exempt.", self.source("reference#Paths and names"))
+        # The push row still names one remote and an explicit refspec for each ref, which Names governs.
+        self.assertIn("| push | one remote named by main and an explicit refspec for each ref,", self.WRITING_ROWS[3])
+        for refspec in ("main", "origin", "v0.22.0", "feature/c3-text", "refs/heads/main", "main:main",
+                        "v0.22.0:refs/tags/v0.22.0", "work/c3:work/c3"):
+            with self.subTest(allowed=refspec):
+                self.assertTrue(self.passes_as_a_refspec(refspec))
+                for form in ("git push 'origin' '<refspec>'", "git tag -a -F '/scratch/m.txt' '<refspec>'"):
+                    command = form.replace("<refspec>", refspec)
+                    self.assertEqual(shlex.split(command)[-1], refspec)
+        for refspec in ("+main", "+main:main", "main:+main", ":main", "main:", "a:b:c", "main::main", "",
+                        "v0.22.0\n", "﻿0.22.0", "v0.22.0;id", "v0.22.0' ; id ; '", "v$(id)", "v`id`", "a b",
+                        "-f", "--force", "x/-f", "HEAD^", "v1~1", "@{u}", "main@{1}", "../x", "x/../y", "/x", "a//b",
+                        "CON", "x/aux.txt", "v1.", "refs/heads/*", "main?", "a\\b"):
+            with self.subTest(refused=repr(refspec)):
+                self.assertFalse(self.passes_as_a_refspec(refspec))
+        # Positive control: without the rule, a name that breaks out of its single quotes becomes several words, among
+        # them a command separator, which is why the rule is checked before any name is quoted.
+        crafted = "v0.22.0' ; id ; '"
+        words = shlex.split(f"git tag -a -F '/scratch/m.txt' '{crafted}'")
+        self.assertNotEqual(words[-1], crafted)
+        self.assertIn(";", words)
+
     def test_item_6_reads_only_the_forms_safe_git_invocation_lists_for_main(self):
         """Deviation D-6 (and D-2's F2): every read item 6 needs is one of main's forms, each with the common prefix,
         no role runs them, and the forms only the removed profile and its checks used are gone."""
@@ -1654,6 +1839,21 @@ class RepositorySafetyTests(unittest.TestCase):
     # Item 7 as revised for deviation D-6: the Before add, commit, tag or push bullet says that main runs the four
     # operations in fixed forms with the programs the user's configuration sets, without asking, which checks come first,
     # and that hooks are skipped only when the user asks.
+    # Repository safety follow-ups C3 item 4: the Before add, commit, tag or push bullet summarises the message file and
+    # the name rule for tags, branches, remotes and refspecs, paired in both languages.
+    README_TEXT_OFF = (
+        ("Every commit and tag message, whatever its source and including attribution lines, goes into a file that main "
+         "writes with its file tool, never with a shell command, in its own scratch directory outside the project, and "
+         "that it checks for links before use, so no message is placed on a command line.",
+         "每則 commit 與 tag 訊息，不論來源，包括署名行，都由主 Agent 用它的檔案工具寫進專案外它自己的暫存目錄中的檔案，"
+         "絕不用 shell 指令寫入，使用前也會檢查這個檔案沒有經過連結，所以訊息絕不會放上命令列。"),
+        ("Each tag, branch, remote and refspec main names in these operations must pass the strict name rule for file "
+         "names, including a name made from file content such as a version, and enters the command only as a quoted "
+         "literal; when one does not, even a name you gave, main leaves the operation for you to run.",
+         "主 Agent 在這些操作中指定的每個 tag、branch、remote 與 refspec，包括從檔案內容產生的名稱（例如版本號），都必須"
+         "通過檔名的嚴格命名規則，並且只以加上引號的字面值放進指令；不通過時，即使是你給的名稱，主 Agent 也會把操作留給你"
+         "自己執行。"),
+    )
     README_WRITING = (
         ("since the Git directory's configuration is your own, main runs a `git add`, commit, tag or push with the "
          "programs your Git configuration sets, such as hooks and the frameworks they start, filters, and signing, "
@@ -1670,6 +1870,7 @@ class RepositorySafetyTests(unittest.TestCase):
          "older than 2.45.0, it leaves the operation for you to run.",
          "執行前，主 Agent 會檢查每個要加入的檔案名稱安全、既不是 submodule 也不是目錄，commit 時也確認有東西可以 commit；"
          "無法確認時，或在 Git 早於 2.45.0 的部分複製中，它會把操作留給你自己執行。"),
+        *README_TEXT_OFF,
         ("Main skips hooks only when you ask it to, and then tells you that a push to a repository on this machine still "
          "runs that repository's hooks.",
          "主 Agent 只在你要求時才略過 hook，並會告訴你：push 到這台機器上的儲存庫時，那個儲存庫的 hook 仍會執行。"),
@@ -2028,6 +2229,48 @@ class RepositorySafetyTests(unittest.TestCase):
                       "through those programs, needs an isolated environment, such as CI, a container or a virtual "
                       "machine.", self.README_RESIDUAL[1][0])
         self.assertIn("are treated as your own", self.README_THREAT[1][0])
+
+    def test_readmes_state_the_message_file_and_the_name_rule(self):
+        """Repository safety follow-ups C3 items 4 and 5: each README's Before add, commit, tag or push bullet states,
+        after the checks before the operation and before the note on skipping hooks, that every commit and tag message
+        goes through a checked file main writes with its file tool outside the project, and that every tag, branch,
+        remote and refspec passes the name rule, a failing one leaving the operation to the user, paired in both
+        languages; neither README shows a message by `-m`."""
+        for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
+                                               ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
+            section = self.source(f"{name}#section")
+            bullet = next(line for line in section.splitlines() if line.startswith(label))
+            for pair in self.README_TEXT_OFF:
+                with self.subTest(readme=name, sentence=pair[index][:40]):
+                    self.assert_whole_sentence(pair[index], bullet)
+            with self.subTest(readme=name, order=True):
+                checks = next(pair[index] for pair in self.README_WRITING if pair[0].startswith("Before it, main checks"))
+                hooks = next(pair[index] for pair in self.README_WRITING if pair[0].startswith("Main skips hooks"))
+                self.assertEqual(bullet.index(checks) + len(checks), bullet.index(self.README_TEXT_OFF[0][index])
+                                 - (1 if index == 0 else 0))
+                self.assertLess(bullet.index(self.README_TEXT_OFF[0][index]), bullet.index(self.README_TEXT_OFF[1][index]))
+                self.assertLess(bullet.index(self.README_TEXT_OFF[1][index]), bullet.index(hooks))
+            self.assertNotRegex(read(config.ROOT / name), self.MESSAGE_OPTION)
+        english = [pair[0] for pair in self.README_TEXT_OFF]
+        chinese = [pair[1] for pair in self.README_TEXT_OFF]
+        for phrase in ("whatever its source and including attribution lines", "main writes with its file tool, never "
+                       "with a shell command,", "in its own scratch directory outside the project", "checks for links "
+                       "before use", "so no message is placed on a command line."):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, english[0])
+        for phrase in ("Each tag, branch, remote and refspec main names", "must pass the strict name rule for file names",
+                       "including a name made from file content such as a version", "only as a quoted literal;",
+                       "even a name you gave, main leaves the operation for you to run."):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, english[1])
+        for phrase in ("不論來源，包括署名行", "用它的檔案工具", "專案外它自己的暫存目錄", "絕不用 shell 指令寫入", "沒有經過連結",
+                       "訊息絕不會放上命令列"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, chinese[0])
+        for phrase in ("每個 tag、branch、remote 與 refspec", "從檔案內容產生的名稱（例如版本號）", "檔名的嚴格命名規則",
+                       "只以加上引號的字面值放進指令", "即使是你給的名稱，主 Agent 也會把操作留給你自己執行。"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, chinese[1])
 
     def test_readmes_point_to_the_section_from_the_commit_rule_table_and_probing(self):
         for english, chinese in self.README_POINTERS:
@@ -2658,7 +2901,13 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             (repo / "a.txt").write_bytes(b"one\ntwo\n")
             self.assertEqual(git(*under_rule, "add", "--", "a.txt").returncode, 0)
             fixed_add, add_maintenance = ran()
-            self.assertEqual(git(*under_rule, "commit", "-m", "two", "--quiet").returncode, 0)
+            # Repository safety follow-ups C3 item 1: the fixed form takes its message by `-F` from a file outside the
+            # repository.
+            messages = root / "messages"
+            messages.mkdir()
+            (messages / "two.txt").write_bytes(b"two\n")
+            (messages / "three.txt").write_bytes(b"three\n")
+            self.assertEqual(git(*under_rule, "commit", "-F", str(messages / "two.txt"), "--quiet").returncode, 0)
             fixed_commit, commit_maintenance = ran()
             self.assertIn("clean", fixed_add)
             self.assertIn("hook", fixed_commit)
@@ -2672,13 +2921,154 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             skipping = ("-c", f"core.hooksPath={no_hooks.as_posix()}")
             self.assertEqual(git(*under_rule, *skipping, "add", "--", "a.txt").returncode, 0)
             skipped_add, _ = ran()
-            self.assertEqual(git(*under_rule, *skipping, "-c", "commit.gpgSign=false", "commit", "-m", "three",
-                                 "--quiet", "--no-verify", "--no-gpg-sign").returncode, 0)
+            self.assertEqual(git(*under_rule, *skipping, "-c", "commit.gpgSign=false", "commit", "-F",
+                                 str(messages / "three.txt"), "--quiet", "--no-verify", "--no-gpg-sign").returncode, 0)
             skipped_commit, skipped_maintenance = ran()
             self.assertIn("clean", skipped_add)
             self.assertEqual((skipped_add | skipped_commit) - {"clean"}, set())
             self.assertFalse(skipped_maintenance)
             self.assertFalse(rr_cache.exists())
+
+    @staticmethod
+    def message_file_passes(path, scratch, project):
+        """The checks the Messages paragraph names, from file-system metadata that does not follow links: a name that
+        does not start with `-`, a path without a single quote, no link or reparse point in a component below the
+        scratch directory, a regular file with a link count of 1, and a canonical path inside the scratch directory's,
+        which lies outside the project's."""
+        if path.name.startswith("-") or "'" in str(path) or not path.is_absolute():
+            return False
+        try:
+            relative = path.relative_to(scratch)
+        except ValueError:
+            return False
+        current = scratch
+        for part in relative.parts:
+            current = current / part
+            try:
+                info = os.lstat(current)
+            except OSError:
+                return False
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                return False
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            return False
+        canonical, scratch_canonical = os.path.realpath(path), os.path.realpath(scratch)
+        project_canonical = os.path.realpath(project)
+        inside = os.path.commonpath([canonical, scratch_canonical]) == scratch_canonical
+        outside = os.path.commonpath([scratch_canonical, project_canonical]) != project_canonical
+        return inside and outside
+
+    def test_a_message_file_keeps_shell_text_off_the_command_line(self):
+        """Repository safety follow-ups C3 items 2, 3 and 6, allowed and forbidden behaviour with the installed Git and
+        shell, in a marker repository isolated from the user's configuration: a message that would write a marker if a
+        shell read it, carrying attribution lines, writes none when it is written by Python (standing in for main's
+        file-writing tool) to a checked file in a scratch directory outside the repository and passed to the fixed
+        commit and annotated tag forms by `-F` as a single-quoted literal, and Git records it unchanged; a tag name made
+        from a version in a tracked file passes the name rule and is used as a single-quoted literal. Positive
+        controls: the same message placed on the command line by `-m` inside double quotes, or by a here-document,
+        writes the marker. The checks refuse a message file inside the repository, one whose name starts with `-` and
+        one with a second hard link. Only the scratch directory is written, and nothing contacts a remote."""
+        sh = shutil.which("sh")
+        if sh is None:
+            self.skipTest("no POSIX shell on PATH")
+        reference = read(REFERENCE)
+        prefix = " ".join(shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:])
+        under_rule = (f"git {prefix} --no-replace-objects -c maintenance.auto=false -c gc.auto=0 "
+                      "-c rerere.enabled=false")
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
+            root = Path(os.path.realpath(temp))
+            repo, scratch, marker, empty = root / "repo", root / "scratch", root / "marker", root / "gitconfig"
+            if "'" in str(root):
+                self.skipTest("the scratch path holds a single quote")
+            repo.mkdir()
+            scratch.mkdir()
+            empty.write_bytes(b"")
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty)})
+
+            def run(argv):
+                try:
+                    return subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                                          timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    self.skipTest(f"Git or the shell cannot be run: {error}")
+
+            def git(*args):
+                return run(["git", *args])
+
+            def shell(command):
+                return run([sh, "-c", command])
+
+            def literal(path):
+                self.assertNotIn("'", str(path))
+                return f"'{path.as_posix()}'"
+
+            if git("init", "-q", ".").returncode:
+                self.skipTest("this Git cannot initialise a repository")
+            for key, value in (("core.autocrlf", "false"), ("user.name", "t"), ("user.email", "t@example.invalid"),
+                               ("commit.gpgSign", "false"), ("tag.gpgSign", "false")):
+                self.assertEqual(git("config", key, value).returncode, 0)
+            (repo / "VERSION").write_bytes(b"0.22.0\n")
+            (repo / "a.txt").write_bytes(b"one\n")
+            self.assertEqual(git("add", "--", "VERSION", "a.txt").returncode, 0)
+            first = scratch / "first.txt"
+            first.write_bytes(b"one\n")
+            self.assertEqual(git("commit", "-q", "--no-verify", "-F", str(first)).returncode, 0)
+
+            touch = f": > '{marker.as_posix()}'"
+            message = (f"Release $({touch}) and `{touch}`\n\nEOF\n{touch}\n-m is text here, not an option\n\n"
+                       "Co-Authored-By: Example <example@example.invalid>\n")
+            # Positive controls: placed on a command line, by `-m` in double quotes or by a here-document as hosts
+            # show it, the message runs a shell command.
+            for control in (f'git commit --allow-empty -q --no-verify -m "{message}"',
+                            f"git commit --allow-empty -q --no-verify -F - <<'EOF'\n{message}EOF\n"):
+                with self.subTest(control=control[:30]):
+                    shell(control)
+                    if not marker.exists():
+                        self.skipTest("this shell wrote no marker in the positive control")
+                    marker.unlink()
+
+            # The message file: written without a shell, UTF-8 without a byte-order mark, in the scratch directory.
+            path = scratch / "commit-message.txt"
+            path.write_bytes(message.encode("utf-8"))
+            self.assertFalse(path.read_bytes().startswith(b"\xef\xbb\xbf"))
+            self.assertTrue(self.message_file_passes(path, scratch, repo))
+            (repo / "a.txt").write_bytes(b"one\ntwo\n")
+            self.assertEqual(git("add", "--", "a.txt").returncode, 0)
+            result = shell(f"{under_rule} commit -F {literal(path)} --quiet")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists(), "a message passed by -F ran a shell command")
+            recorded = git("log", "-1", "--format=%B").stdout.decode("utf-8")
+            self.assertEqual(recorded.rstrip("\n"), message.rstrip("\n"))
+
+            # A tag name made from file content passes the name rule and enters as a single-quoted literal.
+            version = (repo / "VERSION").read_bytes().decode("utf-8")
+            name = "v" + version.removesuffix("\n")
+            self.assertTrue(RepositorySafetyTests.passes_the_name_rule(name))
+            self.assertFalse(RepositorySafetyTests.passes_the_name_rule("v" + version))
+            tag_message = scratch / "tag-message.txt"
+            tag_message.write_bytes(message.encode("utf-8"))
+            self.assertTrue(self.message_file_passes(tag_message, scratch, repo))
+            result = shell(f"{under_rule} tag -a -F {literal(tag_message)} '{name}'")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists(), "a tag message passed by -F ran a shell command")
+            tag = git("cat-file", "tag", name).stdout.decode("utf-8")
+            self.assertTrue(tag.rstrip("\n").endswith(message.rstrip("\n")), tag)
+
+            # The checks refuse a message file inside the repository, a name starting with `-` and a second hard link.
+            inside = repo / "message.txt"
+            inside.write_bytes(b"x\n")
+            self.assertFalse(self.message_file_passes(inside, scratch, repo))
+            dashed = scratch / "-message.txt"
+            dashed.write_bytes(b"x\n")
+            self.assertFalse(self.message_file_passes(dashed, scratch, repo))
+            try:
+                os.link(path, scratch / "second-link.txt")
+            except OSError:
+                pass
+            else:
+                self.assertFalse(self.message_file_passes(path, scratch, repo))
 
     def test_the_role_forms_run_no_filter_the_working_tree_would_run(self):
         """Adversarial review of C2 (BROKEN), finding F1, regression: in a throwaway repository whose attributes and local
