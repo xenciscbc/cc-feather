@@ -60,10 +60,13 @@ def qualified(entry: str) -> bool:
     """The test's own statement of a considered PATH entry, written independently of the resolver: on POSIX it
     starts with /, has no `..` component, whose target depends on links before it, and does not lie in /proc or
     /dev/fd, whose paths name something different in every process; on Windows it holds no `:` but its drive
-    letter's, and a UNC entry none, since Git's MSYS layer splits a value at such a `:` for the programs it starts."""
+    letter's, and a UNC entry none, since Git's MSYS layer splits a value at such a `:` for the programs it starts,
+    and no character in U+F000-U+F0FF, which that layer maps back to `:` and the other characters Windows forbids."""
     if not WINDOWS:
         return (entry.startswith("/") and not re.search(r"(?:^|/)\.\.(?:/|$)", entry)
                 and not re.match(r"^/+(?:\./+)*(?:proc|dev/+(?:\./+)*fd)(?:/|$)", entry))
+    if any(0xF000 <= ord(character) <= 0xF0FF for character in entry):
+        return False
     return bool(re.match(r"^[A-Za-z]:[\\/][^:]*$", entry)
                 or re.match(r"^[\\/]{2}(?![?.][\\/])[^\\/:]+[\\/][^\\/:]+[^:]*$", entry))
 
@@ -248,6 +251,45 @@ class GitResolverTableTest(unittest.TestCase):
             self.assertEqual(storage.git_search_path(value), [good])
             self.assertEqual(self.resolve(value), os.path.join(good, NAME))
 
+    @unittest.skipUnless(WINDOWS, WINDOWS_ONLY)
+    def test_windows_entries_holding_msys_mapped_characters(self):
+        """Regression for Adversarial review call 5 at ddfc2ef (D-3): Git for Windows' MSYS runtime maps the
+        private-use characters U+F000-U+F0FF back to the ASCII characters Windows forbids in names, U+F03A to `:`,
+        and then splits the value there for the programs it starts. Every Windows entry holding a character in that
+        range is skipped; directories so named hold a Git here, so the resolver rows are live traps. An entry with a
+        non-ASCII character outside that range is kept."""
+        drive = os.path.splitdrive(str(self.good))[0]
+        self.assertTrue(drive and drive[1] == ":", "the scratch directory is not on a drive letter")
+        good = str(self.good)
+        mapped = good + "."
+        ends = str(self.root / "endsx")
+        cjk = str(self.root / "工具")
+        for directory in (mapped, ends, cjk):
+            try:
+                plant(Path(directory))
+            except OSError as error:
+                self.skipTest(f"a directory named with a non-ASCII character cannot be created here: {error}")
+        skipped = [
+            ("<good>U+F03A., a directory holding git.exe", mapped),
+            ("<good>U+F03A, a trailing U+F03A", good + ""),
+            ("a quoted <good>U+F03A., quotes removed first", f'"{mapped}"'),
+            ("a UNC entry \\\\localhost\\share U+F03A.", "\\\\localhost\\share."),
+            ("U+F000 and U+F0FF, a directory holding git.exe", ends),
+            ("U+F000 alone", str(self.root / "a")),
+            ("U+F0FF alone", str(self.root / "a")),
+        ]
+        for label, entry in skipped:
+            with self.subTest(label, PATH=entry):
+                self.assertEqual(storage.git_search_path(entry), [])
+                self.assertIsNone(self.resolve(entry))
+        with self.subTest("a CJK character outside U+F000-U+F0FF is kept", PATH=cjk):
+            self.assertEqual(storage.git_search_path(cjk), [cjk])
+            self.assertEqual(self.resolve(cjk), os.path.join(cjk, NAME))
+        with self.subTest("every mapped entry before a kept one"):
+            value = ";".join([entry for _, entry in skipped] + [good])
+            self.assertEqual(storage.git_search_path(value), [good])
+            self.assertEqual(self.resolve(value), os.path.join(good, NAME))
+
     @unittest.skipIf(WINDOWS, POSIX_ONLY)
     def test_posix_entry_shapes(self):
         plant(self.root / "noexec", mode=0o644)
@@ -366,7 +408,7 @@ class GitResolverTableTest(unittest.TestCase):
         good = str(self.good)
         skipped = ["", ".", "bin"] + ([os.path.splitdrive(good)[0] + "bin", os.path.splitdrive(good)[1],
                                        "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + good, "\\\\.\\" + good, good + ":.",
-                                       "\\\\localhost\\share:x\\good"] if WINDOWS
+                                       "\\\\localhost\\share:x\\good", good + "."] if WINDOWS
                                       else ["/proc/self/cwd", "//proc//self/cwd/", "/proc/./thread-self/cwd",
                                             "/dev/fd/3", "/var/run/../proc/self/cwd", "/usr/../usr/bin",
                                             good + "/../good"])
@@ -523,10 +565,11 @@ class GitCallTest(InProcessBase):
         if WINDOWS:
             drive, rooted = os.path.splitdrive(str(self.cwd))
             # D-3: an entry whose first part is the working directory, which holds a planted Git, followed by `:.`,
-            # and a UNC entry holding a `:`; Git's MSYS layer would split either at that `:` for its children.
+            # and a UNC entry holding a `:`; Git's MSYS layer would split either at that `:` for its children. The
+            # same holds for U+F03A, which that layer maps back to `:` (Adversarial review call 5 at ddfc2ef).
             self.skipped = ["", ".", "bin", drive + "bin", rooted, "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + str(self.cwd),
                             "\\\\.\\" + str(self.cwd), str(self.cwd) + ":.", "\\\\localhost\\share:x\\cwd",
-                            f'"{empty}"']
+                            str(self.cwd) + ".", f'"{empty}"']
         else:
             self.skipped = ["", ".", "bin", "$HOME/bin", "/proc/self/cwd", "//proc//self/cwd/", "/dev/fd/0",
                             "/var/run/../proc/self/cwd", str(self.cwd) + "/../cwd"]
@@ -722,7 +765,8 @@ class GitExecPathTest(unittest.TestCase):
     Git processes do not get it; a considered one, the user's own, reaches Git unchanged. The value is judged as is:
     on Windows a quoted value is dropped, although a quoted PATH entry is considered without its quotes, and a value
     holding a path separator is dropped, because Git puts it before its children's PATH, and so is a Windows value
-    with a `:` other than its drive letter's, at which Git's MSYS layer splits it.
+    with a `:` other than its drive letter's, at which Git's MSYS layer splits it, or with a character in
+    U+F000-U+F0FF, which that layer maps back to `:` and the other characters Windows forbids.
     git_environment itself, which other code uses, is unchanged."""
 
     def setUp(self):
@@ -760,6 +804,8 @@ class GitExecPathTest(unittest.TestCase):
             # Regression for the C4 outcome verification finding at 3051676 (D-3): Git's MSYS layer splits the
             # value at a `:` other than the drive letter's for the programs it starts, handing them `.`.
             dropped += [kept + ":.", kept + ":", Path(kept).as_posix() + ":.", "\\\\localhost\\share:x\\libexec"]
+            # Regression for Adversarial review call 5 at ddfc2ef: that layer maps U+F03A back to `:` first.
+            dropped += [kept + ".", kept + ""]
         for value in dropped:
             with self.subTest("dropped", GIT_EXEC_PATH=value):
                 self.assertIsNone(self.started_with(value))
