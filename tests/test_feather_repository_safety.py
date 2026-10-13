@@ -278,6 +278,9 @@ class RepositorySafetyTests(unittest.TestCase):
     WRITING_FORMS = (
         "git <prefix> rev-parse --verify --quiet HEAD",
         "git <prefix> diff-index --cached --quiet --ita-invisible-in-index --no-ext-diff --no-textconv <commit> --",
+        # Repository safety follow-ups C3, deviation D-2: the read of exactly one remote's URL key that confirms the
+        # remote a push names.
+        "git <prefix> config --local --no-includes --get 'remote.<name>.url'",
     )
     # Item 4.4 as revised for deviation D-6: the hooks directory for the hooks snapshot, main's alone.
     HOOKS_FORM = "git <prefix> rev-parse --git-path hooks"
@@ -287,18 +290,44 @@ class RepositorySafetyTests(unittest.TestCase):
     CONFIG_LIST_FORM = "git <prefix> config --list -z --show-origin --show-scope --no-includes"
     # The listing without `-z`, whose lines a value holding a newline can forge.
     CONFIG_LIST_FORM_REMOVED = "git <prefix> config --list --show-origin --show-scope --no-includes"
-    # C3, Adversarial review call 3: how main divides the NUL-separated listing into entries, and never into lines.
+    # C3, Adversarial review call 3: the layout of the NUL-separated listing. Deviation D-2, Adversarial review call 4
+    # (BROKEN): the host's tool output shows NUL as a space, so main cannot see entry boundaries and a value can mimic an
+    # entry; main reads the listing as the union of possible entries, a listing never proves that a remote exists, and
+    # output main cannot read so is not established.
+    CONFIG_LIST_MIMIC = (
+        "The host's tool output shows NUL as a space, so main cannot see where one entry ends, and in the host's display "
+        "a value can mimic an entry, since a value can hold spaces and newlines."
+    )
+    CONFIG_LIST_NO_PROOF = (
+        "A listing never proves that a remote exists: a `remote.<name>.url` key it shows is only a candidate for the "
+        "remote a push names, which main confirms as Names under Before add, commit, tag or push states."
+    )
     CONFIG_LIST_ENTRIES = (
         "Main lists the configuration without includes only in this form with `-z`, which prints each entry as its "
         "scope, ended by NUL, its origin, ended by NUL, and its key, which is followed by a newline and then by the "
         "value, ended by NUL, or, for a key set with no value, is ended by NUL itself.",
-        "Since a key holds neither a newline nor NUL and a value holds no NUL, main takes each entry's key up to the "
-        "first newline or NUL after its origin and the value up to the next NUL, so a newline inside a value can never "
-        "start a new entry.",
-        "Main never parses this read line by line: item 2 of Main's preparation, item 4's snapshot of it and the remote "
-        "a push names under Before add, commit, tag or push use only these entries, and output that main cannot divide "
-        "into such entries leaves the read not established, so main dispatches nothing, performs no operation under "
-        "Before add, commit, tag or push, and reports it.",
+        CONFIG_LIST_MIMIC,
+        "Main therefore reads this listing as the union of every entry any reading of the display allows: any text that "
+        "could be an entry counts as one, and main never drops a possible entry.",
+        "For item 2 of Main's preparation, such a possible entry only adds an entry and so, at most, an extra question; "
+        "for item 4's snapshot of that read, a value that mimics an entry falls under the residual risk that Scope and "
+        "assurance states for what is written into the Git directory.",
+        CONFIG_LIST_NO_PROOF,
+        "Output that main cannot read as such a union of possible entries leaves the read not established, so main "
+        "dispatches nothing, performs no operation under Before add, commit, tag or push, and reports it.",
+    )
+    # The sentences D-2 replaced: they claimed that main divides the listing at NUL boundaries it cannot see in the
+    # host's display, that a newline in a value can never start an entry, and that the remote a push names comes from
+    # such entries.
+    CONFIG_LIST_ENTRIES_REMOVED = (
+        "so a newline inside a value can never start a new entry",
+        "can never start a new entry",
+        "Main never parses this read line by line:",
+        "use only these entries",
+        "output that main cannot divide into such entries",
+        "NUL-separated and divided into entries as Safe Git invocation states",
+        "prints in that scope as the key of one of the entries into which that section divides the read",
+        "named exactly as that entry prints it",
     )
     # Adversarial review of C1, finding F1: a read that follows includes (items 4.2, 4.3, 4.4 and item 6's promisor
     # detection) reads only the keys a pattern names, never a whole listing.
@@ -405,8 +434,10 @@ class RepositorySafetyTests(unittest.TestCase):
     # checks. It is not part of CONFINED, which the shell roles' paragraph carries word for word, because it names main's
     # operations.
     MAIN_ONLY_SENTENCE = (
-        "The form for the hooks directory is for main's preparation only, and the forms for the commit `HEAD` names and "
-        "the index against a tree are for main's checks under Before add, commit, tag or push only."
+        # Deviation D-2 of the repository safety follow-ups adds the read of a remote's URL key.
+        "The form for the hooks directory is for main's preparation only, and the forms for the commit `HEAD` names, "
+        "the index against a tree and a remote's URL key are for main's checks under Before add, commit, tag or push "
+        "only."
     )
     # Deviation D-6: the sentence that listed the forms of the removed operation profile.
     MAIN_ONLY_SENTENCE_REMOVED = (
@@ -681,8 +712,10 @@ class RepositorySafetyTests(unittest.TestCase):
         "such command and dispatches nothing.",
         "confirms that the version check has run;",
         "reads the repository's configuration with origins and scopes and without following includes, covering its local "
-        # C3, Adversarial review call 3: the read is NUL-separated and divided into entries (CONFIG_LIST_ENTRIES).
-        "and worktree scopes, NUL-separated and divided into entries as Safe Git invocation states, and reports and asks "
+        # C3, Adversarial review call 3, and deviation D-2: the read is NUL-separated and read as the union of possible
+        # entries (CONFIG_LIST_ENTRIES).
+        "and worktree scopes, NUL-separated and read as the union of possible entries that Safe Git invocation states, "
+        "and reports and asks "
         "the user before dispatching when `include.path` or an `includeIf` "
         # Deviation D-1: main asks only when `core.bare` is true, since `git init` writes `core.bare=false`; the item
         # now ends with the promisor detection (PROMISOR), so this sentence ends with a full stop.
@@ -793,8 +826,10 @@ class RepositorySafetyTests(unittest.TestCase):
         "themselves; the claim then waits for the user, as for a user instruction not to commit or push.",
         "Safe Git invocation lists among main's preparation forms the reads this rule needs: `rev-parse --verify --quiet "
         "HEAD` for the commit `HEAD` names or that it is unborn, the index listing, `ls-files --stage`, for gitlinks, "
-        "the comparison of the index with a tree under Something to commit above, and the configuration read with "
-        "`--local` and without includes for the remote a push names.",
+        "the comparison of the index with a tree under Something to commit above, the configuration read with `--local` "
+        # Deviation D-2: the listing gives only a candidate, and the read of its URL key confirms it.
+        "and without includes, from which main may take a candidate for the remote a push names, and the read of that "
+        "remote's URL key that confirms it.",
         "Under this rule each of these reads carries `--no-replace-objects` after the common prefix, like the operations "
         "themselves.",
     )
@@ -844,6 +879,20 @@ class RepositorySafetyTests(unittest.TestCase):
     # Repository safety follow-ups C3 items 3 and 6 (F3, S8, N1, N2): every tag, branch, remote and refspec passes the
     # name rule whatever its origin and enters as a single-quoted literal; a failing name stops the operation; and no
     # other text from content reaches these command lines.
+    # Deviation D-2 (Adversarial review call 4, BROKEN): before each push main confirms the remote with the read of
+    # exactly its key; only exit 0 with a non-empty value confirms it, exit 1 is not proof of absence, any other exit is
+    # not established, and main relays no value the read prints.
+    REMOTE_KEY_FORM = WRITING_FORMS[2]
+    NAMES_CONFIRMATION = (
+        "Before each push, main confirms the remote with the read of exactly its key that Safe Git invocation lists, `"
+        + REMOTE_KEY_FORM + "`, the name entering only inside that single-quoted literal, and the push names the remote "
+        "exactly as that literal does.",
+        "Only an exit of 0 with a non-empty printed value confirms the remote, since a newer Git treats an empty `url` "
+        "as resetting the list; main reports an exit of 1 as the remote not being confirmed, not as proof that it does "
+        "not exist, and any other exit leaves it not established.",
+        "In every case but a confirmed remote, main does not push and tells the user they may run the push themselves, "
+        "and main relays no value that this read prints.",
+    )
     NAMES = (
         "**Names.** Every tag, branch and remote that main's `git add`, commit, tag or push names passes the name rule "
         "of Paths and names, with `/` allowed between components, whatever its origin, including a name main creates "
@@ -852,15 +901,17 @@ class RepositorySafetyTests(unittest.TestCase):
         "one single-quoted literal.",
         # C3's Adversarial review call 1, finding 1: a push names only a remote the Git directory's own configuration
         # defines, never one whose name comes from content.
-        "The remote a push names must also be one that the Git directory's own configuration defines: a "
-        # C3's Adversarial review call 3: the key is that of an entry of the NUL-separated read, never a line of it.
-        "`remote.<name>.url` key that main's configuration read with `--local` and without includes, the NUL-separated "
-        "form Safe Git invocation lists, prints in that scope as the key of one of the entries into which that section "
-        "divides the read, never as a line of it, named exactly as that entry prints it, since Git takes a name that is "
-        "no configured remote as a path or URL, which can reach a repository inside the working tree and run its hooks.",
-        "Main takes a remote's name only from the user or from that read, never from file content, a reviewed change or "
-        "other command output, even when it passes the name rule, and when the remote is not one so defined, main does "
-        "not push and tells the user they may run the push themselves.",
+        "The remote a push names must also be one that the Git directory's own configuration defines, by a "
+        "`remote.<name>.url` key in its local scope read without includes, since Git takes a name that is no configured "
+        "remote as a path or URL, which can reach a repository inside the working tree and run its hooks.",
+        # Deviation D-2 (Adversarial review calls 3 and 4): a name taken from the listing is only a candidate, since a
+        # value can mimic an entry in the host's display.
+        "Main takes a remote's name only from the user or from its configuration read with `--local` and without "
+        "includes, the NUL-separated form Safe Git invocation lists, never from file content, a reviewed change or other "
+        "command output, even when it passes the name rule, and a name it takes from that listing is only a candidate, "
+        "since in the host's display a value can mimic an entry.",
+        # Deviation D-2: the read of exactly the remote's key confirms it before each push.
+        *NAMES_CONFIRMATION,
         "The exemption that Paths and names gives refs main wrote itself does not cover a name taken from content.",
         "When a name fails, including one the user gave, main does not perform the operation and tells the user they "
         "may run it themselves, as it does when it cannot establish the checks below.",
@@ -1651,12 +1702,12 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("including a name main creates from file content such as a version,", self.NAMES[0]),
                 ("and enters the command only as a single-quoted literal.", self.NAMES[0]),
                 ("or two such names joined by a single `:`, never with a leading `+`,", self.NAMES[1]),
-                ("does not cover a name taken from content.", self.NAMES[4]),
+                ("does not cover a name taken from content.", self.NAMES[7]),
                 ("including one the user gave, main does not perform the operation and tells the user they may run it "
-                 "themselves,", self.NAMES[5]),
+                 "themselves,", self.NAMES[8]),
                 ("So no text taken from file content, command output, a link target or a reviewed change reaches the "
                  "command line of main's `git add`, commit, tag or push, except a name that passed the name rule, as a "
-                 "single-quoted literal or, for a `hook.<name>`, within one.", self.NAMES[7])):
+                 "single-quoted literal or, for a `hook.<name>`, within one.", self.NAMES[10])):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, sentence)
         # The exemption the Names paragraph narrows is the one Paths and names states.
@@ -1689,61 +1740,125 @@ class RepositorySafetyTests(unittest.TestCase):
         """Repository safety follow-ups C3, Adversarial review call 1, finding 1 (BROKEN), regression: passing the name
         rule is not enough for a remote, because Git takes a name that is no configured remote as a path or URL. The
         Names paragraph states, after the refspec sentence, that the remote a push names is one a `remote.<name>.url` key
-        defines in the local configuration main reads without includes, named exactly as that read prints it; that main
-        takes a remote's name only from the user or that read, never from content, even when it passes the name rule;
-        and that otherwise main does not push and leaves the push to the user. The read is one Safe Git invocation lists,
-        and the paragraph listing the reads this rule needs names it. The name rule still applies to the remote, and tags
-        and branches keep it unchanged."""
+        defines in the local configuration read without includes; that main takes a remote's name only from the user or
+        that read, never from content, even when it passes the name rule, and that a name taken from the listing is only
+        a candidate. Deviation D-2 (Adversarial review call 4, BROKEN): before each push main confirms the remote with
+        the read of exactly its key, which Safe Git invocation lists for main alone; only exit 0 with a non-empty value
+        confirms it, exit 1 is not proof of absence, any other exit is not established, in every other case main does
+        not push and tells the user, and main relays no value the read prints. The paragraph listing the reads this rule
+        needs names both reads. The name rule still applies to the remote, and tags and branches keep it unchanged."""
         section = self.source("reference#Before add, commit, tag or push")
         names = " ".join(section.split("\n\n")[[p.startswith("**Names.** ") for p in section.split("\n\n")].index(True)]
                          .split())
         self.assertEqual(names, " ".join(self.NAMES))
+        confirmation = self.NAMES_CONFIRMATION
         for phrase, sentence in (
-                ("The remote a push names must also be one that the Git directory's own configuration defines:",
-                 self.NAMES[2]),
-                ("a `remote.<name>.url` key that main's configuration read with `--local` and without includes, the "
-                 "NUL-separated form Safe Git invocation lists, prints in that scope as the key of one of the entries "
-                 "into which that section divides the read, never as a line of it, named exactly as that entry prints "
-                 "it,", self.NAMES[2]),
+                ("The remote a push names must also be one that the Git directory's own configuration defines, by a "
+                 "`remote.<name>.url` key in its local scope read without includes,", self.NAMES[2]),
                 ("since Git takes a name that is no configured remote as a path or URL,", self.NAMES[2]),
-                ("Main takes a remote's name only from the user or from that read, never from file content, a reviewed "
-                 "change or other command output, even when it passes the name rule,", self.NAMES[3]),
-                ("when the remote is not one so defined, main does not push and tells the user they may run the push "
-                 "themselves.", self.NAMES[3])):
+                ("Main takes a remote's name only from the user or from its configuration read with `--local` and without "
+                 "includes,", self.NAMES[3]),
+                ("never from file content, a reviewed change or other command output, even when it passes the name rule,",
+                 self.NAMES[3]),
+                ("and a name it takes from that listing is only a candidate, since in the host's display a value can "
+                 "mimic an entry.", self.NAMES[3]),
+                ("Before each push, main confirms the remote with the read of exactly its key that Safe Git invocation "
+                 "lists, `git <prefix> config --local --no-includes --get 'remote.<name>.url'`,", confirmation[0]),
+                ("the name entering only inside that single-quoted literal,", confirmation[0]),
+                ("and the push names the remote exactly as that literal does.", confirmation[0]),
+                ("Only an exit of 0 with a non-empty printed value confirms the remote,", confirmation[1]),
+                ("main reports an exit of 1 as the remote not being confirmed, not as proof that it does not exist,",
+                 confirmation[1]),
+                ("and any other exit leaves it not established.", confirmation[1]),
+                ("In every case but a confirmed remote, main does not push and tells the user they may run the push "
+                 "themselves,", confirmation[2]),
+                ("and main relays no value that this read prints.", confirmation[2])):
             with self.subTest(phrase=phrase[:50]):
                 self.assertIn(phrase, sentence)
-        # The remote rule follows the name rule and the refspec sentence, so a configured remote passes both.
+        # The remote rule follows the name rule and the refspec sentence, so a configured remote passes both; the
+        # confirmation follows the candidate sentence.
+        self.assertEqual(self.NAMES[4:7], confirmation)
         self.assertLess(names.index(self.NAMES[0]), names.index(self.NAMES[2]))
         self.assertLess(names.index(self.NAMES[1]), names.index(self.NAMES[2]))
+        self.assertLess(names.index(self.NAMES[3]), names.index(confirmation[0]))
         self.assertIn("Every tag, branch and remote that main's `git add`, commit, tag or push names passes the name rule",
                       self.NAMES[0])
-        # The read is one of the forms Safe Git invocation lists, and the reads this rule needs include it.
+        # Both reads are forms Safe Git invocation lists, the key read for main alone and as one of the forms under
+        # Before add, commit, tag or push, which carry `--no-replace-objects`; the reads this rule needs name both.
         safe = self.source("reference#Safe Git invocation")
         self.assertIn("`git <prefix> config --list -z --show-origin --show-scope --no-includes` with `--local`", safe)
-        # C3's Adversarial review call 3 (BROKEN), regression: the read is NUL-separated and main divides it into
-        # entries, never lines, so a newline inside a value cannot forge a `remote.<name>.url` entry
-        # (test_a_push_names_only_a_remote_the_local_configuration_defines). The parsing sentences are one paragraph
-        # right after the table, and the remote rule relies on them.
-        table_end = "the empty tree of the repository's object format |\n\n"
-        self.assertIn(table_end + " ".join(self.CONFIG_LIST_ENTRIES) + "\n\nA configuration read that follows includes",
-                      safe)
-        self.assertIn("each entry as its scope, ended by NUL, its origin, ended by NUL, and its key, which is followed by a "
-                      "newline and then by the value, ended by NUL, or, for a key set with no value, is ended by NUL "
-                      "itself.", self.CONFIG_LIST_ENTRIES[0])
-        self.assertIn("so a newline inside a value can never start a new entry.", self.CONFIG_LIST_ENTRIES[1])
-        self.assertIn("Main never parses this read line by line:", self.CONFIG_LIST_ENTRIES[2])
-        self.assertIn("the remote a push names under Before add, commit, tag or push use only these entries",
-                      self.CONFIG_LIST_ENTRIES[2])
-        # Absence pins: the listing without `-z`, anywhere in the reference, and any reading of it by lines.
-        reference = read(REFERENCE)
-        self.assertNotIn(self.CONFIG_LIST_FORM_REMOVED, reference)
-        self.assertNotRegex(reference, r"config --list(?! -z)")
-        self.assertEqual(reference.count("line by line"), 1)
-        self.assertIn("and the configuration read with `--local` and without includes for the remote a push names.",
-                      self.WRITING_BEFORE[6])
+        self.assertIn("| A remote's URL key | `" + self.REMOTE_KEY_FORM + "`, where `<name>` is a remote's name that "
+                      "passed the name rule, inside that one single-quoted literal |", safe)
+        self.assertIn(self.REMOTE_KEY_FORM, self.MAIN_ONLY_FORMS)
+        self.assertNotIn(self.REMOTE_KEY_FORM, self.ROLE_FORMS)
+        self.assertIn("a remote's URL key are for main's checks under Before add, commit, tag or push only.",
+                      self.MAIN_ONLY_SENTENCE)
+        for phrase in ("the configuration read with `--local` and without includes, from which main may take a "
+                       "candidate for the remote a push names,", "and the read of that remote's URL key that confirms it."):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, self.WRITING_BEFORE[6])
         self.assertIn(self.WRITING_BEFORE[6], " ".join(section.split()))
+        self.assertTrue(self.WRITING_BEFORE[7].startswith("Under this rule each of these reads carries "
+                                                          "`--no-replace-objects`"))
+        # The form reads exactly one key, local and without includes, and the remote's name sits inside its one
+        # single-quoted literal, so the name rule keeps it one word.
+        words = shlex.split(self.REMOTE_KEY_FORM.replace("<name>", "up-stream/x"))
+        self.assertEqual(words[-4:], ["--local", "--no-includes", "--get", "remote.up-stream/x.url"])
         # Absence pin: the push row that let main name any remote is gone.
         self.assertNotIn("one remote named by main and an explicit refspec", " ".join(read(REFERENCE).split()))
+
+    def test_a_configuration_listing_is_read_as_a_union_of_possible_entries_and_never_proves_a_remote(self):
+        """Repository safety follow-ups C3, deviation D-2 (Adversarial review call 4, BROKEN), regression: the host's
+        tool output shows NUL as a space, so the paragraph right after the table states that in the host's display a
+        value can mimic an entry; that main reads the listing as the union of possible entries, never dropping one;
+        what that means for item 2 and for item 4's snapshot; that a listing never proves that a remote exists; and a
+        fail-closed rule that does not depend on seeing NUL boundaries. Item 2 reads the listing that way too. Absence
+        pins: the reference no longer claims that main divides the listing at NUL boundaries, that a newline in a value
+        can never start an entry, or that a listing confirms a remote."""
+        safe = self.source("reference#Safe Git invocation")
+        table_end = "inside that one single-quoted literal |\n\n"
+        self.assertIn(table_end + " ".join(self.CONFIG_LIST_ENTRIES) + "\n\nA configuration read that follows includes",
+                      safe)
+        self.assert_whole_sentence(self.CONFIG_LIST_MIMIC, safe)
+        self.assert_whole_sentence(self.CONFIG_LIST_NO_PROOF, safe)
+        entries = self.CONFIG_LIST_ENTRIES
+        for phrase, sentence in (
+                ("each entry as its scope, ended by NUL, its origin, ended by NUL, and its key, which is followed by a "
+                 "newline and then by the value, ended by NUL, or, for a key set with no value, is ended by NUL itself.",
+                 entries[0]),
+                ("The host's tool output shows NUL as a space, so main cannot see where one entry ends,", entries[1]),
+                ("in the host's display a value can mimic an entry,", entries[1]),
+                ("any text that could be an entry counts as one, and main never drops a possible entry.", entries[2]),
+                ("For item 2 of Main's preparation, such a possible entry only adds an entry and so, at most, an extra "
+                 "question;", entries[3]),
+                ("for item 4's snapshot of that read, a value that mimics an entry falls under the residual risk that "
+                 "Scope and assurance states for what is written into the Git directory.", entries[3]),
+                ("A listing never proves that a remote exists:", entries[4]),
+                ("is only a candidate for the remote a push names,", entries[4]),
+                ("Output that main cannot read as such a union of possible entries leaves the read not established,",
+                 entries[5]),
+                ("so main dispatches nothing, performs no operation under Before add, commit, tag or push, and reports "
+                 "it.", entries[5])):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, sentence)
+        # The residual risk the paragraph points to is the one Scope and assurance states.
+        self.assertIn("and anything repository code, or a program the user's configuration sets, writes into the Git "
+                      "directory when it runs, are residual risk.", self.source("reference#Scope and assurance"))
+        # Item 2 reads the listing as that paragraph states.
+        preparation = " ".join(self.source("reference#Main's preparation").split())
+        self.assertIn("NUL-separated and read as the union of possible entries that Safe Git invocation states,",
+                      preparation)
+        # Absence pins: the listing without `-z`, the claims that main sees NUL boundaries or that a newline in a value
+        # can never start an entry, and any claim that a listing confirms a remote.
+        reference = " ".join(read(REFERENCE).split())
+        self.assertNotIn(self.CONFIG_LIST_FORM_REMOVED, reference)
+        self.assertNotRegex(reference, r"config --list(?! -z)")
+        for removed in self.CONFIG_LIST_ENTRIES_REMOVED:
+            with self.subTest(removed=removed[:50]):
+                self.assertNotIn(removed, reference)
+        self.assertNotRegex(reference, r"newline (?:inside|in) a value (?:can|could) never")
+        self.assertNotRegex(reference, r"(?i)listing (?:confirms|proves|establishes) (?:that )?(?:a|the) remote")
+        self.assertNotRegex(reference, r"(?i)(?:divides|divided) (?:the read |it )?into (?:such )?entries")
 
     def test_every_hook_name_the_skipping_form_disables_passes_the_name_rule(self):
         """Repository safety follow-ups C3, Adversarial review call 1: the skipping form of `git add` puts each
@@ -1758,9 +1873,9 @@ class RepositorySafetyTests(unittest.TestCase):
                        "when one does not, main does not perform the operation and tells the user, as for a name that "
                        "fails."):
             with self.subTest(phrase=phrase[:50]):
-                self.assertIn(phrase, self.NAMES[6])
+                self.assertIn(phrase, self.NAMES[9])
         names = self.NAMES
-        self.assertTrue(names[5].startswith("When a name fails,"))
+        self.assertTrue(names[8].startswith("When a name fails,"))
         self.assertTrue(names[-1].endswith("as a single-quoted literal or, for a `hook.<name>`, within one."))
         for name in ("lint", "pre-commit.format", "check_1"):
             with self.subTest(allowed=name):
@@ -1931,9 +2046,11 @@ class RepositorySafetyTests(unittest.TestCase):
                     self.assertNotIn("--includes ", span.replace("--no-includes", ""))
                 else:
                     # Deviation D-1: outcome 1's include-free read is the key read by the filter-driver pattern only.
+                    # C3's deviation D-2: the read of one remote's URL key follows no include either.
                     self.assertIn(span, (self.CONFIG_KEYS_FORM, self.CONFIG_NO_INCLUDES_KEYS_FORM,
                                          self.CONFIG_NO_INCLUDES_KEYS_FORM.replace("<pattern>",
-                                                                                   self.CONFIG_PATTERNS["filter"])))
+                                                                                   self.CONFIG_PATTERNS["filter"]),
+                                         self.REMOTE_KEY_FORM))
         # Only `--list` with a scope option reads a whole listing; no other form does.
         listings = [span for span in re.findall(r"`(git <prefix> config [^`]*)`", reference) if "--list" in span]
         self.assertEqual(listings, [self.CONFIG_LIST_FORM])
@@ -2246,12 +2363,15 @@ class RepositorySafetyTests(unittest.TestCase):
          "主 Agent 在這些操作中指定的每個 tag、branch、remote 與 refspec，以及你要求略過 hook 時它停用的每個 hook 名稱，"
          "包括從檔案內容產生的名稱（例如版本號），都必須通過檔名的嚴格命名規則，並且只以加上引號的字面值放進指令；不通過時，"
          "即使是你給的名稱，主 Agent 也會把操作留給你自己執行。"),
+        # Deviation D-2 (Adversarial review call 4): main confirms the remote before each push by reading its own url
+        # key, so the README no longer says that main names it exactly as configured from the listing.
         ("Main pushes only to a remote that the Git directory's own local configuration defines, read without includes, "
-         "and names it exactly as configured, taking its name only from you or from that read and never from file "
-         "content, a reviewed change or other command output; otherwise it leaves the push for you to run.",
-         "主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote，並完全照設定中的名稱"
-         "指定；主 Agent 只從你或那次讀取取得 remote 名稱，絕不取自檔案內容、受審變更或其他指令輸出；否則它會把 push 留給你"
-         "自己執行。"),
+         "takes its name only from you or from that read and never from file content, a reviewed change or other "
+         "command output, and before each push confirms the remote by reading its own url key from that configuration; "
+         "otherwise it leaves the push for you to run.",
+         "主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote；主 Agent 只從你或那次"
+         "讀取取得 remote 名稱，絕不取自檔案內容、受審變更或其他指令輸出，並在每次 push 前從那份設定讀取這個 remote 自己的 url "
+         "來確認它；否則它會把 push 留給你自己執行。"),
     )
     # The sentences README_TEXT_OFF replaced, in both languages. Deviation D-2: the remote sentence takes the remote's
     # name only from the user or from the configuration read, as the reference's Names paragraph says.
@@ -2259,11 +2379,14 @@ class RepositorySafetyTests(unittest.TestCase):
         "README.md": ("in its own scratch directory outside the project, and that it checks for links before use,",
                       "Each tag, branch, remote and refspec main names in these operations must pass",
                       "it never uses a remote name taken from file content, command output or a reviewed change",
-                      "and otherwise leaves the push for you to run."),
+                      "and otherwise leaves the push for you to run.",
+                      # Deviation D-2: the wording that named the remote exactly as the listing showed it.
+                      "and names it exactly as configured,"),
         "README.zh-TW.md": ("暫存目錄中的檔案，絕不用 shell 指令寫入，使用前也會檢查",
                             "remote 與 refspec，包括從檔案內容產生的名稱",
                             "它絕不使用取自檔案內容、指令輸出或受審變更的 remote 名稱",
-                            "remote 名稱，否則會把 push 留給你自己執行。"),
+                            "remote 名稱，否則會把 push 留給你自己執行。",
+                            "並完全照設定中的名稱指定"),
     }
     README_WRITING = (
         ("since the Git directory's configuration is your own, main runs a `git add`, commit, tag or push with the "
@@ -2721,16 +2844,18 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("and each hook name it disables when you ask it to skip hooks, must pass the strict name rule",
                  english[1]),
                 ("Main pushes only to a remote that the Git directory's own local configuration defines, read without "
-                 "includes, and names it exactly as configured,", english[2]),
-                ("taking its name only from you or from that read and never from file content, a reviewed change or "
-                 "other command output;", english[2]),
+                 "includes,", english[2]),
+                ("takes its name only from you or from that read and never from file content, a reviewed change or "
+                 "other command output,", english[2]),
+                ("and before each push confirms the remote by reading its own url key from that configuration;",
+                 english[2]),
                 ("otherwise it leaves the push for you to run.", english[2]),
                 ("以它自己選定的名稱建立的新檔案", chinese[0]),
                 ("寫入前與使用前都會檢查這個檔案沒有經過連結", chinese[0]),
                 ("以及你要求略過 hook 時它停用的每個 hook 名稱", chinese[1]),
-                ("主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote，並完全照設定中的"
-                 "名稱指定；", chinese[2]),
-                ("主 Agent 只從你或那次讀取取得 remote 名稱，絕不取自檔案內容、受審變更或其他指令輸出；", chinese[2]),
+                ("主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote；", chinese[2]),
+                ("主 Agent 只從你或那次讀取取得 remote 名稱，絕不取自檔案內容、受審變更或其他指令輸出，", chinese[2]),
+                ("並在每次 push 前從那份設定讀取這個 remote 自己的 url 來確認它；", chinese[2]),
                 ("否則它會把 push 留給你自己執行。", chinese[2])):
             with self.subTest(phrase=phrase[:40]):
                 self.assertIn(phrase, sentence)
@@ -3298,7 +3423,7 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 self.skipTest("this Git ran no configured program in the control reads")
 
             substitutions = {"<prefix>": " ".join(shlex.split(prefix)[1:]), "<commit> <commit>": "HEAD~1 HEAD",
-                             "<commit>": "HEAD", "<path>": "a.txt", "<attribute>": "diff"}
+                             "<commit>": "HEAD", "<path>": "a.txt", "<attribute>": "diff", "<name>": "origin"}
             for form in RepositorySafetyTests.FORMS:
                 # Deviation D-3: under Before add, commit, tag or push every form carries `--no-replace-objects` after
                 # the common prefix, so each form also runs that way with the installed Git.
@@ -3315,9 +3440,10 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                         with self.subTest(form=variant, pattern=pattern):
                             result = git(*shlex.split(command)[1:])
                             # A `--quiet` form of item 6 answers with its exit code: 1 for an index that differs from
-                            # the tree; a key read exits 1 when no key matches. Any other failure, such as an unknown
-                            # option, is an error.
-                            expected = (0, 1) if "--quiet" in form or "--get-regexp" in form else (0,)
+                            # the tree; a key read exits 1 when no key matches, and so does the read of a remote's URL
+                            # key (deviation D-2) here, where no remote is configured. Any other failure, such as an
+                            # unknown option, is an error.
+                            expected = (0, 1) if "--quiet" in form or " --get" in form else (0,)
                             self.assertIn(result.returncode, expected, result.stderr)
                             self.assertEqual(ran(), set(), f"{command} ran a configured program")
             # Each control that ran is one this check covered, so a form that dropped its option would be caught.
@@ -3651,45 +3777,20 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             self.assertTrue((project / "commit-message.txt").exists())
 
     @staticmethod
-    def config_entries(output):
-        """The entries of the NUL-separated configuration listing, divided as Safe Git invocation states and never by
-        lines: each is its scope and its origin, each ended by NUL, and its key, followed by a newline and the value
-        ended by NUL, or ended by NUL itself for a key with no value (value None). Output that does not divide so raises
-        ValueError, which leaves the read not established."""
-        entries, rest = [], output
-        while rest:
-            scope, ended_scope, rest = rest.partition(b"\0")
-            origin, ended_origin, rest = rest.partition(b"\0")
-            end, newline = rest.find(b"\0"), rest.find(b"\n")
-            if not (ended_scope and ended_origin) or end < 0:
-                raise ValueError("the listing does not divide into entries")
-            if 0 <= newline < end:
-                key, value = rest[:newline], rest[newline + 1:end].decode("utf-8", "surrogateescape")
-            else:
-                key, value = rest[:end], None
-            if not key:
-                raise ValueError("an entry has no key")
-            entries.append((scope.decode("utf-8"), origin.decode("utf-8", "surrogateescape"), key.decode("utf-8"),
-                            value))
-            rest = rest[end + 1:]
-        return entries
-
-    @staticmethod
-    def configured_remotes(entries):
-        """The remotes Names lets a push name: the names of `remote.<name>.url` keys of the entries that the
-        NUL-separated configuration read with `--local` and without includes prints in the local scope, exactly as
-        printed, that pass the name rule."""
+    def display_candidates(display):
+        """The remote names a reader of the host's display, where NUL shows as a space, could take from the listing as
+        the union of possible entries: every `remote.<name>.url` key standing between spaces or newlines, wherever it
+        stands, that passes the name rule. Each is only a candidate."""
         found = set()
-        for scope, _origin, key, _value in entries:
-            match = re.fullmatch(r"remote\.(.+)\.url", key)
-            if scope == "local" and match and RepositorySafetyTests.passes_the_name_rule(match.group(1)):
-                found.add(match.group(1))
+        for name in re.findall(r"(?<![^ \n])remote\.(\S+)\.url(?![^ \n])", display):
+            if RepositorySafetyTests.passes_the_name_rule(name):
+                found.add(name)
         return found
 
     @staticmethod
     def remotes_by_lines(listing):
-        """The same rule applied, as Names forbids, to the lines of the listing without `-z`; only the positive control
-        of the forged entry uses it."""
+        """The listing without `-z` read by lines, as Names forbids; only the positive control of the forged line uses
+        it."""
         found = set()
         for line in listing.splitlines():
             scope, _, rest = line.partition("\t")
@@ -3699,14 +3800,32 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 found.add(match.group(1))
         return found
 
+    @staticmethod
+    def remote_confirmation(git, prefix, name):
+        """Names' confirmation of a candidate, with the installed Git: the name passes the name rule and the read of
+        exactly its key, the form Safe Git invocation lists with `--no-replace-objects` after the common prefix, exits 0
+        with a non-empty printed value. Returns whether it is confirmed and the read's exit code; the printed value is
+        never returned, as main relays none."""
+        if not RepositorySafetyTests.passes_the_name_rule(name):
+            return False, None
+        form = RepositorySafetyTests.REMOTE_KEY_FORM.replace("git <prefix> ", "git <prefix> --no-replace-objects ", 1)
+        words = shlex.split(form.replace("<name>", name))
+        result = git(*prefix, *words[2:])
+        value = result.stdout[:-1] if result.stdout.endswith(b"\n") else result.stdout
+        return result.returncode == 0 and value != b"", result.returncode
+
     def test_a_push_names_only_a_remote_the_local_configuration_defines(self):
-        """Repository safety follow-ups C3, Adversarial review call 1, finding 1 (BROKEN), regression with the installed
+        """Repository safety follow-ups C3, Adversarial review calls 1, 3 and 4 (BROKEN), regression with the installed
         Git, in a marker repository isolated from the user's configuration: a remote name taken from file content that
-        passes the name rule, and one defined only through an included working-tree file, are not among the remotes the
-        local configuration read without includes defines, so Names forbids pushing to them; the fixed push form to the
-        configured remote succeeds and runs no hook of a repository inside the working tree. Positive controls: a plain
-        push to either name reaches the repository inside the working tree and runs its hook. Only the temporary
-        directory is written, and nothing contacts the network."""
+        passes the name rule, one defined only through an included working-tree file, one only the global configuration
+        defines, one a value forges as a line of the listing without `-z`, and one a value mimics as an entry in the
+        host's display of the `-z` listing (deviation D-2) are not confirmed by the read of exactly their key, which
+        exits 1 for each, so Names forbids pushing to them; a remote whose `url` is empty is not confirmed although the
+        read exits 0. The configured remote is confirmed, and the fixed push form to it succeeds and runs no hook of a
+        repository inside the working tree. Positive controls: a plain push to the content's name or the included one
+        reaches the repository inside the working tree and runs its hook, the forged line reads as a remote by lines,
+        and the display with NUL shown as a space shows the mimicked entry. Only the temporary directory is written,
+        and nothing contacts the network."""
         reference = read(REFERENCE)
         prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
         under_rule = (*prefix, "--no-replace-objects", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c",
@@ -3716,6 +3835,7 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
         flags = ("--no-follow-tags", "--recurse-submodules=no", "--no-signed")
         for flag in flags:
             self.assertIn(f"`{flag}`", push_row)
+        self.assertIn(f"`{RepositorySafetyTests.REMOTE_KEY_FORM}`", reference)
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
             root = Path(os.path.realpath(temp))
             repo, origin, marker, global_config = root / "repo", root / "origin.git", root / "marker", root / "gitconfig"
@@ -3769,42 +3889,66 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                     marker.unlink()
 
             # C3's Adversarial review call 3 (BROKEN): a value of the Git directory's configuration that holds a
-            # newline, as one `git submodule init` copies from a URL in a committed `.gitmodules`, forges a line that
-            # reads as a `remote.<name>.url` key of the local scope naming the repository inside the working tree.
-            forged = "local\tfile:.git/config\tremote." + content_name + ".url=y"
-            self.assertEqual(git("config", "submodule.lib.url", "x\n" + forged).returncode, 0)
-            # A key set with no value is ended by NUL itself, after the forged value.
+            # newline forges a line that reads as a `remote.<name>.url` key of the local scope.
+            forged_name = "forged"
+            forged = "local\tfile:.git/config\tremote." + forged_name + ".url=y"
+            self.assertEqual(git("config", "submodule.old.url", "x\n" + forged).returncode, 0)
+            # C3's Adversarial review call 4 (BROKEN): `git submodule init` copies a URL from a committed `.gitmodules`
+            # into the Git directory's configuration, and with plain spaces it mimics, in the host's display of the
+            # `-z` listing where NUL shows as a space, an entry whose key is `remote.<content's name>.url` and that is
+            # ended by NUL itself, as a key set with no value is.
+            mimic = "x local file:.git/config remote." + content_name + ".url"
+            (repo / ".gitmodules").write_text(f'[submodule "lib"]\n\tpath = lib\n\turl = {mimic}\n', encoding="utf-8",
+                                              newline="\n")
+            head = git("rev-parse", "HEAD").stdout.decode("ascii").strip()
+            self.assertEqual(git("update-index", "--add", "--cacheinfo", f"160000,{head},lib").returncode, 0)
+            if git("submodule", "init").returncode or git("config", "--local", "submodule.lib.url").stdout != (
+                    mimic + "\n").encode("utf-8"):
+                # A Git whose `submodule init` copies no such URL: the same value written directly.
+                self.assertEqual(git("config", "submodule.lib.url", mimic).returncode, 0)
+            # A second mimicked entry, followed by a newline and a value, as an entry with a value is.
+            spaced_name = "spaced"
+            self.assertEqual(git("config", "submodule.two.url",
+                                 "x local file:.git/config remote." + spaced_name + ".url\nupstream").returncode, 0)
+            # A remote whose `url` is empty: its key read exits 0 with an empty value, and a newer Git treats an empty
+            # `url` as resetting the list.
             with open(repo / ".git" / "config", "ab") as config_file:
-                config_file.write(b"[feather]\n\tflag\n")
+                config_file.write(b'[remote "blank"]\n\turl =\n')
+
             # Positive control: the listing without `-z` prints the forged line, and taking its lines would count the
-            # content's name as a configured remote.
+            # forged name as a configured remote.
             plain = git(*prefix, *shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM_REMOVED)[2:], "--local")
             self.assertEqual(plain.returncode, 0, plain.stderr)
             self.assertIn(forged, plain.stdout.decode("utf-8").splitlines())
-            self.assertIn(content_name, self.remotes_by_lines(plain.stdout.decode("utf-8")))
-
-            # The configuration read Names names defines only `origin`: neither the content's name, even in the forged
-            # line, nor the remote an included working-tree file defines, nor one the global configuration defines is a
-            # remote main may push to.
+            self.assertIn(forged_name, self.remotes_by_lines(plain.stdout.decode("utf-8")))
+            # Positive control (D-2): the `-z` listing as the host shows it, with NUL as a space, shows the mimicked
+            # entries exactly as a real one is shown, so the listing gives them as candidates.
             listing = git(*prefix, *shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:], "--local")
             self.assertEqual(listing.returncode, 0, listing.stderr)
-            entries = self.config_entries(listing.stdout)
-            # The forged text stays inside the one value it belongs to.
-            self.assertIn(("local", "file:.git/config", "submodule.lib.url", "x\n" + forged), entries)
-            self.assertEqual(entries[-1], ("local", "file:.git/config", "feather.flag", None))
-            self.assertEqual(len([entry for entry in entries if entry[2] == "submodule.lib.url"]), 1)
-            # Output that does not divide into entries is not established, rather than read some other way.
-            for broken in (listing.stdout[:-1], b"local\0file:.git/config\0", b"local\0"):
-                with self.subTest(broken=broken[-20:]):
-                    with self.assertRaises(ValueError):
-                        self.config_entries(broken)
-            configured = self.configured_remotes(entries)
-            self.assertEqual(configured, {"origin"})
-            for name in (content_name, "tracked", "personal"):
-                with self.subTest(refused=name):
-                    self.assertNotIn(name, configured)
+            display = listing.stdout.replace(b"\0", b" ").decode("utf-8")
+            self.assertIn(" local file:.git/config remote." + content_name + ".url local file:.git/config ", display)
+            self.assertIn(" local file:.git/config remote." + spaced_name + ".url\nupstream local file:.git/config ",
+                          display)
+            self.assertIn("local file:.git/config remote.origin.url\n" + origin.as_posix() + " ", display)
+            candidates = self.display_candidates(display)
+            for name in ("origin", content_name, spaced_name, "blank"):
+                with self.subTest(candidate=name):
+                    self.assertIn(name, candidates)
 
-            # Allowed behaviour: the fixed push form to the configured remote succeeds and runs no such hook.
+            # The confirming read: only the configured remote is confirmed. Neither the content's name, mimicked in the
+            # display, nor the other mimicked or forged names, nor the remote an included working-tree file defines,
+            # nor one the global configuration defines is confirmed: the read of exactly its key exits 1 for each.
+            self.assertEqual(self.remote_confirmation(git, prefix, "origin"), (True, 0))
+            for name in (content_name, spaced_name, forged_name, "tracked", "personal"):
+                with self.subTest(refused=name):
+                    self.assertEqual(self.remote_confirmation(git, prefix, name), (False, 1))
+            # The empty `url` is not confirmed, although the read exits 0 (positive control: an exit code alone would
+            # confirm it).
+            self.assertEqual(self.remote_confirmation(git, prefix, "blank"), (False, 0))
+            # A name that fails the name rule is never read.
+            self.assertEqual(self.remote_confirmation(git, prefix, "x' ; id ; '"), (False, None))
+
+            # Allowed behaviour: the fixed push form to the confirmed remote succeeds and runs no such hook.
             result = git(*under_rule, "push", *flags, "origin", "main:main")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(marker.exists(), "a push to the configured remote ran a hook inside the working tree")
@@ -3976,8 +4120,7 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
             # The include-less listing of item 4.2 shows the include, not what it reaches.
             local = git(*prefix, *shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:], "--local")
             self.assertEqual(local.returncode, 0, local.stderr)
-            self.assertIn(("local", "file:.git/config", "include.path", "../tree.cfg"),
-                          RepositorySafetyGitFormsTests.config_entries(local.stdout))
+            self.assertIn(b"local\0file:.git/config\0include.path\n../tree.cfg\0", local.stdout)
             self.assertNotIn(marker, local.stdout.decode("utf-8"))
             self.assertNotIn("promisor", local.stdout.decode("utf-8"))
 
