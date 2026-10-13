@@ -5,7 +5,7 @@ cc-feather lets a main Claude agent hand work to managed native roles and keeps 
 ## Work and plans
 
 **Plan**:
-An implementation basis with stated scope and acceptance criteria that the user agreed to, with its claims listed, its unfinished tickets in the named scope as claims, or else one claim: a plan file, spec, ticket, plan-mode plan or a plan approved in conversation. Telling the agent to implement a given plan or ticket counts as agreement; a document lacking scope or acceptance is not yet a Plan.
+An implementation basis with stated scope and acceptance criteria that the user agreed to: a plan file, spec, ticket, plan-mode plan or a plan approved in conversation. It is what the user names when asking for implementation, and its Claims are decided then: a named spec is one Claim unless it lists its own; named tickets of a spec form one Plan of those tickets, the spec serving only to check that they cover it; a single named ticket is its own Plan. Telling the agent to implement a given plan or ticket counts as agreement; a document lacking scope or acceptance is not yet a Plan.
 _Avoid_: task list, todo
 
 **Plan-driven work**:
@@ -21,11 +21,11 @@ A change to a security guarantee at a trust boundary, or to the implementation o
 _Avoid_: security boundary change, sensitive change
 
 **Security-critical claim**:
-A Claim whose outcome includes a Security-critical change. It is identified when the Plan is written or, for a Plan main did not write, before its first review.
+A Claim whose outcome includes a Security-critical change. It is identified when main lists the Plan's Claims itself or, otherwise, before the Plan's first review. A spec main drafts at the user's request is not thereby a Plan whose Claims main lists.
 _Avoid_: security claim
 
 **Claim**:
-One independently verifiable outcome with its own acceptance, listed in a Plan or written as an unfinished ticket in the Plan's named scope. Code review and outcome verification each judge one Claim. A ticket is one place a Claim may be written, not a synonym for it; a ticket being "claimed" in a ticket workflow means someone took it and is unrelated.
+One independently verifiable outcome with its own acceptance: a named spec or ticket, one a spec lists itself, or one unfinished ticket among those named. A spec lists Claims only when the user asked for them. Code review and outcome verification each judge one Claim, reading what it is written in and the parts of a spec it cites or that state they hold for every Claim. A ticket is one place a Claim may be written, not a synonym for it; a ticket being "claimed" in a ticket workflow means someone took it and is unrelated.
 _Avoid_: change, slice
 
 **Implementation phase**:
