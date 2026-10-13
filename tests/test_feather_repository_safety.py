@@ -2157,17 +2157,23 @@ class RepositorySafetyTests(unittest.TestCase):
          "包括從檔案內容產生的名稱（例如版本號），都必須通過檔名的嚴格命名規則，並且只以加上引號的字面值放進指令；不通過時，"
          "即使是你給的名稱，主 Agent 也會把操作留給你自己執行。"),
         ("Main pushes only to a remote that the Git directory's own local configuration defines, read without includes, "
-         "and names it exactly as configured; it never uses a remote name taken from file content, command output or a "
-         "reviewed change, and otherwise leaves the push for you to run.",
+         "and names it exactly as configured, taking its name only from you or from that read and never from file "
+         "content, a reviewed change or other command output; otherwise it leaves the push for you to run.",
          "主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote，並完全照設定中的名稱"
-         "指定；它絕不使用取自檔案內容、指令輸出或受審變更的 remote 名稱，否則會把 push 留給你自己執行。"),
+         "指定；主 Agent 只從你或那次讀取取得 remote 名稱，絕不取自檔案內容、受審變更或其他指令輸出；否則它會把 push 留給你"
+         "自己執行。"),
     )
-    # The sentences README_TEXT_OFF replaced, in both languages.
+    # The sentences README_TEXT_OFF replaced, in both languages. Deviation D-2: the remote sentence takes the remote's
+    # name only from the user or from the configuration read, as the reference's Names paragraph says.
     README_TEXT_OFF_REPLACED = {
         "README.md": ("in its own scratch directory outside the project, and that it checks for links before use,",
-                      "Each tag, branch, remote and refspec main names in these operations must pass"),
+                      "Each tag, branch, remote and refspec main names in these operations must pass",
+                      "it never uses a remote name taken from file content, command output or a reviewed change",
+                      "and otherwise leaves the push for you to run."),
         "README.zh-TW.md": ("暫存目錄中的檔案，絕不用 shell 指令寫入，使用前也會檢查",
-                            "remote 與 refspec，包括從檔案內容產生的名稱"),
+                            "remote 與 refspec，包括從檔案內容產生的名稱",
+                            "它絕不使用取自檔案內容、指令輸出或受審變更的 remote 名稱",
+                            "remote 名稱，否則會把 push 留給你自己執行。"),
     }
     README_WRITING = (
         ("since the Git directory's configuration is your own, main runs a `git add`, commit, tag or push with the "
@@ -2625,16 +2631,17 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("and each hook name it disables when you ask it to skip hooks, must pass the strict name rule",
                  english[1]),
                 ("Main pushes only to a remote that the Git directory's own local configuration defines, read without "
-                 "includes, and names it exactly as configured;", english[2]),
-                ("it never uses a remote name taken from file content, command output or a reviewed change,", english[2]),
-                ("and otherwise leaves the push for you to run.", english[2]),
+                 "includes, and names it exactly as configured,", english[2]),
+                ("taking its name only from you or from that read and never from file content, a reviewed change or "
+                 "other command output;", english[2]),
+                ("otherwise it leaves the push for you to run.", english[2]),
                 ("以它自己選定的名稱建立的新檔案", chinese[0]),
                 ("寫入前與使用前都會檢查這個檔案沒有經過連結", chinese[0]),
                 ("以及你要求略過 hook 時它停用的每個 hook 名稱", chinese[1]),
                 ("主 Agent 只 push 到 Git 目錄本身的本機設定（在不跟隨 include 的情況下讀取）所定義的 remote，並完全照設定中的"
                  "名稱指定；", chinese[2]),
-                ("它絕不使用取自檔案內容、指令輸出或受審變更的 remote 名稱", chinese[2]),
-                ("否則會把 push 留給你自己執行。", chinese[2])):
+                ("主 Agent 只從你或那次讀取取得 remote 名稱，絕不取自檔案內容、受審變更或其他指令輸出；", chinese[2]),
+                ("否則它會把 push 留給你自己執行。", chinese[2])):
             with self.subTest(phrase=phrase[:40]):
                 self.assertIn(phrase, sentence)
         for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
