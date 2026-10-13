@@ -59,11 +59,13 @@ def plant(directory: Path, name: str = NAME, data: bytes = b"MZ", mode: int = 0o
 def qualified(entry: str) -> bool:
     """The test's own statement of a considered PATH entry, written independently of the resolver: on POSIX it
     starts with /, has no `..` component, whose target depends on links before it, and does not lie in /proc or
-    /dev/fd, whose paths name something different in every process."""
+    /dev/fd, whose paths name something different in every process; on Windows it holds no `:` but its drive
+    letter's, and a UNC entry none, since Git's MSYS layer splits a value at such a `:` for the programs it starts."""
     if not WINDOWS:
         return (entry.startswith("/") and not re.search(r"(?:^|/)\.\.(?:/|$)", entry)
                 and not re.match(r"^/+(?:\./+)*(?:proc|dev/+(?:\./+)*fd)(?:/|$)", entry))
-    return bool(re.match(r"^[A-Za-z]:[\\/]", entry) or re.match(r"^[\\/]{2}(?![?.][\\/])[^\\/]+[\\/][^\\/]+", entry))
+    return bool(re.match(r"^[A-Za-z]:[\\/][^:]*$", entry)
+                or re.match(r"^[\\/]{2}(?![?.][\\/])[^\\/:]+[\\/][^\\/:]+[^:]*$", entry))
 
 
 def isolated_environment(root: Path) -> dict[str, str]:
@@ -206,6 +208,46 @@ class GitResolverTableTest(unittest.TestCase):
         self.check([("a link to a regular git.exe", str(linked), str(linked / NAME)),
                     ("a link to a directory", str(self.root / "linkdir"), None)])
 
+    @unittest.skipUnless(WINDOWS, WINDOWS_ONLY)
+    def test_windows_entries_holding_a_colon(self):
+        """Regression for the C4 outcome verification finding at 3051676 (D-3): Git for Windows' MSYS layer splits a
+        value at every `:` but a drive letter's for the programs it starts, so an entry such as <good>:. would hand
+        them `.`. Every Windows entry with a `:` anywhere but right after its drive letter, and every UNC entry with
+        a `:`, is skipped, although its first part holds a Git; one whose only `:` is its drive letter's is kept.
+        The rows assert the classification itself, since Windows may refuse to open such a path anyway."""
+        drive = os.path.splitdrive(str(self.good))[0]
+        self.assertTrue(drive and drive[1] == ":", "the scratch directory is not on a drive letter")
+        good = str(self.good)
+        unc = "\\\\localhost\\" + drive[0] + "$" + os.path.splitdrive(good)[1]
+        skipped = [
+            ("<good>:., whose good holds git.exe", good + ":."),
+            ("<good>: with a trailing colon", good + ":"),
+            ("a colon inside the path", good + ":x\\good"),
+            ("forward slashes, <good>:.", self.good.as_posix() + ":."),
+            ("a lower-case drive letter, <good>:.", drive[0].lower() + good[1:] + ":."),
+            ("a quoted <good>:., quotes removed first", f'"{good}:."'),
+            ("a UNC entry ending in :.", unc + ":."),
+            ("a UNC server name holding a colon", "\\\\localhost:445\\" + drive[0] + "$" + os.path.splitdrive(good)[1]),
+            ("a UNC share name holding a colon", "\\\\localhost\\share:x\\good"),
+        ]
+        kept = [
+            ("C:\\... with only its drive letter's colon", good),
+            ("C:/... with only its drive letter's colon", self.good.as_posix()),
+            ("a lower-case drive letter", drive[0].lower() + good[1:]),
+        ]
+        for label, entry in skipped:
+            with self.subTest(label, PATH=entry):
+                self.assertEqual(storage.git_search_path(entry), [])
+                self.assertIsNone(self.resolve(entry))
+        for label, entry in kept:
+            with self.subTest(label, PATH=entry):
+                self.assertEqual(storage.git_search_path(entry), [entry])
+                self.assertEqual(self.resolve(entry), os.path.join(entry, NAME))
+        with self.subTest("every colon entry before a kept one"):
+            value = ";".join([entry for _, entry in skipped] + [good])
+            self.assertEqual(storage.git_search_path(value), [good])
+            self.assertEqual(self.resolve(value), os.path.join(good, NAME))
+
     @unittest.skipIf(WINDOWS, POSIX_ONLY)
     def test_posix_entry_shapes(self):
         plant(self.root / "noexec", mode=0o644)
@@ -323,7 +365,8 @@ class GitResolverTableTest(unittest.TestCase):
         separator = os.pathsep
         good = str(self.good)
         skipped = ["", ".", "bin"] + ([os.path.splitdrive(good)[0] + "bin", os.path.splitdrive(good)[1],
-                                       "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + good, "\\\\.\\" + good] if WINDOWS
+                                       "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + good, "\\\\.\\" + good, good + ":.",
+                                       "\\\\localhost\\share:x\\good"] if WINDOWS
                                       else ["/proc/self/cwd", "//proc//self/cwd/", "/proc/./thread-self/cwd",
                                             "/dev/fd/3", "/var/run/../proc/self/cwd", "/usr/../usr/bin",
                                             good + "/../good"])
@@ -479,8 +522,11 @@ class GitCallTest(InProcessBase):
         empty.mkdir()
         if WINDOWS:
             drive, rooted = os.path.splitdrive(str(self.cwd))
+            # D-3: an entry whose first part is the working directory, which holds a planted Git, followed by `:.`,
+            # and a UNC entry holding a `:`; Git's MSYS layer would split either at that `:` for its children.
             self.skipped = ["", ".", "bin", drive + "bin", rooted, "%FEATHER_LOOKUP_DIR%", "\\\\?\\" + str(self.cwd),
-                            "\\\\.\\" + str(self.cwd), f'"{empty}"']
+                            "\\\\.\\" + str(self.cwd), str(self.cwd) + ":.", "\\\\localhost\\share:x\\cwd",
+                            f'"{empty}"']
         else:
             self.skipped = ["", ".", "bin", "$HOME/bin", "/proc/self/cwd", "//proc//self/cwd/", "/dev/fd/0",
                             "/var/run/../proc/self/cwd", str(self.cwd) + "/../cwd"]
@@ -675,7 +721,8 @@ class GitExecPathTest(unittest.TestCase):
     after -C, look up its git-* programs relative to the project or through the current directory, so the helper's
     Git processes do not get it; a considered one, the user's own, reaches Git unchanged. The value is judged as is:
     on Windows a quoted value is dropped, although a quoted PATH entry is considered without its quotes, and a value
-    holding a path separator is dropped, because Git puts it before its children's PATH.
+    holding a path separator is dropped, because Git puts it before its children's PATH, and so is a Windows value
+    with a `:` other than its drive letter's, at which Git's MSYS layer splits it.
     git_environment itself, which other code uses, is unchanged."""
 
     def setUp(self):
@@ -709,11 +756,18 @@ class GitExecPathTest(unittest.TestCase):
         # considered first entry followed by a path separator would hand them `.` (the project after -C), `..` or
         # /proc/self/cwd; a value holding a path separator is dropped whatever its entries are.
         dropped += [kept + ";."] if WINDOWS else [kept + ":.", kept + ":/proc/self/cwd", kept + ":.."]
+        if WINDOWS:
+            # Regression for the C4 outcome verification finding at 3051676 (D-3): Git's MSYS layer splits the
+            # value at a `:` other than the drive letter's for the programs it starts, handing them `.`.
+            dropped += [kept + ":.", kept + ":", Path(kept).as_posix() + ":.", "\\\\localhost\\share:x\\libexec"]
         for value in dropped:
             with self.subTest("dropped", GIT_EXEC_PATH=value):
                 self.assertIsNone(self.started_with(value))
         with self.subTest("kept"):
             self.assertEqual(self.started_with(kept), kept)
+        if WINDOWS:
+            with self.subTest("kept, forward slashes"):
+                self.assertEqual(self.started_with(Path(kept).as_posix()), Path(kept).as_posix())
         with self.subTest("absent stays absent"):
             self.assertIsNone(self.started_with(None))
 

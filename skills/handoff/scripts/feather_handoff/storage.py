@@ -52,7 +52,8 @@ def _fully_qualified(entry: str) -> bool:
 
     Windows: a drive letter followed by a separator, or a UNC path \\\\server\\share; never drive-relative (C:foo),
     rooted without a drive (\\foo), or a device path (\\\\?\\, \\\\.\\). Decided from the text, not ntpath.isabs,
-    whose answer for rooted paths differs between Python versions. POSIX: starts with /."""
+    whose answer for rooted paths differs between Python versions; _considered also skips one holding a further `:`
+    (see _colon_split). POSIX: starts with /."""
     if not WINDOWS:
         return entry.startswith("/")
     if len(entry) >= 3 and entry[0].isascii() and entry[0].isalpha() and entry[1] == ":" and entry[2] in _SEPARATORS:
@@ -86,21 +87,30 @@ def _process_relative(entry: str) -> bool:
     return any(tuple(parts[:len(namespace)]) == namespace for namespace in _PROCESS_NAMESPACES)
 
 
+def _colon_split(entry: str) -> bool:
+    """Windows: the fully qualified entry holds a `:` anywhere but right after its drive letter, and a UNC entry
+    any `:`. Git for Windows' MSYS layer reads such a value as several entries split at that `:` for the programs it
+    starts, so C:\\tools:. would hand them `.`. A drive-letter entry's own `:` is at index 1 and a UNC entry starts
+    with two separators, so both cases are a `:` from index 2 on."""
+    return WINDOWS and ":" in entry[2:]
+
+
 def _considered(entry: str) -> bool:
     """One directory the user named, the same for every process and current directory: nonempty, fully qualified,
-    expanded and, on POSIX, without a `..` component and outside /proc and /dev/fd. Classifies PATH entries and
-    GIT_EXEC_PATH alike."""
+    expanded and, on Windows, without a `:` that Git's MSYS layer would split at (see _colon_split), on POSIX
+    without a `..` component and outside /proc and /dev/fd. Classifies PATH entries and GIT_EXEC_PATH alike."""
     return (bool(entry) and "\0" not in entry and _fully_qualified(entry) and not _UNEXPANDED.search(entry)
-            and (WINDOWS or not (_climbs(entry) or _process_relative(entry))))
+            and not _colon_split(entry) and (WINDOWS or not (_climbs(entry) or _process_relative(entry))))
 
 
 def git_search_path(value: str | None) -> list[str]:
     """The PATH entries the resolver considers and the only ones Git's own PATH keeps, in their order.
 
     An absent or empty PATH has none. On Windows one pair of surrounding double quotes is removed first. Empty,
-    relative, not fully qualified and unexpanded entries are skipped, and on POSIX every entry with a `..`
-    component (see _climbs) and every entry under /proc or /dev/fd (see _process_relative), so neither the current
-    directory nor a directory relative to it takes part."""
+    relative, not fully qualified and unexpanded entries are skipped, on Windows every entry with a `:` anywhere but
+    right after its drive letter and every UNC entry with a `:` (see _colon_split), and on POSIX every entry with a
+    `..` component (see _climbs) and every entry under /proc or /dev/fd (see _process_relative), so neither the
+    current directory nor a directory relative to it takes part."""
     entries = []
     for entry in (value or "").split(os.pathsep):
         if WINDOWS and len(entry) >= 2 and entry[0] == entry[-1] == '"':
@@ -121,8 +131,9 @@ def resolve_git(value: str | None) -> str:
     """The Git executable the handoff tool starts: the first git_search_path entry holding GIT_NAME as a regular
     file after following links, and on POSIX executable, returned as the entry joined with that name (not a link's
     target). Entries git_search_path skips are never looked at: empty, relative and not fully qualified ones,
-    unexpanded ones, and on POSIX those with a `..` component or under /proc or /dev/fd, which can name the current
-    directory although they start with /. Raises FileNotFoundError when no entry has one. Asks neither the operating
+    unexpanded ones, on Windows those with a `:` anywhere but right after the drive letter (any `:` in a UNC entry),
+    and on POSIX those with a `..` component or under /proc or /dev/fd, which can name the current directory
+    although they start with /. Raises FileNotFoundError when no entry has one. Asks neither the operating
     system nor Python to search (no shutil.which, os.get_exec_path or os.defpath), starts no process and keeps no
     result between calls."""
     for entry in git_search_path(value):
@@ -144,10 +155,11 @@ def run_git(directory: Path, *arguments: str, errors: str = "strict",
     propagates and no process starts. Git runs from its own directory with only the entries git_search_path keeps as
     its PATH, so the process's current directory takes part neither in finding Git nor in Git's own lookups, and
     <directory> is passed absolute. An inherited GIT_EXEC_PATH stays only when its value, taken as is without
-    removing quotes, holds no path separator (os.pathsep) and is an entry the resolver would consider; any other is
-    dropped, because Git would look up its git-* programs there and puts the value before its children's PATH, so a
-    value that is not one considered entry would reach them relative to the project after -C or through the
-    process's current directory. Needs no Store, so root discovery can use it. no_lazy_fetch is what
+    removing quotes, holds no path separator (os.pathsep) and is an entry the resolver would consider, so on Windows
+    one with a `:` anywhere but right after its drive letter is dropped too; any other is dropped, because Git would
+    look up its git-* programs there and puts the value before its children's PATH, so a value that is not one
+    considered entry would reach them relative to the project after -C or through the process's current directory.
+    Needs no Store, so root discovery can use it. no_lazy_fetch is what
     lazy_fetch_guard returned for the operation. Output is UTF-8 text decoded with `errors`; OSError and
     subprocess.TimeoutExpired propagate, and each caller judges the return code."""
     value = os.environ.get("PATH")
