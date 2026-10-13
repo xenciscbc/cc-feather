@@ -286,6 +286,11 @@ class RepositorySafetyTests(unittest.TestCase):
     # Adversarial review of C1, finding F1: a read that follows includes (items 4.2, 4.3, 4.4 and item 6's promisor
     # detection) reads only the keys a pattern names, never a whole listing.
     CONFIG_KEYS_FORM = "git <prefix> config --includes --show-origin --show-scope --get-regexp '<pattern>'"
+    # Repository safety follow-ups C2, deviation D-1: outcome 1's read of the filter-driver keys without includes, in
+    # every scope, by the same pattern as the read that follows includes, so both print the same layout.
+    CONFIG_NO_INCLUDES_KEYS_FORM = (
+        "git <prefix> config --no-includes --show-origin --show-scope --get-regexp '<pattern>'"
+    )
     CONFIG_PATTERNS = {
         "promisor": r"^(extensions\.partialclone|remote\..*\.(promisor|partialclonefilter))$",
         "filter": r"^filter\..*\.(clean|smudge|process|required)$",
@@ -300,16 +305,34 @@ class RepositorySafetyTests(unittest.TestCase):
         "Such a read exits 0 when a key matches, and 1 when the configuration sets none of those keys, which main records "
         "as none declared or defined; any other exit leaves the answer not established, so main dispatches nothing, "
         "performs no operation under Before add, commit, tag or push, and reports it.",
+        # Repository safety follow-ups C2, deviation D-1: outcome 1's include-free read, of the same filter-driver keys
+        # by the same pattern in every scope, never a whole listing, with its exit codes.
+        "For outcome 1 of Main's preparation only, main reads the same filter-driver keys by the same pattern without "
+        "includes, `" + CONFIG_NO_INCLUDES_KEYS_FORM.replace("<pattern>", CONFIG_PATTERNS["filter"]) + "`, in every "
+        "scope, so that read too prints nothing but those keys and their values, in the same layout of scope, origin, "
+        "key and value as the read that follows includes, and never lists the whole configuration.",
+        "That read exits 0 when a key matches and 1 when no key matches, which is an established empty result; any "
+        "other exit leaves its result not established, so outcome 1 does not apply.",
     )
-    # Code review call 3 of C2, NB-1 and NB-2: the include-less read of every scope, for outcome 1 only.
+    # Code review call 3 of C2, NB-1 and NB-2, as deviation D-1 states it: the include-free read for outcome 1 only is
+    # the key read without includes, by the filter-driver pattern, in every scope.
     CONFIG_ROW = (
         "| Configuration reads | `" + CONFIG_LIST_FORM + "` with `--local` and with `--worktree`, which follows no "
-        "include, and, for outcome 1 of Main's preparation only, without a scope option, which reads every scope and, "
-        "since it follows no include either, may list the whole configuration; and `" + CONFIG_KEYS_FORM + "`, in every scope, for only the keys of the effective configuration that "
-        "a pattern given below names |"
+        "include; `" + CONFIG_KEYS_FORM + "`, in every scope, for only the keys of the effective configuration that a "
+        "pattern given below names; and, for outcome 1 of Main's preparation only, `" + CONFIG_NO_INCLUDES_KEYS_FORM
+        + "`, in every scope and following no include, for only the filter-driver keys, by the pattern given below for "
+        "them |"
     )
     # The row that read the whole effective configuration, includes followed.
     CONFIG_ROW_REMOVED = "and with `--includes` in place of `--no-includes`, in every scope, for the effective configuration"
+    # Deviation D-1: the outcome-1 read was the whole listing without a scope option, which could print every setting
+    # of every scope, such as a credential in the user's global configuration.
+    CONFIG_ROW_OUTCOME_1_REMOVED = (
+        "include, and, for outcome 1 of Main's preparation only, without a scope option, which reads every scope and, "
+        "since it follows no include either, may list the whole configuration;",
+        "the configuration read of every scope that follows no include, the form Safe Git invocation lists for "
+        "outcome 1,",
+    )
     # Deviation D-6: the forms that only the removed operation profile and its checks after `git add` and after a commit
     # read (deviations D-2 to D-4), and the forms D-3 had already removed.
     FORMS_REMOVED = (
@@ -346,6 +369,7 @@ class RepositorySafetyTests(unittest.TestCase):
         *WRITING_FORMS,
         CONFIG_LIST_FORM,
         CONFIG_KEYS_FORM,
+        CONFIG_NO_INCLUDES_KEYS_FORM,
     )
     # Finding F1: the forms only main runs; the table holds these and ROLE_FORMS and nothing else. Deviation D-6 keeps
     # only the forms item 6's checks before the operation need and adds the hooks directory of item 4.4. Adversarial
@@ -353,6 +377,7 @@ class RepositorySafetyTests(unittest.TestCase):
     MAIN_ONLY_FORMS = (
         CONFIG_LIST_FORM,
         CONFIG_KEYS_FORM,
+        CONFIG_NO_INCLUDES_KEYS_FORM,
         "git <prefix> rev-parse --show-toplevel --git-dir --git-common-dir --is-bare-repository",
         HOOKS_FORM,
         "git <prefix> hash-object -- '<path>'",
@@ -566,8 +591,9 @@ class RepositorySafetyTests(unittest.TestCase):
         "established only from the untracked listing of those paths, the index listing compared with the reviewed commit's tree listing and, for a path whose filter "
         "names no defined driver, the content hash above, so that untracked or uncommitted content main cannot attribute "
         "fails this condition; and, for every driver the compared paths' filters name, the read of the filter-driver "
-        "keys, which follows includes and carries `--show-origin`, and the configuration read of every scope that "
-        "follows no include, the form Safe Git invocation lists for outcome 1, both made for that call, report exactly "
+        "keys, which follows includes and carries `--show-origin`, and the same read without includes, of the same "
+        "keys by the same pattern in every scope, the form Safe Git invocation lists for outcome 1, both made for that "
+        "call, report exactly "
         "the same entries for that driver, each with the same scope, origin, key and value and in the same order, so "
         "that no key that defines the driver is added, changed or overridden by any include.",
         *INCLUDE_RULE,
@@ -1085,8 +1111,8 @@ class RepositorySafetyTests(unittest.TestCase):
                        "so that untracked or uncommitted content main cannot attribute fails this condition;",
                        # Code review call 3 of C2, NB-1 and NB-2: the two reads, both made for the call, agree exactly.
                        "for every driver the compared paths' filters name, the read of the filter-driver keys, which "
-                       "follows includes and carries `--show-origin`, and the configuration read of every scope that "
-                       "follows no include,",
+                       "follows includes and carries `--show-origin`, and the same read without includes, of the same "
+                       "keys by the same pattern in every scope,",
                        "both made for that call, report exactly the same entries for that driver, each with the same "
                        "scope, origin, key and value and in the same order,",
                        "so that no key that defines the driver is added, changed or overridden by any include."):
@@ -1117,10 +1143,26 @@ class RepositorySafetyTests(unittest.TestCase):
                                   "configuration file itself, as outcome 3.", self.INCLUDE_RULE[1])):
             with self.subTest(include=phrase[:50]):
                 self.assertIn(phrase, sentence)
-        # The read of every scope that follows no include is a form Safe Git invocation lists, for outcome 1 only.
-        self.assertIn("for outcome 1 of Main's preparation only, without a scope option, which reads every scope",
-                      self.CONFIG_ROW)
+        # Deviation D-1: the read without includes is a form Safe Git invocation lists, for outcome 1 only: the key read
+        # without includes, by the filter-driver pattern, in every scope, never a whole listing.
+        self.assertIn("for outcome 1 of Main's preparation only, `" + self.CONFIG_NO_INCLUDES_KEYS_FORM + "`, in every "
+                      "scope and following no include, for only the filter-driver keys,", self.CONFIG_ROW)
         self.assertIn(self.CONFIG_ROW, self.source("reference#Safe Git invocation").splitlines())
+        self.assert_pinned({"reference#Safe Git invocation": self.CONFIG_KEYS[2:]})
+        self.assertIn("`" + self.CONFIG_NO_INCLUDES_KEYS_FORM.replace("<pattern>", self.CONFIG_PATTERNS["filter"])
+                      + "`, in every scope,", self.CONFIG_KEYS[2])
+        # Absence pins: outcome 1's read is no `--list`, and the reference never says it may list the whole
+        # configuration.
+        for sentence in self.CONFIG_ROW_OUTCOME_1_REMOVED:
+            with self.subTest(removed=sentence[:60]):
+                self.assertNotIn(" ".join(sentence.split()), flat)
+        self.assertNotIn("may list the whole configuration", flat)
+        self.assertNotIn("without a scope option", flat)
+        row = next(line for line in self.source("reference#Safe Git invocation").splitlines()
+                   if line.startswith("| Configuration reads |"))
+        for text in (row.split("for outcome 1", 1)[1], self.CONFIG_KEYS[2], run[0]):
+            with self.subTest(listing=text[:60]):
+                self.assertNotIn("--list", text)
         # Absence pins: the canonical-path origin rule, its case rule and the working-tree origin condition are gone.
         for sentence in (*self.ORIGIN_RULE_REMOVED, *self.OUTCOME_RUN_REMOVED):
             with self.subTest(removed=sentence[:60]):
@@ -1161,7 +1203,7 @@ class RepositorySafetyTests(unittest.TestCase):
         self.assertIn("item 4's snapshot", self.OUTCOME_CONFIGURATION[0])
         self.assertIn("main runs no driver on this machine for that call.", self.OUTCOME_ISOLATED[0])
         # Abuse check: every sentence of the reference that names a driver is pinned.
-        pinned = {" ".join(s.split()) for s in (*self.CONFIG_KEYS, *self.READ_ONLY, *self.PREPARATION,
+        pinned = {" ".join(s.split()) for s in (*self.CONFIG_KEYS, self.CONFIG_ROW, *self.READ_ONLY, *self.PREPARATION,
                                                 *self.FILTER_OUTCOMES, *self.AFTER_CALL, self.WRITING_SETTINGS[0])}
         for sentence in self.reference_sentences():
             if re.search(r"\bdrivers?\b", sentence):
@@ -1846,7 +1888,13 @@ class RepositorySafetyTests(unittest.TestCase):
                     self.assertIn("--no-includes", span)
                     self.assertNotIn("--includes ", span.replace("--no-includes", ""))
                 else:
-                    self.assertEqual(span, self.CONFIG_KEYS_FORM)
+                    # Deviation D-1: outcome 1's include-free read is the key read by the filter-driver pattern only.
+                    self.assertIn(span, (self.CONFIG_KEYS_FORM, self.CONFIG_NO_INCLUDES_KEYS_FORM,
+                                         self.CONFIG_NO_INCLUDES_KEYS_FORM.replace("<pattern>",
+                                                                                   self.CONFIG_PATTERNS["filter"])))
+        # Only `--list` with a scope option reads a whole listing; no other form does.
+        listings = [span for span in re.findall(r"`(git <prefix> config [^`]*)`", reference) if "--list" in span]
+        self.assertEqual(listings, [self.CONFIG_LIST_FORM])
         self.assertNotRegex(flat, r"reads the effective configuration with its includes")
         # Each place that follows includes says it reads only the keys it needs, by the pattern stated once.
         preparation = self.source("reference#Main's preparation")
@@ -3215,6 +3263,9 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 for variant in (form, form.replace("git <prefix> ", "git <prefix> --no-replace-objects ", 1)):
                     # Finding F1 of C1's Adversarial review: the key read runs with each pattern the reference states.
                     patterns = RepositorySafetyTests.CONFIG_PATTERNS.values() if "<pattern>" in variant else ("",)
+                    # Deviation D-1: the read without includes, for outcome 1, uses only the filter-driver pattern.
+                    if "--no-includes --show-origin --show-scope --get-regexp" in variant:
+                        patterns = (RepositorySafetyTests.CONFIG_PATTERNS["filter"],)
                     for pattern in patterns:
                         command = variant.replace("<pattern>", pattern)
                         for placeholder, value in substitutions.items():
@@ -3849,22 +3900,30 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
     def test_outcome_1s_two_reads_differ_exactly_when_an_include_supplies_a_driver_key(self):
         """Code review call 3 of C2, findings NB-1 and NB-2, regression and abuse check with the installed Git: in a
         repository isolated from the user's configuration, outcome 1 compares, for each driver, the entries of the read
-        of the filter-driver keys that follows includes with those of the read of every scope that follows none. A key
-        written directly in the Git directory's configuration or in the global file gives the same entries in both
-        reads, so outcome 1 may apply. A key that an include supplies differs, wherever the included file lies: a
-        working-tree file, a file under the Git directory reached by a chained include from a working-tree file (NB-1 b,
-        whose origin a path judgement would place inside the Git directory), a file outside the project that the
-        global file includes, an include that overrides or repeats a key written directly, and, where this system lets
-        the test create one, an included path through a working-tree link to a directory under the Git directory
-        (NB-1 a). Nothing is fetched: the
-        repository has no remote, and every file stays in this test's temporary directory."""
+        of the filter-driver keys that follows includes with those of the same read without includes, by the same
+        pattern in every scope (deviation D-1), which the reference states and which prints the same layout of scope,
+        origin, key and value and no key the pattern does not name, so an unrelated setting in the global file never
+        appears in it while the whole listing without a scope option prints it (positive control); it exits 1 with
+        nothing printed when no key matches. A key written directly in the Git directory's configuration or in the
+        global file gives the same entries in both reads, so outcome 1 may apply. A key that an include supplies
+        differs, wherever the included file lies: a working-tree file, a file under the Git directory reached by a
+        chained include from a working-tree file (NB-1 b, whose origin a path judgement would place inside the Git
+        directory), a file outside the project that the global file includes, an include that overrides or repeats a
+        key written directly, and, where this system lets the test create one, an included path through a working-tree
+        link to a directory under the Git directory (NB-1 a). Nothing is fetched: the repository has no remote, and
+        every file stays in this test's temporary directory."""
         reference = read(REFERENCE)
         prefix = shlex.split(reference.split("```text\n", 1)[1].split("\n```", 1)[0])[1:]
         pattern = RepositorySafetyTests.CONFIG_PATTERNS["filter"]
         keys_read = shlex.split(RepositorySafetyTests.CONFIG_KEYS_FORM.replace("<pattern>", pattern))[2:]
-        # The read of every scope is the listing form without a scope option, as the Configuration reads row states.
-        every_scope_read = shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:]
-        self.assertIn("without a scope option, which reads every scope", RepositorySafetyTests.CONFIG_ROW)
+        # Deviation D-1: the read without includes is the one the reference states for outcome 1, the same key read by
+        # the same pattern with `--no-includes` in place of `--includes`, and no scope option, so it reads every scope.
+        stated = re.findall(r"`(git <prefix> config --no-includes [^`]*)`", reference)
+        no_includes = RepositorySafetyTests.CONFIG_NO_INCLUDES_KEYS_FORM.replace("<pattern>", pattern)
+        self.assertEqual(stated, [RepositorySafetyTests.CONFIG_NO_INCLUDES_KEYS_FORM, no_includes])
+        every_scope_read = shlex.split(no_includes)[2:]
+        self.assertEqual(every_scope_read, [("--no-includes" if arg == "--includes" else arg) for arg in keys_read])
+        self.assertFalse({"--list", "--local", "--global", "--system", "--worktree", "--file"} & set(every_scope_read))
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp:
             root = Path(os.path.realpath(temp))
             repo, elsewhere, home, global_file = root / "repo", root / "elsewhere", root / "home", root / "gitconfig"
@@ -3882,23 +3941,46 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                 except (OSError, subprocess.TimeoutExpired) as error:
                     self.skipTest(f"Git cannot be run: {error}")
 
-            def entries(args, separator, driver):
-                """The read's entries for the driver, each its scope, origin, key and value, in the order printed."""
+            def entries(args, driver):
+                """The read's entries for the driver, each its scope, origin, key and value, in the order printed. Both
+                reads print the same layout, a line of scope, origin and key with its value, and only keys the pattern
+                names."""
                 result = git(*prefix, *args)
                 self.assertIn(result.returncode, (0, 1), result.stderr)
+                self.assertEqual(result.returncode == 1, result.stdout == b"", result.stdout)
                 found = []
                 for line in result.stdout.decode("utf-8").splitlines():
-                    scope, origin, rest = line.split("\t", 2)
-                    key, value = rest.split(separator, 1)
-                    if re.search(pattern, key) and key.startswith(f"filter.{driver}."):
+                    fields = line.split("\t")
+                    self.assertEqual(len(fields), 3, line)
+                    scope, origin, rest = fields
+                    key, value = rest.split(" ", 1)
+                    self.assertIn(scope, ("local", "global"), line)
+                    self.assertTrue(origin.startswith("file:"), line)
+                    self.assertRegex(key, pattern)
+                    self.assertNotIn(marker, line)
+                    if key.startswith(f"filter.{driver}."):
                         found.append((scope, origin, key, value))
                 return found
 
             def reads(driver):
-                return entries(keys_read, " ", driver), entries(every_scope_read, "=", driver)
+                return entries(keys_read, driver), entries(every_scope_read, driver)
 
             if git("init", "-q", ".").returncode:
                 self.skipTest("this Git cannot initialise a repository")
+            # No filter-driver key yet: the read without includes exits 1 and prints nothing, an established empty
+            # result.
+            empty = git(*prefix, *every_scope_read)
+            if empty.returncode not in (0, 1):
+                self.skipTest(f"this Git cannot read configuration keys with scopes: {empty.stderr!r}")
+            self.assertEqual((empty.returncode, empty.stdout), (1, b""))
+            # An unrelated global setting, standing for a credential: the whole listing without a scope option prints it
+            # (positive control), the read without includes never does.
+            marker = "feather-unrelated-" + os.urandom(8).hex()
+            self.assertEqual(git("config", "--global", "sample.token", marker).returncode, 0)
+            whole = git(*prefix, *shlex.split(RepositorySafetyTests.CONFIG_LIST_FORM)[2:])
+            self.assertEqual(whole.returncode, 0, whole.stderr)
+            self.assertIn(marker, whole.stdout.decode("utf-8"))
+            self.assertEqual(git(*prefix, *every_scope_read).returncode, 1)
             # Written directly in the Git directory's configuration and in the global file: the reads agree.
             for args in (("config", "filter.direct.clean", "cat"), ("config", "filter.untouched.smudge", "cat"),
                          ("config", "--global", "filter.glob.smudge", "cat")):
