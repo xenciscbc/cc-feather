@@ -4018,6 +4018,10 @@ class FeatherConfigTests(unittest.TestCase):
                          "plan-review.md", "report a mismatch as a blocker for the user to settle"),
         "Claim changes": ("修改 claim", "main edits only after your authorisation", "在你授權後才修改",
                           "review-state.md", "only after the user authorises it"),
+        # Claims at implementation ticket 04 (Acceptance items 5 and 11): the drafting rule.
+        "Drafting a spec": ("草擬 spec", "it lists no claims and cuts none unless you ask", "除非你要求，不會在裡面列出 claim",
+                            "plan-review.md", "When main drafts a spec for the user, it lists no claims and cuts none "
+                            "unless the user asks."),
         "Not yet a plan": ("還不算計畫", "is not yet a plan", "主 Agent 會先補齊",
                            "plan-review.md", "A document without scope or acceptance is not yet a plan"),
         "Plan-mode and conversation plans": ("plan mode 與對話中的計畫",
@@ -4728,8 +4732,9 @@ class ClaimsAtImplementationTests(unittest.TestCase):
             "spec it cites and, for a Claim a spec lists, the spec's parts that state they hold for every Claim.",
         ),
         "Security-critical claim": (
+            # Ticket 04 aligned the timing with off mode's classification before dispatch (S7).
             "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
-            "before the Plan's first review.",
+            "before the Plan's first review and before its implementation is dispatched.",
             "A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
     }
@@ -5246,6 +5251,224 @@ class ReadingSetTests(unittest.TestCase):
             text = self.text(config.ROOT / name)
             with self.subTest(readme=name, part="order"):
                 self.assertLess(text.index(citations), text.index(reads))
+
+
+class DraftingSpecTests(unittest.TestCase):
+    """0.23.0 ticket 04 (docs/specs/claims-at-implementation.md, Solution's drafting rule, Acceptance items 5 and 6, the
+    Claims-table part of item 10 and the parts of items 11 and 12 for these rules, Implementation Decisions "Where the
+    rules live" and "Unchanged", S4, S7, S8 and S12): drafting a spec lists no Claims, and when Claims are classified."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+
+    @classmethod
+    def text(cls, path):
+        return path.read_text(encoding="utf-8")
+
+    @classmethod
+    def plan_review_paragraph(cls, opening):
+        text = cls.text(cls.REFERENCES / "plan-review.md")
+        return next(block for block in text.split("\n\n") if block.startswith(opening))
+
+    @classmethod
+    def classification_paragraph(cls):
+        return cls.plan_review_paragraph("Classify every plan's claims by what they change:")
+
+    @classmethod
+    def security_analysis_paragraph(cls):
+        return cls.plan_review_paragraph("In auto, a plan with a Security-critical claim gets a security analysis")
+
+    @classmethod
+    def readme_bullets(cls, name):
+        text = cls.text(config.ROOT / name)
+        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
+                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+        return dict(feather_support.readme_rule_bullets(text, start, end))
+
+    @classmethod
+    def readme_security_section(cls, name):
+        heading = {"README.md": "### Security-critical work", "README.zh-TW.md": "### 安全關鍵工作"}[name]
+        return cls.text(config.ROOT / name).split(heading, 1)[1].split("\n### ", 1)[0]
+
+    # Acceptance item 5: the drafting rule, stated in plan review.
+    DRAFTING = "When main drafts a spec for the user, it lists no claims and cuts none unless the user asks."
+
+    # Acceptance item 5 and S7: marking when written covers only a plan main proposes itself, whatever its form.
+    NARROWED = (
+        "Main marks each Security-critical claim in a plan it proposes itself, such as one for Unplanned work, when it "
+        "writes that plan; a plan main writes because Unplanned work needs one is a plan main proposes itself, whatever "
+        "its form."
+    )
+
+    # Acceptance item 5: a spec main drafts is classified before the Plan's first plan review.
+    DRAFTED_SPEC = (
+        "A spec main drafts is not a plan main proposes itself: its claims are classified before the plan's first plan "
+        "review, as for any plan the user wrote."
+    )
+
+    # Kept: the timing for every other plan.
+    OTHER_PLANS = (
+        "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a "
+        "conversation plan, main classifies its claims before the first plan review of that plan in the session or, for "
+        "implemented work, before its code review."
+    )
+
+    # S8: classification reads the whole spec, unlike a claim's reviews.
+    WHOLE_SPEC = (
+        "Classifying a ticket's claim reads the ticket and, when it belongs to a spec, its whole spec, as plan review's "
+        "checklist does, not only the claim's reading set."
+    )
+
+    # S7: off mode classifies before dispatch (kept), and an executor's reported Security-critical change is routed.
+    OFF_MODE = "In off mode, main classifies before dispatching the implementation, so that Security-critical work is " \
+               "routed to security-executor."
+    EXECUTOR_REPORT = "In either mode, a Security-critical change an executor reports goes to security-executor."
+
+    SKILL_OFF_MODE = (
+        "A Security-critical claim is a claim whose outcome includes a Security-critical change; classify claims as "
+        "[plan review](references/plan-review.md) describes, in off mode too, before dispatching their implementation."
+    )
+    SKILL_EXECUTOR_REPORT = "In off mode too, a Security-critical change an executor reports goes to security-executor."
+
+    # Replaced 0.22.0 wording: marking in any plan main writes.
+    REPLACED = "Main marks each Security-critical claim in a plan it writes."
+
+    def test_plan_review_states_the_drafting_rule_and_the_narrowed_marking_rule(self):
+        paragraph = self.classification_paragraph()
+        for sentence in (self.DRAFTING, self.NARROWED, self.DRAFTED_SPEC, self.OTHER_PLANS, self.WHOLE_SPEC,
+                         self.OFF_MODE, self.EXECUTOR_REPORT):
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, paragraph)
+        self.assertNotIn(self.REPLACED, self.text(self.REFERENCES / "plan-review.md"))
+        # The drafted spec is classified as the other plans are, so its rule precedes theirs.
+        self.assertLess(paragraph.index(self.NARROWED), paragraph.index(self.DRAFTING))
+        self.assertLess(paragraph.index(self.DRAFTED_SPEC), paragraph.index(self.OTHER_PLANS))
+
+    def test_the_delegation_skill_keeps_off_mode_classification_and_routes_reported_changes(self):
+        skill = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        paragraph = next(block for block in skill.split("\n\n")
+                         if block.startswith("For requested security analysis or a Security-critical change,"))
+        self.assertIn(self.SKILL_OFF_MODE, skill)
+        self.assertIn(self.SKILL_EXECUTOR_REPORT, paragraph)
+
+    # S4, writing side: accepted controls and test targets go where the claim's reading set reaches.
+    WRITTEN_INTO_THE_CLAIM = (
+        "Main writes each such security invariant into the claim's own acceptance or a part of a spec the claim cites, "
+        "and each test target into the claim's own text or a part it cites, not into another part of the named spec, so "
+        "that both are in the claim's reading set, as [review state](review-state.md)'s Reading set describes."
+    )
+
+    # Acceptance item 6 and Implementation Decisions "Unchanged": timing, invariants and the approval step are kept.
+    SECURITY_ANALYSIS_KEPT = (
+        "In auto, a plan with a Security-critical claim gets a security analysis before its plan review.",
+        "Main dispositions every finding into the plan, turning each accepted control into a security invariant in the "
+        "acceptance of each Security-critical claim it applies to,",
+        "Plan review then receives the revised plan; security analysis and plan review stay separate assignments, and "
+        "neither runs inside the other.",
+        "The user's approval then follows step 5: a disposition that adds a security invariant or otherwise materially "
+        "changes the plan's outcome, scope or acceptance needs the user's approval of the revised plan, while a plan the "
+        "analysis leaves unchanged keeps the user's earlier agreement.",
+        "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised "
+        "control, and then covers only what changed, before plan review runs again.",
+    )
+
+    def test_security_analysis_writes_its_controls_where_the_claim_reads_them(self):
+        paragraph = self.security_analysis_paragraph()
+        for sentence in (self.WRITTEN_INTO_THE_CLAIM,) + self.SECURITY_ANALYSIS_KEPT:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, paragraph)
+        # Written while dispositioning, before plan review receives the revised plan and before the approval.
+        self.assertLess(paragraph.index(self.SECURITY_ANALYSIS_KEPT[1]), paragraph.index(self.WRITTEN_INTO_THE_CLAIM))
+        self.assertLess(paragraph.index(self.WRITTEN_INTO_THE_CLAIM), paragraph.index(self.SECURITY_ANALYSIS_KEPT[2]))
+        # Where Acceptance item 6's looser place differs, S4 governs: the procedure never names the looser place.
+        self.assertNotIn("written into the named ticket or spec", paragraph)
+
+    # Acceptance item 10, the Claims-table part.
+    TRACKER = "A spec lists claims in a Claims table only when the user asks; its tickets then mirror that table."
+    TRACKER_REPLACED = "A spec may also list its claims in a Claims table; its tickets then mirror that table."
+
+    def test_the_tracker_note_lists_a_claims_table_only_when_the_user_asks(self):
+        text = self.text(config.ROOT / "docs" / "agents" / "issue-tracker.md")
+        line = next(line for line in text.splitlines() if line.startswith("- Each ticket starts with"))
+        self.assertIn(self.TRACKER, line)
+        self.assertNotIn(self.TRACKER_REPLACED, text)
+
+    # Acceptance items 11 and 12 for these rules, S7, S8 and S12: both READMEs, paired.
+    README_DRAFTING = (
+        ("when main drafts a spec for you, it lists no claims and cuts none unless you ask: its claims are decided when "
+         "you name the spec or its tickets for implementation.",
+         "主 Agent 替你草擬 spec 時，除非你要求，不會在裡面列出 claim，也不會切分 claim：它的 claim 在你指名要實作這份 spec 或它的 "
+         "ticket 時才決定。"),
+        ("A spec main drafts is not a plan main proposes itself, so its claims are classified like those of a spec you "
+         "wrote, before its first plan review; see [Security-critical work](#security-critical-work).",
+         "主 Agent 草擬的 spec 不算它自己提出的計畫，所以它的 claim 和你寫的 spec 一樣，在第一次計畫審查前分類；見"
+         "[安全關鍵工作](#安全關鍵工作)。"),
+    )
+
+    README_SECURITY = (
+        ("Main marks each Security-critical claim when it writes a plan it proposes itself, such as the plan that "
+         "unplanned work needs, whatever its form; it classifies the claims of any other plan, such as a spec you wrote "
+         "or one main drafted for you, before its first plan review in the session or, for implemented work, before its "
+         "code review, and in `off` before dispatching their implementation.",
+         "主 Agent 寫自己提出的計畫時（例如沒有計畫的工作所需要的計畫，不論形式），會在其中標出每個安全關鍵 claim；其他計畫（例如你寫的 "
+         "spec，或主 Agent 替你草擬的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類，`off` 下則在派出"
+         "實作前分類。"),
+        ("Classifying a ticket's claim reads the ticket and its whole spec, not only the parts it cites.",
+         "分類 ticket 的 claim 時，會讀該 ticket 與它的整份 spec，不只它引用的部分。"),
+        ("A Security-critical change an executor reports also goes to security-executor.",
+         "executor 回報的安全關鍵變更也交給 security-executor。"),
+        # S4, writing side.
+        ("Main writes those invariants and test targets into the claim's own text or a spec part it cites, so that its "
+         "implementer and reviewers read them.",
+         "主 Agent 把這些不變條件與測試目標寫進該 claim 自己的文字或它引用的 spec 部分，讓實作者與審查者都讀得到。"),
+    )
+
+    # Replaced README wording: marking in any plan main writes.
+    README_REPLACED = (
+        ("README.md", "Main marks each Security-critical claim in a plan it writes"),
+        ("README.zh-TW.md", "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim"),
+    )
+
+    def test_readmes_state_the_drafting_rule_and_when_claims_are_classified_in_both_languages(self):
+        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        for en, zh in self.README_DRAFTING:
+            with self.subTest(sentence=en[:50]):
+                self.assertIn(en, english["Drafting a spec"])
+                self.assertIn(zh, chinese["草擬 spec"])
+        sections = {name: self.readme_security_section(name) for name in ("README.md", "README.zh-TW.md")}
+        for en, zh in self.README_SECURITY:
+            with self.subTest(sentence=en[:50]):
+                self.assertIn(en, sections["README.md"])
+                self.assertIn(zh, sections["README.zh-TW.md"])
+        for name, sentence in self.README_REPLACED:
+            with self.subTest(readme=name, removed=sentence[:40]):
+                self.assertNotIn(sentence, self.text(config.ROOT / name))
+
+    # S12: the drafting bullet sits under the section intro that states these rules are instructions to main.
+    def test_the_drafting_bullet_sits_under_the_stated_limits(self):
+        for name, intro, bullet in (
+                ("README.md", "These rules are instructions to main, not enforced by any tool;", "- **Drafting a spec:**"),
+                ("README.zh-TW.md", "這些規則是給主 Agent 的指示，沒有任何工具強制執行；", "- **草擬 spec：**")):
+            section = ClaimsAtImplementationTests.readme_section(name)
+            with self.subTest(readme=name):
+                self.assertIn(intro, section)
+                self.assertIn(bullet, section)
+
+    # Re-checked against the procedures after this ticket: a plan main proposes itself, and off-mode timing.
+    GLOSSARY = {
+        "Security-critical claim": (
+            "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
+            "before the Plan's first review and before its implementation is dispatched.",
+            "A spec main drafts at the user's request is not a Plan main proposes itself.",
+        ),
+        "Claim": ("A spec lists Claims only when the user asked for them.",),
+    }
+
+    def test_glossary_entries_match_the_procedures_after_this_ticket(self):
+        entries = feather_support.glossary_entries(self.text(config.ROOT / "CONTEXT.md"))
+        for term, sentences in self.GLOSSARY.items():
+            for sentence in sentences:
+                with self.subTest(term=term, sentence=sentence[:60]):
+                    self.assertIn(sentence, entries[term])
 
 
 if __name__ == "__main__":

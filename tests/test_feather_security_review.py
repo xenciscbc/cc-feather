@@ -42,7 +42,8 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
     CLASSIFICATION = {
         "plan-review.md": (
             "Classify every plan's claims by what they change: a claim is Security-critical when its outcome includes a Security-critical change as the [delegation skill](../SKILL.md) defines it.",
-            "Main marks each Security-critical claim in a plan it writes.",
+            # Claims at implementation ticket 04 (Acceptance item 5, S7) narrowed "in a plan it writes".
+            "Main marks each Security-critical claim in a plan it proposes itself, such as one for Unplanned work, when it writes that plan; a plan main writes because Unplanned work needs one is a plan main proposes itself, whatever its form.",
             "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a conversation plan, main classifies its claims before the first plan review of that plan in the session or, for implemented work, before its code review.",
             "Main records the classification in the plan-review brief, in its report and in any active handoff, and edits a user-written spec or ticket to mark it only with the user's authorisation.",
             "In off mode, main classifies before dispatching the implementation, so that Security-critical work is routed to security-executor.",
@@ -51,9 +52,10 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
         "code-review.md": (
             "Classify the claim as [plan review](plan-review.md) describes if it is not yet classified; for a Security-critical claim, name the trust boundaries to check.",
         ),
-        # Claims at implementation ticket 01 (Acceptance item 9): a spec main drafts is not a Plan main proposes itself.
+        # Claims at implementation ticket 01 (Acceptance item 9): a spec main drafts is not a Plan main proposes itself;
+        # ticket 04 aligned the timing with off mode's classification before dispatch (S7).
         "CONTEXT.md#Security-critical claim": (
-            "A Claim whose outcome includes a Security-critical change. It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, before the Plan's first review. A spec main drafts at the user's request is not a Plan main proposes itself.",
+            "A Claim whose outcome includes a Security-critical change. It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, before the Plan's first review and before its implementation is dispatched. A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
     }
 
@@ -139,14 +141,17 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
 
     # Each scenario names the outcome and the sentences that decide it; the sentence it replaced must be gone.
     SCENARIOS = (
-        ("main writes a Plan whose claim changes how sessions are checked",
+        # Claims at implementation ticket 04 (Acceptance item 5, S7): marking when written covers a plan main proposes.
+        ("main writes, for Unplanned work, a Plan whose claim changes how sessions are checked",
          "the claim is classified Security-critical and marked when the Plan is written, and routed to security-executor",
          (("delegation SKILL.md", "A Security-critical change is a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control,"),
           ("delegation SKILL.md", "Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list;"),
-          ("plan-review.md", "Main marks each Security-critical claim in a plan it writes."),
+          ("plan-review.md", "Main marks each Security-critical claim in a plan it proposes itself, such as one for Unplanned work, when it writes that plan;"),
+          ("plan-review.md", "a plan main writes because Unplanned work needs one is a plan main proposes itself, whatever its form."),
           ("CONTEXT.md#Security-critical claim", "It is identified when main writes a Plan it proposes itself"),
           ("delegation SKILL.md", "route the implementation of every Security-critical claim to security-executor.")),
          (("delegation SKILL.md", "| security-executor | Authorized changes to security boundaries |"),
+          ("plan-review.md", "Main marks each Security-critical claim in a plan it writes."),
           ("CONTEXT.md#Security-critical claim", "It is identified when the Plan is written"))),
         ("implementation discovers that the Plan lacks a security control or invariant it needs",
          "a material deviation: dependent work stops for another plan review and the user's approval",
@@ -165,14 +170,26 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
          "main classifies its claims before that review, records it in the brief, report and any handoff, and edits the spec only with authorisation",
          (("plan-review.md", "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a conversation plan, main classifies its claims before the first plan review of that plan in the session"),
           ("plan-review.md", "Main records the classification in the plan-review brief, in its report and in any active handoff, and edits a user-written spec or ticket to mark it only with the user's authorisation."),
-          ("CONTEXT.md#Security-critical claim", "or, otherwise, before the Plan's first review.")),
+          ("CONTEXT.md#Security-critical claim", "or, otherwise, before the Plan's first review and before its implementation is dispatched.")),
          (("CONTEXT.md#Security-critical claim", "for a Plan main did not write, before its first review."),)),
         # Claims at implementation ticket 01 (Acceptance item 9): drafting a spec for the user is not writing a Plan.
+        # Ticket 04 (Acceptance item 5): the drafting rule and the classification of a drafted spec, in plan review.
         ("main drafts a spec at the user's request and the user later names it for implementation",
-         "the spec is not a Plan main proposes itself, so its claims are classified before its first plan review",
+         "main listed no claims while drafting; the spec is not a Plan main proposes itself, so its claims are classified before its first plan review",
          (("CONTEXT.md#Security-critical claim", "A spec main drafts at the user's request is not a Plan main proposes itself."),
-          ("CONTEXT.md#Security-critical claim", "or, otherwise, before the Plan's first review.")),
-         (("CONTEXT.md#Security-critical claim", "is not thereby a Plan whose Claims main lists"),)),
+          ("CONTEXT.md#Security-critical claim", "or, otherwise, before the Plan's first review and before its implementation is dispatched."),
+          ("plan-review.md", "When main drafts a spec for the user, it lists no claims and cuts none unless the user asks."),
+          ("plan-review.md", "A spec main drafts is not a plan main proposes itself: its claims are classified before the plan's first plan review, as for any plan the user wrote."),
+          ("issue-tracker.md", "A spec lists claims in a Claims table only when the user asks; its tickets then mirror that table.")),
+         (("CONTEXT.md#Security-critical claim", "is not thereby a Plan whose Claims main lists"),
+          ("issue-tracker.md", "A spec may also list its claims in a Claims table; its tickets then mirror that table."))),
+        # Ticket 04 (S7): off mode classifies before dispatch, and an executor's reported change is routed.
+        ("in off mode, an executor implementing a claim classified as not Security-critical reports a Security-critical change",
+         "the claims were classified before dispatch, and the reported change goes to security-executor",
+         (("plan-review.md", "In off mode, main classifies before dispatching the implementation, so that Security-critical work is routed to security-executor."),
+          ("plan-review.md", "In either mode, a Security-critical change an executor reports goes to security-executor."),
+          ("delegation SKILL.md", "In off mode too, a Security-critical change an executor reports goes to security-executor.")),
+         ()),
     )
 
     def test_scenarios_are_decided_by_their_sentences(self):
@@ -1358,8 +1375,9 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
     README_FLOW = (
         ("A Security-critical claim is one whose outcome includes a Security-critical change: a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream.",
          "安全關鍵 claim（Security-critical claim）是結果包含安全關鍵變更的 claim：改變信任邊界上的安全保證，或改變安全控制的實作或設定，包括敏感資料流向哪裡、不受信任的資料在下游如何被解讀。"),
-        ("Main marks each Security-critical claim in a plan it writes and classifies the claims of any other plan, such as a spec you wrote, before its first plan review in the session or, for implemented work, before its code review;",
-         "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim；其他計畫（例如你寫的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類；"),
+        # Claims at implementation ticket 04 (Acceptance item 11, S7) replaced "in a plan it writes".
+        ("Main marks each Security-critical claim when it writes a plan it proposes itself, such as the plan that unplanned work needs, whatever its form; it classifies the claims of any other plan, such as a spec you wrote or one main drafted for you, before its first plan review in the session or, for implemented work, before its code review, and in `off` before dispatching their implementation.",
+         "主 Agent 寫自己提出的計畫時（例如沒有計畫的工作所需要的計畫，不論形式），會在其中標出每個安全關鍵 claim；其他計畫（例如你寫的 spec，或主 Agent 替你草擬的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類，`off` 下則在派出實作前分類。"),
         ("security-executor implements every Security-critical claim, in `off` too.",
          "每個安全關鍵 claim 都由 security-executor 實作，`off` 時也一樣。"),
         # 0.19.0 C6 item 3: the sequence no longer ends with an unconditional approval; PreApprovalApprovalRuleTests pins
