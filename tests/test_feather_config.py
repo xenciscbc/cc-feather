@@ -5034,6 +5034,29 @@ class ReadingSetTests(unittest.TestCase):
 
     READS = "A claim's reading set is what its implementation and every review of it read: " + CORE + "."
 
+    # Code review finding B1 (FIX): a claim of a plan that is neither a spec nor tickets of a spec keeps reading the
+    # whole plan, its shared decisions and Out of Scope lines included.
+    WHOLE_PLAN = (
+        "For a claim of a plan that is neither a spec nor tickets of a spec, such as a plan file, a plan-mode plan or a "
+        "conversation plan with several claims, the text the claim is written in is the whole plan: the whole plan is "
+        "supplied to the claim's implementation and every review of it, as before cc-feather 0.23.0, and main records "
+        "and compares it, with any part of a spec the claim cites, as the claim's reading set, so a change to another "
+        "claim's part of that plan is a change to the reading set."
+    )
+
+    # S4 (amended 2026-10-13): where a Security-critical claim's invariants and targets may be written; a non-spec
+    # plan's claim takes only its own part's, never another claim's.
+    SOURCES = (
+        "the claim's own text, which for a claim of a plan that is neither a spec nor tickets of a spec is its own part "
+        "of that plan, the parts it cites and, for a claim a spec or other plan lists, the parts stated to hold for "
+        "every claim"
+    )
+    LISTED_EXCEPTION = "for a claim a spec or other plan lists, the parts stated to hold for every claim"
+
+    # S1's read limit and S11's reopening, the other places that name the parts holding for every claim.
+    READ_LIMIT = "only for a claim a spec lists, the spec's parts that state they hold for every claim"
+    REOPENING = "or to a part the spec states holds for every claim, reopens"
+
     # Implementation Decisions "Citations": ticket 02's definition, used by reference.
     CITES = (
         "Citations are as [plan review](plan-review.md) defines them, so a `Spec:` line, a parent reference or a shared "
@@ -5063,19 +5086,28 @@ class ReadingSetTests(unittest.TestCase):
                                  "it, and the gaps earlier calls for this claim left open.",
     }
 
-    # S4: exactly the invariants and targets in the reading set, and main's findings to the implementer go to reviewers.
+    # S4: exactly the invariants and targets written where S4 allows, and main's findings to the implementer go to
+    # reviewers.
     SECURITY_CRITICAL = (
         "For a Security-critical claim, the security invariants and test targets the brief carries are exactly those "
-        "written in its reading set, and the brief also carries every finding or disposition main gave the claim's "
-        "implementer, masked and limited as [Adversarial review](adversarial-review.md) step 7 sets for findings it "
-        "passes to code review or outcome verification."
+        "written in " + SOURCES + ", never another claim's, and the brief also carries every finding or disposition "
+        "main gave the claim's implementer, masked and limited as [Adversarial review](adversarial-review.md) step 7 "
+        "sets for findings it passes to code review or outcome verification."
     )
 
     ADVERSARIAL = (
-        "The security invariants and test targets the brief carries are exactly those written in the claim's reading "
-        "set, together with any target the user's own command arguments name as step 3 allows, and the brief also "
-        "carries every finding or disposition main gave the claim's implementer, with any secret, credential or real "
-        "data masked as step 7 requires."
+        "The security invariants and test targets the brief carries are exactly those written in " + SOURCES + ", never "
+        "another claim's, together with any target the user's own command arguments name as step 3 allows, and the "
+        "brief also carries every finding or disposition main gave the claim's implementer, with any secret, credential "
+        "or real data masked as step 7 requires."
+    )
+
+    # Replaced pre-fix wording (HEAD e26c9d0): invariants and targets taken from the whole reading set, which for a
+    # non-spec plan's claim would now be the whole plan, other claims' parts included.
+    REPLACED_SOURCES = (
+        "those written in its reading set",
+        "those written in the claim's reading set",
+        "written in that reading set",
     )
 
     # S4: a cited part is part of the approved plan for Adversarial review's targets.
@@ -5096,9 +5128,11 @@ class ReadingSetTests(unittest.TestCase):
     # S5: review state records and confirms the reading set.
     READING_SET = (
         "- **Reading set.** " + READS,
+        READS + " " + WHOLE_PLAN,
         "Citations are as [plan review](plan-review.md) defines them, and a `Spec:` line, a parent reference or a shared "
         "directory brings in no part of a spec.",
-        "A Security-critical claim's security invariants and test targets are those written in its reading set.",
+        "A Security-critical claim's security invariants and test targets are those written in " + SOURCES + "; a claim "
+        "of such a plan takes no other claim's invariants or targets from the rest of that plan.",
         "When plan review returns READY, main records each claim's reading set, by content or by hash; when no READY was "
         "given for the claim in this session, as in off mode, after a waived plan review or for an explicit call, main "
         "records it at the claim's first dispatch in this session.",
@@ -5116,12 +5150,13 @@ class ReadingSetTests(unittest.TestCase):
     IMPLEMENTING = (
         "The brief of an Assignment that implements a claim carries the claim's reading set, as [review state]"
         "(references/review-state.md)'s Reading set describes: " + CORE + ".",
+        WHOLE_PLAN,
         "Citations are as [plan review](references/plan-review.md) defines them.",
         "This is the same material the claim's code review, outcome verification and Adversarial review read; main "
         "confirms it unchanged before dispatch and supplies only the reading set it recorded.",
         "For a Security-critical claim, the brief carries exactly the security invariants and test targets written in "
-        "that reading set, and any finding or disposition main gives the implementer also goes to the claim's code "
-        "review, outcome verification and Adversarial review.",
+        + SOURCES + ", never another claim's, and any finding or disposition main gives the implementer also goes to "
+        "the claim's code review, outcome verification and Adversarial review.",
     )
 
     # Acceptance item 10, the `Spec:` part.
@@ -5136,6 +5171,17 @@ class ReadingSetTests(unittest.TestCase):
                     self.assertIn(sentence, step)
             with self.subTest(procedure=name, part="order"):
                 self.assertLess(step.index(self.SUPPLY[name]), step.index(self.READS))
+
+    def test_a_claim_of_a_non_spec_plan_reads_the_whole_plan(self):
+        # B1: the whole plan, right after the material it widens and before the citation rule, in every place a
+        # claim's brief is built from.
+        places = {name: self.step(name, 2) for name in self.REVIEWS}
+        places["review-state.md"] = feather_support.review_rules_source("review-state.md#Reading set")
+        skill = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        places["SKILL.md"] = skill.split("## Dispatch", 1)[1].split("\n## ", 1)[0]
+        for name, text in places.items():
+            with self.subTest(place=name):
+                self.assertIn(self.CORE + ". " + self.WHOLE_PLAN + " Citations are as ", text)
 
     def test_the_single_ticket_spec_as_context_is_gone(self):
         for name, sentence in self.REPLACED:
@@ -5160,6 +5206,32 @@ class ReadingSetTests(unittest.TestCase):
         step_3 = self.step("adversarial-review.md", 3)
         self.assertIn(self.KEPT_PROVENANCE + " " + self.APPROVED_PLAN, step_3)
 
+    @classmethod
+    def invariant_places(cls):
+        places = {name: cls.text(cls.REFERENCES / name) for name in cls.REVIEWS + ("review-state.md",)}
+        places["SKILL.md"] = cls.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        return places
+
+    def test_the_invariants_and_targets_come_from_the_claim_s_own_part_never_another_claim_s(self):
+        # S4 as amended: no place takes them from the whole reading set, which for a non-spec plan's claim is the
+        # whole plan with the other claims' parts.
+        for name, text in self.invariant_places().items():
+            for removed in self.REPLACED_SOURCES:
+                with self.subTest(place=name, removed=removed):
+                    self.assertNotIn(removed, text)
+        # Every sentence that says where the invariants and test targets are written names the listed-claim
+        # every-claim exception and excludes other claims' invariants and targets.
+        for name, text in self.invariant_places().items():
+            sentences = [sentence for sentence in re.split(r"(?<=\.) ", text)
+                         if "invariants and test targets" in sentence and " written in " in sentence]
+            with self.subTest(place=name, part="found"):
+                self.assertEqual(len(sentences), 1, sentences)
+            for sentence in sentences:
+                with self.subTest(place=name, sentence=sentence[:60]):
+                    self.assertIn(self.SOURCES, sentence)
+                    self.assertIn(self.LISTED_EXCEPTION, sentence)
+                    self.assertTrue("never another claim's" in sentence or "no other claim's" in sentence, sentence)
+
     def test_review_state_records_and_confirms_the_reading_set(self):
         bullet = feather_support.review_rules_source("review-state.md#Reading set")
         for sentence in self.READING_SET:
@@ -5179,16 +5251,21 @@ class ReadingSetTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:60]):
                 self.assertIn(sentence, dispatch)
 
+    @classmethod
+    def unqualified_every_claim_parts(cls, text):
+        # Every mention of the parts that hold for every claim, in either number, must be S1's read limit, S4's
+        # listed-claim exception or S11's reopening; anything left over names them without a listed-claim limit.
+        for qualified in (cls.READ_LIMIT, cls.LISTED_EXCEPTION, cls.REOPENING):
+            text = text.replace(qualified, "")
+        return re.findall(r"holds? for every claim", text)
+
     def test_every_claim_parts_are_read_only_for_a_listed_claim(self):
-        # S1: wherever this rule names the parts that hold for every Claim, it limits them to a Claim a spec lists.
-        places = {name: self.text(self.REFERENCES / name) for name in self.REVIEWS + ("review-state.md",)}
-        places["SKILL.md"] = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
-        for name, text in places.items():
+        # S1: wherever this rule names the parts that hold for every Claim, it limits them to a Claim a spec lists, or,
+        # for the invariants and targets, to a claim a spec or other plan lists (S4).
+        for name, text in self.invariant_places().items():
             with self.subTest(place=name):
-                self.assertGreater(text.count("hold for every claim"), 0)
-                self.assertEqual(text.count("hold for every claim"),
-                                 text.count("only for a claim a spec lists, the spec's parts that state they hold for "
-                                            "every claim"))
+                self.assertGreater(text.count(self.READ_LIMIT), 0)
+                self.assertEqual(self.unqualified_every_claim_parts(text), [])
         claim = feather_support.glossary_entries(self.text(config.ROOT / "CONTEXT.md"))["Claim"]
         self.assertIn("for a Claim a spec lists, the spec's parts that state they hold for every Claim", claim)
 
@@ -5209,11 +5286,24 @@ class ReadingSetTests(unittest.TestCase):
          "The whole spec is read only when the spec itself is the claim; a ticket's `Spec:` line records where the ticket "
          "came from and brings no part of the spec in.",
          "只有 spec 本身就是 claim 時才讀整份 spec；ticket 的 `Spec:` 行只記錄 ticket 從哪裡來，不會帶進 spec 的任何部分。"),
+        # B1: a non-spec plan's claim reads the whole plan.
+        ("What a review reads", "審查讀什麼",
+         "For a claim of a plan that is neither a spec nor tickets of a spec, such as a plan file, a plan-mode plan or a "
+         "conversation plan with several claims, the text the claim is written in is the whole plan, so its implementer "
+         "and reviewers read the whole plan, as before 0.23.0, and a change to another claim's part of it changes the "
+         "reading set.",
+         "既不是 spec、也不是 spec 的 ticket 的計畫（例如計畫檔、plan mode 的計畫，或有多個 claim 的對話中計畫），其 claim "
+         "所寫的文字就是整份計畫，所以實作者與審查者讀整份計畫，和 0.23.0 之前一樣，而改動其他 claim 在其中的部分也會改變閱讀"
+         "範圍。"),
+        # S4 as amended: the claim's own text or part, its citations and the listed-claim every-claim parts.
         ("What a review reads", "審查讀什麼",
          "For a Security-critical claim, the security invariants and test targets the briefs carry are exactly those "
-         "written there, and any finding main gives the implementer also goes to the reviewers.",
-         "安全關鍵 claim 的 brief 所帶的安全不變條件與測試目標，恰好就是寫在這組範圍裡的那些；主 Agent 給實作者的任何發現，"
-         "也會交給審查者。"),
+         "written in the claim's own text (for a claim of such a plan, its own part of the plan), the parts it cites "
+         "and, for a claim a spec or other plan lists, the parts stated to hold for every claim, never another claim's, "
+         "and any finding main gives the implementer also goes to the reviewers.",
+         "安全關鍵 claim 的 brief 所帶的安全不變條件與測試目標，恰好就是寫在該 claim 自己的文字（這類計畫的 claim 是它自己在"
+         "計畫中的部分）、它引用的部分，以及 spec 或其他計畫列出的 claim 另外有的、聲明適用於每個 claim 的部分裡的那些，不會是"
+         "其他 claim 的；主 Agent 給實作者的任何發現，也會交給審查者。"),
         ("What a review reads", "審查讀什麼",
          "Main records the reading set when plan review returns READY, or at the claim's first dispatch in a session "
          "without one, and confirms it is unchanged before each implementation or review; a change you did not "
@@ -5241,6 +5331,9 @@ class ReadingSetTests(unittest.TestCase):
         ("README.md", "with `login.md` as context"),
         ("README.zh-TW.md", "其 spec 作為背景提供給計畫審查、程式碼審查與結果驗證"),
         ("README.zh-TW.md", "`login.md` 作為背景"),
+        # Replaced pre-fix wording (HEAD e26c9d0): the invariants and targets as everything the reading set holds.
+        ("README.md", "exactly those written there"),
+        ("README.zh-TW.md", "恰好就是寫在這組範圍裡的那些"),
     )
 
     def test_readmes_state_what_a_review_reads_in_both_languages(self):
@@ -5514,15 +5607,20 @@ class DeviationScopeTests(unittest.TestCase):
                  "after a material deviation, as [plan review](plan-review.md) step 5 describes, covers the changed "
                  "tickets and the tickets they block, and also every ticket that shares a file, a trust boundary or a "
                  "security invariant with a changed ticket.",
-        # Acceptance item 7: the checklist only when the change touches the spec; S2's check is kept in every review.
-        "checklist": "It runs the spec checklist again only when the change touches the spec's stated scope, decisions or "
-                     "invariants; every plan review over tickets of a spec, a narrowed one included, still checks that "
-                     "each of the spec's security invariants is cited by at least one of its tickets, as [plan review]"
+        # Acceptance item 7 (outcome added on 2026-10-13 by the user's decision): the checklist only when the change
+        # touches the spec's stated outcome, scope, decisions or invariants, and losing coverage touches the outcome.
+        "checklist": "It runs the spec checklist again only when the change touches the spec's stated outcome, scope, "
+                     "decisions or invariants; a change that stops the tickets covering the spec's outcome touches the "
+                     "spec's outcome, so the checklist, its coverage part included, runs again as [plan review]"
+                     "(plan-review.md) describes.",
+        # S2's check is kept in every review.
+        "citations": "Every plan review over tickets of a spec, a narrowed one included, still checks that each of the "
+                     "spec's security invariants is cited by at least one of its tickets, as [plan review]"
                      "(plan-review.md) describes.",
         # S10: main states why, and the analyst receives the spec and may require the checklist.
-        "why": "When main judges that a change does not touch the spec's stated scope, decisions or invariants, it states "
-               "why in the plan-review brief and in its report; the brief still supplies the spec, and analyst may require "
-               "the checklist, which then runs before the revised plan can be READY.",
+        "why": "When main judges that a change does not touch the spec's stated outcome, scope, decisions or invariants, "
+               "it states why in the plan-review brief and in its report; the brief still supplies the spec, and analyst "
+               "may require the checklist, which then runs before the revised plan can be READY.",
         # S5: an unauthorised change to a recorded reading set is a material deviation.
         "reading set": "A change to a claim's recorded reading set that the user did not authorise is a material "
                        "deviation, as Reading set describes, and that claim's ticket counts as a changed ticket.",
@@ -5610,6 +5708,11 @@ class DeviationScopeTests(unittest.TestCase):
                 self.assertIn(sentence, bullet)
         # Main's stated reason follows the rule it explains.
         self.assertLess(bullet.index(self.DEVIATION_SCOPE["checklist"]), bullet.index(self.DEVIATION_SCOPE["why"]))
+        # The trigger no longer leaves out the spec's outcome, in the rule or in main's stated reason.
+        self.assertNotIn("the spec's stated scope, decisions or invariants", bullet)
+        self.assertEqual(bullet.count("scope, decisions or invariants"),
+                         bullet.count("the spec's stated outcome, scope, decisions or invariants"))
+        self.assertEqual(bullet.count("the spec's stated outcome, scope, decisions or invariants"), 2)
 
     def test_review_state_states_the_spec_update_rule(self):
         bullet = self.bullet("Spec updates")
@@ -5638,11 +5741,11 @@ class DeviationScopeTests(unittest.TestCase):
                     self.assertIn(sentence, self.place(name))
 
     def test_the_every_claim_parts_wording_keeps_the_listed_claim_limit(self):
-        # S1 as ticket 03 pins it: "hold for every claim" in review state names only the listed-claim parts.
+        # S1 as ticket 03 pins it: every mention of the parts that hold for every claim in review state, the Spec
+        # updates bullet's included, is qualified by the read limit, S4's listed-claim exception or S11's reopening.
         text = self.text(self.REFERENCES / "review-state.md")
-        self.assertEqual(text.count("hold for every claim"),
-                         text.count("only for a claim a spec lists, the spec's parts that state they hold for every "
-                                    "claim"))
+        self.assertEqual(ReadingSetTests.unqualified_every_claim_parts(text), [])
+        self.assertIn(ReadingSetTests.REOPENING, self.bullet("Spec updates"))
 
     # Acceptance item 11 for these rules, and S12: both READMEs, paired.
     README_BULLETS = (
@@ -5653,11 +5756,15 @@ class DeviationScopeTests(unittest.TestCase):
          "計畫是某份 spec 的 ticket 時，重大偏離後的審查涵蓋變動的 ticket、被它們擋住的 ticket，以及與變動的 ticket 共用檔案、"
          "信任邊界或安全不變條件的每張 ticket。"),
         ("Deviations in tickets", "ticket 的偏離",
-         "It runs the spec checklist again only when the change touches the spec's stated scope, decisions or "
+         "It runs the spec checklist again only when the change touches the spec's stated outcome, scope, decisions or "
          "invariants; when main judges that a change does not, it says why in the review's brief and in its report, and "
          "analyst, which still gets the spec, may require the checklist.",
-         "只有變動觸及 spec 明定的範圍、決定或不變條件時，才會再做 spec 檢查清單；主 Agent 判斷沒有觸及時，會在審查的 brief 與它的"
-         "回報中說明理由，而仍會拿到 spec 的 analyst 可以要求做檢查清單。"),
+         "只有變動觸及 spec 明定的結果、範圍、決定或不變條件時，才會再做 spec 檢查清單；主 Agent 判斷沒有觸及時，會在審查的 brief "
+         "與它的回報中說明理由，而仍會拿到 spec 的 analyst 可以要求做檢查清單。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "A change that stops the tickets covering the spec's outcome touches the spec's outcome, so the checklist runs "
+         "again, its coverage check included when its usual condition holds.",
+         "讓 ticket 不再涵蓋 spec 結果的變動，就是觸及 spec 的結果，所以會再做檢查清單，原有條件成立時也包括涵蓋檢查。"),
         ("Deviations in tickets", "ticket 的偏離",
          "Each such review still checks that every security invariant of the spec is cited by at least one of its "
          "tickets.",
@@ -5703,6 +5810,12 @@ class DeviationScopeTests(unittest.TestCase):
             with self.subTest(label=label, sentence=en[:50]):
                 self.assertIn(en, english[label])
                 self.assertIn(zh, chinese[zh_label])
+        # The deviation trigger no longer leaves out the spec's outcome.
+        for label, removed in (("Deviations in tickets", "the spec's stated scope, decisions or invariants"),
+                               ("ticket 的偏離", "spec 明定的範圍、決定或不變條件")):
+            bullets = english if label == "Deviations in tickets" else chinese
+            with self.subTest(label=label, removed=removed):
+                self.assertNotIn(removed, bullets[label])
         # The new bullets follow the claim-change bullet, under the section intro that states its limits (S12).
         for name, intro, bullets in (
                 ("README.md", "These rules are instructions to main, not enforced by any tool;",
