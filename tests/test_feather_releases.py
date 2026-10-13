@@ -220,8 +220,7 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_21_0(self):
-        self.assertEqual("0.21.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.22.0 C5 item 1).
 
     def test_updates_sections_require_setup_update_and_name_inconclusive_in_both_languages(self):
         for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
@@ -265,6 +264,63 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
         link = "(0011-reviews-treat-the-repository-as-hostile-by-instruction.md)"
         self.assertIn(link, note)
         self.assertTrue((config.ROOT / "docs" / "adr" / link.strip("()")).is_file())
+
+
+class RepositorySafetyFollowUpsReleaseTests(unittest.TestCase):
+    """0.22.0 C5 (docs/specs/repository-safety-followups.md): the release needs only the plugin update, says how to go
+    back, and records its validation and review round."""
+
+    # C5 item 3: the Updates sections, paired in both languages.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.22.0 changes no role definition, guidance template or configuration tool, so existing installations need only the plugin update and a fresh session; no setup update is needed.",
+         "To go back to 0.21.0, reinstall the 0.21.0 plugin; no setup change is needed, since 0.22.0 changes no installed file or state."),
+        ("## 更新、移除與驗證\n",
+         "0.22.0 沒有改任何角色定義、指引範本或設定工具，所以既有安裝只要更新 plugin 再開新 session，不需要做 setup update。",
+         "要回到 0.21.0，重新安裝 0.21.0 的 plugin 即可；不需要變更 setup，因為 0.22.0 沒有改任何已安裝的檔案或 state。"),
+    )
+
+    # C5 item 2.
+    ENTRY = (
+        "**No setup update is required.** This release changes no role definition, no guidance template and no configuration tool:",
+        "To go back to 0.21.0, reinstall the 0.21.0 plugin; no setup change is needed.",
+        "C4 item 6's Windows positive control ran and was not skipped",
+        "C4's POSIX checks and their positive control ran in Ubuntu under WSL",
+        "PortableGit v2.56.0.windows.2",
+        "`claude plugin validate . --json`",
+        "No live scenario ran with the 0.22.0 procedures:",
+        "`v0.22.0` does not exist when this entry is written.",
+        "Review round, recorded after it (2026-10-13; the final candidate is the release commit).",
+        "Known limitation, recorded by the user's decision:",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_22_0(self):
+        self.assertEqual("0.22.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
+        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertIn(sentence, self.section(self.text(name), heading))
+
+    def test_validation_entry_records_the_checks_live_scope_tag_and_review_round(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.22.0 repository safety follow-ups\n")
+        for sentence in self.ENTRY:
+            with self.subTest(entry=sentence[:50]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("Setup update is required", entry)
+        # Each Claim has its line in the review round.
+        for claim in ("C1", "C2", "C3", "C4", "C5"):
+            with self.subTest(claim=claim):
+                self.assertEqual(entry.count(f"\n- {claim}: "), 1)
 
 
 class InstallDocumentTests(unittest.TestCase):
