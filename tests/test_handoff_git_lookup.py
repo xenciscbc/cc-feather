@@ -258,10 +258,13 @@ class GitResolverTableTest(unittest.TestCase):
             ("climbing from the scratch directory into /proc", str(self.root) + to_root + "/proc/self/cwd"),
             ("climbing out of /proc/self/cwd back to the current directory", climb),
         ]
+        # The namespaces themselves are skipped too, though none of them names the current directory.
+        inert = {"/dev/fd/3", "/proc", "/proc/", "/dev/fd"}
+        traps += [("bare /proc", "/proc"), ("/proc/", "/proc/"), ("bare /dev/fd", "/dev/fd")]
         if sys.platform.startswith("linux") and os.path.isdir("/proc/self/cwd"):
             for label, entry in traps:
                 # Each trap naming the current directory is live: a lookup that considered it would find a Git.
-                if entry != "/dev/fd/3":
+                if entry not in inert:
                     self.assertTrue(os.path.isfile(os.path.join(entry, NAME)), f"{label} is not a live trap: {entry}")
         plant(self.root / "proc" / "self" / "cwd")
         plant(self.root / "dev" / "fd")
@@ -671,7 +674,8 @@ class GitExecPathTest(unittest.TestCase):
     """Adopted with the 001d047 finding: an inherited GIT_EXEC_PATH that is not a considered entry would make Git,
     after -C, look up its git-* programs relative to the project or through the current directory, so the helper's
     Git processes do not get it; a considered one, the user's own, reaches Git unchanged. The value is judged as is:
-    on Windows a quoted value is dropped, although a quoted PATH entry is considered without its quotes.
+    on Windows a quoted value is dropped, although a quoted PATH entry is considered without its quotes, and a value
+    holding a path separator is dropped, because Git puts it before its children's PATH.
     git_environment itself, which other code uses, is unchanged."""
 
     def setUp(self):
@@ -701,6 +705,10 @@ class GitExecPathTest(unittest.TestCase):
             dropped += ["$HOME/libexec", "/proc/self/cwd", "//proc/./self/cwd/", "/dev/fd/3",
                         "/var/run/../proc/self/cwd", "/usr/../usr/libexec/git-core", kept + "/../libexec",
                         "/tmp/../tmp"]
+        # Regression for code review call 4 at f265e54: Git puts GIT_EXEC_PATH before its children's PATH, so a
+        # considered first entry followed by a path separator would hand them `.` (the project after -C), `..` or
+        # /proc/self/cwd; a value holding a path separator is dropped whatever its entries are.
+        dropped += [kept + ";."] if WINDOWS else [kept + ":.", kept + ":/proc/self/cwd", kept + ":.."]
         for value in dropped:
             with self.subTest("dropped", GIT_EXEC_PATH=value):
                 self.assertIsNone(self.started_with(value))

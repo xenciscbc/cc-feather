@@ -144,16 +144,18 @@ def run_git(directory: Path, *arguments: str, errors: str = "strict",
     propagates and no process starts. Git runs from its own directory with only the entries git_search_path keeps as
     its PATH, so the process's current directory takes part neither in finding Git nor in Git's own lookups, and
     <directory> is passed absolute. An inherited GIT_EXEC_PATH stays only when its value, taken as is without
-    removing quotes, is an entry the resolver would consider; any other is dropped, because Git would look up its
-    git-* programs there, relative to the project after -C or through the process's current directory. Needs no
-    Store, so root discovery can use it. no_lazy_fetch is what lazy_fetch_guard returned for the operation. Output
-    is UTF-8 text decoded with `errors`; OSError and subprocess.TimeoutExpired propagate, and each caller judges the
-    return code."""
+    removing quotes, holds no path separator (os.pathsep) and is an entry the resolver would consider; any other is
+    dropped, because Git would look up its git-* programs there and puts the value before its children's PATH, so a
+    value that is not one considered entry would reach them relative to the project after -C or through the
+    process's current directory. Needs no Store, so root discovery can use it. no_lazy_fetch is what
+    lazy_fetch_guard returned for the operation. Output is UTF-8 text decoded with `errors`; OSError and
+    subprocess.TimeoutExpired propagate, and each caller judges the return code."""
     value = os.environ.get("PATH")
     executable = resolve_git(value)
     environment = git_environment()
     environment["PATH"] = os.pathsep.join(git_search_path(value))
-    if "GIT_EXEC_PATH" in environment and not _considered(environment["GIT_EXEC_PATH"]):
+    exec_path = environment.get("GIT_EXEC_PATH")
+    if exec_path is not None and (os.pathsep in exec_path or not _considered(exec_path)):
         del environment["GIT_EXEC_PATH"]
     target = str(directory)
     if not _fully_qualified(target):
