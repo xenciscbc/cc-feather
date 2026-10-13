@@ -4018,6 +4018,13 @@ class FeatherConfigTests(unittest.TestCase):
                          "plan-review.md", "report a mismatch as a blocker for the user to settle"),
         "Claim changes": ("修改 claim", "main edits only after your authorisation", "在你授權後才修改",
                           "review-state.md", "only after the user authorises it"),
+        # Claims at implementation ticket 05 (Acceptance items 7 and 11): the deviation scope and spec-update rules.
+        "Deviations in tickets": ("ticket 的偏離", "the review after a material deviation covers the changed tickets",
+                                  "重大偏離後的審查涵蓋變動的 ticket", "review-state.md",
+                                  "covers the changed tickets and the tickets they block"),
+        "Spec updates": ("更新 spec", "main also updates the spec, only with your authorisation",
+                         "主 Agent 也會更新 spec，但只在你授權後", "review-state.md",
+                         "main updates the spec with the user's authorisation"),
         # Claims at implementation ticket 04 (Acceptance items 5 and 11): the drafting rule.
         "Drafting a spec": ("草擬 spec", "it lists no claims and cuts none unless you ask", "除非你要求，不會在裡面列出 claim",
                             "plan-review.md", "When main drafts a spec for the user, it lists no claims and cuts none "
@@ -5469,6 +5476,244 @@ class DraftingSpecTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(term=term, sentence=sentence[:60]):
                     self.assertIn(sentence, entries[term])
+
+
+class DeviationScopeTests(unittest.TestCase):
+    """0.23.0 ticket 05 (docs/specs/claims-at-implementation.md, Solution's implementation paragraph, Acceptance item 7
+    and the parts of items 11 and 12 for these rules, Implementation Decisions "Deviation scope", "Where the rules live"
+    and "Unchanged", Out of Scope item 4, S5, S9, S10, S11 and S12): the review after a material deviation in a Plan of
+    tickets, and updating the spec after an agreed change."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+
+    @classmethod
+    def text(cls, path):
+        return path.read_text(encoding="utf-8")
+
+    @classmethod
+    def bullet(cls, label):
+        return feather_support.review_rules_source(f"review-state.md#{label}")
+
+    @classmethod
+    def step(cls, name, number):
+        return next(line for line in cls.text(cls.REFERENCES / name).splitlines() if line.startswith(f"{number}. "))
+
+    @classmethod
+    def readme_bullets(cls, name):
+        text = cls.text(config.ROOT / name)
+        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
+                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+        return dict(feather_support.readme_rule_bullets(text, start, end))
+
+    # Acceptance item 7, S9, S10 and S5, and Implementation Decisions "Deviation scope": review state, beside its
+    # claim-change rule.
+    DEVIATION_SCOPE = {
+        # Acceptance item 7 and S9: the changed tickets, the tickets they block, and tickets sharing a file, trust
+        # boundary or security invariant with a changed ticket.
+        "scope": "For a plan that is tickets of a spec, a single named ticket included, the review of the revised plan "
+                 "after a material deviation, as [plan review](plan-review.md) step 5 describes, covers the changed "
+                 "tickets and the tickets they block, and also every ticket that shares a file, a trust boundary or a "
+                 "security invariant with a changed ticket.",
+        # Acceptance item 7: the checklist only when the change touches the spec; S2's check is kept in every review.
+        "checklist": "It runs the spec checklist again only when the change touches the spec's stated scope, decisions or "
+                     "invariants; every plan review over tickets of a spec, a narrowed one included, still checks that "
+                     "each of the spec's security invariants is cited by at least one of its tickets, as [plan review]"
+                     "(plan-review.md) describes.",
+        # S10: main states why, and the analyst receives the spec and may require the checklist.
+        "why": "When main judges that a change does not touch the spec's stated scope, decisions or invariants, it states "
+               "why in the plan-review brief and in its report; the brief still supplies the spec, and analyst may require "
+               "the checklist, which then runs before the revised plan can be READY.",
+        # S5: an unauthorised change to a recorded reading set is a material deviation.
+        "reading set": "A change to a claim's recorded reading set that the user did not authorise is a material "
+                       "deviation, as Reading set describes, and that claim's ticket counts as a changed ticket.",
+        # S10: security analysis reopens under its existing triggers first, and the citation part covers every ticket.
+        "security": "A deviation that adds or changes a security control or invariant reopens security analysis under its "
+                    "existing triggers, as [plan review](plan-review.md) describes, before the narrowed plan review, and "
+                    "that plan review also runs the checklist's citation part over all of the plan's tickets.",
+        # Implementation Decisions "Deviation scope": the completed-call and coverage rules.
+        "completed": "The narrowing follows Completed calls and coverage: the review is narrowed only when the plan's "
+                     "previous plan-review call completed, and after a call that did not complete, the next call reviews "
+                     "the whole plan.",
+        # Out of Scope item 4: counts, the Stop threshold and the approval step are unchanged.
+        "unchanged": "The count, the Stop threshold and the user's approval of the revised plan are as [plan review]"
+                     "(plan-review.md) step 5 describes.",
+    }
+
+    # Acceptance item 7 and S11: the spec-update rule.
+    SPEC_UPDATES = {
+        "tickets govern": "Once tickets are cut, they govern implementation.",
+        "update": "After an agreed change to the spec's stated outcome, scope, decisions or invariants, such as one a "
+                  "deviation or a claim change brings, main updates the spec with the user's authorisation, so that later "
+                  "checklist checks and other sessions read the agreed version.",
+        "reopen": "An agreed change to a spec part a claim cites, or to a part the spec states holds for every claim, "
+                  "reopens the READY, APPROVED, CONFIRMED and HELD of every claim that cites or reads it, as a change to "
+                  "its acceptance does under User decisions, and main records each such claim's changed reading set "
+                  "before its next dispatch, as Reading set describes.",
+    }
+
+    # Plan review step 5 points to the scope rather than restating it.
+    STEP_5_POINTER = ("For a plan that is tickets of a spec, what that review covers, and when security analysis and the "
+                      "spec checklist run again, is as [review state](review-state.md)'s Deviation scope describes.")
+
+    # Kept statements this ticket relies on: each pin fails if the statement is removed (Out of Scope item 4).
+    KEPT = {
+        "plan-review.md#5": (
+            "a material deviation stops dependent work for another review of the revised plan, counted from the reset of "
+            "the last automatic READY, or from the unchanged count after an explicit READY that cleared a stop, and the "
+            "user's approval.",
+            "That review needs the user's explicit request exactly while the count is at or above the Stop threshold in "
+            "effect, as [review state](review-state.md)'s Next automatic call describes.",
+            "A deviation is material when it changes the plan's outcome, scope or acceptance; in addition, discovering a "
+            "security control or invariant the plan lacks is a material deviation.",
+        ),
+        "plan-review.md#security analysis": (
+            "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially "
+            "revised control, and then covers only what changed, before plan review runs again.",
+            "The security analysis is not a counted step, and the Stop threshold does not apply to it.",
+        ),
+        "review-state.md#Completed calls and coverage": (
+            "Only a completed review establishes coverage.",
+            "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for "
+            "plan review, the whole plan), carrying any partial findings as evidence, not as coverage.",
+            "Every attempted call still counts as under What counts as a call, and the budgets are unchanged.",
+        ),
+        "review-state.md#Reading set": (
+            "A change the user did not authorise is a material deviation, as [plan review](plan-review.md) step 5 "
+            "describes; after a change the user authorises, main records the changed reading set before the claim's next "
+            "dispatch.",
+        ),
+        "review-state.md#Claim changes": (
+            "Main edits a spec or ticket for it only after the user authorises it, keeping a mapping from old claims to "
+            "new ones and the unresolved blockers each carries.",
+        ),
+        "review-state.md#Resolution": (
+            "otherwise the value the loaded user guidance states; otherwise 2.",
+        ),
+        "review-state.md#Commit and completion": ("This is the acceptance gate.",),
+        "review-state.md": ("Counts are per session;",),
+    }
+
+    @classmethod
+    def place(cls, name):
+        path, _, part = name.partition("#")
+        if path == "plan-review.md" and part == "5":
+            return cls.step(path, 5)
+        if path == "plan-review.md" and part == "security analysis":
+            return DraftingSpecTests.security_analysis_paragraph()
+        return feather_support.review_rules_source(name)
+
+    def test_review_state_states_the_deviation_scope_beside_its_claim_change_rule(self):
+        bullet = self.bullet("Deviation scope")
+        self.assertTrue(bullet.startswith("- **Deviation scope.** " + self.DEVIATION_SCOPE["scope"]), bullet[:120])
+        for part, sentence in self.DEVIATION_SCOPE.items():
+            with self.subTest(part=part):
+                self.assertIn(sentence, bullet)
+        # Main's stated reason follows the rule it explains.
+        self.assertLess(bullet.index(self.DEVIATION_SCOPE["checklist"]), bullet.index(self.DEVIATION_SCOPE["why"]))
+
+    def test_review_state_states_the_spec_update_rule(self):
+        bullet = self.bullet("Spec updates")
+        self.assertTrue(bullet.startswith("- **Spec updates.** " + self.SPEC_UPDATES["tickets govern"]), bullet[:120])
+        for part, sentence in self.SPEC_UPDATES.items():
+            with self.subTest(part=part):
+                self.assertIn(sentence, bullet)
+
+    def test_the_new_rules_sit_beside_the_claim_change_rule(self):
+        text = self.text(self.REFERENCES / "review-state.md")
+        section = text.split("## Resumed sessions and plan changes", 1)[1].split("\n## ", 1)[0]
+        labels = [line.split("**", 2)[1] for line in section.splitlines() if line.startswith("- **")]
+        index = labels.index("Claim changes.")
+        self.assertEqual(labels[index:index + 3], ["Claim changes.", "Deviation scope.", "Spec updates."])
+
+    def test_plan_review_step_5_points_to_the_deviation_scope(self):
+        step = self.step("plan-review.md", 5)
+        self.assertIn(self.STEP_5_POINTER, step)
+        # The pointer follows the sentence that sends a material deviation to another review.
+        self.assertLess(step.index(self.KEPT["plan-review.md#5"][0]), step.index(self.STEP_5_POINTER))
+
+    def test_kept_rules_stay(self):
+        for name, sentences in self.KEPT.items():
+            for sentence in sentences:
+                with self.subTest(place=name, sentence=sentence[:60]):
+                    self.assertIn(sentence, self.place(name))
+
+    def test_the_every_claim_parts_wording_keeps_the_listed_claim_limit(self):
+        # S1 as ticket 03 pins it: "hold for every claim" in review state names only the listed-claim parts.
+        text = self.text(self.REFERENCES / "review-state.md")
+        self.assertEqual(text.count("hold for every claim"),
+                         text.count("only for a claim a spec lists, the spec's parts that state they hold for every "
+                                    "claim"))
+
+    # Acceptance item 11 for these rules, and S12: both READMEs, paired.
+    README_BULLETS = (
+        ("Deviations in tickets", "ticket 的偏離",
+         "when the plan is tickets of a spec, the review after a material deviation covers the changed tickets, the "
+         "tickets they block and every ticket that shares a file, a trust boundary or a security invariant with a "
+         "changed ticket.",
+         "計畫是某份 spec 的 ticket 時，重大偏離後的審查涵蓋變動的 ticket、被它們擋住的 ticket，以及與變動的 ticket 共用檔案、"
+         "信任邊界或安全不變條件的每張 ticket。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "It runs the spec checklist again only when the change touches the spec's stated scope, decisions or "
+         "invariants; when main judges that a change does not, it says why in the review's brief and in its report, and "
+         "analyst, which still gets the spec, may require the checklist.",
+         "只有變動觸及 spec 明定的範圍、決定或不變條件時，才會再做 spec 檢查清單；主 Agent 判斷沒有觸及時，會在審查的 brief 與它的"
+         "回報中說明理由，而仍會拿到 spec 的 analyst 可以要求做檢查清單。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "Each such review still checks that every security invariant of the spec is cited by at least one of its "
+         "tickets.",
+         "這樣的審查仍會檢查 spec 的每條安全不變條件至少被它的一張 ticket 引用。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "A change to a claim's reading set that you did not authorise counts as such a deviation.",
+         "未經你授權而改變 claim 的閱讀範圍，也算這種偏離。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "A deviation that adds or changes a security control or invariant first reopens the security analysis under its "
+         "usual triggers, and the review then checks the citations of all the plan's tickets.",
+         "新增或改變安全控制或不變條件的偏離，會先依原有的觸發條件重新做安全分析，審查時再檢查計畫所有 ticket 的引用。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "The review is narrowed only after a plan review that completed; after one that did not, the whole plan is "
+         "reviewed.",
+         "只有在上一次計畫審查完成時，審查才會縮小範圍；上一次沒有完成時，會審查整份計畫。"),
+        ("Deviations in tickets", "ticket 的偏離",
+         "The count, the Stop threshold and your approval of the revised plan work as for any deviation.",
+         "次數、停止門檻與修訂後的計畫需要你同意，都和其他偏離一樣。"),
+        # S12: the limits of these rules.
+        ("Deviations in tickets", "ticket 的偏離",
+         "These are instructions to the model: main judges which tickets a change touches and whether it touches the "
+         "spec, and the checklist otherwise runs only at plan review, on the text as written then.",
+         "這些是給模型的指示：哪些 ticket 受變動影響、變動是否觸及 spec，由主 Agent 判斷；除此之外，檢查清單只在計畫審查時執行，"
+         "看的是當時寫下的文字。"),
+        ("Spec updates", "更新 spec",
+         "once tickets are cut, they govern implementation.",
+         "ticket 切好之後，實作以 ticket 為準。"),
+        ("Spec updates", "更新 spec",
+         "When a change you agree to alters the spec's stated outcome, scope, decisions or invariants, main also updates "
+         "the spec, only with your authorisation, so later checklist checks and other sessions read the agreed version.",
+         "你同意的變動改變了 spec 明定的結果、範圍、決定或不變條件時，主 Agent 也會更新 spec，但只在你授權後，讓之後的檢查清單與"
+         "其他 session 讀到同意後的版本。"),
+        ("Spec updates", "更新 spec",
+         "An agreed change to a spec part a claim cites, or to a part the spec says holds for every claim, reopens the "
+         "READY, APPROVED, CONFIRMED and HELD of every claim that cites or reads it, as a change to its acceptance does.",
+         "你同意的變動若改到某個 claim 引用的 spec 部分，或 spec 聲明適用於每個 claim 的部分，會重新打開每個引用或讀到它的 claim 的 "
+         "READY、APPROVED、CONFIRMED 與 HELD，和修改它的驗收條件一樣。"),
+    )
+
+    def test_readmes_state_the_deviation_and_spec_update_rules_in_both_languages(self):
+        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        for label, zh_label, en, zh in self.README_BULLETS:
+            with self.subTest(label=label, sentence=en[:50]):
+                self.assertIn(en, english[label])
+                self.assertIn(zh, chinese[zh_label])
+        # The new bullets follow the claim-change bullet, under the section intro that states its limits (S12).
+        for name, intro, bullets in (
+                ("README.md", "These rules are instructions to main, not enforced by any tool;",
+                 ("- **Claim changes:**", "- **Deviations in tickets:**", "- **Spec updates:**")),
+                ("README.zh-TW.md", "這些規則是給主 Agent 的指示，沒有任何工具強制執行；",
+                 ("- **修改 claim：**", "- **ticket 的偏離：**", "- **更新 spec：**"))):
+            section = ClaimsAtImplementationTests.readme_section(name)
+            with self.subTest(readme=name):
+                self.assertIn(intro, section)
+                positions = [section.index(bullet) for bullet in bullets]
+                self.assertEqual(positions, sorted(positions))
 
 
 if __name__ == "__main__":

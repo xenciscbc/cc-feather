@@ -187,6 +187,8 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 - **告訴主 Agent ticket 放在哪裡：**在專案的 CLAUDE.md 或 AGENTS.md（或它們指向的檔案）寫一行，說明 spec 和 ticket 放在哪裡，例如「Tickets: `.scratch/<feature>/issues/`, linked to specs in `docs/specs/` by a `Spec:` line」。規劃工具的 setup 可能會幫你寫好這行。如果這份指示檔沒有進版本控制，其他 checkout 就沒有這行，主 Agent 只能退回自己搜尋。
 - **不一致：**spec 自己列了 claim 又有 ticket 時，列出的 claim 必須與它所有的 ticket（不論是否完成）一致；不一致會列為阻擋事項，由你決定。
 - **修改 claim：**主 Agent 不會為了補 claim 而修改 spec 或 ticket，除非你授權：審查需要新增、拆分或修改 claim 時，由你或你的規劃步驟決定；主 Agent 在你授權後才修改，並保留新舊 claim 的對應與尚未解決的阻擋事項。
+- **ticket 的偏離：**計畫是某份 spec 的 ticket 時，重大偏離後的審查涵蓋變動的 ticket、被它們擋住的 ticket，以及與變動的 ticket 共用檔案、信任邊界或安全不變條件的每張 ticket。只有變動觸及 spec 明定的範圍、決定或不變條件時，才會再做 spec 檢查清單；主 Agent 判斷沒有觸及時，會在審查的 brief 與它的回報中說明理由，而仍會拿到 spec 的 analyst 可以要求做檢查清單。這樣的審查仍會檢查 spec 的每條安全不變條件至少被它的一張 ticket 引用。未經你授權而改變 claim 的閱讀範圍，也算這種偏離。新增或改變安全控制或不變條件的偏離，會先依原有的觸發條件重新做安全分析，審查時再檢查計畫所有 ticket 的引用。只有在上一次計畫審查完成時，審查才會縮小範圍；上一次沒有完成時，會審查整份計畫。次數、停止門檻與修訂後的計畫需要你同意，都和其他偏離一樣。這些是給模型的指示：哪些 ticket 受變動影響、變動是否觸及 spec，由主 Agent 判斷；除此之外，檢查清單只在計畫審查時執行，看的是當時寫下的文字。
+- **更新 spec：**ticket 切好之後，實作以 ticket 為準。你同意的變動改變了 spec 明定的結果、範圍、決定或不變條件時，主 Agent 也會更新 spec，但只在你授權後，讓之後的檢查清單與其他 session 讀到同意後的版本。你同意的變動若改到某個 claim 引用的 spec 部分，或 spec 聲明適用於每個 claim 的部分，會重新打開每個引用或讀到它的 claim 的 READY、APPROVED、CONFIRMED 與 HELD，和修改它的驗收條件一樣。
 - **草擬 spec：**主 Agent 替你草擬 spec 時，除非你要求，不會在裡面列出 claim，也不會切分 claim：它的 claim 在你指名要實作這份 spec 或它的 ticket 時才決定。主 Agent 草擬的 spec 不算它自己提出的計畫，所以它的 claim 和你寫的 spec 一樣，在第一次計畫審查前分類；見[安全關鍵工作](#安全關鍵工作)。
 - **還不算計畫：**既沒有 ticket、也沒有自己範圍與驗收條件的 spec（例如沒有驗收段落的 spec 範本）還不算計畫；主 Agent 會先補齊，並請你確認補齊後的版本。
 - **plan mode 與對話中的計畫：**它們的 claim 只存在於該計畫的文字中，其他 session 看不到；這是已接受的限制。新的 session 只會依它的原文、現有紀錄或你確認過的版本來使用這類計畫。
