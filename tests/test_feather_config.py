@@ -3529,8 +3529,10 @@ class FeatherConfigTests(unittest.TestCase):
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertIn(phrase, text)
         entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
-        self.assertIn("with its claims listed, its unfinished tickets in the named scope as claims, or else one claim",
-                      entries["Plan"])
+        # Claims at implementation ticket 01 replaced the 0.22.0 Plan definition with the named-Plan cases.
+        self.assertIn("a named spec is one Claim unless it lists its own", entries["Plan"])
+        self.assertNotIn("with its claims listed, its unfinished tickets in the named scope as claims, or else one claim",
+                         entries["Plan"])
         self.assertIn("In auto, Unplanned work", entries["Unplanned work"])
 
     def test_adr_0006_records_the_review_state_decisions_and_amends_earlier_adrs(self):
@@ -3964,11 +3966,15 @@ class FeatherConfigTests(unittest.TestCase):
                  "preview.md", "a Claim makes at most K(K+1) automatic calls"),
         "Independence": ("獨立性", "each review runs in a fresh context", "每次審查都在新的 context",
                          "plan-review.md", "in fresh native context"),
-        "A spec, or some of its tickets": ("一份 spec，或其中幾張 ticket", "Each unfinished ticket in that scope is one claim",
-                                           "範圍內每張未完成的 ticket 是一個 claim", "plan-review.md",
+        # Claims at implementation ticket 01: the three named-Plan cases replace "A spec, or some of its tickets".
+        "A spec": ("一份 spec", "main first asks whether you mean the spec as it stands or its tickets",
+                   "主 Agent 會先問你要實作 spec 本身還是它的 ticket", "plan-review.md",
+                   "main first asks the user whether to implement the spec as it stands or its tickets"),
+        "Tickets of a spec, all or some": ("一份 spec 的 ticket（全部或部分）", "Each unfinished ticket among them is one claim",
+                                           "其中每張未完成的 ticket 是一個 claim", "plan-review.md",
                                            "each unfinished ticket in the named scope is one claim"),
-        "A single ticket": ("單一 ticket", "with its spec given as context", "其 spec 作為背景",
-                            "plan-review.md", "A single named ticket is the plan"),
+        "A single ticket": ("單一 ticket", "that ticket is the plan and its one claim", "該 ticket 就是計畫，也是它唯一的 claim",
+                            "plan-review.md", "A single named ticket is the plan and its one claim"),
         "A ticket that belongs to no spec": ("不屬於任何 spec 的 ticket", "is its own plan", "自成一份計畫",
                                              "plan-review.md", "A ticket that belongs to no spec is its own plan"),
         "Example": ("例子", "makes one plan with three claims", "是一份有三個 claim 的計畫",
@@ -4036,7 +4042,8 @@ class FeatherConfigTests(unittest.TestCase):
 
     # Glossary term -> (phrase in its CONTEXT.md entry, procedure file, procedure phrase).
     GLOSSARY_RULES = {
-        "Plan": ("its unfinished tickets in the named scope as claims",
+        # Claims at implementation ticket 01 (Acceptance item 9): the Plan entry states the named-Plan cases.
+        "Plan": ("named tickets of a spec, all or some, form one Plan with each unfinished ticket as one Claim",
                  "plan-review.md", "each unfinished ticket in the named scope is one claim"),
         "Claim": ("One independently verifiable outcome with its own acceptance",
                   "plan-review.md", "each an independently verifiable outcome with its own acceptance"),
@@ -4474,6 +4481,313 @@ class SavedStopThresholdTests(unittest.TestCase):
                 "Like the review mode, the Stop threshold is an agent instruction, not a hook-enforced counter."):
             with self.subTest(sentence=sentence[:40]):
                 self.assertIn(sentence, section)
+
+
+class ClaimsAtImplementationTests(unittest.TestCase):
+    """0.23.0 ticket 01 (docs/specs/claims-at-implementation.md, Acceptance items 1, 2, 8 and 9, S2 and S12): Claims are
+    decided when the user asks for implementation, by what the user names."""
+
+    REFERENCES = config.ROOT / "skills" / "delegation" / "references"
+    ADR = config.ROOT / "docs" / "adr"
+    ADR_0012 = "0012-claims-are-decided-by-what-the-user-names.md"
+
+    @classmethod
+    def text(cls, path):
+        return path.read_text(encoding="utf-8")
+
+    @classmethod
+    def named_plan_paragraph(cls):
+        # The plan-review paragraph that decides the Plan and its Claims (Implementation Decisions "Where the rules live").
+        text = cls.text(cls.REFERENCES / "plan-review.md")
+        return next(block for block in text.split("\n\n") if "A plan lists its claims" in block)
+
+    @classmethod
+    def readme_section(cls, name):
+        # The "Which document is the plan" part of each README, intro and rule bullets.
+        text = cls.text(config.ROOT / name)
+        start = {"README.md": "**Which document is the plan.**", "README.zh-TW.md": "**哪份文件是計畫。**"}[name]
+        return start + "\n\n".join(text.split(start, 1)[1].split("\n\n", 2)[:2])
+
+    @classmethod
+    def readme_bullets(cls, name):
+        text = cls.text(config.ROOT / name)
+        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
+                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+        return dict(feather_support.readme_rule_bullets(text, start, end))
+
+    # Acceptance item 1: the three named-Plan cases, the spec-or-tickets question and a spec's own Claims list.
+    NAMED_PLAN = (
+        "The plan is what the user names when asking for implementation, and its claims are decided then, by what the "
+        "user names, in three cases.",
+        "A named spec is the plan and one claim, unless it lists its own claims, which then count as listed; a spec's "
+        "own claims list counts only when the spec has one.",
+        "When the named spec has at least one unfinished ticket and no plan in this session already covers the named "
+        "work, main first asks the user whether to implement the spec as it stands or its tickets: \"the spec\" makes "
+        "the spec one claim, or its listed claims, and \"the tickets\" makes those unfinished tickets the plan.",
+        "Named tickets of a spec, all or some, are the plan: each unfinished ticket in the named scope is one claim, and "
+        "its `Blocked by` lines are the dependencies.",
+        "A single named ticket is the plan and its one claim",
+        # The question does not displace "nothing left": a named spec whose tickets are all finished asks nothing.
+        "For a named spec that has tickets, the named scope is all of them, so when they are all finished nothing is "
+        "left to implement and no question is asked.",
+    )
+
+    # Acceptance item 2: one Claim from a spec, and the separability note that does not stop the flow.
+    ONE_CLAIM_FROM_A_SPEC = (
+        "A spec without tickets and without a claims list, which refers to no tickets or claims of its own, is one "
+        "claim only when it has scope and acceptance of its own; otherwise it is not yet a plan, as above.",
+        "Main may say in one line that such a spec looks separable into tickets; that line does not stop the flow or "
+        "wait for an answer.",
+    )
+
+    # S2: a single named ticket is named tickets of its spec for plan review, so the coverage rule reaches it too.
+    SINGLE_TICKET_COVERAGE = (
+        "plan review treats it as a named ticket of its spec, so every check plan review makes for named tickets of a "
+        "spec, a single named ticket included, applies to it too.",
+    )
+
+    # Acceptance item 1: the rules this ticket keeps, pinned whole so removing one fails.
+    KEPT = (
+        "A plan lists its claims, each an independently verifiable outcome with its own acceptance; a plan that lists "
+        "none is one claim.",
+        "A ticket that belongs to no spec is its own plan.",
+        "When every ticket in the named scope is finished, report that nothing is left to implement.",
+        "The named-plan rule applies only when no plan in this session already covers the named work; otherwise that "
+        "plan continues with no new plan review and keeps its count, verdicts and blockers, and a new plan that partly "
+        "overlaps one inherits its unresolved verdicts and blockers for the overlapping tickets,",
+        "In a resumed session, an unresolved verdict that an active handoff records for a spec's plan applies to that "
+        "spec's tickets when they are named; one recorded for a ticket's plan still restricts that ticket when the "
+        "whole spec is named, and without such a record no restriction carries over.",
+        "Recognise a spec's tickets by an explicit link such as a `Spec:` line or parent reference, a shared feature "
+        "directory, or the user naming them; ask when none or several plans match, and state the tickets used.",
+        "Look first at the project's instructions, such as CLAUDE.md or AGENTS.md, and any file they point to, for "
+        "where tickets live.",
+        "If a spec's tickets still cannot be found, a spec that lists its own claims keeps that list without asking.",
+        "A spec that lists claims and also has tickets must agree with all of them, finished or not; report a mismatch "
+        "as a blocker for the user to settle.",
+    )
+
+    # Replaced 0.22.0 wording: the spec with its tickets as one Plan.
+    REPLACED = (
+        "A spec, or a set of its tickets, makes the spec with those tickets the plan",
+    )
+
+    def test_plan_review_states_the_three_named_plan_cases_and_the_question(self):
+        paragraph = self.named_plan_paragraph()
+        for sentence in self.NAMED_PLAN + self.ONE_CLAIM_FROM_A_SPEC + self.SINGLE_TICKET_COVERAGE:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, paragraph)
+        for sentence in self.REPLACED:
+            with self.subTest(removed=sentence[:60]):
+                self.assertNotIn(sentence, self.text(self.REFERENCES / "plan-review.md"))
+
+    def test_plan_review_keeps_the_existing_named_plan_rules(self):
+        paragraph = self.named_plan_paragraph()
+        for sentence in self.KEPT:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, paragraph)
+
+    def test_the_question_comes_before_its_answers_and_the_existing_plan_rule_follows(self):
+        # The question is asked only when no plan already covers the named work, which the existing-plan rule decides.
+        paragraph = self.named_plan_paragraph()
+        question = paragraph.index("main first asks the user whether to implement the spec as it stands or its tickets")
+        self.assertLess(paragraph.index("A named spec is the plan and one claim"), question)
+        self.assertLess(question, paragraph.index("The named-plan rule applies only when no plan in this session"))
+
+    # Acceptance item 8 and S12: the preview applies the rules by reference and reports the question as open.
+    PREVIEW = (
+        "Identify each Plan and its Claims as [plan review](plan-review.md) does,",
+        "When plan review's rules would have main ask whether to implement a named spec as it stands or its tickets, "
+        "report that question as open rather than answering it: show both readings, the spec as one Claim or its "
+        "listed Claims and its unfinished tickets as Claims, or mark the counts of Plans, Claims and Security-critical "
+        "claims as depending on the answer.",
+        "- a named spec with unfinished tickets whose spec-or-tickets question is still open, with both readings shown or "
+        "its counts marked as depending on the answer;",
+    )
+
+    def test_the_preview_reports_the_spec_or_tickets_question_as_open(self):
+        preview = self.text(self.REFERENCES / "preview.md")
+        for sentence in self.PREVIEW:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, preview)
+        command = self.text(config.ROOT / "skills" / "delegation-preview" / "SKILL.md")
+        self.assertIn("this command adds no separate rules", command)
+
+    # Acceptance items 11 and 12 for these rules, S2 and S12: both READMEs, paired.
+    README_BULLETS = (
+        ("A spec", "一份 spec",
+         "main first asks whether you mean the spec as it stands or its tickets: \"the spec\" makes it one claim, or its "
+         "listed claims, and \"the tickets\" makes those unfinished tickets the plan.",
+         "主 Agent 會先問你要實作 spec 本身還是它的 ticket：答「spec」，spec 就是一個 claim，或以它列出的 claim 為準；答「ticket」，"
+         "這些未完成的 ticket 就是計畫。"),
+        ("A spec", "一份 spec",
+         "A spec written earlier with its own claims table keeps it: naming it and answering \"the spec\" keeps its "
+         "listed claims, which must still agree with its tickets.",
+         "先前寫成、自己列了 claim 表的 spec 會保留它：指名它並回答「spec」時，沿用它列出的 claim，且仍須與它的 ticket 一致。"),
+        ("Tickets of a spec, all or some", "一份 spec 的 ticket（全部或部分）",
+         "those tickets are one plan, reviewed once. Each unfinished ticket among them is one claim, and its `Blocked by` "
+         "lines are its dependencies.",
+         "這些 ticket 是一份計畫，只做一次計畫審查。其中每張未完成的 ticket 是一個 claim，它的 `Blocked by` 行就是相依關係。"),
+        ("A single ticket", "單一 ticket",
+         "that ticket is the plan and its one claim",
+         "該 ticket 就是計畫，也是它唯一的 claim"),
+        ("A single ticket", "單一 ticket",
+         "Plan review treats it as a named ticket of its spec, just as when several are named.",
+         "計畫審查把它當作該 spec 被指名的 ticket，和指名多張時一樣。"),
+        ("A ticket that belongs to no spec", "不屬於任何 spec 的 ticket",
+         "**A spec without tickets** keeps the claims it lists or, when it lists none, is one claim provided it has scope "
+         "and acceptance of its own; main may say in one line that it looks separable into tickets, without stopping.",
+         "**沒有 ticket 的 spec** 沿用它列出的 claim；沒有列出時，只要有自己的範圍與驗收條件，整份就是一個 claim。主 Agent 可能用一句話"
+         "提醒它看起來可以拆成 ticket，但不會因此停下。"),
+        ("Example", "例子",
+         "\"Implement the login spec\" makes main ask first: \"the tickets\" makes one plan with three claims, with one "
+         "plan review, and 03 waits for 02; \"the spec\" makes the whole spec one claim. \"Implement tickets 02 and 03\" "
+         "makes one plan with two claims.",
+         "「實作 login spec」時主 Agent 會先問你：答「ticket」是一份有三個 claim 的計畫，計畫審查一次，03 等 02 完成；答「spec」則整份 "
+         "spec 是一個 claim。「實作 ticket 02 和 03」是一份有兩個 claim 的計畫。"),
+        ("Example", "例子",
+         "`docs/specs/logout.md`, with no tickets and no claims list, is one claim when you name it.",
+         "沒有 ticket、也沒有列 claim 的 `docs/specs/logout.md`，指名它就是一個 claim。"),
+    )
+
+    README_INTRO = (
+        "naming it is your agreement to it, and what you name decides its claims.",
+        "指名即代表你同意它，指名什麼也決定了它有哪些 claim。",
+    )
+
+    # S12: the READMEs state the limits of these rules where this ticket's text makes a claim.
+    README_LIMITS = (
+        "These rules are instructions to main, not enforced by any tool; tests only keep the texts consistent.",
+        "這些規則是給主 Agent 的指示，沒有任何工具強制執行；測試只確保各文件說法一致。",
+    )
+
+    README_PREVIEW = (
+        "For a named spec with unfinished tickets, the preview does not answer whether you mean the spec or its tickets: "
+        "it shows both readings, or marks its counts as depending on your answer.",
+        "指名的 spec 還有未完成的 ticket 時，預覽不替你回答要實作 spec 還是它的 ticket：它會列出兩種解讀，或標示它的數量取決於你怎麼回答。",
+    )
+
+    # Replaced README wording: the spec with its tickets as one plan.
+    README_REPLACED = (
+        ("README.md", "the spec with those tickets is one plan"),
+        ("README.md", "- **A spec, or some of its tickets:**"),
+        ("README.zh-TW.md", "該 spec 連同這些 ticket 是一份計畫"),
+        ("README.zh-TW.md", "- **一份 spec，或其中幾張 ticket：**"),
+    )
+
+    def test_readmes_explain_the_three_cases_with_an_example_in_both_languages(self):
+        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        for label, zh_label, en, zh in self.README_BULLETS:
+            with self.subTest(label=label, sentence=en[:50]):
+                self.assertIn(en, english[label])
+                self.assertIn(zh, chinese[zh_label])
+        for name, sentence in zip(("README.md", "README.zh-TW.md"), self.README_INTRO):
+            with self.subTest(readme=name, intro=sentence[:40]):
+                self.assertIn(sentence, self.readme_section(name))
+        for name, sentence in self.README_REPLACED:
+            with self.subTest(readme=name, removed=sentence[:40]):
+                self.assertNotIn(sentence, self.text(config.ROOT / name))
+
+    def test_readmes_state_the_limits_and_the_open_question_in_the_preview(self):
+        for name, limits, preview, heading in (
+                ("README.md", self.README_LIMITS[0], self.README_PREVIEW[0], "### Delegation preview"),
+                ("README.zh-TW.md", self.README_LIMITS[1], self.README_PREVIEW[1], "### 分派預覽")):
+            text = self.text(config.ROOT / name)
+            with self.subTest(readme=name, part="limits"):
+                self.assertIn(limits, self.readme_section(name))
+            with self.subTest(readme=name, part="preview"):
+                self.assertIn(preview, text.split(heading, 1)[1].split("\n### ", 1)[0])
+
+    # Acceptance item 9 and S1: the glossary entries, aligned with the procedures.
+    GLOSSARY = {
+        "Plan": (
+            "It is what the user names when asking for implementation, and its Claims are decided then: a named spec is "
+            "one Claim unless it lists its own, and when it has unfinished tickets and no Plan in this session already "
+            "covers the work, main first asks whether to implement the spec or its tickets; named tickets of a spec, all "
+            "or some, form one Plan with each unfinished ticket as one Claim; a single named ticket is its own Plan and "
+            "one Claim.",
+            "When the Plan is tickets of a spec, a single named ticket included, the spec serves plan review only as a "
+            "checklist for what the tickets must carry.",
+        ),
+        "Claim": (
+            "One independently verifiable outcome with its own acceptance: a named spec without a Claims list of its "
+            "own, a single named ticket, one a spec lists itself, or one unfinished ticket among those named.",
+            "A spec lists Claims only when the user asked for them.",
+            "Code review and outcome verification each judge one Claim, reading what it is written in, the parts of a "
+            "spec it cites and, for a Claim a spec lists, the spec's parts that state they hold for every Claim.",
+        ),
+        "Security-critical claim": (
+            "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
+            "before the Plan's first review.",
+            "A spec main drafts at the user's request is not a Plan main proposes itself.",
+        ),
+    }
+
+    # Wording of the uncommitted revision that the alignment replaced.
+    GLOSSARY_REPLACED = {
+        "Plan": ("the spec serving only to check that they cover it",),
+        "Claim": ("the parts of a spec it cites or that state they hold for every Claim",),
+        "Security-critical claim": ("when main lists the Plan's Claims itself",
+                                    "is not thereby a Plan whose Claims main lists"),
+    }
+
+    def test_glossary_entries_state_the_rules_and_match_the_procedures(self):
+        entries = feather_support.glossary_entries(self.text(config.ROOT / "CONTEXT.md"))
+        for term, sentences in self.GLOSSARY.items():
+            for sentence in sentences:
+                with self.subTest(term=term, sentence=sentence[:60]):
+                    self.assertIn(sentence, entries[term])
+        for term, sentences in self.GLOSSARY_REPLACED.items():
+            for sentence in sentences:
+                with self.subTest(term=term, removed=sentence[:60]):
+                    self.assertNotIn(sentence, entries[term])
+
+    # Acceptance item 9: ADR 0012 records the decision and its rejected options; ADR 0005 gains a note only.
+    ADR_0012_DECISIONS = (
+        "**Claims are decided at implementation by what the user names.**",
+        "**A ticket's Plan is its own content, and the spec is a checklist for plan review.**",
+        "**Reviews and implementation read the Claim and its citations.**",
+        "**Main does not cut Claims while drafting.**",
+        "Main first asks whether to implement the spec as it stands or its tickets",
+        "only when the named spec has at least one unfinished ticket and no Plan in this session already covers the "
+        "named work",
+        "This amends [ADR 0005](0005-the-named-plan-and-its-tickets.md)",
+    )
+
+    ADR_0012_REJECTED = (
+        "**Ask at drafting time whether to list Claims**",
+        "**Main writes a Claims table into specs it drafts**",
+        "**Each ticket its own Plan when several are named**",
+        "**The whole spec as context for a single ticket**",
+        "**Plan review reads only the tickets**",
+        "**Security invariants kept only in briefs and handoffs**",
+        "**The implementer reads the whole spec while reviewers read the ticket**",
+    )
+
+    ADR_0005_NOTE = (
+        "(Amended by ADR 0012: the single named ticket's spec is no longer context for its reviews; a named spec with "
+        "unfinished tickets prompts a question, whether to implement the spec as it stands or its tickets, unless a "
+        "Plan in this session already covers the named work; and when tickets are named, the spec is a checklist for "
+        "plan review, not part of the Plan's content.)"
+    )
+
+    def test_adr_0012_records_the_decision_and_its_rejected_options(self):
+        decision = self.text(self.ADR / self.ADR_0012)
+        options = decision.split("## Considered Options", 1)[1].split("\n## ", 1)[0]
+        for phrase in self.ADR_0012_DECISIONS:
+            with self.subTest(decision=phrase[:60]):
+                self.assertIn(phrase, decision)
+        for phrase in self.ADR_0012_REJECTED:
+            with self.subTest(rejected=phrase[:60]):
+                self.assertIn(phrase, options)
+
+    def test_adr_0005_gains_its_amendment_note_and_keeps_its_text(self):
+        lines = self.text(self.ADR / "0005-the-named-plan-and-its-tickets.md").splitlines()
+        self.assertIn(self.ADR_0005_NOTE, lines)
+        # The original decision stays as written; the note names what changed.
+        self.assertTrue(any("a single named ticket is the Plan with its spec as context" in line for line in lines))
+        self.assertTrue(any("- **Treat every ticket as its own Plan even when the whole spec is named**" in line
+                            for line in lines))
 
 
 if __name__ == "__main__":

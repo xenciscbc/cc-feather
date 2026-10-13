@@ -51,8 +51,9 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
         "code-review.md": (
             "Classify the claim as [plan review](plan-review.md) describes if it is not yet classified; for a Security-critical claim, name the trust boundaries to check.",
         ),
+        # Claims at implementation ticket 01 (Acceptance item 9): a spec main drafts is not a Plan main proposes itself.
         "CONTEXT.md#Security-critical claim": (
-            "A Claim whose outcome includes a Security-critical change. It is identified when the Plan is written or, for a Plan main did not write, before its first review.",
+            "A Claim whose outcome includes a Security-critical change. It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, before the Plan's first review. A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
     }
 
@@ -143,9 +144,10 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
          (("delegation SKILL.md", "A Security-critical change is a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control,"),
           ("delegation SKILL.md", "Authentication, authorization, sessions and CSRF, credentials, cryptography, input validation and access control are typical examples, not a closed list;"),
           ("plan-review.md", "Main marks each Security-critical claim in a plan it writes."),
-          ("CONTEXT.md#Security-critical claim", "It is identified when the Plan is written"),
+          ("CONTEXT.md#Security-critical claim", "It is identified when main writes a Plan it proposes itself"),
           ("delegation SKILL.md", "route the implementation of every Security-critical claim to security-executor.")),
-         (("delegation SKILL.md", "| security-executor | Authorized changes to security boundaries |"),)),
+         (("delegation SKILL.md", "| security-executor | Authorized changes to security boundaries |"),
+          ("CONTEXT.md#Security-critical claim", "It is identified when the Plan is written"))),
         ("implementation discovers that the Plan lacks a security control or invariant it needs",
          "a material deviation: dependent work stops for another plan review and the user's approval",
          (("plan-review.md", "in addition, discovering a security control or invariant the plan lacks is a material deviation."),
@@ -163,8 +165,14 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
          "main classifies its claims before that review, records it in the brief, report and any handoff, and edits the spec only with authorisation",
          (("plan-review.md", "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a conversation plan, main classifies its claims before the first plan review of that plan in the session"),
           ("plan-review.md", "Main records the classification in the plan-review brief, in its report and in any active handoff, and edits a user-written spec or ticket to mark it only with the user's authorisation."),
-          ("CONTEXT.md#Security-critical claim", "for a Plan main did not write, before its first review.")),
-         ()),
+          ("CONTEXT.md#Security-critical claim", "or, otherwise, before the Plan's first review.")),
+         (("CONTEXT.md#Security-critical claim", "for a Plan main did not write, before its first review."),)),
+        # Claims at implementation ticket 01 (Acceptance item 9): drafting a spec for the user is not writing a Plan.
+        ("main drafts a spec at the user's request and the user later names it for implementation",
+         "the spec is not a Plan main proposes itself, so its claims are classified before its first plan review",
+         (("CONTEXT.md#Security-critical claim", "A spec main drafts at the user's request is not a Plan main proposes itself."),
+          ("CONTEXT.md#Security-critical claim", "or, otherwise, before the Plan's first review.")),
+         (("CONTEXT.md#Security-critical claim", "is not thereby a Plan whose Claims main lists"),)),
     )
 
     def test_scenarios_are_decided_by_their_sentences(self):

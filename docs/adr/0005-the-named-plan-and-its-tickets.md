@@ -4,6 +4,8 @@ A Claim was "listed in a Plan", but nothing said where when a spec is split into
 
 (Amended by ADR 0006: main edits a spec or ticket to change Claims that the user or the planning step decided, only after the user authorises it, keeping the old-to-new mapping and unresolved blockers, and it keeps ticket status current where the project defines a completion value.)
 
+(Amended by ADR 0012: the single named ticket's spec is no longer context for its reviews; a named spec with unfinished tickets prompts a question, whether to implement the spec as it stands or its tickets, unless a Plan in this session already covers the named work; and when tickets are named, the spec is a checklist for plan review, not part of the Plan's content.)
+
 The named-Plan rule applies only when no Plan in the session already covers the named work. Otherwise that Plan continues with no new plan review and keeps its count, verdicts and blockers, and a new Plan that partly overlaps one inherits its unresolved verdicts and blockers for the overlapping tickets, so naming a ticket can neither repeat a review nor escape a stopped one; this follows the session rules of ADR 0002 and ADR 0004 that renamed plans and cosmetic splits never reset a count. In a resumed session, an unresolved verdict that an active handoff records for a spec's Plan applies to that spec's tickets when they are named.
 
 ## Considered Options

@@ -8,7 +8,7 @@ Main produces the preview alone. It may read the Plans, the relevant code and th
 
 ## Inputs
 
-Take one or more Plans or tickets, or a description of Unplanned work. With no argument, preview the Plan currently under discussion; ask when there is none or several are candidates. Identify each Plan and its Claims as [plan review](plan-review.md) does, including a spec's tickets in the named scope searched as plan review does, ignored directories included and hidden ones too, and list the tickets used; a Plan that lists none is one Claim. Do not re-cut, merge or resize Claims.
+Take one or more Plans or tickets, or a description of Unplanned work. With no argument, preview the Plan currently under discussion; ask when there is none or several are candidates. Identify each Plan and its Claims as [plan review](plan-review.md) does, including a spec's tickets in the named scope searched as plan review does, ignored directories included and hidden ones too, and list the tickets used; a Plan that lists none is one Claim. When plan review's rules would have main ask whether to implement a named spec as it stands or its tickets, report that question as open rather than answering it: show both readings, the spec as one Claim or its listed Claims and its unfinished tickets as Claims, or mark the counts of Plans, Claims and Security-critical claims as depending on the answer. Do not re-cut, merge or resize Claims.
 
 ## Values
 
@@ -37,6 +37,7 @@ Mark each affected row or Plan:
 - an external Explore, whose model and effort are unknown;
 - an input that is not yet a Plan because it lacks scope or acceptance;
 - a Plan whose text refers to its own tickets or Claims that cannot be found, or whose listed Claims disagree with its tickets; when it lists no Claims, show the one-Claim reading and note that main will ask before plan review or implementation;
+- a named spec with unfinished tickets whose spec-or-tickets question is still open, with both readings shown or its counts marked as depending on the answer;
 - a Claim without its own verifiable acceptance;
 - in auto, a Plan with implemented Claims and no plan-review state in this session, for which main will ask whether to run plan review first, as [review state](review-state.md)'s Implemented before plan review describes;
 - in auto, Unplanned work that makes a Security-critical change, migrates data or is irreversible, which needs a reviewed Plan the user approves first; in off, note it only;
