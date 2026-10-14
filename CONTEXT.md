@@ -84,10 +84,10 @@ A program that the reviewed repository's configuration, attributes or hooks sele
 _Avoid_: git hook, safe git
 
 **Blocking finding**:
-A Code review finding that holds completion: a correctness bug, security problem, data loss, regression or deviation from the Plan.
+A finding of any review step that holds completion. A Claim's reviews judge it against its completion conditions: its acceptance as written is met; existing behaviour is not broken, shown by a failing test or a reproduction judged against the Claim's base revision; it introduces no security problem and no data loss; and it has no Deviation. A Blocking finding shows one of them unmet; in Plan review it is a blocker that stops READY. A security problem the change introduced or made exploitable, even outside the diff, and data loss it introduced block whatever the acceptance states and without a reproduction, so a removed or weakened security control blocks; a regression that is only inferred and is neither a security problem nor data loss does not block. The criteria hold in both Review modes, for every user, with no setting.
 
 **Non-blocking finding**:
-A Code review finding that does not hold completion: style, naming, a refactoring suggestion or an issue that predates the change. It is recorded as follow-up work.
+A finding of any review step that does not hold completion: an issue that predates the change, a correctness problem outside what the acceptance states, a regression that is only inferred and is neither a security problem nor data loss, style, naming or a refactoring suggestion. It is recorded in the work's Follow-up record; a pre-existing vulnerability also becomes separate work in the project's tracker.
 _Avoid_: nit, minor issue
 
 **Follow-up record**:

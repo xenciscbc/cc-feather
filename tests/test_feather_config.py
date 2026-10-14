@@ -3943,8 +3943,14 @@ class FeatherConfigTests(unittest.TestCase):
                    "plan-review.md", "Count consecutive automatic calls without a pass"),
         "Re-review during implementation": ("施工中的重審", "a plan is reviewed again only after a material deviation",
                                             "只有重大偏離", "plan-review.md", "a material deviation stops dependent work"),
-        "Findings": ("問題分級", "Non-blocking ones are listed in the final report", "非阻擋問題列在最終回報",
-                     "code-review.md", "List them in the final report"),
+        # Completion criteria ticket 01 (Acceptance items 1, 3 and 8): what holds completion and the Follow-up record
+        # replace "blocking ones (correctness, security, data loss, regression, deviation from the plan)".
+        "Findings": ("問題分級", "is non-blocking and recorded in the work's Follow-up record",
+                     "都是非阻擋問題，記在這份工作的後續紀錄", "code-review.md",
+                     "Non-blocking findings do not hold completion. Record them in the work's Follow-up record"),
+        "Follow-up record": ("後續紀錄", "its next step is always your decision whether to start a later plan",
+                             "下一步永遠是由你決定要不要開始之後的計畫", "review-state.md",
+                             "its next step is always the user's decision whether to start a later plan"),
         "Not passed": ("未通過", "it is not landed on the default branch, released or reported complete", "不進入預設 branch、不 release、不回報完成",
                        "code-review.md", "do not land it on the default branch, release it or report it complete"),
         "Authority": ("授權", "a pass grants no new authority", "通過不代表新的授權",

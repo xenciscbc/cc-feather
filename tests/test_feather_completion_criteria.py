@@ -1,0 +1,474 @@
+"""Completion criteria ticket 01 (docs/specs/completion-criteria.md, Acceptance items 1, 2, 3 and 7 and the parts of
+items 8 and 9 for these rules, Security invariants S1, S2 and S3): a Claim's reviews judge it against its acceptance as
+written, unbroken existing behaviour, no security problem or data loss and no Deviation; every other finding is a
+Non-blocking finding recorded in the work's Follow-up record; security findings, BROKEN and Adversarial review are
+unchanged."""
+
+from __future__ import annotations
+
+import hashlib
+import subprocess
+import unittest
+
+from tests import feather_support
+from tests.feather_support import config
+
+
+class CompletionCriteriaTests(unittest.TestCase):
+    """Whole-sentence pins of the new statements, absence pins of the old blocking criteria, and a check that every new
+    pin fails on the text at tag v0.23.0."""
+
+    ADR_0013 = "0013-only-what-a-claims-acceptance-needs-holds-its-completion.md"
+    ADR_0006 = "0006-review-state-validity-and-completion.md"
+    # The repository path behind each place, for reading the same place at the tag.
+    PATHS = {
+        "review-state.md": "skills/delegation/references/review-state.md",
+        "plan-review.md": "skills/delegation/references/plan-review.md",
+        "code-review.md": "skills/delegation/references/code-review.md",
+        "outcome-verification.md": "skills/delegation/references/outcome-verification.md",
+        "reviewer.md": "templates/agents/reviewer.md",
+        "CONTEXT.md": "CONTEXT.md",
+        "README.md": "README.md",
+        "README.zh-TW.md": "README.zh-TW.md",
+        "ADR 0013": f"docs/adr/{ADR_0013}",
+        "ADR 0006": f"docs/adr/{ADR_0006}",
+    }
+    TAG = "v0.23.0"
+    # The reference's read-only Git prefix (repository safety's Safe Git invocation).
+    GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
+                "-c", "log.showSignature=false", "-c", "mailmap.file=", "-c", "mailmap.blob=",
+                "-c", "blame.ignoreRevsFile=", "-c", "diff.orderFile=/dev/null", "-c", "submodule.recurse=false")
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """'<file>', '<procedure>#<step number>', 'review-state.md#<bullet label>', 'CONTEXT.md#<term>',
+            '<README>#<rule label>', 'ADR 0013', 'ADR 0013#options' or 'ADR 0006'."""
+        path, _, part = name.partition("#")
+        if path.startswith("ADR "):
+            text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+            if part == "options":
+                return text.split("\n## Considered Options\n", 1)[1].split("\n## ", 1)[0]
+            return text
+        if part.isdigit():
+            return feather_support.post_fix_source(name)
+        return feather_support.review_rules_source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    # Acceptance item 1: the completion conditions, the evidence rule, the Deviation rule and the Non-blocking findings,
+    # in review state.
+    REVIEW_STATE = {
+        "review-state.md#Completion conditions": (
+            "A claim's reviews judge it against these conditions: its acceptance as written is met; existing behaviour is "
+            "not broken, shown by a failing test or a reproduction; it introduces no security problem and no data loss, "
+            "as Security findings below describes; and it has no deviation from the plan.",
+            "A Blocking finding is a finding that shows one of these conditions unmet; every other finding is a "
+            "Non-blocking finding.",
+            "The criteria apply in both review modes and to every user; there is no setting that changes them.",
+            "Plan review checks a plan before these reviews, and the Adversarial review procedure and its BROKEN are "
+            "unchanged.",
+        ),
+        "review-state.md#Evidence for a regression": (
+            "A regression that is only inferred and is neither a security problem nor data loss does not block: such a "
+            "regression blocks only when a failing test or a reproduction shows it.",
+        ),
+        "review-state.md#Deviations": (
+            "A finding that shows a deviation from the plan is a Blocking finding, and a Deviation still stops main to ask "
+            "the user: a material deviation stops dependent work for another review of the revised plan and the user's "
+            "approval, as [plan review](plan-review.md) step 5 describes.",
+        ),
+        "review-state.md#Non-blocking findings": (
+            "Every other finding is a Non-blocking finding, including an issue that predates the change, a correctness "
+            "problem outside what the acceptance states, a regression that is only inferred and is neither a security "
+            "problem nor data loss, and style, naming or a refactoring suggestion.",
+            "It does not hold completion and is recorded in the work's Follow-up record.",
+        ),
+    }
+
+    # Acceptance item 1: plan review and the code review and outcome verification procedures state the criteria.
+    PROCEDURES = {
+        "plan-review.md": (
+            "Once a plan is implemented, each claim's reviews judge it against the completion criteria [review "
+            "state](review-state.md) states: its acceptance as written is met; existing behaviour is not broken, shown by "
+            "a failing test or a reproduction judged against the claim's base revision; it introduces no security problem "
+            "and no data loss; and it has no deviation from the plan.",
+            "A regression that is only inferred and is neither a security problem nor data loss does not block, every "
+            "other finding is a Non-blocking finding and is recorded in the work's Follow-up record, and a Deviation still "
+            "stops main to ask the user.",
+            "The criteria apply in both review modes and to every user; there is no setting.",
+        ),
+        "plan-review.md#4": (
+            "Style preferences and optional improvements are non-blocking, and main records them in the work's Follow-up "
+            "record, as [review state](review-state.md)'s Follow-up record describes.",
+        ),
+        "code-review.md": (
+            "In both review modes, code review judges the claim against the completion criteria [review "
+            "state](review-state.md) states: its acceptance as written is met; existing behaviour is not broken, shown by "
+            "a failing test or a reproduction judged against the claim's base revision; it introduces no security problem "
+            "and no data loss; and it has no deviation from the plan.",
+            "A regression that is only inferred and is neither a security problem nor data loss does not block, every "
+            "other finding is a Non-blocking finding and is recorded, and a Deviation still stops main to ask the user, "
+            "as [review state](review-state.md)'s Completion criteria describes.",
+        ),
+        "code-review.md#4": (
+            "A finding given as blocking that shows none of the completion conditions unmet, such as a regression that is "
+            "only inferred and is neither a security problem nor data loss, is rejected with that evidence and recorded "
+            "as a Non-blocking finding; a security problem or data loss the change introduced is never rejected for "
+            "lacking a failing test or a reproduction, as [review state](review-state.md)'s Security findings describes.",
+        ),
+        "outcome-verification.md": (
+            "In both review modes, outcome verification judges the claim against the completion criteria [review "
+            "state](review-state.md) states: its acceptance as written is met; existing behaviour is not broken, shown by "
+            "a failing test or a reproduction judged against the claim's base revision; it introduces no security problem "
+            "and no data loss; and it has no deviation from the plan.",
+            "A regression that is only inferred and is neither a security problem nor data loss does not block, every "
+            "other finding is a Non-blocking finding and is recorded, and a Deviation still stops main to ask the user, "
+            "as [review state](review-state.md)'s Completion criteria describes.",
+        ),
+        "outcome-verification.md#4": (
+            "A finding that shows none of the completion conditions unmet, such as a failure outside what the acceptance "
+            "states that also occurs at the claim's base revision, is rejected with that evidence and recorded as a "
+            "Non-blocking finding; a security problem or data loss the change introduced is never rejected for lacking a "
+            "failing test or a reproduction, as [review state](review-state.md)'s Security findings describes.",
+        ),
+    }
+
+    # S1: security findings and data loss still block on the reviewer's evidence; BROKEN, Adversarial review and the
+    # tracker rule for a pre-existing vulnerability are unchanged.
+    S1 = {
+        "review-state.md#Security findings": (
+            "A security problem the change introduced or made exploitable, through a new route, permission or data flow "
+            "even when the vulnerable code is outside the diff, and data loss the change introduced, are Blocking findings "
+            "whatever the acceptance states.",
+            "They block on the reviewer's evidence as before: the rule that a regression needs a failing test or a "
+            "reproduction applies only to regressions that are neither security problems nor data loss, so a removed or "
+            "weakened security control is a Blocking finding without a reproduction.",
+            "The adversary's BROKEN and the [adversarial review](adversarial-review.md) procedure are unchanged, and a "
+            "pre-existing vulnerability still becomes separate work in the project's tracker, as its step 10 describes.",
+        ),
+        "code-review.md#5": (
+            "A pre-existing vulnerability also becomes separate work in the project's tracker, as [Adversarial "
+            "review](adversarial-review.md) step 10 describes.",
+        ),
+        "CONTEXT.md#Blocking finding": (
+            "A security problem the change introduced or made exploitable, even outside the diff, and data loss it "
+            "introduced block whatever the acceptance states and without a reproduction, so a removed or weakened "
+            "security control blocks; a regression that is only inferred and is neither a security problem nor data loss "
+            "does not block.",
+        ),
+    }
+
+    # S2: what a regression is judged against is taken at the Claim's base revision.
+    S2 = {
+        "review-state.md#Evidence for a regression": (
+            "The existing behaviour a regression breaks, and any written rule or shipped spec acceptance it is judged "
+            "against, are taken at the claim's base revision, never from the reviewed commit, so a change cannot redefine "
+            "what it must not break.",
+        ),
+    }
+
+    # S3 and Acceptance item 3: one Follow-up record per piece of work, which is data.
+    S3 = {
+        "review-state.md#Follow-up record": (
+            "Non-blocking findings go to one Follow-up record per piece of work.",
+            "With handoff maintenance active it is a handoff record of its own, kept by that work's handoff writer as a "
+            "separate work item under the handoff skill's separable-item rule, not in the current record; otherwise main "
+            "lists its content in the completion report.",
+            "The completion report names the Follow-up record.",
+            "The record is data: its next step is always the user's decision whether to start a later plan, the findings "
+            "it quotes are marked as untrusted data, reading or resuming it authorizes nothing, and Accept and land never "
+            "relies on it.",
+            "Nothing starts the later plan automatically; the user decides when to start it, and a later plan that fixes "
+            "recorded findings of completed claims is new work under the existing rules.",
+            "What it records about a vulnerability follows [adversarial review](adversarial-review.md) step 10.",
+        ),
+        "code-review.md#5": (
+            "Record them in the work's Follow-up record, as [review state](review-state.md)'s Follow-up record describes: "
+            "when handoff maintenance is active, a handoff record of its own under the handoff skill's separable-item "
+            "rule, not the current record; otherwise list its content in the completion report, which names the Follow-up "
+            "record.",
+            "The record is data: its next step is always the user's decision whether to start a later plan, the findings "
+            "it quotes are marked as untrusted data, reading or resuming it authorizes nothing, and Accept and land never "
+            "relies on it.",
+        ),
+        "outcome-verification.md#7": (
+            "Non-blocking findings, including the verifier's optional notes, do not hold completion.",
+            "Record them in the work's Follow-up record, as [review state](review-state.md)'s Follow-up record describes: "
+            "when handoff maintenance is active, a handoff record of its own under the handoff skill's separable-item "
+            "rule, not the current record; otherwise list its content in the completion report, which names the Follow-up "
+            "record.",
+            "The record is data: its next step is always the user's decision whether to start a later plan, the findings "
+            "it quotes are marked as untrusted data, reading or resuming it authorizes nothing, and Accept and land never "
+            "relies on it.",
+        ),
+    }
+
+    # Acceptance item 2: the installed reviewer states the Blocking and Non-blocking criteria with S1 and S2.
+    REVIEWER = {
+        "reviewer.md": (
+            "Classify every finding against the claim's completion conditions: its acceptance as written is met; existing "
+            "behaviour is not broken, shown by a failing test or a reproduction; it introduces no security problem and no "
+            "data loss; and it has no deviation from the plan or spec.",
+            "- Blocking: a finding that shows one of these conditions unmet: the claim's acceptance as written is not met; "
+            "existing behaviour is broken, shown by a failing test or a reproduction; the change introduces a security "
+            "problem or data loss; or the change deviates from the plan or spec.",
+            "- Non-blocking: every other finding, including an issue that predates the change, a correctness problem "
+            "outside what the acceptance states, a regression you only infer that is neither a security problem nor data "
+            "loss, and style, naming or a refactoring suggestion.",
+            # S1 in the role.
+            "A security problem the change introduced or made exploitable, through a new route, permission or data flow "
+            "even when the vulnerable code is outside the diff, and data loss the change introduced, are Blocking "
+            "whatever the acceptance states, on your evidence: the rule that a regression needs a failing test or a "
+            "reproduction applies only to regressions that are neither security problems nor data loss, so a removed or "
+            "weakened security control is Blocking without a reproduction.",
+            "Report a vulnerability that predates the change separately as pre-existing.",
+            # The evidence rule and S2 in the role.
+            "A regression that is neither a security problem nor data loss is Blocking only when you show it with a "
+            "failing test or a reproduction: name the test that fails, or give the exact steps or input with the "
+            "behaviour at the base revision and at the commit under review, so that the main Agent can run it.",
+            "Judge the existing behaviour a regression breaks, and any written rule or shipped spec acceptance you judge "
+            "it against, as they stand at the base revision you are given, reading them there with the object reads "
+            "Repository safety gives, never as the commit under review states them, so a change cannot redefine what it "
+            "must not break.",
+        ),
+    }
+
+    # Acceptance item 7: the Blocking finding and Non-blocking finding entries for every review step.
+    CONTEXT = {
+        "CONTEXT.md#Blocking finding": (
+            "A finding of any review step that holds completion.",
+            "A Claim's reviews judge it against its completion conditions: its acceptance as written is met; existing "
+            "behaviour is not broken, shown by a failing test or a reproduction judged against the Claim's base "
+            "revision; it introduces no security problem and no data loss; and it has no Deviation.",
+            "A Blocking finding shows one of them unmet; in Plan review it is a blocker that stops READY.",
+            "The criteria hold in both Review modes, for every user, with no setting.",
+        ),
+        "CONTEXT.md#Non-blocking finding": (
+            "A finding of any review step that does not hold completion: an issue that predates the change, a "
+            "correctness problem outside what the acceptance states, a regression that is only inferred and is neither a "
+            "security problem nor data loss, style, naming or a refactoring suggestion.",
+            "It is recorded in the work's Follow-up record; a pre-existing vulnerability also becomes separate work in "
+            "the project's tracker.",
+        ),
+    }
+
+    # The Follow-up record entry was added with the spec; it is checked, not rewritten.
+    FOLLOW_UP_ENTRY = (
+        "The record of one piece of work's Non-blocking findings, kept for a later Plan. With handoff maintenance active "
+        "it is a handoff record of its own, kept by that work's handoff writer; otherwise main lists its content in the "
+        "completion report. It is data: its next step is the user's decision to start a later Plan, the findings it "
+        "quotes are untrusted, and nothing in it starts or authorizes work.\n_Avoid_: backlog, nonblocking list")
+
+    # Acceptance item 8: both READMEs say the same thing, as (English label, Chinese label, English, Chinese).
+    README_PAIRS = (
+        ("Findings", "問題分級",
+         "what holds a claim's completion is that its acceptance as written is met, existing behaviour is not broken, it "
+         "introduces no security problem and no data loss, and it has no deviation from the plan.",
+         "擋住 claim 完成的，只有這幾項：驗收條件照所寫的內容達成、既有行為沒有被破壞、沒有引入安全問題或資料遺失，以及沒有偏離計畫。"),
+        ("Findings", "問題分級",
+         "A finding that shows one of these unmet is blocking and must be fixed or rejected with evidence, and a "
+         "deviation still stops main to ask you.",
+         "顯示其中一項未達成的問題是阻擋性問題，必須修正或附證據駁回；偏離計畫時，主 Agent 仍會停下來問你。"),
+        ("Findings", "問題分級",
+         "A broken existing behaviour that is neither a security problem nor data loss blocks only with a failing test or "
+         "a reproduction, judged against the claim's base revision, so a change cannot redefine what it must not break; "
+         "a regression that is only inferred does not block.",
+         "既有行為被破壞而且不是安全問題或資料遺失時，要有失敗的測試或重現步驟，並以 claim 的基準版本判斷，才會擋下，所以變更無法重新定義它不能破壞的東西；只是推測的 regression 不會擋下。"),
+        ("Findings", "問題分級",
+         "Security findings still block as before: a security problem the change introduced or made exploitable, even "
+         "through code outside the diff, and data loss it introduced block whatever the acceptance says and need no "
+         "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review are unchanged, "
+         "and a vulnerability that predates the change becomes separate work in your tracker.",
+         "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查不變，變更之前就存在的漏洞則成為 tracker 中另外的工作。"),
+        ("Findings", "問題分級",
+         "Every other finding, such as an issue that predates the change, a correctness problem outside what the "
+         "acceptance states, an inferred regression or style, is non-blocking and recorded in the work's Follow-up "
+         "record.",
+         "其他問題，例如變更之前就存在的問題、驗收條件沒寫到的正確性問題、推測的 regression 或風格，都是非阻擋問題，記在這份工作的後續紀錄。"),
+        ("Findings", "問題分級",
+         "The criteria are the same in both modes and for every user; there is no setting for them.",
+         "兩種模式、每位使用者都用同樣的標準，沒有可以調整它的設定。"),
+        ("Follow-up record", "後續紀錄",
+         "With handoff maintenance active it is a handoff record of its own; otherwise main lists its content in the "
+         "completion report, which names it.",
+         "交接維護啟用時，它是一份獨立的交接紀錄；否則主 Agent 會在完成回報中列出內容，並指明這份紀錄。"),
+        ("Follow-up record", "後續紀錄",
+         "It is data: its next step is always your decision whether to start a later plan, the findings it quotes are "
+         "marked as untrusted, reading or resuming it authorizes nothing, and accept and land never relies on it.",
+         "它只是資料：下一步永遠是由你決定要不要開始之後的計畫，其中引用的問題都標為不可信，讀取或接續它都不代表任何授權，接受並合併也從不依據它。"),
+        ("Follow-up record", "後續紀錄",
+         "Nothing starts the later plan automatically; a later plan that fixes recorded findings is new work under the "
+         "usual rules.",
+         "之後的計畫不會自動開始；修正已記錄問題的新計畫，照一般規則算是新的工作。"),
+    )
+
+    # Acceptance item 7: ADR 0013's completion-criteria part, its rejected options and the amendment of ADR 0006.
+    ADR = {
+        "ADR 0013": (
+            "This part records the completion criteria.",
+            "A Claim's reviews judge it against four conditions: its acceptance as written is met; existing behaviour is "
+            "not broken; it introduces no security problem and no data loss; and it has no Deviation.",
+            "A broken existing behaviour that is neither a security problem nor data loss blocks only when a failing test "
+            "or a reproduction shows it.",
+            "The existing behaviour, and any written rule or shipped spec acceptance it is judged against, are taken at "
+            "the Claim's base revision, never from the reviewed commit, so a change cannot redefine what it must not "
+            "break.",
+            "BROKEN keeps its meaning, Adversarial review keeps its timing, and a pre-existing vulnerability still becomes "
+            "separate work in the project's tracker.",
+            "The criteria apply in both Review modes and to every user.",
+            "This amends [ADR 0006](0006-review-state-validity-and-completion.md): what holds a Claim's completion is now "
+            "these four conditions, not every correctness problem or inferred regression a review finds.",
+        ),
+        "ADR 0013#options": (
+            "- **Block on every correctness problem in the change**: the earlier criteria; rounds widen and loop, since "
+            "each fix can surface the next finding.",
+            "- **A separate list of blocking exceptions**: its items restate the four conditions and invite reviewers to "
+            "widen them.",
+            "- **A setting to choose the old criteria**: adds configuration for a rule every user benefits from.",
+            "- **Let security defects outside the acceptance land through Accept and land, with deferred Adversarial "
+            "reviews**:",
+            "- **Per-Claim review timing with Review schedules and Review groups**:",
+        ),
+        "ADR 0006": (
+            "(Amended by ADR 0013: what holds a Claim's completion is that its acceptance as written is met, existing "
+            "behaviour is not broken, shown by a failing test or a reproduction judged against its base revision, it "
+            "introduces no security problem and no data loss, and it has no Deviation; every other finding is a "
+            "Non-blocking finding recorded in the work's Follow-up record.",
+        ),
+    }
+
+    # Replaced statements of the old blocking criteria: absent now, present at v0.23.0.
+    OLD_CRITERIA = {
+        "reviewer.md": (
+            "- Blocking: a correctness bug, security problem, data loss, regression or deviation from the plan or spec "
+            "introduced by this change.",
+            "- Non-blocking: style, naming, a refactoring suggestion or an issue that predates the change.",
+        ),
+        "CONTEXT.md#Blocking finding": (
+            "A Code review finding that holds completion: a correctness bug, security problem, data loss, regression or "
+            "deviation from the Plan.",
+        ),
+        "CONTEXT.md#Non-blocking finding": (
+            "A Code review finding that does not hold completion: style, naming, a refactoring suggestion or an issue that "
+            "predates the change.",
+            "It is recorded as follow-up work.",
+        ),
+        "code-review.md#5": ("List them in the final report.",),
+        "README.md#Findings": (
+            "blocking ones (correctness, security, data loss, regression, deviation from the plan)",
+            "Non-blocking ones are listed in the final report, or become separate follow-up work when a handoff is active.",
+        ),
+        "README.zh-TW.md#問題分級": (
+            "阻擋性問題（正確性、安全、資料遺失、regression、偏離計畫）",
+            "非阻擋問題列在最終回報，有進行中的交接時另建獨立的後續工作。",
+        ),
+    }
+
+    # Acceptance item 2: the installed verifier and adversary definitions are unchanged (SHA-256 of the LF text, equal
+    # to `git show v0.23.0:templates/agents/<role>.md`).
+    UNCHANGED_ROLES = {
+        "adversary": "b213d2f9f7d12a3d179fa5c817c2be99791406983fff765285d4aa3d703ff522",
+        "verifier": "5f7cb142c181f4190c878efd27bc0fe17743ef52eac7d75379774ecf731fba76",
+    }
+
+    def new_pins(self):
+        pins = {}
+        for group in (self.REVIEW_STATE, self.PROCEDURES, self.S1, self.S2, self.S3, self.REVIEWER, self.CONTEXT,
+                      self.ADR):
+            for place, sentences in group.items():
+                pins.setdefault(place, []).extend(sentences)
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            pins.setdefault(f"README.md#{en_label}", []).append(english)
+            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+        return pins
+
+    def test_review_state_states_the_completion_conditions(self):
+        self.assert_pinned(self.REVIEW_STATE)
+
+    def test_plan_review_and_the_procedures_state_the_criteria(self):
+        self.assert_pinned(self.PROCEDURES)
+
+    def test_s1_security_findings_still_block(self):
+        self.assert_pinned(self.S1)
+
+    def test_s2_regressions_are_judged_against_the_base_revision(self):
+        self.assert_pinned(self.S2)
+
+    def test_s3_the_follow_up_record_is_data(self):
+        self.assert_pinned(self.S3)
+
+    def test_the_reviewer_template_states_the_new_criteria(self):
+        self.assert_pinned(self.REVIEWER)
+
+    def test_the_installed_reviewer_renders_the_new_criteria(self):
+        choice = {"model": "sonnet", "effort": "high"}
+        for prefix in ("", "cc-"):
+            rendered = config._render("reviewer", choice, prefix).decode("utf-8")
+            for sentence in self.REVIEWER["reviewer.md"]:
+                with self.subTest(prefix=prefix, sentence=sentence[:60]):
+                    self.assertIn(sentence, rendered)
+
+    def test_the_verifier_and_adversary_templates_are_unchanged(self):
+        for role, digest in self.UNCHANGED_ROLES.items():
+            text = (config.ROOT / "templates" / "agents" / f"{role}.md").read_text(encoding="utf-8")
+            with self.subTest(role=role):
+                self.assertEqual(hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest(), digest)
+
+    def test_glossary_states_the_criteria_for_every_review_step(self):
+        self.assert_pinned(self.CONTEXT)
+        entries = feather_support.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        self.assertEqual(entries["Follow-up record"], self.FOLLOW_UP_ENTRY)
+
+    def test_both_readmes_explain_what_holds_completion_and_what_is_recorded(self):
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_adr_0013_records_the_completion_criteria_and_amends_adr_0006(self):
+        # The serial rule, the final check and the single Accept and land decision, with the note amending ADR 0008, are
+        # added to ADR 0013 by the tickets that implement them.
+        self.assert_pinned(self.ADR)
+        lines = self.source("ADR 0006").splitlines()
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0013:") for line in lines), 1)
+
+    def test_the_old_blocking_criteria_are_gone(self):
+        for place, phrases in self.OLD_CRITERIA.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def tagged(self, place):
+        """The whole file behind a place at the tag, '' when it did not exist there; skips without the tag."""
+        path = self.PATHS[place.partition("#")[0]]
+        try:
+            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{self.TAG}:{path}"], cwd=config.ROOT,
+                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            known = subprocess.run([*self.GIT_READ, "rev-parse", "--verify", "--quiet", f"{self.TAG}^{{commit}}"],
+                                   cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run, so the {self.TAG} text cannot be read: {error}")
+        if known.returncode != 0:
+            self.skipTest(f"no {self.TAG} tag in this checkout")
+        return shown.stdout.decode("utf-8") if shown.returncode == 0 else ""
+
+    def test_every_new_pin_fails_on_the_v0_23_0_text(self):
+        for place, sentences in self.new_pins().items():
+            text = self.tagged(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
+
+    def test_every_absence_pin_matches_the_v0_23_0_text(self):
+        for place, phrases in self.OLD_CRITERIA.items():
+            text = self.tagged(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
+
+
+if __name__ == "__main__":
+    unittest.main()
