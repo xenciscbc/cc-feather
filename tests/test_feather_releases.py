@@ -360,8 +360,7 @@ class ClaimsAtImplementationReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_23_0(self):
-        self.assertEqual("0.23.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.24.0 ticket 04).
 
     def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
         for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
@@ -369,7 +368,7 @@ class ClaimsAtImplementationReleaseTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The newest release's notes come first, before 0.22.0's.
+            # 0.23.0's notes come before 0.22.0's.
             with self.subTest(readme=name, order=True):
                 self.assertLess(section.index(sentences[0]), section.index(sentences[0].replace("0.23.0", "0.22.0", 1)))
 
@@ -383,6 +382,45 @@ class ClaimsAtImplementationReleaseTests(unittest.TestCase):
         for claim in ("T01", "T02", "T03", "T04", "T05", "T06"):
             with self.subTest(claim=claim):
                 self.assertEqual(entry.count(f"\n- {claim}: "), 1)
+
+
+class CompletionCriteriaReleaseTests(unittest.TestCase):
+    """0.24.0 ticket 04 (docs/specs/completion-criteria.md, Acceptance item 11): the release changes the installed
+    reviewer definition, so existing installations need the plugin update and then `/cc-feather:setup update`, and the
+    Updates sections say so in both languages. The validation entry and the tag are pinned once they exist."""
+
+    # The Updates sections, paired in both languages, at the start of the release notes.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "0.24.0 changes the reviewer role definition, so existing installations need the plugin update and then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` reports `role_update_required: true` with reviewer from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`.",
+         "To go back to 0.23.0, reinstall the 0.23.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.23.0 reviewer role definition; no remove is needed, since 0.24.0 changes no configuration tool or state."),
+        ("## 更新、移除與驗證\n",
+         "0.24.0 改了 reviewer 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出 reviewer 來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。",
+         "要回到 0.23.0，重新安裝 0.23.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.23.0 的 reviewer 角色定義；不需要先移除，因為 0.24.0 沒有改設定工具或 state。"),
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_24_0(self):
+        self.assertEqual("0.24.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        previous = ClaimsAtImplementationReleaseTests.UPDATES
+        for name, (heading, *sentences), (_, previous_first, _) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The newest release's notes come first, the update note then the way back, before 0.23.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertLess(section.index(sentences[0]), section.index(sentences[1]))
+                self.assertLess(section.index(sentences[1]), section.index(previous_first))
 
 
 class InstallDocumentTests(unittest.TestCase):
