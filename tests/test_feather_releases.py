@@ -428,8 +428,7 @@ class CompletionCriteriaReleaseTests(unittest.TestCase):
         "The deferred items, security items first, are kept in an untracked handoff record, not here.",
     )
 
-    def test_manifest_is_0_24_0(self):
-        self.assertEqual("0.24.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.25.0 ticket 03).
 
     def test_validation_entry_records_the_checks_rehearsal_baseline_tag_and_review_round(self):
         entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.24.0 completion criteria\n")
@@ -453,6 +452,53 @@ class CompletionCriteriaReleaseTests(unittest.TestCase):
             with self.subTest(readme=name, order=True):
                 self.assertLess(section.index(sentences[0]), section.index(sentences[1]))
                 self.assertLess(section.index(sentences[1]), section.index(previous_first))
+
+
+class RepoTrustDefaultReleaseTests(unittest.TestCase):
+    """0.25.0 ticket 03 (docs/specs/repo-trust-default.md, Acceptance items 9 and 11): the Updates note starts with
+    the new execution default, points to Repository safety, and says that the changed reviewer, verifier and adversary
+    definitions need the plugin update and then `/cc-feather:setup update`, what happens until then and how to go back
+    to 0.24.0, in both languages. The validation entry and the tag are pinned once they exist."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.25.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "From 0.25.0, reviews run repository code without asking, and a review of someone else's change needs you to state that it comes from someone else.",
+         "See [Repository safety](#repository-safety).",
+         "0.25.0 changes the reviewer, verifier and adversary role definitions, so existing installations need the plugin update and then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` reports `role_update_required: true` with those three roles from an older template, `model`, `review` and session export ask for setup update first, in `auto` and in `off`, and a review that needs execution reports INCONCLUSIVE for it.",
+         "To go back to 0.24.0, reinstall the 0.24.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.24.0 reviewer, verifier and adversary role definitions; no remove is needed, since 0.25.0 changes no configuration tool or state."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "從 0.25.0 起，審查不再詢問就會執行儲存庫的程式碼，而審查別人的變更時，需要由你說明它來自別人。",
+         "詳見[儲存庫安全](#儲存庫安全)。",
+         "0.25.0 改了 reviewer、verifier 與 adversary 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出這三個角色來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update，需要執行程式碼的審查則會對這部分回報 INCONCLUSIVE。",
+         "要回到 0.24.0，重新安裝 0.24.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.24.0 的 reviewer、verifier 與 adversary 角色定義；不需要先移除，因為 0.25.0 沒有改設定工具或 state。"),
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_25_0(self):
+        self.assertEqual("0.25.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_execution_default_in_both_languages(self):
+        previous = CompletionCriteriaReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, previous_first, _) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.25.0 note starts right after the section's opening sentence, its sentences in order, before 0.24.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
 
 
 class InstallDocumentTests(unittest.TestCase):
