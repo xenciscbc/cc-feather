@@ -90,12 +90,8 @@ A Code review finding that holds completion: a correctness bug, security problem
 A Code review finding that does not hold completion: style, naming, a refactoring suggestion or an issue that predates the change. It is recorded as follow-up work.
 _Avoid_: nit, minor issue
 
-**Recorded security defect**:
-A vulnerability the change introduced that lies outside what the Claim's acceptance states. It does not change a review's verdict, but in the Automatic flow a Claim with one is landed, released or reported complete only through an Accept and land decision that names it.
-_Avoid_: known issue, accepted vulnerability
-
 **Follow-up record**:
-The record of one piece of work's Non-blocking findings and Recorded security defects, security defects first, with the Claims whose Adversarial review waits for a later Plan. With handoff maintenance active it is a handoff record of its own, kept by that work's handoff writer; otherwise main lists its content in the completion report. Nothing in it starts work by itself.
+The record of one piece of work's Non-blocking findings, kept for a later Plan. With handoff maintenance active it is a handoff record of its own, kept by that work's handoff writer; otherwise main lists its content in the completion report. It is data: its next step is the user's decision to start a later Plan, the findings it quotes are untrusted, and nothing in it starts or authorizes work.
 _Avoid_: backlog, nonblocking list
 
 **Unreviewed claim**:
