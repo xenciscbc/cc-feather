@@ -578,6 +578,29 @@ class CompletionCriteriaTests(unittest.TestCase):
             "non-pass under step 4, establishes no coverage and resets no count, and the next call for the claim covers "
             "its full scope from its base revision.",
         ),
+        # Code review call 3 of ticket 02: the recheck after REFUTED, the calls after BROKEN and INCONCLUSIVE, and the
+        # continuation after HELD.
+        "outcome-verification.md#4": (
+            "When main's comparison after the previous call found a change to a file the claim depends on, as [review "
+            "state](review-state.md)'s Serial within a working tree describes, the brief does not say that call completed "
+            "with a verdict and the next call verifies the claim's full acceptance from its base revision, not only the "
+            "original failure.",
+        ),
+        "adversarial-review.md#5": (
+            "When main's comparison after the previous call found a change to a file the claim depends on, as [review "
+            "state](review-state.md)'s Serial within a working tree describes, the call after BROKEN covers the claim's "
+            "full scope from its base revision, not only the fix and the open gaps.",
+            "After any INCONCLUSIVE, when main's comparison after the previous call found a change to a file the claim "
+            "depends on, the next call, once the rule above lets it run, covers the claim's full scope from its base "
+            "revision, not only the uncovered invariants and gaps.",
+        ),
+        "adversarial-review.md#8": (
+            "With a HELD in the automatic flow that main accepts under step 6, continue to completion under the existing "
+            "authority.",
+            "A HELD that main does not accept under step 6, one whose pass is not used after main's comparison of the "
+            "workspace included, whether automatic or explicit, does not continue to completion and clears no stopped "
+            "step.",
+        ),
     }
 
     # Ticket 02, Acceptance item 5: the final check, not counted and adding no verdict, a failure reopening Claims.
@@ -1139,6 +1162,23 @@ class CompletionCriteriaTests(unittest.TestCase):
         held = self.source("adversarial-review.md#6")
         self.assertLess(held.index("Before accepting a HELD, main checks it"),
                         held.index(self.S7_PROCEDURES["adversarial-review.md#6"][0]))
+        recheck = self.source("outcome-verification.md#4")
+        self.assertLess(recheck.index("When the previous verification call completed, use the next call to recheck"),
+                        recheck.index(self.S7_PROCEDURES["outcome-verification.md#4"][0]))
+        coverage = self.source("adversarial-review.md#5")
+        after_broken, after_inconclusive = self.S7_PROCEDURES["adversarial-review.md#5"]
+        self.assertLess(coverage.index("A call after BROKEN covers the fix and every open gap"),
+                        coverage.index(after_broken))
+        self.assertLess(coverage.index(after_broken), coverage.index("After any INCONCLUSIVE, whether the adversary"))
+        for rule in ("When the open item is coverage the role could have examined",
+                     "When the call lacked a target, evidence or prerequisite, the next call runs only once"):
+            with self.subTest(rule=rule[:40]):
+                self.assertLess(coverage.index(rule), coverage.index(after_inconclusive))
+        # Only a HELD main accepts continues to completion; the unqualified continuation is gone.
+        step_8 = self.source("adversarial-review.md#8")
+        accepted, not_accepted = self.S7_PROCEDURES["adversarial-review.md#8"]
+        self.assertTrue(step_8.startswith(f"8. {accepted} {not_accepted} "))
+        self.assertNotIn("With HELD in the automatic flow, continue to completion", step_8)
 
     def test_review_state_states_the_final_check(self):
         self.assert_pinned(self.FINAL_CHECK)
