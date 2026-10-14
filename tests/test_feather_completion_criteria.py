@@ -542,6 +542,44 @@ class CompletionCriteriaTests(unittest.TestCase):
         ),
     }
 
+    # S7 in the code review and Adversarial review procedures (code review call 2 of ticket 02): a call whose pass is
+    # not used after main's comparison counts as a call without a pass, resets no count, does not continue to the next
+    # step, and the next call is not narrowed but covers the claim's full scope from its base revision.
+    S7_PROCEDURES = {
+        "code-review.md#2": (
+            "When main's comparison of the workspace after the previous call found a change to a file the claim depends "
+            "on, so that call's pass is not used, as [review state](review-state.md)'s Serial within a working tree "
+            "describes, the brief does not say that call completed with a verdict and supplies the claim's full scope "
+            "from its base revision.",
+        ),
+        "code-review.md#3": (
+            "An APPROVED that is not used as a pass, after main's comparison as [review state](review-state.md)'s Serial "
+            "within a working tree describes, counts as a call without a pass and does not reset the count.",
+        ),
+        "code-review.md#4": (
+            "When main's comparison after the previous call found a change to a file the claim depends on, as step 2 "
+            "describes, the brief does not say that call completed with a verdict and supplies instead the full range "
+            "from the claim's base revision with earlier findings as evidence.",
+        ),
+        "code-review.md#6": (
+            "An APPROVED that is not used as a pass, as step 3 describes, whether automatic or explicit, does not "
+            "continue to outcome verification and clears no stopped step.",
+        ),
+        # The paragraphs on the review of a fix.
+        "code-review.md": (
+            "An APPROVED that is not used as a pass, as step 3 describes, does not make it zero.",
+            "When main's comparison after that call found a change to a file the claim depends on, as step 2 describes, "
+            "the review of the fix is not narrowed: the brief does not say that call completed with a verdict, and the "
+            "call reviews the claim's full scope from its base revision.",
+        ),
+        "adversarial-review.md#6": (
+            "A HELD from a call whose pass main does not use after its comparison of the workspace, as [review "
+            "state](review-state.md)'s Serial within a working tree describes, is not accepted: the call counts as a "
+            "non-pass under step 4, establishes no coverage and resets no count, and the next call for the claim covers "
+            "its full scope from its base revision.",
+        ),
+    }
+
     # Ticket 02, Acceptance item 5: the final check, not counted and adding no verdict, a failure reopening Claims.
     FINAL_CHECK = {
         "review-state.md#Final check": (
@@ -1013,7 +1051,7 @@ class CompletionCriteriaTests(unittest.TestCase):
         for group in (self.REVIEW_STATE, self.PROCEDURES, self.S1, self.S2, self.S3, self.REVIEWER, self.CONTEXT,
                       self.ADR, self.SERIAL, self.S7, self.FINAL_CHECK, self.S8, self.SERIAL_ADR, self.ACCEPT_ONCE,
                       self.S4, self.S5, self.S8_AND_S3, self.ACCEPT_CONTEXT, self.ACCEPT_ADR, self.S1_VERIFIER_NOTE,
-                      self.S2_BRIEFS):
+                      self.S2_BRIEFS, self.S7_PROCEDURES):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
         for en_label, zh_label, english, chinese in (self.README_PAIRS + self.SERIAL_README_PAIRS
@@ -1088,6 +1126,19 @@ class CompletionCriteriaTests(unittest.TestCase):
 
     def test_s7_nothing_writes_the_tree_a_review_judges(self):
         self.assert_pinned(self.S7)
+
+    def test_s7_a_call_whose_pass_is_not_used_neither_passes_nor_narrows_in_the_procedures(self):
+        self.assert_pinned(self.S7_PROCEDURES)
+        # Each exception follows the rule it qualifies.
+        step_3 = self.source("code-review.md#3")
+        self.assertLess(step_3.index("An automatic APPROVED resets the count to zero"),
+                        step_3.index(self.S7_PROCEDURES["code-review.md#3"][0]))
+        step_6 = self.source("code-review.md#6")
+        self.assertLess(step_6.index("With APPROVED in the automatic flow, continue to outcome verification"),
+                        step_6.index(self.S7_PROCEDURES["code-review.md#6"][0]))
+        held = self.source("adversarial-review.md#6")
+        self.assertLess(held.index("Before accepting a HELD, main checks it"),
+                        held.index(self.S7_PROCEDURES["adversarial-review.md#6"][0]))
 
     def test_review_state_states_the_final_check(self):
         self.assert_pinned(self.FINAL_CHECK)
