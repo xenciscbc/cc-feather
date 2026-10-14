@@ -4006,6 +4006,13 @@ class FeatherConfigTests(unittest.TestCase):
                    "review-state.md", "only with a valid APPROVED and a valid CONFIRMED"),
         "Release checks": ("事後檢查", "is checked and reported by main after the operation", "在操作後檢查並回報",
                            "review-state.md", "checks and reports it after the operation"),
+        # Completion criteria ticket 02 (Acceptance items 4, 5 and 8): serial reviews and the final check.
+        "Serial reviews": ("審查依序進行", "main changes nothing in the working tree it judges",
+                           "主 Agent 不會改動它審查的工作樹", "review-state.md",
+                           "main does not change the working tree it judges"),
+        "Final check": ("最終檢查", "it does not count toward the Stop threshold and adds no verdict",
+                        "不計入停止門檻，也不產生新的結論", "review-state.md",
+                        "it is not a counted step and adds no verdict"),
         "Your decisions": ("你的決定", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land",
                            "重審、延後、取消、修改驗收、豁免或接受並合併",
                            "review-state.md", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land"),

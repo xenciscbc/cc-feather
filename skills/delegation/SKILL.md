@@ -41,6 +41,8 @@ The brief of an Assignment that implements a claim carries the claim's reading s
 
 Parallelize only independent work without shared mutable conflicts. Isolate overlapping checkout risks in separate worktrees or serialize writers. Wait for the previous owner to stop before taking over or reassigning its files; pass its findings and current state to the next owner.
 
+Reviews are serial within a working tree, as [review state](references/review-state.md)'s Serial within a working tree describes. While a code review, outcome verification or Adversarial review call runs, main does not change the working tree it judges, its own handoff records inside the project included, which it updates only between calls, and implementation in that working tree waits until the call ends. Before dispatching such a call, main confirms that no Assignment or background process it started that may write the working tree is still running, and at most one gated call that executes code runs in a working tree at a time. Main does not create a worktree for a review on its own. Work the user runs in separate worktrees may proceed in parallel, each worktree serial in itself and still prepared and checked under [repository safety](references/repository-safety.md). Shared test resources stay governed by each brief's target start and reset.
+
 ## Accept or recover
 
 Compare the child's report with its brief. Verify cited evidence, actual changes against the pre-dispatch state and remaining acceptance checks, including unchanged sources for read-only roles. Preserve unexpected changes. Reuse a verdict only while it is valid, as [review state](references/review-state.md) describes; a child's completed status does not establish whole-task completion.

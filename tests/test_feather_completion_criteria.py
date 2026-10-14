@@ -2,7 +2,11 @@
 items 8 and 9 for these rules, Security invariants S1, S2 and S3): a Claim's reviews judge it against its acceptance as
 written, unbroken existing behaviour, no security problem or data loss and no Deviation; every other finding is a
 Non-blocking finding recorded in the work's Follow-up record; security findings, BROKEN and Adversarial review are
-unchanged."""
+unchanged.
+
+Completion criteria ticket 02 (Acceptance items 4 and 5 and the parts of items 7, 8 and 9 for these rules, Security
+invariants S7 and S8): reviews are serial within a working tree, and main runs a final check of the Plan's overall
+acceptance at the commit to be landed or tagged."""
 
 from __future__ import annotations
 
@@ -32,7 +36,9 @@ class CompletionCriteriaTests(unittest.TestCase):
         "README.zh-TW.md": "README.zh-TW.md",
         "ADR 0013": f"docs/adr/{ADR_0013}",
         "ADR 0006": f"docs/adr/{ADR_0006}",
+        "SKILL.md": "skills/delegation/SKILL.md",
     }
+    ADR_0013_SERIAL = "\n## Serial reviews and the final check\n"
     TAG = "v0.23.0"
     # The reference's read-only Git prefix (repository safety's Safe Git invocation).
     GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
@@ -42,13 +48,19 @@ class CompletionCriteriaTests(unittest.TestCase):
     @classmethod
     def source(cls, name: str) -> str:
         """'<file>', '<procedure>#<step number>', 'review-state.md#<bullet label>', 'CONTEXT.md#<term>',
-            '<README>#<rule label>', 'ADR 0013', 'ADR 0013#options' or 'ADR 0006'."""
+            '<README>#<rule label>', 'ADR 0013', 'ADR 0013#options', 'ADR 0013#serial' (the part on the serial rule
+            and the final check), 'ADR 0006' or 'SKILL.md#Dispatch' (the delegation skill's Dispatch section)."""
         path, _, part = name.partition("#")
         if path.startswith("ADR "):
             text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
             if part == "options":
                 return text.split("\n## Considered Options\n", 1)[1].split("\n## ", 1)[0]
+            if part == "serial":
+                return text.split(cls.ADR_0013_SERIAL, 1)[1].split("\n## ", 1)[0]
             return text
+        if path == "SKILL.md":
+            text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+            return text.split(f"\n## {part}\n", 1)[1].split("\n## ", 1)[0]
         if part.isdigit():
             return feather_support.post_fix_source(name)
         return feather_support.review_rules_source(name)
@@ -373,13 +385,177 @@ class CompletionCriteriaTests(unittest.TestCase):
         "verifier": "5f7cb142c181f4190c878efd27bc0fe17743ef52eac7d75379774ecf731fba76",
     }
 
+    # Ticket 02, Acceptance item 4: the serial rule, the handoff records it includes, no review worktrees, the worktree
+    # exception and shared test resources, in review state and in the delegation skill's rule on parallel work.
+    SERIAL = {
+        "review-state.md#Serial within a working tree": (
+            "Within one working tree, reviews and implementation are serial.",
+            "While a code review, outcome verification or Adversarial review call runs, main does not change the working "
+            "tree it judges, and nothing main started writes to it; implementation in that working tree waits until the "
+            "call ends.",
+            "This includes main's own handoff records inside the project, which main updates only between calls.",
+            "Main does not create a worktree for a review on its own.",
+            "Work the user runs in separate worktrees may proceed in parallel, each worktree its own workspace and serial "
+            "in itself.",
+            "Shared test resources stay governed by each brief's target start and reset.",
+        ),
+        "SKILL.md#Dispatch": (
+            "Reviews are serial within a working tree, as [review state](references/review-state.md)'s Serial within a "
+            "working tree describes.",
+            "While a code review, outcome verification or Adversarial review call runs, main does not change the working "
+            "tree it judges, its own handoff records inside the project included, which it updates only between calls, "
+            "and implementation in that working tree waits until the call ends.",
+            "Main does not create a worktree for a review on its own.",
+            "Work the user runs in separate worktrees may proceed in parallel, each worktree serial in itself and still "
+            "prepared and checked under [repository safety](references/repository-safety.md).",
+            "Shared test resources stay governed by each brief's target start and reset.",
+        ),
+    }
+
+    # S7: nothing main started writes the tree a review judges, one gated call that executes code per tree, a changed
+    # dependency voids the pass, and the worktree exception extends no trust.
+    S7 = {
+        "review-state.md#Serial within a working tree": (
+            "Before dispatching a code review, outcome verification or Adversarial review call, main confirms that no "
+            "Assignment or background process it started that may write the working tree is still running.",
+            "At most one gated call that executes code runs in a working tree at a time.",
+            "When main's comparison of the workspace after a call, under [repository safety](repository-safety.md)'s "
+            "Main's preparation, finds a change to a file the claim depends on, its own files and what its acceptance "
+            "checks depend on included, that call's pass is not used.",
+            "The worktree exception extends no trust: each worktree still gets [repository safety](repository-safety.md)'s "
+            "preparation and checks.",
+        ),
+        "SKILL.md#Dispatch": (
+            "Before dispatching such a call, main confirms that no Assignment or background process it started that may "
+            "write the working tree is still running, and at most one gated call that executes code runs in a working "
+            "tree at a time.",
+        ),
+    }
+
+    # Ticket 02, Acceptance item 5: the final check, not counted and adding no verdict, a failure reopening Claims.
+    FINAL_CHECK = {
+        "review-state.md#Final check": (
+            "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, once "
+            "at the final commit, within [repository safety](repository-safety.md)'s Execution rules.",
+            "It is main's own run, not a review step: it is not a counted step and adds no verdict.",
+        ),
+        "review-state.md#Not counted": (
+            "The final check before landing or release, as Validity and completion's Final check describes, is not a "
+            "counted step either.",
+        ),
+    }
+
+    # S8: the final check judges the landing commit.
+    S8 = {
+        "review-state.md#Final check": (
+            "It runs only when the workspace equals the commit to be landed or tagged, established as for a gated pass "
+            "under What a gated pass judged, so an untracked or changed file cannot take part in it.",
+            "When Execution does not allow it, it is recorded as not run, and main states that it has not run before "
+            "landing and in any accept-and-land decision.",
+            "A failure reopens the claims it affects under the existing rules, and landing and release wait for their "
+            "passes again; a failure that cannot be attributed with evidence reopens every claim the check covers.",
+            "It runs again at the new final commit after any fix.",
+        ),
+    }
+
+    # Ticket 02, Acceptance item 7: ADR 0013's part on the serial rule and the final check, with its rejected options.
+    SERIAL_ADR = {
+        "ADR 0013#serial": (
+            "This part records the serial rule and the final check.",
+            "While a code review, outcome verification or Adversarial review call runs, main does not change the working "
+            "tree it judges, its own handoff records inside the project included, which it updates only between calls, "
+            "and implementation in that working tree waits until the call ends.",
+            "Before dispatching such a call, main confirms that no Assignment or background process it started that may "
+            "write the working tree is still running, and at most one gated call that executes code runs in a working "
+            "tree at a time.",
+            "When main's comparison after a call finds a change to a file the Claim depends on, that call's pass is not "
+            "used.",
+            "Main does not create a worktree for a review on its own.",
+            "The worktree exception extends no trust: each worktree still gets repository safety's preparation and "
+            "checks.",
+            "Before landing or release, main runs the Plan's overall acceptance checks once at the final commit, within "
+            "repository safety's Execution rules.",
+            "It is main's own run, not a review step: it is not a counted step and adds no verdict.",
+            "It runs only when the workspace equals the commit to be landed or tagged, established as for a gated pass, "
+            "so an untracked or changed file cannot take part in it.",
+            "When Execution does not allow it, it is recorded as not run, and that is stated before landing and in any "
+            "Accept and land decision.",
+            "A failure reopens the Claims it affects under the existing rules, and landing and release wait for their "
+            "passes again; a failure that cannot be attributed with evidence reopens every Claim the check covers.",
+            "It runs again at the new final commit after any fix.",
+            "- **Main creates a worktree for each review**: it would let implementation continue while a review runs, "
+            "but setting up a worktree can mean reinstalling dependencies or rebuilding in other projects, and each new "
+            "worktree would need repository safety's preparation and checks again.",
+            "- **Parallel review calls in one working tree**:",
+            "- **No final check, relying on each Claim's passes**:",
+            "- **A counted final review step with its own verdict**:",
+        ),
+    }
+
+    # Ticket 02, Acceptance item 8: both READMEs explain serial reviews and the final check, paired as README_PAIRS.
+    SERIAL_README_PAIRS = (
+        ("Serial reviews", "審查依序進行",
+         "within one working tree, reviews and implementation take turns.",
+         "在同一個工作樹裡，審查與實作輪流進行。"),
+        ("Serial reviews", "審查依序進行",
+         "While a code review, verification or Adversarial review runs, main changes nothing in the working tree it "
+         "judges, not even its own handoff records inside the project, which it updates only between calls, and "
+         "implementation there waits until the call ends.",
+         "程式碼審查、驗證或對抗式審查執行期間，主 Agent 不會改動它審查的工作樹，連專案內自己的交接紀錄也不改，只在兩次呼叫之間更新；"
+         "在那個工作樹裡的實作也要等呼叫結束。"),
+        ("Serial reviews", "審查依序進行",
+         "Before dispatching such a call, main confirms that no assignment or background process it started that may "
+         "write the working tree is still running, and at most one gated call that runs code runs in a working tree at "
+         "a time.",
+         "派出這類呼叫前，主 Agent 會確認它啟動、可能寫入工作樹的 assignment 或背景程序都已結束，而且同一個工作樹一次最多只跑一個會執行程式碼的"
+         "受把關呼叫。"),
+        ("Serial reviews", "審查依序進行",
+         "If main's comparison after a call finds a change to a file the claim depends on, that call's pass is not used.",
+         "呼叫結束後，主 Agent 的比對若發現 claim 依賴的檔案有變動，該次呼叫的通過不予採用。"),
+        ("Serial reviews", "審查依序進行",
+         "Main never creates a worktree for a review on its own, since setting one up can mean reinstalling dependencies "
+         "or rebuilding the project.",
+         "主 Agent 不會自行為審查建立 worktree，因為建立 worktree 可能要重新安裝相依套件或重新建置專案。"),
+        ("Serial reviews", "審查依序進行",
+         "Work you run in separate worktrees may proceed in parallel, each worktree serial in itself and each still "
+         "prepared and checked as [Repository safety](#repository-safety) describes.",
+         "你分開在不同 worktree 進行的工作可以平行，每個 worktree 內部仍依序進行，也仍各自依[儲存庫安全](#儲存庫安全)所說的方式準備與檢查。"),
+        ("Serial reviews", "審查依序進行",
+         "Shared test resources stay governed by each brief's target start and reset.",
+         "共用的測試資源仍由每份 brief 中測試目標的啟動與重設方式管理。"),
+        ("Final check", "最終檢查",
+         "before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, once "
+         "at the final commit, as its own run within [Repository safety](#repository-safety)'s rules on running code.",
+         "進入預設 branch 或 release 之前，主 Agent 會在最終 commit 上執行一次計畫的整體驗收檢查（例如完整測試），這是它自己的執行，遵守"
+         "[儲存庫安全](#儲存庫安全)中執行程式碼的規則。"),
+        ("Final check", "最終檢查",
+         "It is not a review step: it does not count toward the Stop threshold and adds no verdict.",
+         "它不是審查步驟：不計入停止門檻，也不產生新的結論。"),
+        ("Final check", "最終檢查",
+         "It runs only when the workspace equals the commit to be landed or tagged, so an untracked or changed file "
+         "cannot take part in it.",
+         "只有在工作區與要進入預設 branch 或要加 tag 的 commit 相同時才會執行，所以未追蹤或有變動的檔案不會參與其中。"),
+        ("Final check", "最終檢查",
+         "When running the repository's code is not allowed, the check is recorded as not run, and main tells you so "
+         "before landing and in any accept-and-land decision.",
+         "不允許執行儲存庫程式碼時，這項檢查會記為未執行，主 Agent 會在進入預設 branch 之前，以及任何接受並合併的決定中告訴你。"),
+        ("Final check", "最終檢查",
+         "A failure reopens the claims it affects, and landing and release wait for their passes again; a failure main "
+         "cannot attribute with evidence reopens every claim the check covers.",
+         "檢查失敗會重新打開受影響的 claim，進入預設 branch 與 release 都要等它們再次通過；主 Agent 無法以證據歸因的失敗，會重新打開這項檢查涵蓋的"
+         "每個 claim。"),
+        ("Final check", "最終檢查",
+         "After any fix, the check runs again at the new final commit.",
+         "任何修正之後，都會在新的最終 commit 上再執行一次。"),
+    )
+
     def new_pins(self):
         pins = {}
         for group in (self.REVIEW_STATE, self.PROCEDURES, self.S1, self.S2, self.S3, self.REVIEWER, self.CONTEXT,
-                      self.ADR):
+                      self.ADR, self.SERIAL, self.S7, self.FINAL_CHECK, self.S8, self.SERIAL_ADR):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
-        for en_label, zh_label, english, chinese in self.README_PAIRS:
+        for en_label, zh_label, english, chinese in self.README_PAIRS + self.SERIAL_README_PAIRS:
             pins.setdefault(f"README.md#{en_label}", []).append(english)
             pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
@@ -433,6 +609,39 @@ class CompletionCriteriaTests(unittest.TestCase):
         self.assert_pinned(self.ADR)
         lines = self.source("ADR 0006").splitlines()
         self.assertEqual(sum(line.startswith("(Amended by ADR 0013:") for line in lines), 1)
+
+    def test_reviews_are_serial_within_a_working_tree(self):
+        self.assert_pinned(self.SERIAL)
+
+    def test_s7_nothing_writes_the_tree_a_review_judges(self):
+        self.assert_pinned(self.S7)
+
+    def test_review_state_states_the_final_check(self):
+        self.assert_pinned(self.FINAL_CHECK)
+
+    def test_s8_the_final_check_judges_the_landing_commit(self):
+        self.assert_pinned(self.S8)
+
+    def test_the_serial_rule_and_final_check_sit_beside_what_a_gated_pass_judged(self):
+        # Both rules sit in Validity and completion, right after the rule they extend and before the existing notes.
+        text = (config.ROOT / self.PATHS["review-state.md"]).read_text(encoding="utf-8")
+        section = text.split("## Validity and completion", 1)[1].split("\n## ", 1)[0]
+        order = [section.index(f"\n- **{label}.**") for label in (
+            "What a gated pass judged", "Serial within a working tree", "Final check", "Existing handoff notes")]
+        self.assertEqual(order, sorted(order))
+
+    def test_adr_0013_records_the_serial_rule_and_the_final_check(self):
+        self.assert_pinned(self.SERIAL_ADR)
+        text = self.source("ADR 0013")
+        # The part follows ticket 01's Consequences; the single Accept and land decision is ticket 03's part.
+        self.assertLess(text.index("\n## Consequences\n"), text.index(self.ADR_0013_SERIAL))
+        self.assertNotIn("ADR 0008", self.source("ADR 0013#serial"))
+
+    def test_both_readmes_explain_serial_reviews_and_the_final_check(self):
+        for en_label, zh_label, english, chinese in self.SERIAL_README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
 
     def test_the_old_blocking_criteria_are_gone(self):
         for place, phrases in self.OLD_CRITERIA.items():
