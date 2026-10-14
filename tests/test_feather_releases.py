@@ -387,7 +387,8 @@ class ClaimsAtImplementationReleaseTests(unittest.TestCase):
 class CompletionCriteriaReleaseTests(unittest.TestCase):
     """0.24.0 ticket 04 (docs/specs/completion-criteria.md, Acceptance item 11): the release changes the installed
     reviewer definition, so existing installations need the plugin update and then `/cc-feather:setup update`, and the
-    Updates sections say so in both languages. The validation entry and the tag are pinned once they exist."""
+    Updates sections say so in both languages, and the validation entry records the checks, the rehearsal, the S6
+    baseline and the review round. The tag is checked after it exists."""
 
     # The Updates sections, paired in both languages, at the start of the release notes.
     UPDATES = (
@@ -407,8 +408,33 @@ class CompletionCriteriaReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
+    # The validation entry: the setup update, both discovery forms, the rehearsal and its findings, the S6 baseline,
+    # the tag and the review round.
+    ENTRY = (
+        "**Setup update is required.** This release changes the reviewer role definition, `templates/agents/reviewer.md`,",
+        "each ran 747 tests at a41bd28, the reviewed commit, and 748 at 2c0a22a, all passing with 30 skips and the same count in both forms",
+        "Live rehearsal (Acceptance item 10, test target T1), 2026-10-14.",
+        "The rehearsal ran headless (`claude -p`, resumed turn by turn) with the user's approval, main of this session playing the user,",
+        "Two findings: with an untracked test file present, main said the final check's precondition did not hold but still ran a final check scoped to the named test modules instead of refusing;",
+        "After the rehearsal, the user-scope agent definitions, CLAUDE.md, settings.json and the cc-feather state were byte-identical to a backup taken before it.",
+        "Reviews of this Plan used the roles and procedures installed before it (S6).",
+        "`v0.24.0` does not exist when this entry is written.",
+        "The deferred items, security items first, are kept in an untracked handoff record, not here.",
+    )
+
     def test_manifest_is_0_24_0(self):
         self.assertEqual("0.24.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_validation_entry_records_the_checks_rehearsal_baseline_tag_and_review_round(self):
+        entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.24.0 completion criteria\n")
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
+        # Each ticket has its line in the review round.
+        for claim in ("01", "02", "03", "04"):
+            with self.subTest(claim=claim):
+                self.assertEqual(entry.count(f"\n- {claim}: "), 1)
 
     def test_updates_sections_require_setup_update_in_both_languages(self):
         previous = ClaimsAtImplementationReleaseTests.UPDATES
