@@ -2127,22 +2127,24 @@ class RepositorySafetyTests(unittest.TestCase):
             self.assertEqual(len(claims), 1, claims)
             self.assertIn(exception, claims[0])
         english = [pair[0] for pair in self.README_FILTER]
-        for phrase, sentence in (("the repository is trusted to run on this machine", english[0]),
-                                 ("the change under review was written by you or in this session", english[0]),
-                                 ("every difference from the reviewed commit that main can find without running the "
-                                  "filter was written by you or in this session", english[0]),
+        # Repo trust default ticket 02 (Acceptance 8): the filter runs under the review's own stops and allowance, and
+        # review Git commands still run no program the repository chose apart from it.
+        for phrase, sentence in (("main runs it when it hashes that content, under the same stops and allowance as the "
+                                  "rest of the review's execution, described under Running repository code,", english[0]),
+                                 ("an allowance of someone else's change covers its filter for the calls it names unless "
+                                  "you limit it to particular commands,", english[0]),
+                                 ("review Git commands still run no program the repository chose, as before.",
+                                  english[0]),
+                                 ("the workspace does not equal that commit, so main blocks the call.", english[2]),
                                  # Adversarial review of C2 call 1, finding N6: the condition names the settings that
                                  # define the driver, and the settings the filter program reads itself are residual risk.
                                  # Code review call 3 of C2, NB-1: the settings come directly from the user's
                                  # configuration files, never through an include, wherever the included file lies.
                                  ("every setting that defines the filter driver, the program Git runs, comes directly "
                                   "from your configuration files, not through any include;", english[0]),
-                                 ("files others committed earlier that the change leaves unchanged do not stop it.",
-                                  english[0]),
                                  ("Settings the filter program reads itself, which an include can take from a "
                                   "working-tree file, are not checked and remain the residual risk stated below.",
                                   english[1]),
-                                 ("main stops the call, does not use the result", english[2]),
                                  # Code review call 1, B1: the choices follow both a failed condition and the stop.
                                  ("When those conditions do not all hold, or the filter shows such a difference, main "
                                   "does not dispatch the call, reports the claim blocked and offers you the choices:",
@@ -2818,12 +2820,16 @@ class RepositorySafetyTests(unittest.TestCase):
     # Item 1: the glossary entry, which ADR 0011 and the reference use.
     # Item 7 as revised for deviation D-6: the entry states the threat model as D1 does, keeping the term's scope and its
     # reason.
+    # Repo trust default ticket 02 (Acceptance 7): the entry gains that this threat model governs reads, while Execution
+    # decides what runs.
     GLOSSARY = ("A program that the reviewed repository's configuration, attributes or hooks select and Git may run, such "
                 "as an fsmonitor, a textconv or external diff, a filter, a signing program or a hook. The reviewed "
                 "repository's working tree, with any configuration, hook or include file Git reads from it, and every "
                 "change that neither the user nor main wrote are treated as attacker-controlled, while the Git "
                 "directory's own configuration and metadata are the user's own; since such a program can load the "
-                "working tree's content, running one counts as executing repository code.\n_Avoid_: git hook, safe git")
+                "working tree's content, running one counts as executing repository code. Treating them as "
+                "attacker-controlled governs reads, while repository safety's Execution decides what runs.\n"
+                "_Avoid_: git hook, safe git")
 
     def test_the_glossary_defines_repository_chosen_program_before_blocking_finding(self):
         text = self.source("CONTEXT.md")
@@ -3166,11 +3172,18 @@ class RepositorySafetyTests(unittest.TestCase):
          "你的設定從工作樹取用的 hook 目錄、include 與程式；push 到達這台機器上的目的地儲存庫時，那個儲存庫的 hook；以及主 "
          "Agent 自己在 `git add`、commit、tag 與 push 以外的 Git 操作，例如 fetch、pull、merge、checkout 或 stash，還有用 "
          "`gh` 開 pull request。"),
-        ("The rule for running repository code is not a sandbox either: running the code of a change neither you nor "
-         "main wrote, including through those programs, needs an isolated environment, such as CI, a container or a "
-         "virtual machine.",
-         "執行儲存庫程式碼的規則同樣不是 sandbox：要執行不是你也不是主 Agent 寫的變更的程式碼，包括透過這些程式執行，都"
-         "需要隔離環境，例如 CI、容器或虛擬機器。"),
+        # Repo trust default ticket 02 (Acceptance 8): what the new default risks, in place of the statement that the
+        # code of a change neither the user nor main wrote needs an isolated environment.
+        ("The rule for running repository code is not a sandbox either: unless a statement of yours in this session stops "
+         "it, a review runs the whole repository at the reviewed commit on this machine, so a change whose origin you did "
+         "not state runs like your own, as does one whose origin you stated only in an earlier session or in a message a "
+         "context compaction lost, and executor and security-executor run code while implementing whatever you said; to "
+         "run someone else's code safely, including through those programs, name an isolated environment, such as CI, a "
+         "container or a virtual machine.",
+         "執行儲存庫程式碼的規則同樣不是 sandbox：除非你在這個 session 的陳述停止它，審查會在這台機器上執行受審 commit 上的"
+         "整個儲存庫，所以你沒有說明來源的變更會像你自己的變更一樣執行，只在先前 session 或在被 context compaction 遺失的訊息中"
+         "說明來源的變更也一樣，而 executor 與 security-executor 實作時不論你說過什麼都會執行程式碼；要安全地執行別人的程式碼，"
+         "包括透過這些程式執行，請指定隔離環境，例如 CI、容器或虛擬機器。"),
     )
     # Item 7 as revised for deviation D-6: the threat model as D1 states it, in the section's opening paragraph.
     README_THREAT = (
@@ -3217,11 +3230,11 @@ class RepositorySafetyTests(unittest.TestCase):
         "a signing program or a hook, with one exception on this machine: when main may run a filter for a call, as "
         "Before a review describes, its content hashing runs that filter and lets it do what it does, including writing "
         "into the Git directory, as Git LFS does, and processing a difference from the reviewed commit that only the "
-        "filter can reveal and that neither you nor main wrote, before main stops the call.",
+        "filter can reveal, which means the workspace does not equal the reviewed commit, so main blocks the call.",
         "**Git 指令：**審查執行的每個 Git 指令都會停用 fsmonitor、選用鎖定與分頁程式，不寫入任何東西、不連線遠端，也不執行儲存庫選定的程式，"
         "例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook；只有一個例外，發生在這台機器上：主 Agent 依「審查之前」所說"
         "可以為某次呼叫執行 filter 時，它計算內容雜湊會執行那個 filter，並讓它照常運作，包括寫入 Git 目錄（Git LFS 就會這樣），以及"
-        "在主 Agent 擋下該次呼叫之前，處理只有 filter 才能揭露、不是你也不是主 Agent 寫的、與受審 commit 的差異。",
+        "處理只有 filter 才能揭露、與受審 commit 的差異；這樣的差異表示工作區不等於受審 commit，所以主 Agent 會擋下該次呼叫。",
     )
     # C2 item 5: the Before a review bullet's first sentence without the stop before a call that would run a filter.
     README_BEFORE_REVIEW = (
@@ -3269,26 +3282,30 @@ class RepositorySafetyTests(unittest.TestCase):
         ),
     }
     # C2 item 5: the outcomes and the comparison after a call, summarised in the Before a review bullet, paired.
+    # Repo trust default ticket 02 (Acceptance 8): the filter runs when main hashes content, under the same stops and
+    # allowance as the rest of the review's execution, in place of outcome 1's trust and authorship conditions; review
+    # Git commands still run no program the repository chose apart from it.
     README_FILTER = (
-        ("When a call's comparison would run a filter, such as Git LFS, main runs it only when you have said in this "
-         "session that the repository is trusted to run on this machine, the change under review was written by you or "
-         "in this session, every difference from the reviewed commit that main can find without running the filter was "
-         "written by you or in this session, and every setting that defines the filter driver, the program Git runs, "
-         "comes directly from your configuration files, not through any include; files others committed earlier that "
-         "the change leaves unchanged do not stop it.",
-         "某次呼叫的比對會執行 filter（例如 Git LFS）時，主 Agent 只有在下列條件都成立時才執行它：你在這個 session 說過這個儲存庫"
-         "可以在這台機器上執行；受審的變更是你寫的或在這個 session 寫的；主 Agent 不執行 filter 就能找到的、與受審 commit 的每個"
-         "差異，都是你寫的或在這個 session 寫的；而且定義這個 filter driver（也就是 Git 執行的程式）的設定都直接寫在你的設定檔中，"
-         "沒有任何一項經由 include 取得；別人先前 commit、這次變更沒有改動的檔案不會擋下它。"),
+        ("When a call's comparison would run a filter, such as Git LFS, main runs it when it hashes that content, under "
+         "the same stops and allowance as the rest of the review's execution, described under Running repository code, "
+         "and only when every setting that defines the filter driver, the program Git runs, comes directly from your "
+         "configuration files, not through any include; an allowance of someone else's change covers its filter for the "
+         "calls it names unless you limit it to particular commands, and apart from this, review Git commands still run "
+         "no program the repository chose, as before.",
+         "某次呼叫的比對會執行 filter（例如 Git LFS）時，主 Agent 在計算那些內容的雜湊時執行它，適用與審查其他執行相同的停止"
+         "條件與允許，見「執行儲存庫程式碼」，而且只有在定義這個 filter driver（也就是 Git 執行的程式）的設定都直接寫在你的"
+         "設定檔中、沒有任何一項經由 include 取得時才執行；你對別人變更的允許，也涵蓋它指名的呼叫中的 filter，除非你把它限定在"
+         "特定指令，而除此之外，審查的 Git 指令仍和以前一樣，不會執行儲存庫選定的任何程式。"),
         # Adversarial review of C2 call 1, finding N6: the condition covers the settings that define the driver; settings
         # the filter program reads itself stay the residual risk the README's residual paragraph states.
         ("Settings the filter program reads itself, which an include can take from a working-tree file, are not checked "
          "and remain the residual risk stated below.",
          "filter 程式自己讀取的設定，可能經由 include 取自工作樹內的檔案，這些不受檢查，仍屬於下文所述的剩餘風險。"),
-        ("If the filter then shows a difference neither you nor main wrote, main stops the call, does not use the result "
-         "and tells you that the filter has already processed that content.",
-         "如果 filter 接著揭露了不是你也不是主 Agent 寫的差異，主 Agent 會擋下該次呼叫、不使用結果，並告訴你 filter 已經處理過那些"
-         "內容。"),
+        # Repo trust default ticket 02: a difference only the filter reveals blocks the call because the workspace does
+        # not equal the reviewed commit, in place of the stop after hashing for a difference neither wrote.
+        ("If the filter then shows a difference from the reviewed commit, the workspace does not equal that commit, so "
+         "main blocks the call.",
+         "如果 filter 接著揭露了與受審 commit 的差異，表示工作區不等於該 commit，主 Agent 會擋下該次呼叫。"),
         ("When those conditions do not all hold, or the filter shows such a difference, main does not dispatch the call, "
          "reports the claim blocked and offers you the choices: change the attribute or the filter, after which main reads them again, and main tells you that changing `.gitattributes` "
          "makes the workspace differ from the reviewed commit and that disabling a filter in the Git directory's "
@@ -3317,6 +3334,11 @@ class RepositorySafetyTests(unittest.TestCase):
             # Code review call 3 of C2, NB-1: a condition on where a setting's file lies, which a link or a chained
             # include defeated.
             "no setting that defines the filter driver, the program Git runs, comes from a file in the working tree",
+            # Repo trust default ticket 02: outcome 1's trust and authorship conditions and the stop after hashing.
+            "every difference from the reviewed commit that main can find without running the filter",
+            "files others committed earlier that the change leaves unchanged do not stop it",
+            "does not use the result and tells you that the filter has already processed that content",
+            "before main stops the call",
         ),
         "README.zh-TW.md": (
             "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook。",
@@ -3324,6 +3346,10 @@ class RepositorySafetyTests(unittest.TestCase):
             "否則主 Agent 不派出該次呼叫",
             "而且定義這個 filter 的設定都不是來自工作樹內的檔案",
             "的設定都不是來自工作樹內的檔案",
+            "主 Agent 不執行 filter 就能找到的、與受審 commit 的每個差異",
+            "別人先前 commit、這次變更沒有改動的檔案不會擋下它",
+            "不使用結果，並告訴你 filter 已經處理過那些內容",
+            "在主 Agent 擋下該次呼叫之前",
         ),
     }
     # C3's Adversarial review call 1, finding NB3: the File reads bullet's last sentence, and the wording it replaced.
@@ -3336,6 +3362,70 @@ class RepositorySafetyTests(unittest.TestCase):
         "放進指令。",
     )
     README_FILE_NAMES_REPLACED = ("command output or a link target never does.", "連結目標的文字絕不放進指令。")
+    # Repo trust default ticket 02 (Acceptance 8): the Running repository code bullet, exactly these sentences in this
+    # order, paired. A review runs repository code by default; cc-feather no longer asks; the review runs the whole
+    # repository at the reviewed commit; only the user's own statements stop it, restrict it or allow someone else's
+    # change; they last for the session, and a compaction keeps only what its summary shows; a stop leaves the hooks of
+    # main's own Git operations and implementation alone; and someone else's code runs safely only in an isolated
+    # environment the user names.
+    README_RUNNING = (
+        ("main, reviewer, verifier and adversary run repository code for a review, such as tests, builds, linters, type "
+         "checkers and probes, on this machine by default, and main runs the final check before landing or release the "
+         "same way.",
+         "**執行儲存庫程式碼：**主 Agent、reviewer、verifier 與 adversary 預設會在這台機器上為審查執行儲存庫程式碼，例如測試、"
+         "建置、linter、型別檢查與探測，主 Agent 在合併或發布前的最終檢查也一樣。"),
+        ("cc-feather no longer asks you before a review runs them: what remains is Claude Code's folder trust, which you "
+         "give once per folder and which is not asked again when the folder's content changes, and whatever your "
+         "permission settings require, so in a permission mode or with allow rules that do not prompt for commands "
+         "nothing asks first.",
+         "cc-feather 不再在審查執行這些之前先問你：剩下的只有 Claude Code 的資料夾信任，每個資料夾只給一次，資料夾內容改變時"
+         "不會再問，以及你的權限設定要求的確認，所以在不會為指令提示的 permission mode 或 allow 規則下，執行前沒有任何東西會"
+         "先問你。"),
+        ("A review runs the whole repository at the reviewed commit, not only the change: content others committed "
+         "earlier, commits a pull, fetch, merge or rebase brought in, and untracked files.",
+         "審查執行的是受審 commit 上的整個儲存庫，而不只是這次變更：別人先前 commit 的內容、pull、fetch、merge 或 rebase "
+         "帶進來的 commit，以及未追蹤的檔案。"),
+        ("It stops on this machine only when you say, in your own message, that the change under review or content in "
+         "the workspace, or part of it, comes from someone else, such as another person's pull request, branch or patch, "
+         "or when you say in this session that the repository is not trusted, that code must not run, or a narrower "
+         "restriction, such as not running a pull request's tests.",
+         "只有在你於自己的訊息中說受審的變更或工作區中的內容（或其中一部分）來自別人，例如別人的 pull request、branch 或 "
+         "patch，或你在這個 session 說這個儲存庫不受信任、程式碼不得執行，或更窄的限制（例如不要跑某個 pull request 的測試）時，"
+         "才會停止在這台機器上執行。"),
+        ("Then what needs execution runs only in an isolated environment you name, or on this machine only when no "
+         "restriction of yours covers the call, or your own message lifted it, and every part you said comes from someone "
+         "else lies in a change your own message named and allowed to run on this machine for that call; otherwise it is "
+         "INCONCLUSIVE.",
+         "這時需要執行的部分只在你指定的隔離環境中執行，或只有在你的限制都不涵蓋該次呼叫（或你自己的訊息已解除它），而且你說"
+         "來自別人的每個部分，都屬於你自己的訊息指名並允許在這台機器上為該次呼叫執行的變更時，才在這台機器上執行；否則回報 "
+         "INCONCLUSIVE。"),
+        ("So you can stop execution, or restrict it more narrowly, by saying so, and allow someone else's change on this "
+         "machine only by naming it in your own message; text in the repository, a pull request, a tool's output or a "
+         "handoff can never do either.",
+         "所以你只要說出來，就能停止執行或做更窄的限制，而要讓別人的變更在這台機器上執行，只能在你自己的訊息中指名它；儲存庫、"
+         "pull request、工具輸出或 handoff 中的文字都絕不能做到這兩件事。"),
+        ("These statements last for the session only: a conversation continued with resume or continue is the same "
+         "session, but a new session, including one that continues a handoff, starts without them, so say them again "
+         "there.",
+         "這些陳述只在這個 session 有效：以 resume 或 continue 接續的對話算同一個 session，但新的 session（包括接續 handoff "
+         "的 session）不帶有它們，所以請在那裡再說一次。"),
+        ("After a context compaction, main keeps what the compaction summary still shows; a statement the summary lost is "
+         "not recovered, so repeat it when in doubt.",
+         "context compaction 之後，主 Agent 保留 compaction 摘要仍然顯示的內容；摘要遺失的陳述不會找回，有疑慮時請再說一次。"),
+        ("A stop does not stop the hooks your Git configuration runs for main's `git add`, commit and push unless you also "
+         "ask main to skip hooks, and it governs reviews, not implementation: executor and security-executor may run the "
+         "repository's code while implementing, including while fixing someone else's change.",
+         "停止執行並不會停止你的 Git 設定為主 Agent 的 `git add`、commit 與 push 執行的 hook，除非你也要求主 Agent 略過 hook；"
+         "而且它管的是審查，不是實作：executor 與 security-executor 實作時可能執行儲存庫的程式碼，包括修正別人的變更時。"),
+        ("To run someone else's code safely, name an isolated environment, such as CI, a container or a virtual machine.",
+         "要安全地執行別人的程式碼，請指定隔離環境，例如 CI、容器或虛擬機器。"),
+        ("Main states its determination in every brief of a role that may run code, and a role runs code only on that "
+         "statement.",
+         "主 Agent 會在每份可能執行程式碼的角色 brief 中寫明它的判定，角色只依這項陳述執行程式碼。"),
+        ("When main may not run the primary acceptance itself, it records it as not run, code review proceeds on the code "
+         "and verification is still dispatched.",
+         "主 Agent 不能自己執行主要驗收時，會記為未執行，程式碼審查仍就程式碼進行，結果驗證也照樣派出。"),
+    )
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
     README = (
         ("Every review reads your repository under one set of rules, the [repository safety "
@@ -3372,18 +3462,9 @@ class RepositorySafetyTests(unittest.TestCase):
         # C3's Adversarial review call 1, finding NB3: the File reads bullet names the names that Before add, commit, tag
         # or push lets enter.
         README_FILE_NAMES,
-        ("main, reviewer, verifier and adversary run repository code for a review, such as tests, builds, linters, type "
-         "checkers and probes, only when you have said in this session that the repository is trusted to run on this "
-         "machine and the change was written by you or in this session; otherwise only in an isolated environment you "
-         "name, and what needs execution is INCONCLUSIVE.",
-         "**執行儲存庫程式碼：**主 Agent、reviewer、verifier 與 adversary 只有在你於這個 session 說過這個儲存庫可以在這台機器上執行，而且變更是"
-         "你寫的或在這個 session 寫的時，才會為審查執行儲存庫程式碼，例如測試、建置、linter、型別檢查與探測；否則只在你指定"
-         "的隔離環境中執行，需要執行的部分回報 INCONCLUSIVE。"),
-        ("Main asks you about trust the first time a session needs it.",
-         "session 第一次需要時，主 Agent 會問你是否信任這個儲存庫。"),
-        ("When main may not run the primary acceptance itself, it records it as not run, code review proceeds on the code "
-         "and verification is still dispatched.",
-         "主 Agent 不能自己執行主要驗收時，會記為未執行，程式碼審查仍就程式碼進行，結果驗證也照樣派出。"),
+        # Repo trust default ticket 02 (Acceptance 8): the bullet states the new default in place of the trust question
+        # and the authorship condition.
+        *README_RUNNING,
         # Repository safety follow-ups C2 item 5: the stop before a call that would run a filter became the outcomes.
         README_BEFORE_REVIEW,
         *README_FILTER,
@@ -3422,6 +3503,18 @@ class RepositorySafetyTests(unittest.TestCase):
     README_LABELS = (("Git commands", "Git 指令"), ("File reads", "讀取檔案"),
                      ("Running repository code", "執行儲存庫程式碼"), ("Before a review", "審查之前"),
                      ("Before add, commit, tag or push", "add、commit、tag 或 push 之前"))
+    README_PROBING = (
+        "Dynamic probing follows the rule for running repository code under [Repository safety](#repository-safety): it "
+        "runs on this machine unless you have said that the change under attack or content in the workspace comes from "
+        "someone else, or stated a restriction that covers it, and then only in an isolated environment you name, or on "
+        "this machine only when no restriction of yours covers it, or your own message lifted it, and every part you "
+        "said comes from someone else lies in a change your own message named and allowed to run on this machine; "
+        "without either the attack stays static.",
+        "動態探測依[儲存庫安全](#儲存庫安全)中執行儲存庫程式碼的規則：除非你說過受審的變更或工作區中的內容來自別人，或說過涵蓋"
+        "它的限制，否則它在這台機器上進行；有這些情況時，只在你指定的隔離環境中進行，或只有在你的限制都不涵蓋它（或你自己的"
+        "訊息已解除它），而且你說來自別人的每個部分都屬於你自己的訊息指名並允許在這台機器上執行的變更時，才在這台機器上進行；"
+        "兩者都沒有的話只做靜態攻擊。",
+    )
     # The Commit rule, the code-review row and the dynamic-probing sentence point to the section.
     README_POINTERS = (
         # Deviation D-6: main no longer checks what the configuration would run; it makes item 6's checks and uses its
@@ -3433,12 +3526,8 @@ class RepositorySafetyTests(unittest.TestCase):
         ("| Code review | After main's primary acceptance passes, or is recorded as not run under [Repository "
          "safety](#repository-safety) | reviewer, reading the diff itself | APPROVED |",
          "| 程式碼審查 | 主 Agent 的主要驗收通過後，或依[儲存庫安全](#儲存庫安全)記為未執行時 | reviewer，自行取得 diff | APPROVED |"),
-        ("Dynamic probing follows the rule for running repository code under [Repository safety](#repository-safety): it "
-         "runs on your machine only when you have said in this session that the repository is trusted there and the "
-         "change was written by you or in this session, and otherwise only in an isolated environment you name; without "
-         "one the attack stays static.",
-         "動態探測依[儲存庫安全](#儲存庫安全)中執行儲存庫程式碼的規則：只有你在這個 session 說過這個儲存庫可以在你的機器上執"
-         "行，而且變更是你寫的或在這個 session 寫的，才會在你的機器上進行，否則只在你指定的隔離環境中進行；沒有的話只做靜態攻擊。"),
+        # Repo trust default ticket 02 (Acceptance 8): dynamic probing follows the new default in Security-critical work.
+        README_PROBING,
     )
 
     # Repository safety follow-ups C1 item 4: the residual risks of review reads, summarised in the paragraph that states
@@ -3528,7 +3617,8 @@ class RepositorySafetyTests(unittest.TestCase):
                                                ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
             section = self.source(f"{name}#section")
             bullet = next(line for line in section.splitlines() if line.startswith(label))
-            opening = section.strip().split("\n\n", 1)[0]
+            # Repo trust default ticket 02: the bold first point precedes the opening paragraph.
+            opening = section.strip().split("\n\n")[1]
             paragraph = next(p for p in section.split("\n\n") if p.startswith(("These rules are instructions to the "
                                                                                "model", "這些規則是給模型的指示")))
             # The bullet is exactly the pinned sentences: nothing of the removed summary survives beside them.
@@ -3563,9 +3653,15 @@ class RepositorySafetyTests(unittest.TestCase):
                      "opening a pull request with `gh`"):
             with self.subTest(risk=risk):
                 self.assertIn(risk, self.README_RESIDUAL[0][0])
-        self.assertIn("is not a sandbox either: running the code of a change neither you nor main wrote, including "
-                      "through those programs, needs an isolated environment, such as CI, a container or a virtual "
-                      "machine.", self.README_RESIDUAL[1][0])
+        # Repo trust default ticket 02: the sentence states what the default risks and how to run someone else's code
+        # safely.
+        for phrase in ("is not a sandbox either: unless a statement of yours in this session stops it, a review runs the "
+                       "whole repository at the reviewed commit on this machine,",
+                       "so a change whose origin you did not state runs like your own,",
+                       "to run someone else's code safely, including through those programs, name an isolated "
+                       "environment, such as CI, a container or a virtual machine."):
+            with self.subTest(residual=phrase[:40]):
+                self.assertIn(phrase, self.README_RESIDUAL[1][0])
         self.assertIn("are treated as your own", self.README_THREAT[1][0])
 
     def test_readmes_state_the_message_file_and_the_name_rule(self):
@@ -5355,6 +5451,348 @@ class RepositorySafetyGitFormsTests(unittest.TestCase):
                     self.assertNotEqual(included, direct)
                 finally:
                     feather_support.remove_directory_link(link)
+
+
+ADR = config.ROOT / "docs" / "adr"
+ADR_0009 = "0009-security-critical-claims-get-an-adversarial-review.md"
+ADR_0014 = "0014-reviews-execute-repository-code-by-default.md"
+
+
+class RepoTrustDefaultDocsTests(unittest.TestCase):
+    """Repo trust default ticket 02 (Acceptance 7 and 8, and item 9 for these texts): both READMEs state first and in
+    bold that someone else's change needs its origin stated, then the new default and what it risks, without the trust
+    question or the authorship condition; ADR 0014 records the decisions, the rejected options and the residual risks;
+    ADR 0011 and ADR 0009 gain amendment notes; and the glossary says that its threat model governs reads."""
+
+    R = RepositorySafetyTests
+    source = RepositorySafetyTests.source
+    assert_whole_sentence = feather_support.adversarial_retries_assert_whole_sentence
+    sentences = staticmethod(feather_support.sentences)
+    READMES = ("README.md", "README.zh-TW.md")
+
+    # The bold first point of each Repository safety section, paired.
+    BOLD = (
+        "**When you review someone else's change, such as another person's pull request, branch or patch, say in your own "
+        "message that it comes from someone else: a review runs your repository's code by default, and a change whose "
+        "origin you do not state is run like your own.**",
+        "**審查別人的變更時，例如別人的 pull request、branch 或 patch，請在你自己的訊息中說明它來自別人：審查預設會執行你的"
+        "儲存庫的程式碼，而你沒有說明來源的變更，會像你自己的變更一樣被執行。**",
+    )
+    # The opening paragraph's threat model governs reads; Running repository code decides what runs.
+    THREAT_READS = (
+        "This threat model governs how a review reads the repository, not what it runs: Running repository code below "
+        "decides that.",
+        "這個威脅模型管的是審查如何讀取儲存庫，而不是它執行什麼：那由下文的「執行儲存庫程式碼」決定。",
+    )
+    RUNNING_LABELS = ("- **Running repository code:** ", "- **執行儲存庫程式碼：**")
+
+    # Absence pins, broad enough to catch a reworded trust question or authorship condition anywhere in a README.
+    TRUST_QUESTION = re.compile(r"\btrusted (?:to run|there|on (?:this|your) machine)\b|\b(?:is|was|are|be) trusted\b|"
+                                r"\babout trust\b|\bwhether (?:you|the user) trusts?\b|"
+                                r"\btrusts? (?:the|this|your) repository\b|\basks? (?:you )?(?:whether|if)\b[^.;]{0,60}"
+                                r"\btrust", re.I)
+    AUTHORSHIP = re.compile(r"\bwritten by (?:you|the user|main)\b|\bby (?:you|the user) or in (?:this|the) session\b|"
+                            r"\b(?:you|the user) wrote\b[^.;]{0,60}\bsession\b|\bwritten in (?:this|the) session\b|"
+                            r"\bwas written\b|\bwho wrote\b|\bauthor(?:s|ed|ship)?\b", re.I)
+    OUTCOME_1_REMOVED = re.compile(r"\bcan find without running the (?:filter|driver)\b|\balready processed\b|"
+                                   r"\bfiles others committed earlier that the change leaves unchanged\b|"
+                                   r"\bdifference neither you nor main wrote\b|\bneither you nor main wrote, before\b",
+                                   re.I)
+    ZH_REMOVED = ("可以在這台機器上執行", "可以在你的機器上執行", "是否信任這個儲存庫", "會問你是否信任", "信任這個儲存庫",
+                  "你寫的或在這個 session 寫的", "在這個 session 寫的", "是你寫的", "變更是你寫的",
+                  "不是你也不是主 Agent 寫的差異", "不是你也不是主 Agent 寫的、與受審 commit 的差異",
+                  "不執行 filter 就能找到", "已經處理過那些內容", "這次變更沒有改動的檔案不會擋下它")
+
+    def test_readmes_state_first_and_in_bold_that_someone_elses_change_needs_its_origin(self):
+        """Acceptance 8: the Repository safety section of each README opens with one bold paragraph that says a review
+        of someone else's change needs the user to say where it comes from, because a change whose origin the user does
+        not state is run like their own; both languages say the same."""
+        for index, name in enumerate(self.READMES):
+            section = self.source(f"{name}#section").strip()
+            with self.subTest(readme=name):
+                self.assertEqual(section.split("\n\n")[0], self.BOLD[index])
+                # No other bold paragraph precedes it in the section, and it is stated once in the README.
+                self.assertEqual(read(config.ROOT / name).count(self.BOLD[index]), 1)
+        english, chinese = self.BOLD
+        for phrase in ("someone else's change", "say in your own message that it comes from someone else",
+                       "a review runs your repository's code by default",
+                       "a change whose origin you do not state is run like your own."):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, english)
+        for phrase in ("別人的變更", "請在你自己的訊息中說明它來自別人", "審查預設會執行你的儲存庫的程式碼",
+                       "你沒有說明來源的變更，會像你自己的變更一樣被執行。"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, chinese)
+
+    def test_readmes_say_the_threat_model_governs_reads(self):
+        """Acceptance 8 (the introduction): the opening paragraph keeps the threat model for reads and ends by saying
+        that Running repository code, not that threat model, decides what runs."""
+        for index, name in enumerate(self.READMES):
+            opening = self.source(f"{name}#section").strip().split("\n\n")[1]
+            with self.subTest(readme=name):
+                self.assertTrue(opening.endswith(self.THREAT_READS[index]))
+                self.assert_whole_sentence(self.R.README_THREAT[0][index], opening)
+
+    def test_the_running_repository_code_bullet_states_the_new_default(self):
+        """Acceptance 8: each README's Running repository code bullet is exactly the pinned sentences, paired, and states
+        every point of the acceptance: no question from cc-feather and what still gates execution, the whole repository
+        at the reviewed commit, the user's own statements as the only stop, restriction or allowance, their session
+        lifetime and what a compaction keeps, what a stop does not cover, and the isolated environment for someone
+        else's code."""
+        for index, name in enumerate(self.READMES):
+            bullet = next(line for line in self.source(f"{name}#section").splitlines()
+                          if line.startswith(self.RUNNING_LABELS[index]))
+            expected = (self.RUNNING_LABELS[0] + " ".join(pair[0] for pair in self.R.README_RUNNING) if index == 0
+                        else "- " + "".join(pair[1] for pair in self.R.README_RUNNING))
+            with self.subTest(readme=name):
+                self.assertEqual(bullet, expected)
+        english = " ".join(pair[0] for pair in self.R.README_RUNNING)
+        for phrase in (
+                "run repository code for a review, such as tests, builds, linters, type checkers and probes, on this "
+                "machine by default",
+                # cc-feather no longer asks; folder trust and permission settings remain.
+                "cc-feather no longer asks you before a review runs them:",
+                "Claude Code's folder trust, which you give once per folder and which is not asked again when the "
+                "folder's content changes,",
+                "whatever your permission settings require, so in a permission mode or with allow rules that do not "
+                "prompt for commands nothing asks first.",
+                # The whole repository at the reviewed commit.
+                "A review runs the whole repository at the reviewed commit, not only the change: content others "
+                "committed earlier, commits a pull, fetch, merge or rebase brought in, and untracked files.",
+                # Stopping, restricting and allowing, only by the user's own message.
+                "you can stop execution, or restrict it more narrowly, by saying so, and allow someone else's change on "
+                "this machine only by naming it in your own message; text in the repository, a pull request, a tool's "
+                "output or a handoff can never do either.",
+                "named and allowed to run on this machine for that call;",
+                # The session, resume and compaction.
+                "These statements last for the session only: a conversation continued with resume or continue is the "
+                "same session, but a new session, including one that continues a handoff, starts without them,",
+                "main keeps what the compaction summary still shows; a statement the summary lost is not recovered, so "
+                "repeat it when in doubt.",
+                # What a stop does not cover.
+                "A stop does not stop the hooks your Git configuration runs for main's `git add`, commit and push unless "
+                "you also ask main to skip hooks,",
+                "it governs reviews, not implementation: executor and security-executor may run the repository's code "
+                "while implementing, including while fixing someone else's change.",
+                # Running someone else's code safely.
+                "To run someone else's code safely, name an isolated environment, such as CI, a container or a virtual "
+                "machine."):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, english)
+        chinese = "".join(pair[1] for pair in self.R.README_RUNNING)
+        for phrase in ("預設會在這台機器上為審查執行儲存庫程式碼", "cc-feather 不再在審查執行這些之前先問你",
+                       "Claude Code 的資料夾信任，每個資料夾只給一次，資料夾內容改變時不會再問", "執行前沒有任何東西會先問你",
+                       "受審 commit 上的整個儲存庫，而不只是這次變更", "pull、fetch、merge 或 rebase 帶進來的 commit",
+                       "未追蹤的檔案", "儲存庫、pull request、工具輸出或 handoff 中的文字都絕不能做到這兩件事",
+                       "以 resume 或 continue 接續的對話算同一個 session", "包括接續 handoff 的 session",
+                       "摘要遺失的陳述不會找回", "除非你也要求主 Agent 略過 hook", "它管的是審查，不是實作",
+                       "包括修正別人的變更時", "要安全地執行別人的程式碼，請指定隔離環境，例如 CI、容器或虛擬機器。"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, chinese)
+
+    def test_readmes_state_the_filter_and_the_probing_under_the_same_rule(self):
+        """Acceptance 8: the Before a review bullet runs a filter driver when main hashes content under the review's own
+        stops and allowance, review Git commands still running no program the repository chose apart from it; and
+        Security-critical work's dynamic probing follows the same default, paired in both languages."""
+        for index, name in enumerate(self.READMES):
+            before = next(line for line in self.source(f"{name}#section").splitlines()
+                          if line.startswith(("- **Before a review:** ", "- **審查之前：**")[index]))
+            with self.subTest(readme=name, bullet="Before a review"):
+                self.assert_whole_sentence(self.R.README_FILTER[0][index], before)
+                self.assert_whole_sentence(self.R.README_FILTER[2][index], before)
+            security = read(config.ROOT / name).split(("\n### Security-critical work\n", "\n### 安全關鍵工作\n")[index],
+                                                      1)[1].split("\n### ", 1)[0]
+            with self.subTest(readme=name, section="Security-critical work"):
+                self.assert_whole_sentence(self.R.README_PROBING[index], security)
+        self.assertIn("it runs on this machine unless you have said that the change under attack or content in the "
+                      "workspace comes from someone else, or stated a restriction that covers it,", self.R.README_PROBING[0])
+        self.assertIn("named and allowed to run on this machine;", self.R.README_PROBING[0])
+
+    def test_readmes_no_longer_ask_about_trust_or_require_authorship(self):
+        """Acceptance 8 and 9: neither README asks whether the repository is trusted, says main asks about trust, makes
+        execution depend on the change being written by the user or in this session, or keeps outcome 1's trust and
+        attribution conditions or its stop after hashing, in any wording these patterns catch; and no bullet that
+        decides what runs, nor Security-critical work's probing, speaks of a change neither the user nor main wrote."""
+        english = read(config.ROOT / "README.md")
+        for pattern in (self.TRUST_QUESTION, self.AUTHORSHIP, self.OUTCOME_1_REMOVED):
+            for match in pattern.finditer(english):
+                with self.subTest(pattern=pattern.pattern[:30], found=english[max(0, match.start() - 40):match.end() + 20]):
+                    self.fail("README.md keeps a replaced statement")
+        self.assertNotIn("Main asks you about trust", english)
+        chinese = read(config.ROOT / "README.zh-TW.md")
+        for phrase in self.ZH_REMOVED:
+            with self.subTest(removed=phrase):
+                self.assertNotIn(phrase, chinese)
+        for index, name in enumerate(self.READMES):
+            section = self.source(f"{name}#section")
+            labels = (("- **Git commands:** ", "- **Running repository code:** ", "- **Before a review:** "),
+                      ("- **Git 指令：**", "- **執行儲存庫程式碼：**", "- **審查之前：**"))[index]
+            for label in labels:
+                bullet = next(line for line in section.splitlines() if line.startswith(label))
+                with self.subTest(readme=name, bullet=label):
+                    self.assertNotIn(("neither you nor main wrote", "不是你也不是主 Agent 寫的")[index], bullet)
+            with self.subTest(readme=name, probing=True):
+                self.assertNotIn(("neither you nor main wrote", "不是你也不是主 Agent 寫的")[index],
+                                 self.R.README_PROBING[index])
+        # The patterns catch the replaced wordings.
+        for old in ("only when you have said in this session that the repository is trusted to run on this machine",
+                    "the change was written by you or in this session", "Main asks you about trust the first time",
+                    "it runs on your machine only when you have said in this session that the repository is trusted there",
+                    "every difference from the reviewed commit that main can find without running the filter"):
+            with self.subTest(caught=old[:40]):
+                self.assertTrue(any(p.search(old) for p in (self.TRUST_QUESTION, self.AUTHORSHIP,
+                                                            self.OUTCOME_1_REMOVED)))
+
+    # ADR 0014: the decisions, the rejected options and the residual risks.
+    ADR_0014_TITLE = "# Reviews execute repository code by default\n"
+    ADR_0014_DECIDED = ("The user decided (2026-10-14, in a grilling and after a security analysis of a first version; "
+                        "the [spec](../specs/repo-trust-default.md) carries the acceptance and its security invariants):")
+    ADR_0014_DECISIONS = ("Execution by default", "What still stops it", "Only the user's own messages", "For the session",
+                          "Main's determination", "Filter drivers", "Reads unchanged")
+    ADR_0014_DECISION_SENTENCES = (
+        "Main no longer asks whether the repository is trusted, and no longer requires the change to be written by the "
+        "user or in the session.",
+        "Then what needs execution runs only in an isolated environment the user names, or on this machine only when no "
+        "restriction covers the call, or the user's own message lifted it, and every part the user said comes from "
+        "someone else lies in a change the user's own message named and allowed to run on this machine for that call; "
+        "otherwise it is reported INCONCLUSIVE.",
+        "Nothing but the user's own messages can make content the user's, lift a restriction or allow execution.",
+        "Whether content comes from someone else is never inferred from Git authors, in either direction.",
+        "These statements last for the session: a conversation continued with resume or continue is the same session, "
+        "while a new session, including one that continues a handoff, starts without them.",
+        "After a context compaction main keeps what the compaction summary still shows, and a statement the summary lost "
+        "is not recovered.",
+        "A filter driver runs during main's preparation under the same rule, and only when every setting that defines it "
+        "comes directly from the user's configuration files, not through an include.",
+        "How main and the roles read the repository does not change: the working tree stays attacker-controlled for "
+        "reads, and Safe Git invocation, Paths and names and main's own `git add`, commit, tag and push stay as they are, "
+        "apart from the wording that named the removed conditions.",
+    )
+    ADR_0014_OPTIONS = ("Keep the authorship condition", "Infer someone else's change from Git authors",
+                        "A lasting per-project setting", "Ask again after a context compaction",
+                        "Extend Execution to implementation")
+    ADR_0014_RESIDUAL = (
+        "A review runs the whole repository at the reviewed commit on this machine, not only the change: content others "
+        "committed earlier, commits a pull, fetch, merge or rebase brought in, and untracked files.",
+        "A change whose origin the user does not state is run like the user's own.",
+        "What remains before code runs is Claude Code's folder trust, given once per folder and not asked again when its "
+        "content changes, and whatever the user's permission settings require; in a permission mode or with allow rules "
+        "that do not prompt for commands, nothing asks first.",
+        "A new session, including one that continues a handoff, starts without the user's statements, and a statement a "
+        "context compaction lost is not recovered, so code the user said comes from someone else can run on this machine "
+        "there unless the user repeats it.",
+        "A stop does not stop the hooks the user's Git configuration runs for main's `git add`, commit and push unless the "
+        "user also asks main to skip hooks, and it governs reviews, not implementation: executor and security-executor "
+        "may run the repository's code while implementing, including while fixing someone else's change.",
+        "A filter driver such as Git LFS runs when main hashes content, under the same stops and allowance as the rest of "
+        "the review's execution; review Git commands still run no Repository-chosen program apart from it.",
+        "For a change whose origin the user did not state, that rule no longer applies, so it no longer mitigates that "
+        "risk: such a change is probed on this machine by a role that loads its `CLAUDE.md`.",
+    )
+
+    def test_adr_0014_records_the_decisions_the_rejected_options_and_the_residual_risks(self):
+        """Acceptance 7: ADR 0014 records the decisions of the spec, the five options the user rejected and the residual
+        risks of Acceptance 8, including that ADR 0009's isolation rule no longer mitigates a role steered by a changed
+        `CLAUDE.md` for a change whose origin the user did not state, and names what it amends."""
+        path = ADR / ADR_0014
+        self.assertTrue(path.is_file())
+        text = read(path)
+        self.assertTrue(text.startswith(self.ADR_0014_TITLE))
+        self.assertIn("\n" + self.ADR_0014_DECIDED + "\n", text)
+        decisions = text.split(self.ADR_0014_DECIDED, 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(re.findall(r"^- \*\*([^*]+)\.\*\* ", decisions, re.M), list(self.ADR_0014_DECISIONS))
+        for sentence in self.ADR_0014_DECISION_SENTENCES:
+            with self.subTest(decision=sentence[:50]):
+                self.assert_whole_sentence(sentence, decisions)
+        self.assertIn("This amends [ADR 0011](0011-reviews-treat-the-repository-as-hostile-by-instruction.md)", decisions)
+        self.assertIn("It amends [ADR 0009](0009-security-critical-claims-get-an-adversarial-review.md)", decisions)
+        options = text.split("\n## Considered Options\n", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(re.findall(r"^- \*\*([^*]+)\*\*", options, re.M), list(self.ADR_0014_OPTIONS))
+        residual = text.split("\n## Consequences and residual risks\n", 1)[1]
+        for sentence in self.ADR_0014_RESIDUAL:
+            with self.subTest(residual=sentence[:50]):
+                self.assert_whole_sentence(sentence, residual)
+        self.assertIn("ADR 0009 named its isolation rule for code the user did not write as mitigating", residual)
+        self.assertIn("isolated environment the user names, such as CI, a container or a virtual machine.", residual)
+
+    # The amendment notes: one line each, after every earlier paragraph, which stays as it was.
+    ADR_0011_NOTE_PHRASES = (
+        "(Amended by ADR 0014: the execution rule in the Consequences above,",
+        "and the statement in the note for deviation D-6 that running the code of a change neither the user nor main "
+        "wrote safely needs an isolated environment, no longer decide what runs.",
+        "A review and the final check execute repository code on this machine by default,",
+        "The working tree and every change neither the user nor main wrote stay attacker-controlled for reads, and "
+        "repository safety's Execution states that it does not follow that threat model;",
+    )
+    ADR_0011_CONSEQUENCE = (
+        "This extends ADR 0009's isolation rule: main, reviewer, verifier and adversary execute repository code for a "
+        "review only when the user has said the repository is trusted to run on this machine and the change was written "
+        "by the user or in the session, and otherwise only in an isolated environment the user names, because running a "
+        "change runs the whole repository with it.")
+    ADR_0009_NOTE_PHRASES = (
+        "(Amended by ADR 0014: the isolation rule for code the user did not write, with its example of a "
+        "Security-critical claim resumed in a new session, and ADR 0011's extension of it in the amendment note for 0.21.0 "
+        "above no longer decide where dynamic probing runs.",
+        "so a claim resumed in a new session is probed on this machine unless the user states one of these again there.",
+        "The residual risk that a commit under attack that changes the project's CLAUDE.md can steer the role is "
+        "therefore no longer mitigated by the isolation rule for a change whose origin the user did not state;",
+    )
+
+    def test_adr_0011_and_adr_0009_gain_amendment_notes_without_rewriting(self):
+        """Acceptance 7: ADR 0011 and ADR 0009 each end with one `(Amended by ADR 0014: …)` line covering the execution
+        rule and the isolation statement, and the isolation rule, its example, the `CLAUDE.md` residual risk and the
+        statement of ADR 0011's extension; the earlier text they amend is still there word for word."""
+        for name, phrases, kept in (
+                (ADR_0011, self.ADR_0011_NOTE_PHRASES,
+                 (self.ADR_0011_CONSEQUENCE, self.R.ADR_0011_AMENDMENT[5])),
+                (ADR_0009, self.ADR_0009_NOTE_PHRASES,
+                 ("Dynamic probing of code not written by the user or in this session, such as a Security-critical claim "
+                  "resumed in a new session, runs only in an isolated environment the user names;",
+                  "Residual risk: a role loads the project's CLAUDE.md, so a commit under attack that changes it can steer "
+                  "the role. The isolation rule for code the user did not write mitigates this risk but does not remove "
+                  "it.", self.R.AMENDMENT[0]))):
+            text = read(ADR / name)
+            lines = text.splitlines()
+            notes = [line for line in lines if line.startswith("(Amended by ADR 0014:")]
+            with self.subTest(adr=name):
+                self.assertEqual(len(notes), 1)
+                self.assertEqual(lines[-1], notes[0])
+                self.assertTrue(notes[0].endswith(")"))
+                for phrase in phrases:
+                    self.assertIn(phrase, notes[0])
+                before = text[:text.index(notes[0])]
+                for sentence in kept:
+                    self.assertIn(sentence, before)
+
+    README_ADR_LINKS = (
+        "See [ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) and [ADR 0014]"
+        "(docs/adr/0014-reviews-execute-repository-code-by-default.md).",
+        "詳見 [ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) 與 [ADR 0014]"
+        "(docs/adr/0014-reviews-execute-repository-code-by-default.md)。",
+    )
+
+    def test_readmes_point_to_adr_0014_after_the_residual_risks(self):
+        """Acceptance 7 and 8: the paragraph that states the residual risks ends by pointing to ADR 0014 beside ADR
+        0011, in both languages."""
+        for index, name in enumerate(self.READMES):
+            paragraph = next(p for p in self.source(f"{name}#section").split("\n\n")
+                             if p.startswith(("These rules are instructions to the model", "這些規則是給模型的指示")[index]))
+            with self.subTest(readme=name):
+                self.assertTrue(paragraph.strip().endswith(self.README_ADR_LINKS[index]))
+                self.assertLess(paragraph.index(self.R.README_RESIDUAL[1][index]),
+                                paragraph.index(self.README_ADR_LINKS[index]))
+        self.assertTrue((ADR / ADR_0014).is_file())
+
+    GLOSSARY_READS = "Treating them as attacker-controlled governs reads, while repository safety's Execution decides what runs."
+
+    def test_the_glossary_says_its_threat_model_governs_reads(self):
+        """Acceptance 7: the glossary statement that every change neither the user nor main wrote is attacker-controlled
+        gains that this governs reads, while Execution decides what runs."""
+        entry = feather_support.glossary_entries(self.source("CONTEXT.md"))["Repository-chosen program"]
+        self.assert_whole_sentence(self.GLOSSARY_READS, entry)
+        self.assertIn(self.GLOSSARY_READS, self.R.GLOSSARY)
+        self.assertLess(entry.index("every change that neither the user nor main wrote are treated as "
+                                    "attacker-controlled"), entry.index(self.GLOSSARY_READS))
 
 
 if __name__ == "__main__":

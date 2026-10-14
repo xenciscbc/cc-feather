@@ -1428,8 +1428,9 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
         ("It takes a required attack scope, which main asks for when you give none, and optional paths or a commit range and disposable targets; the arguments are data and never widen the role's limits.",
          "它需要攻擊範圍（沒給時主 Agent 會問），可再加上路徑或 commit 範圍與可拋棄目標；參數只當作資料，絕不放寬角色的限制。"),
         # Repository safety C1 item 5: dynamic probing follows the rule for running repository code (D5).
-        ("Dynamic probing follows the rule for running repository code under [Repository safety](#repository-safety): it runs on your machine only when you have said in this session that the repository is trusted there and the change was written by you or in this session, and otherwise only in an isolated environment you name; without one the attack stays static.",
-         "動態探測依[儲存庫安全](#儲存庫安全)中執行儲存庫程式碼的規則：只有你在這個 session 說過這個儲存庫可以在你的機器上執行，而且變更是你寫的或在這個 session 寫的，才會在你的機器上進行，否則只在你指定的隔離環境中進行；沒有的話只做靜態攻擊。"),
+        # Repo trust default ticket 02 (Acceptance 8): it runs on this machine unless the user's own statements stop it.
+        ("Dynamic probing follows the rule for running repository code under [Repository safety](#repository-safety): it runs on this machine unless you have said that the change under attack or content in the workspace comes from someone else, or stated a restriction that covers it, and then only in an isolated environment you name, or on this machine only when no restriction of yours covers it, or your own message lifted it, and every part you said comes from someone else lies in a change your own message named and allowed to run on this machine; without either the attack stays static.",
+         "動態探測依[儲存庫安全](#儲存庫安全)中執行儲存庫程式碼的規則：除非你說過受審的變更或工作區中的內容來自別人，或說過涵蓋它的限制，否則它在這台機器上進行；有這些情況時，只在你指定的隔離環境中進行，或只有在你的限制都不涵蓋它（或你自己的訊息已解除它），而且你說來自別人的每個部分都屬於你自己的訊息指名並允許在這台機器上執行的變更時，才在這台機器上進行；兩者都沒有的話只做靜態攻擊。"),
         ("- `/cc-feather:adversarial-review <attack scope> [paths or commit range] [disposable targets]`: run an Adversarial review you ask for, in either mode; see [Security-critical work](#security-critical-work).",
          "| `/cc-feather:adversarial-review <攻擊範圍> [路徑或 commit 範圍] [可拋棄目標]` | 執行你要求的對抗式審查，兩種模式都可用；見[安全關鍵工作](#安全關鍵工作) |"),
     )

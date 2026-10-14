@@ -4066,9 +4066,9 @@ class FeatherConfigTests(unittest.TestCase):
                          "under outcome 1 of Main's preparation"),
         "File reads": ("讀取檔案", "has a single hard link", "只有一個硬連結",
                        "repository-safety.md", "that its link count is 1."),
-        # Repo trust default ticket 01: the reference states the new default; the README phrases are ticket 02's.
-        "Running repository code": ("執行儲存庫程式碼", "the repository is trusted to run on this machine",
-                                    "這個儲存庫可以在這台機器上執行", "repository-safety.md",
+        # Repo trust default ticket 01: the reference states the new default; ticket 02: so do the READMEs.
+        "Running repository code": ("執行儲存庫程式碼", "on this machine by default",
+                                    "預設會在這台機器上為審查執行儲存庫程式碼", "repository-safety.md",
                                     "execute repository code on this machine unless, for that call,"),
         "Before a review": ("審查之前", "Git is 2.32 or later", "2.32 或更新版本",
                             "repository-safety.md", "Git is 2.32 or later"),
