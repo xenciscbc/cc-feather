@@ -480,12 +480,16 @@ class CompletionCriteriaTests(unittest.TestCase):
         ),
     }
 
-    # Acceptance item 2: the installed verifier and adversary definitions are unchanged (SHA-256 of the LF text, equal
-    # to `git show v0.23.0:templates/agents/<role>.md`).
+    # Acceptance item 2: 0.24.0's completion criteria changed neither the installed verifier nor the adversary
+    # definition. The 0.25.0 spec (docs/specs/repo-trust-default.md) Acceptance 4 changes the shared Repository safety
+    # paragraph of both, which the repository safety tests pin byte for byte, so each digest is the SHA-256 of the LF
+    # text with that one paragraph line removed, equal to the same for `git show v0.23.0:templates/agents/<role>.md`;
+    # any other change to either template still changes it.
     UNCHANGED_ROLES = {
-        "adversary": "b213d2f9f7d12a3d179fa5c817c2be99791406983fff765285d4aa3d703ff522",
-        "verifier": "5f7cb142c181f4190c878efd27bc0fe17743ef52eac7d75379774ecf731fba76",
+        "adversary": "ef555aa958fa8074d66eff4b821b92171b313bd53d5b3c8b1fd7bc2db3c0a12d",
+        "verifier": "54b5f52cca68043c6829053859fd5aa376ee7ea050912334d2b2947260a93e10",
     }
+    REPOSITORY_SAFETY_LINE = "**Repository safety.** "
 
     # Ticket 02, Acceptance item 4: the serial rule, the handoff records it includes, no review worktrees, the worktree
     # exception and shared test resources, in review state and in the delegation skill's rule on parallel work.
@@ -1124,7 +1128,12 @@ class CompletionCriteriaTests(unittest.TestCase):
         for role, digest in self.UNCHANGED_ROLES.items():
             text = (config.ROOT / "templates" / "agents" / f"{role}.md").read_text(encoding="utf-8")
             with self.subTest(role=role):
-                self.assertEqual(hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest(), digest)
+                lines = text.replace("\r\n", "\n").split("\n")
+                # Exactly one line is the shared paragraph, so removing it hides nothing else.
+                paragraph = [line for line in lines if line.startswith(self.REPOSITORY_SAFETY_LINE)]
+                self.assertEqual(len(paragraph), 1)
+                rest = "\n".join(line for line in lines if not line.startswith(self.REPOSITORY_SAFETY_LINE))
+                self.assertEqual(hashlib.sha256(rest.encode("utf-8")).hexdigest(), digest)
 
     def test_glossary_states_the_criteria_for_every_review_step(self):
         self.assert_pinned(self.CONTEXT)
