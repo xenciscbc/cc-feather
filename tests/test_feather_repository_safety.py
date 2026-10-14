@@ -546,7 +546,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "In those cases they execute it only in an isolated environment the user names, or on this machine only when both "
         "of these hold for that call: (a) no restriction the user stated covers the call, or the user's own message "
         "lifted it for that call; and (b) every part of the reviewed commit and the workspace that the user said comes "
-        "from someone else lies in a change the user's own message named and allowed for that call, since an allowance "
+        "from someone else lies in a change the user's own message named and allowed to run on this machine for that call, since an allowance "
         "of one change does not cover other content the user said comes from someone else."
     )
     EXECUTION_INCONCLUSIVE = (
@@ -590,8 +590,13 @@ class RepositorySafetyTests(unittest.TestCase):
         # Revised plan (S1): an allowance covers only the change it names, for the calls it names.
         "Someone else's content runs on this machine only for the calls the user's own message names, and only when "
         "every part of it in the reviewed commit and the workspace lies in a change the user's own message named and "
-        "allowed for that call; an allowance of one change does not cover other content the user said comes from someone "
-        "else.",
+        "allowed to run on this machine for that call; an allowance of one change does not cover other content the user "
+        "said comes from someone else.",
+        # Adversarial review of ticket 01 (BROKEN), F1: like a lift, an allowance covers only what it names, and one
+        # limited to an isolated environment, or whose scope is unclear, allows nothing on this machine.
+        "An allowance covers only what it names, the change, the calls and this machine: one that lets a change run only "
+        "in an isolated environment allows nothing on this machine, so that change runs only in that environment, and an "
+        "allowance whose scope is unclear allows nothing on this machine.",
     )
     # S3: restrictions last for the session, a compaction summary can only keep them, and a resumed conversation is the
     # same session.
@@ -685,10 +690,18 @@ class RepositorySafetyTests(unittest.TestCase):
     )
     # A sentence that speaks of trusting the repository or a program, or of who wrote a change, in the texts ticket 01
     # owns; each must be one of the sentences pinned for it.
-    TRUST_WORD = re.compile(r"\btrust(?:s|ed|ing)?\b(?!\s+(?:boundar|the evidence))", re.I)
-    AUTHORSHIP_WORD = re.compile(r"\bwritten (?:by (?:the user|you)\b|in (?:this|the|another)\b[^.;]*\bsession)|"
-                                 r"\bwho wrote\b|\bwrote (?:a|the|this) change\b|\bmixed origin\b|"
-                                 r"\bnot written\b", re.I)
+    # Adversarial review of ticket 01, test gaps: the patterns catch any form of trust and of authorship, such as
+    # "trusts this repository", "authored in the current session" or "not authored in this session".
+    TRUST_WORD = re.compile(r"\b(?:un)?trust(?:s|ed|ing|worthy|worthiness)?\b(?!\s+(?:boundar|the evidence))", re.I)
+    AUTHORSHIP_WORD = re.compile(r"\bauthor(?:s|ed|ship|ing)?\b|"
+                                 r"\b(?:written|authored|wrote|made|created|produced)\b[^.;]{0,60}\bsessions?\b|"
+                                 r"\bwho wrote\b|\bwrote (?:a|the|this|that) change\b|\bmixed origin\b|"
+                                 r"\bnot (?:written|authored|made) (?:by|in)\b|\bby (?:the user|you) or in\b", re.I)
+    # The only uses of trust that the procedures citing Execution may make: a trust boundary, untrusted data, and the
+    # worktree exception that extends no trust.
+    TRUST_ALLOWED_CONTEXT = re.compile(r"\btrust boundar|\buntrusted data\b|\bextends no trust\b", re.I)
+    # An allowance always names this machine (adversarial review of ticket 01, F1).
+    ALLOWANCE_WITHOUT_MACHINE = re.compile(r"\bnamed and allowed\b(?! to run on this machine\b)")
     # A sentence that attributes a difference or a change to someone, as outcome 1's removed condition and stop did.
     ATTRIBUTION_WORD = re.compile(r"\b(?:cannot|can|could|to)\s+attribute\b|\bunattributable\b|\battributing\b|"
                                   r"\battribute (?:that|this|a|the|such a) difference\b", re.I)
@@ -946,7 +959,7 @@ class RepositorySafetyTests(unittest.TestCase):
         "driver runs: Execution lets the call execute repository code on this machine, so that its conditions (a) and "
         "(b) both hold, (a) no restriction the user stated covers the call, or the user's own message lifted it for that "
         "call, and (b) every part of the reviewed commit and the workspace that the user said comes from someone else "
-        "lies in a change the user's own message named and allowed for that call, with every allowance it relies on "
+        "lies in a change the user's own message named and allowed to run on this machine for that call, with every allowance it relies on "
         "covering the driver, as stated below; and, for every driver the compared paths' filters name, the read of the "
         "filter-driver "
         "keys, which follows includes and carries `--show-origin`, and the same read without includes, of the same "
@@ -1461,8 +1474,9 @@ class RepositorySafetyTests(unittest.TestCase):
 
     # The texts repo trust default ticket 01 owns, in which neither the trust question nor the authorship condition may
     # return; the README, ADR and glossary texts are ticket 02's.
+    # Adversarial review of ticket 01, test gaps: every procedure that cites Execution, the delegation skill included.
     TRUST_OWNED = ("reference", "code-review.md", "outcome-verification.md", "adversarial-review.md", "review-state.md",
-                   "command")
+                   "delegation SKILL.md", "command")
 
     def test_execution_runs_by_default_and_stops_only_on_the_users_own_statements(self):
         """Repo trust default ticket 01 (Acceptance 1 to 3, S1 to S4): a review and the final check execute repository
@@ -1474,7 +1488,7 @@ class RepositorySafetyTests(unittest.TestCase):
         owned text asks whether the repository is trusted or requires the change to be written by the user or in this
         session, in any wording the patterns catch."""
         default, stopped, inconclusive, alone, per_call, own_operations = self.EXECUTION_PARAGRAPHS[0]
-        origin, when, quoted, not_user, taint, allow = self.EXECUTION_ORIGIN
+        origin, when, quoted, not_user, taint, allow, allowance_scope = self.EXECUTION_ORIGIN
         restriction, no_record, compaction, lost, resume, new_session = self.EXECUTION_RESTRICTIONS
         brief, role = self.EXECUTION_BRIEF
         for phrase, sentence in (
@@ -1491,7 +1505,7 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("(a) no restriction the user stated covers the call, or the user's own message lifted it for that "
                  "call; and (b)", stopped),
                 ("(b) every part of the reviewed commit and the workspace that the user said comes from someone else "
-                 "lies in a change the user's own message named and allowed for that call,", stopped),
+                 "lies in a change the user's own message named and allowed to run on this machine for that call,", stopped),
                 ("since an allowance of one change does not cover other content the user said comes from someone else.",
                  stopped),
                 ("When neither an isolated environment nor both of those conditions let the call execute, what needs "
@@ -1518,7 +1532,7 @@ class RepositorySafetyTests(unittest.TestCase):
                 # allowance of one change covers no other content from someone else.
                 ("Someone else's content runs on this machine only for the calls the user's own message names,", allow),
                 ("only when every part of it in the reviewed commit and the workspace lies in a change the user's own "
-                 "message named and allowed for that call;", allow),
+                 "message named and allowed to run on this machine for that call;", allow),
                 ("an allowance of one change does not cover other content the user said comes from someone else.",
                  allow),
                 # S2: someone else's part taints what holds it, committed or not, fixes on top included.
@@ -1582,7 +1596,7 @@ class RepositorySafetyTests(unittest.TestCase):
         # Abuse check: every sentence of the reference that speaks of trust or of who wrote a change is one of the pinned
         # sentences, so the trust question or the authorship condition cannot return reworded.
         trusting = {" ".join(s.split()) for s in (self.THREAT[1], self.MESSAGES[0], restriction, brief)}
-        authoring = {" ".join(s.split()) for s in (when, taint, brief)}
+        authoring = {" ".join(s.split()) for s in (origin, when, taint, brief)}
         for sentence in self.reference_sentences():
             if self.TRUST_WORD.search(sentence):
                 with self.subTest(trust=sentence[:60]):
@@ -1593,13 +1607,33 @@ class RepositorySafetyTests(unittest.TestCase):
             if self.ATTRIBUTION_WORD.search(sentence):
                 with self.subTest(attribution=sentence[:60]):
                     self.fail("a sentence attributes a difference or a change: " + sentence[:80])
-        # In the Adversarial review procedure and the command, no sentence speaks of trusting the repository or of who
-        # wrote a change.
-        for place in ("adversarial-review.md", "command"):
-            for sentence in self.sentences(self.source(place)):
-                with self.subTest(place=place, sentence=sentence[:60]):
-                    self.assertIsNone(self.TRUST_WORD.search(sentence))
-                    self.assertIsNone(self.AUTHORSHIP_WORD.search(sentence))
+        # Adversarial review of ticket 01, test gaps: in every other procedure that cites Execution, the delegation skill
+        # included, no sentence speaks of who wrote or authored a change, and trust appears only as a trust boundary,
+        # untrusted data or the worktree exception that extends no trust.
+        for place in self.TRUST_OWNED:
+            if place == "reference":
+                continue
+            text = " ".join(self.source(place).split())
+            for match in self.AUTHORSHIP_WORD.finditer(text):
+                with self.subTest(place=place, authorship=text[max(0, match.start() - 40):match.end() + 20]):
+                    self.fail("a procedure that cites Execution speaks of authorship")
+            for match in self.TRUST_WORD.finditer(text):
+                context = text[max(0, match.start() - 20):match.end() + 12]
+                with self.subTest(place=place, trust=context):
+                    self.assertRegex(context, self.TRUST_ALLOWED_CONTEXT)
+        # Adversarial review of ticket 01 (BROKEN), F1: every allowance an owned text names is an allowance to run on
+        # this machine, so one limited to an isolated environment never satisfies condition (b).
+        for place in self.TRUST_OWNED:
+            text = " ".join(self.source(place).split())
+            with self.subTest(place=place, allowance="this machine"):
+                self.assertIsNone(self.ALLOWANCE_WITHOUT_MACHINE.search(text))
+        for phrase in ("An allowance covers only what it names, the change, the calls and this machine:",
+                       "one that lets a change run only in an isolated environment allows nothing on this machine, so "
+                       "that change runs only in that environment,",
+                       "and an allowance whose scope is unclear allows nothing on this machine."):
+            with self.subTest(allowance_scope=phrase[:50]):
+                self.assertIn(phrase, allowance_scope)
+        self.assertEqual(self.EXECUTION_ORIGIN.index(allowance_scope), self.EXECUTION_ORIGIN.index(allow) + 1)
 
     def test_every_procedure_that_cites_execution_agrees_with_it(self):
         """Repo trust default ticket 01 (Acceptance 6): the procedures cite Execution without restating its removed
@@ -1669,7 +1703,7 @@ class RepositorySafetyTests(unittest.TestCase):
                        "(b) both hold,",
                        "(a) no restriction the user stated covers the call, or the user's own message lifted it for that "
                        "call, and (b) every part of the reviewed commit and the workspace that the user said comes from "
-                       "someone else lies in a change the user's own message named and allowed for that call,",
+                       "someone else lies in a change the user's own message named and allowed to run on this machine for that call,",
                        "with every allowance it relies on covering the driver, as stated below; and,",
                        # Code review call 3 of C2, NB-1 and NB-2: the two reads, both made for the call, agree exactly.
                        "for every driver the compared paths' filters name, the read of the filter-driver keys, which "
@@ -2892,7 +2926,7 @@ class RepositorySafetyTests(unittest.TestCase):
             "restriction the user stated covers the call, and then only in an isolated environment the user names, or on "
             "this machine only when both (a) no restriction covers the call, or the user's own message lifted it for that "
             "call, and (b) every part the user said comes from someone else lies in a change the user's own message named "
-            "and allowed for that call; without either, the role analyses statically and reports INCONCLUSIVE for what "
+            "and allowed to run on this machine for that call; without either, the role analyses statically and reports INCONCLUSIVE for what "
             "needs execution.",
             "The brief states the outcome of that determination.",
         ),
@@ -2903,7 +2937,7 @@ class RepositorySafetyTests(unittest.TestCase):
             "user said comes from someone else or a restriction the user stated covers the call, and then only in an "
             "isolated environment the user names, or on this machine only when both (a) no restriction covers the call, or "
             "the user's own message lifted it for that call, and (b) every part the user said comes from someone else lies "
-            "in a change the user's own message named and allowed for that call.",
+            "in a change the user's own message named and allowed to run on this machine for that call.",
         ),
     }
     # The replaced conditions: code not written by the user or in this session alone decided dynamic probing, and then,
