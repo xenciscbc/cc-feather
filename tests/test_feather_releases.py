@@ -412,10 +412,16 @@ class CompletionCriteriaReleaseTests(unittest.TestCase):
     # the tag and the review round.
     ENTRY = (
         "**Setup update is required.** This release changes the reviewer role definition, `templates/agents/reviewer.md`,",
-        "each ran 747 tests at a41bd28, the reviewed commit, and 748 at 2c0a22a, all passing with 30 skips and the same count in both forms",
+        "each ran 747 tests at a41bd28, the reviewed commit, 748 at 2c0a22a and 749 at the commit carrying this entry, all passing with 30 skips and the same count in both forms",
         "Live rehearsal (Acceptance item 10, test target T1), 2026-10-14.",
         "The rehearsal ran headless (`claude -p`, resumed turn by turn) with the user's approval, main of this session playing the user,",
-        "Two findings: with an untracked test file present, main said the final check's precondition did not hold but still ran a final check scoped to the named test modules instead of refusing;",
+        "the session reported cc-feather 0.24.0 loaded from it;",
+        "its Follow-up record was the handoff record `.feather/handoffs/demo-tickets-followup.md` in the clone.",
+        "wrote a project CLAUDE.md stating that automatic plan review is off in this project, which the session's `/cc-feather:auto-on` overrode for the session;",
+        "the item's \"seeded security defect blocking code review until it is fixed\" was not observed, since the defect never reached code review.",
+        "No working-tree change during a review call was not observed either way:",
+        "Three findings: with an untracked test file present, main said the final check's precondition did not hold but still ran a final check scoped to the named test modules instead of refusing,",
+        "so whether a conversation resumed with its context is a resumed session in those rules is unsettled and is recorded as an open question.",
         "After the rehearsal, the user-scope agent definitions, CLAUDE.md, settings.json and the cc-feather state were byte-identical to a backup taken before it.",
         "Reviews of this Plan used the roles and procedures installed before it (S6).",
         "`v0.24.0` does not exist when this entry is written.",
