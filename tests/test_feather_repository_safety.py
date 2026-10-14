@@ -3463,9 +3463,9 @@ class RoleRepositorySafetyTests(unittest.TestCase):
     )
     # Items 2 and 3: reviewer compares commits, reads the files its brief lists and runs only the named checks.
     REVIEWER = (
-        "Obtain the change yourself: compare the base revision you are given with the commit under review, or with HEAD "
-        "when the brief names none, and read the uncommitted and untracked files your brief lists under the path checks "
-        "of Repository safety below, instead of diffing the working tree.",
+        "Obtain the change yourself: compare the claim's base revision your brief names with the commit under review, "
+        "or with HEAD when the brief names none, and read the uncommitted and untracked files your brief lists under the "
+        "path checks of Repository safety below, instead of diffing the working tree.",
         "Use history such as log and blame, only in the forms Repository safety gives, to decide whether an issue was "
         "introduced by this change or predates it.",
         "Use only read-only Git as Repository safety below defines it, and static checks that do not modify files: run "

@@ -139,8 +139,9 @@ class CompletionCriteriaTests(unittest.TestCase):
         "code-review.md#4": (
             "A finding given as blocking that shows none of the completion conditions unmet, such as a regression that is "
             "only inferred and is neither a security problem nor data loss, is rejected with that evidence and recorded "
-            "as a Non-blocking finding; a security problem or data loss the change introduced is never rejected for "
-            "lacking a failing test or a reproduction, as [review state](review-state.md)'s Security findings describes.",
+            "as a Non-blocking finding; a security problem or data loss the change introduced or made exploitable is never "
+            "rejected for lacking a failing test or a reproduction, as [review state](review-state.md)'s Security findings "
+            "describes.",
         ),
         "outcome-verification.md": (
             "In both review modes, outcome verification judges the claim against the completion criteria [review "
@@ -154,8 +155,9 @@ class CompletionCriteriaTests(unittest.TestCase):
         "outcome-verification.md#4": (
             "A finding that shows none of the completion conditions unmet, such as a failure outside what the acceptance "
             "states that also occurs at the claim's base revision, is rejected with that evidence and recorded as a "
-            "Non-blocking finding; a security problem or data loss the change introduced is never rejected for lacking a "
-            "failing test or a reproduction, as [review state](review-state.md)'s Security findings describes.",
+            "Non-blocking finding; a security problem or data loss the change introduced or made exploitable is never "
+            "rejected for lacking a failing test or a reproduction, as [review state](review-state.md)'s Security findings "
+            "describes.",
         ),
     }
 
@@ -181,6 +183,89 @@ class CompletionCriteriaTests(unittest.TestCase):
             "introduced block whatever the acceptance states and without a reproduction, so a removed or weakened "
             "security control blocks; a regression that is only inferred and is neither a security problem nor data loss "
             "does not block.",
+        ),
+    }
+
+    # S1 after the first Adversarial round: a verifier's note main judges to be, or cannot rule out as, a security
+    # problem or data loss withholds that call's CONFIRMED until the note is dispositioned, and "made exploitable" holds
+    # where a security finding is never rejected for lacking a reproduction (code review and outcome verification step 4,
+    # pinned in PROCEDURES).
+    S1_VERIFIER_NOTE = {
+        "review-state.md#Security findings": (
+            "A verifier's note that main judges to be, or cannot rule out as, a security problem or data loss the change "
+            "introduced or made exploitable is a Blocking finding, and that call's CONFIRMED is not used as a pass, the "
+            "call counting as a call without a pass, until main dispositions the note as FIX or REJECT with evidence under "
+            "[outcome verification](outcome-verification.md)'s rule for a REFUTED.",
+        ),
+        "outcome-verification.md#3": (
+            "A CONFIRMED that is not used as a pass, as step 7 describes or after main's comparison as [review "
+            "state](review-state.md)'s Serial within a working tree describes, counts as a call without a pass and does "
+            "not reset the count.",
+        ),
+        "outcome-verification.md#6": (
+            "A CONFIRMED that is not used as a pass, as step 3 describes, continues neither to completion nor to "
+            "Adversarial review.",
+        ),
+        "outcome-verification.md#7": (
+            "Non-blocking findings do not hold completion.",
+            "A verifier's optional note is a Non-blocking finding unless main judges it to be, or cannot rule out as, a "
+            "security problem or data loss the change introduced or made exploitable: such a note is a Blocking finding, "
+            "and that call's CONFIRMED is not used as a pass, the call counting as a call without a pass, until main "
+            "dispositions the note as FIX or REJECT with evidence under step 4's rule for a REFUTED.",
+        ),
+        "ADR 0013": (
+            "A verifier's note that main judges to be, or cannot rule out as, a security problem or data loss the change "
+            "introduced or made exploitable is a Blocking finding, and that call's CONFIRMED is not used as a pass, the "
+            "call counting as a call without a pass, until the note is dispositioned as FIX or REJECT with evidence under "
+            "outcome verification's rule for a REFUTED; the verifier's definition is unchanged, since main makes this "
+            "call.",
+            "ADR 0006's state model, validity rules and Acceptance gate are unchanged, apart from the verifier's note "
+            "above, the call whose pass is not used and the final check, which the next part records.",
+        ),
+        "ADR 0006": (
+            "A security problem or data loss the change introduced still blocks whatever the acceptance states, and the "
+            "state model, validity rules and Acceptance gate are unchanged, apart from what ADR 0013 adds: a verifier's "
+            "note that withholds a CONFIRMED, a call whose pass is not used after main's comparison, and the final check "
+            "before landing and release.)",
+        ),
+    }
+
+    # S2 after the first Adversarial round: every brief of a Claim's reviews, a narrowed follow-up's included, names the
+    # Claim's base revision, which main establishes from Git in this session, and the reviewer judges against it.
+    S2_BRIEFS = {
+        "review-state.md#Evidence for a regression": (
+            "Every brief of the claim's code review, outcome verification and Adversarial review, a narrowed follow-up's "
+            "included, names the claim's base revision, which main establishes itself from Git in this session.",
+        ),
+        "code-review.md#2": (
+            "Every brief of the claim's code review, a narrowed follow-up's included, names the claim's base revision, "
+            "which main establishes itself from Git in this session, as [review state](review-state.md)'s Evidence for a "
+            "regression describes.",
+        ),
+        "code-review.md#4": (
+            "Send the next review the prior findings with each disposition and its closure or rejection evidence, the "
+            "claim's base revision as step 2 describes, and, for a claim the acceptance gate covers, the range from the "
+            "previously judged commit to the new one; when the previous call did not complete, supply instead the full "
+            "range from the claim's base revision with earlier and partial findings as evidence.",
+        ),
+        "outcome-verification.md#2": (
+            "Every brief of the claim's outcome verification, a recheck's included, names the claim's base revision, "
+            "which main establishes itself from Git in this session, as [review state](review-state.md)'s Evidence for a "
+            "regression describes.",
+        ),
+        "adversarial-review.md#2": (
+            "Every brief of the claim's Adversarial review, a narrowed follow-up's included, names the claim's base "
+            "revision, which main establishes itself from Git in this session, as [review state](review-state.md)'s "
+            "Evidence for a regression describes.",
+        ),
+        "reviewer.md": (
+            "Obtain the change yourself: compare the claim's base revision your brief names with the commit under review, "
+            "or with HEAD when the brief names none, and read the uncommitted and untracked files your brief lists under "
+            "the path checks of Repository safety below, instead of diffing the working tree.",
+        ),
+        "ADR 0013": (
+            "Every brief of the Claim's code review, outcome verification and Adversarial review, a narrowed follow-up's "
+            "included, names that base revision, which main establishes itself from Git in this session.",
         ),
     }
 
@@ -218,7 +303,6 @@ class CompletionCriteriaTests(unittest.TestCase):
             "relies on it.",
         ),
         "outcome-verification.md#7": (
-            "Non-blocking findings, including the verifier's optional notes, do not hold completion.",
             "Record them in the work's Follow-up record, as [review state](review-state.md)'s Follow-up record describes: "
             "when handoff maintenance is active, a handoff record of its own under the handoff skill's separable-item "
             "rule, not the current record; otherwise list its content in the completion report, which names the Follow-up "
@@ -253,9 +337,9 @@ class CompletionCriteriaTests(unittest.TestCase):
             "failing test or a reproduction: name the test that fails, or give the exact steps or input with the "
             "behaviour at the base revision and at the commit under review, so that the main Agent can run it.",
             "Judge the existing behaviour a regression breaks, and any written rule or shipped spec acceptance you judge "
-            "it against, as they stand at the base revision you are given, reading them there with the object reads "
-            "Repository safety gives, never as the commit under review states them, so a change cannot redefine what it "
-            "must not break.",
+            "it against, as they stand at the claim's base revision your brief names, reading them there with the object "
+            "reads Repository safety gives, never as the commit under review states them, so a change cannot redefine "
+            "what it must not break.",
         ),
     }
 
@@ -307,6 +391,11 @@ class CompletionCriteriaTests(unittest.TestCase):
          "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review are unchanged, "
          "and a vulnerability that predates the change becomes separate work in your tracker.",
          "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查不變，變更之前就存在的漏洞則成為 tracker 中另外的工作。"),
+        ("Findings", "問題分級",
+         "A verifier's note that main judges to be, or cannot rule out as, such a security problem or data loss blocks "
+         "too: that verification's CONFIRMED is not used as a pass until main fixes the note or rejects it with "
+         "evidence.",
+         "驗證者的附註若被主 Agent 判斷為、或無法排除是這類安全問題或資料遺失，也會擋下：在主 Agent 修正它或附證據駁回之前，該次驗證的 CONFIRMED 不算通過。"),
         ("Findings", "問題分級",
          "Every other finding, such as an issue that predates the change, a correctness problem outside what the "
          "acceptance states, an inferred regression or style, is non-blocking and recorded in the work's Follow-up "
@@ -437,6 +526,14 @@ class CompletionCriteriaTests(unittest.TestCase):
             "checks depend on included, that call's pass is not used.",
             "The worktree exception extends no trust: each worktree still gets [repository safety](repository-safety.md)'s "
             "preparation and checks.",
+            # After the first Adversarial round: a call whose pass is not used.
+            "Such a call counts as a call without a pass, establishes no coverage and resets no count, and the next call "
+            "for the claim reviews its full scope from its base revision, as Completed calls and coverage describes.",
+        ),
+        "review-state.md#Completed calls and coverage": (
+            "The exception is a call whose pass main does not use after its comparison of the workspace, as Serial within "
+            "a working tree describes: it counts as a call without a pass, establishes no coverage and resets no count, "
+            "and the next call for the claim reviews its full scope from its base revision.",
         ),
         "SKILL.md#Dispatch": (
             "Before dispatching such a call, main confirms that no Assignment or background process it started that may "
@@ -448,8 +545,8 @@ class CompletionCriteriaTests(unittest.TestCase):
     # Ticket 02, Acceptance item 5: the final check, not counted and adding no verdict, a failure reopening Claims.
     FINAL_CHECK = {
         "review-state.md#Final check": (
-            "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, once "
-            "at the final commit, within [repository safety](repository-safety.md)'s Execution rules.",
+            "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at "
+            "the commit to be landed or tagged, within [repository safety](repository-safety.md)'s Execution rules.",
             "It is main's own run, not a review step: it is not a counted step and adds no verdict.",
         ),
         "review-state.md#Not counted": (
@@ -458,16 +555,43 @@ class CompletionCriteriaTests(unittest.TestCase):
         ),
     }
 
-    # S8: the final check judges the landing commit.
+    # S8 as amended after the first Adversarial round: the final check judges the landing commit, is a condition of
+    # the landings and releases the Acceptance gate covers, and fails closed.
     S8 = {
         "review-state.md#Final check": (
             "It runs only when the workspace equals the commit to be landed or tagged, established as for a gated pass "
             "under What a gated pass judged, so an untracked or changed file cannot take part in it.",
+            "It runs again whenever the commit to be landed changes, after a fix or any other commit.",
+            "After it runs, main compares the workspace as after a review call, under [repository "
+            "safety](repository-safety.md)'s Main's preparation; a change to a tracked file or a file the check depends "
+            "on makes that run a failed run, with the change as its output.",
+            "Landing and release that the acceptance gate covers wait until the final check passes at the commit to be "
+            "landed; otherwise only an accept-and-land decision that states its actual state lets them proceed, as Accept "
+            "and land at the end of the plan describes.",
             "When Execution does not allow it, it is recorded as not run, and main states that it has not run before "
             "landing and in any accept-and-land decision.",
-            "A failure reopens the claims it affects under the existing rules, and landing and release wait for their "
-            "passes again; a failure that cannot be attributed with evidence reopens every claim the check covers.",
-            "It runs again at the new final commit after any fix.",
+            "Once it has failed at a commit, that commit's state is failed, and a later pass at the same commit lets "
+            "landing proceed only through an accept-and-land decision that names the failure.",
+            "Its state comes only from main's own run in this session at that commit, never passed from a record or an "
+            "earlier session, and after a context compaction main runs it again.",
+            "When main cannot establish from this session that the commit has not failed, it treats the commit as failed, "
+            "and a decision states that state as \"failed (presumed: not established as unfailed in this session)\", with "
+            "the reason and this session's outputs.",
+            "A record can only make the state failed, never passed.",
+            "A failure reopens the claims it affects under the existing rules, and its output goes with it to the "
+            "reopened claims' reviews as evidence; landing and release wait for their passes again.",
+            "A failure that cannot be attributed with evidence reopens every claim the check covers.",
+            "For a landing or release the acceptance gate does not cover, main runs the final check when Execution "
+            "allows, reports its state before landing, and waits for the user's instruction given after that report.",
+        ),
+        "review-state.md#Commit and completion": (
+            "Landing and release that the acceptance gate covers also wait for the final check, as Final check below "
+            "describes.",
+        ),
+        "CONTEXT.md#Acceptance gate": (
+            "Landing and release also wait for the final check at the commit to be landed, as review state's Final check "
+            "states: until it passes there, only an Accept and land decision that states its actual state lets them "
+            "proceed.",
         ),
     }
 
@@ -483,19 +607,45 @@ class CompletionCriteriaTests(unittest.TestCase):
             "tree at a time.",
             "When main's comparison after a call finds a change to a file the Claim depends on, that call's pass is not "
             "used.",
+            "Such a call counts as a call without a pass, establishes no coverage and resets no count, and the next call "
+            "for the Claim reviews its full scope from its base revision.",
             "Main does not create a worktree for a review on its own.",
             "The worktree exception extends no trust: each worktree still gets repository safety's preparation and "
             "checks.",
-            "Before landing or release, main runs the Plan's overall acceptance checks once at the final commit, within "
-            "repository safety's Execution rules.",
+            "Before landing or release, main runs the Plan's overall acceptance checks at the commit to be landed or "
+            "tagged, within repository safety's Execution rules.",
             "It is main's own run, not a review step: it is not a counted step and adds no verdict.",
             "It runs only when the workspace equals the commit to be landed or tagged, established as for a gated pass, "
             "so an untracked or changed file cannot take part in it.",
+            "It runs again whenever the commit to be landed changes, after a fix or any other commit.",
+            "After it runs, main compares the workspace as after a review call, and a change to a tracked file or a file "
+            "the check depends on makes that run a failed run, with the change as its output.",
+            "A failure reopens the Claims it affects under the existing rules, with its output supplied to their reviews "
+            "as evidence, and landing and release wait for their passes again; a failure that cannot be attributed with "
+            "evidence reopens every Claim the check covers.",
+            "- **A condition of the gate.** Landing and release the Acceptance gate covers wait until the final check "
+            "passes at the commit to be landed; otherwise only an Accept and land decision that states its actual state "
+            "lets them proceed.",
             "When Execution does not allow it, it is recorded as not run, and that is stated before landing and in any "
             "Accept and land decision.",
-            "A failure reopens the Claims it affects under the existing rules, and landing and release wait for their "
-            "passes again; a failure that cannot be attributed with evidence reopens every Claim the check covers.",
-            "It runs again at the new final commit after any fix.",
+            "For a landing the gate does not cover, main runs it when Execution allows, reports its state before landing, "
+            "and waits for the user's instruction given after that report.",
+            "- **Fail closed.** Once the final check has failed at a commit, that commit's state is failed, and a later "
+            "pass at the same commit lets landing proceed only through an Accept and land decision that names the "
+            "failure.",
+            "Its state comes only from main's own run in this session at that commit, never passed from a record or an "
+            "earlier session, and after a context compaction main runs it again.",
+            "When main cannot establish from this session that the commit has not failed, it treats the commit as failed, "
+            "which a decision states as \"failed (presumed: not established as unfailed in this session)\" with the "
+            "reason and this session's outputs.",
+            "A record can only make the state failed, never passed.",
+            "- **Take the final check's state from a record or an earlier session**: anyone who can edit the working "
+            "tree could record a pass, and an earlier session's run cannot show that nothing failed since; a record can "
+            "only make the state failed.",
+            "Because the final check's state never crosses a context compaction or a session, a final commit whose check "
+            "ran before one can no longer pass cleanly without a rerun: main runs the check again, and if that commit had "
+            "failed, or main cannot establish that it had not, landing needs a decision that names the failure or a new "
+            "commit.",
             "- **Main creates a worktree for each review**: it would let implementation continue while a review runs, "
             "but setting up a worktree can mean reinstalling dependencies or rebuilding in other projects, and each new "
             "worktree would need repository safety's preparation and checks again.",
@@ -526,6 +676,10 @@ class CompletionCriteriaTests(unittest.TestCase):
          "If main's comparison after a call finds a change to a file the claim depends on, that call's pass is not used.",
          "呼叫結束後，主 Agent 的比對若發現 claim 依賴的檔案有變動，該次呼叫的通過不予採用。"),
         ("Serial reviews", "審查依序進行",
+         "Such a call counts as a call without a pass, covers nothing and resets no count, and the next call reviews the "
+         "claim's full scope from its base revision.",
+         "這樣的呼叫算作沒有通過的呼叫，不算涵蓋任何範圍，也不重設計數，下一次呼叫會從 claim 的基準版本審查完整範圍。"),
+        ("Serial reviews", "審查依序進行",
          "Main never creates a worktree for a review on its own, since setting one up can mean reinstalling dependencies "
          "or rebuilding the project.",
          "主 Agent 不會自行為審查建立 worktree，因為建立 worktree 可能要重新安裝相依套件或重新建置專案。"),
@@ -537,10 +691,10 @@ class CompletionCriteriaTests(unittest.TestCase):
          "Shared test resources stay governed by each brief's target start and reset.",
          "共用的測試資源仍由每份 brief 中測試目標的啟動與重設方式管理。"),
         ("Final check", "最終檢查",
-         "before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, once "
-         "at the final commit, as its own run within [Repository safety](#repository-safety)'s rules on running code.",
-         "進入預設 branch 或 release 之前，主 Agent 會在最終 commit 上執行一次計畫的整體驗收檢查（例如完整測試），這是它自己的執行，遵守"
-         "[儲存庫安全](#儲存庫安全)中執行程式碼的規則。"),
+         "before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at the "
+         "commit to be landed, as its own run within [Repository safety](#repository-safety)'s rules on running code.",
+         "進入預設 branch 或 release 之前，主 Agent 會在要進入預設 branch 的 commit 上執行計畫的整體驗收檢查（例如完整測試），這是它自己的執行，"
+         "遵守[儲存庫安全](#儲存庫安全)中執行程式碼的規則。"),
         ("Final check", "最終檢查",
          "It is not a review step: it does not count toward the Stop threshold and adds no verdict.",
          "它不是審查步驟：不計入停止門檻，也不產生新的結論。"),
@@ -553,13 +707,36 @@ class CompletionCriteriaTests(unittest.TestCase):
          "before landing and in any accept-and-land decision.",
          "不允許執行儲存庫程式碼時，這項檢查會記為未執行，主 Agent 會在進入預設 branch 之前，以及任何接受並合併的決定中告訴你。"),
         ("Final check", "最終檢查",
-         "A failure reopens the claims it affects, and landing and release wait for their passes again; a failure main "
-         "cannot attribute with evidence reopens every claim the check covers.",
-         "檢查失敗會重新打開受影響的 claim，進入預設 branch 與 release 都要等它們再次通過；主 Agent 無法以證據歸因的失敗，會重新打開這項檢查涵蓋的"
-         "每個 claim。"),
+         "It runs again whenever the commit to be landed changes, after a fix or any other commit.",
+         "要進入預設 branch 的 commit 只要改變，不論是修正還是其他任何 commit，都會再執行一次。"),
         ("Final check", "最終檢查",
-         "After any fix, the check runs again at the new final commit.",
-         "任何修正之後，都會在新的最終 commit 上再執行一次。"),
+         "If main's comparison after the run finds a change to a tracked file or a file the check depends on, the run "
+         "counts as failed, with the change as its output.",
+         "執行之後，主 Agent 的比對若發現已追蹤的檔案或檢查依賴的檔案有變動，這次執行就算失敗，變動就是它的輸出。"),
+        ("Final check", "最終檢查",
+         "Landing and release wait until the check passes at the commit to be landed; otherwise only an accept-and-land "
+         "decision that states its actual state lets them proceed.",
+         "進入預設 branch 與 release 都要等這項檢查在要進入預設 branch 的 commit 上通過；否則只有寫明它實際狀態的接受並合併決定，才能讓它們繼續。"),
+        ("Final check", "最終檢查",
+         "Once the check has failed at a commit, that commit stays failed, and a later pass there lets landing proceed "
+         "only through a decision that names the failure.",
+         "檢查在某個 commit 上失敗後，該 commit 就維持失敗，之後在同一個 commit 上通過，也只有透過寫明這次失敗的決定才能進入預設 branch。"),
+        ("Final check", "最終檢查",
+         "Main takes the check's state only from its own run in this session at that commit, never from a record or an "
+         "earlier session, and runs it again after context compaction; when it cannot establish from this session that "
+         "the commit has not failed, it treats the commit as failed.",
+         "主 Agent 只採用它在這個 session 於該 commit 上自己執行的結果，絕不採用紀錄或先前 session 的結果，context 壓縮之後也會再執行一次；"
+         "無法從這個 session 確定該 commit 沒有失敗時，就視為失敗。"),
+        ("Final check", "最終檢查",
+         "A failure reopens the claims it affects, with its output as evidence for their reviews, and landing and release "
+         "wait for their passes again; a failure main cannot attribute with evidence reopens every claim the check "
+         "covers.",
+         "檢查失敗會重新打開受影響的 claim，並把輸出當作它們審查的證據，進入預設 branch 與 release 都要等它們再次通過；主 Agent 無法以證據歸因的"
+         "失敗，會重新打開這項檢查涵蓋的每個 claim。"),
+        ("Final check", "最終檢查",
+         "For a landing the acceptance gate does not cover, main runs the check when running code is allowed, tells you "
+         "its state before landing and waits for your instruction.",
+         "驗收把關不涵蓋的合併，主 Agent 在允許執行程式碼時會執行這項檢查，在進入預設 branch 之前告訴你它的狀態，並等你指示。"),
     )
 
     ACCEPT_LABEL = "review-state.md#Accept and land at the end of the plan"
@@ -568,15 +745,18 @@ class CompletionCriteriaTests(unittest.TestCase):
     # earlier-landing exception; User decisions and Adversarial review point to it.
     ACCEPT_ONCE = {
         ACCEPT_LABEL: (
-            "One accept-and-land decision may name several claims.",
+            "One accept-and-land decision may name several claims, including a gated claim whose passes are complete when "
+            "the final check at the commit to be landed failed or was not run.",
             "Main asks for the decision once, after every claim of the plan has finished its reviews and the final check "
-            "has passed or is recorded as not run, before landing or release; it does not ask after each claim.",
+            "has run or is recorded as not run, before landing or release; it does not ask after each claim.",
             "Until then a claim that needs the decision stays under the acceptance gate as it stands, and its ticket "
             "stays unfinished.",
             "Main asks earlier only when the user asks to land a claim earlier.",
         ),
         "review-state.md#User decisions": (
             "Main asks for it, and builds what it names, as Accept and land at the end of the plan describes.",
+            "It may also name a gated claim whose passes are complete when the final check at the commit to be landed "
+            "failed or was not run, and it then states the final check's state at that commit, as Final check describes.",
         ),
         "adversarial-review.md": (
             "A HELD stays valid only as [review state](review-state.md)'s What a pass covers describes, and accept and "
@@ -596,27 +776,34 @@ class CompletionCriteriaTests(unittest.TestCase):
             "of them in a public or possibly public record follows [adversarial review](adversarial-review.md) step 10.",
             "Where main cannot establish a claim's verdicts or missing passes in this session, for example after context "
             "compaction, Unknown state applies: main stops and asks the user.",
-            "The user may confirm part of the list, and the rest stays pending, under the acceptance gate as it stands.",
+            "The user may confirm part of the list by whole claims, and the rest stays pending, under the acceptance gate "
+            "as it stands; a claim is accepted only with everything listed for it.",
             "Saying \"continue\", silence or turning automatic review off is not a confirmation.",
             "The decision covers only what was listed: the claims, their commits, their missing passes and their known "
             "vulnerabilities, and main records it for each claim as User decisions describes.",
+            "A Blocking finding or known vulnerability reported after the decision is not covered, and it holds landing "
+            "until it is resolved or a new decision names it.",
         ),
     }
 
-    # S5: landing a Claim earlier covers every gated Claim on the branch and states that the final check has not run.
+    # S5: landing a Claim earlier covers every gated Claim on the branch and states the final check's actual state,
+    # which main runs whenever Execution allows.
     S5 = {
         ACCEPT_LABEL: (
             "Landing a claim before the end of the plan lands every claim on that branch, so main's list then covers "
-            "every gated claim on the branch, and the decision states that the final check has not run.",
+            "every gated claim on the branch, and the decision states the final check's actual state at that commit; "
+            "main runs it whenever Execution allows, and records it as not run only when Execution does not.",
         ),
     }
 
-    # The decision's part of S8, and S3: a final check recorded as not run is stated, and the Follow-up record plays no
-    # part in the decision.
+    # The decision's part of S8, and S3: the decision states the final check's state at the commit to be landed, its
+    # final-check part covers only what it states, and the Follow-up record plays no part in the decision.
     S8_AND_S3 = {
         ACCEPT_LABEL: (
             "For each claim it names, it states the commit it accepts, the missing passes, the known vulnerabilities and "
-            "the remaining risk, and, when the final check is recorded as not run, that the final check has not run.",
+            "the remaining risk, and the decision states the final check's state at the commit to be landed: passed, "
+            "failed with its output, or not run, as Final check describes.",
+            "The final-check part of the decision covers only the commit and the output it states.",
             "Accept and land never relies on the Follow-up record, as Follow-up record describes.",
         ),
         "CONTEXT.md#Follow-up record": ("Accept and land never relies on it.",),
@@ -626,17 +813,22 @@ class CompletionCriteriaTests(unittest.TestCase):
     ACCEPT_CONTEXT = {
         "CONTEXT.md#Accept and land": (
             "The user's explicit, recorded acceptance of one or more named gated Claims without one or both passes, or of "
-            "a Security-critical claim without its HELD, stating for each Claim the commit it accepts, the missing "
-            "passes, the known vulnerabilities and the remaining risk, and that the final check has not run when it is "
-            "recorded as not run.",
-            "Main asks for it once, after every Claim of the Plan has finished its reviews and the final check has passed "
-            "or is recorded as not run, before landing or release; until then such a Claim stays under the Acceptance "
-            "gate as it stands.",
+            "a Security-critical claim without its HELD, or of a gated Claim whose passes are complete when the final "
+            "check at the commit to be landed failed or was not run, stating for each Claim the commit it accepts, the "
+            "missing passes, the known vulnerabilities and the remaining risk, and the final check's state at the commit "
+            "to be landed: passed, failed with its output, or not run.",
+            "Main asks for it once, after every Claim of the Plan has finished its reviews and the final check has run or "
+            "is recorded as not run, before landing or release; until then such a Claim stays under the Acceptance gate "
+            "as it stands.",
             "Main asks earlier only when the user asks to land a Claim earlier, and then the decision covers every gated "
-            "Claim on that branch and states that the final check has not run.",
+            "Claim on that branch and states the final check's actual state at that commit, which main runs whenever "
+            "Execution allows.",
             "Main builds the list from the review results it received in this session, never from a record in the "
-            "working tree, and the user may confirm part of it; \"continue\", silence or turning automatic review off is "
-            "not a confirmation.",
+            "working tree, and the user may confirm part of it by whole Claims, a Claim being accepted only with "
+            "everything listed for it; \"continue\", silence or turning automatic review off is not a confirmation.",
+            "A Blocking finding or known vulnerability reported after the decision is not covered and holds landing until "
+            "it is resolved or a new decision names it, and its final-check part covers only the commit and output it "
+            "states.",
             "It satisfies the Acceptance gate for each Claim it covers until a relevant change, is never READY, APPROVED, "
             "CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
         ),
@@ -647,15 +839,17 @@ class CompletionCriteriaTests(unittest.TestCase):
     ACCEPT_ADR = {
         "ADR 0013#accept": (
             "This part records the single Accept and land decision.",
-            "- **Several Claims in one decision.** One Accept and land decision may name several Claims, stating for each "
-            "the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and, when the "
-            "final check is recorded as not run, that it has not run.",
-            "Main asks once, after every Claim of the Plan has finished its reviews and the final check has passed or is "
+            "- **Several Claims in one decision.** One Accept and land decision may name several Claims, including a gated "
+            "Claim whose passes are complete when the final check at the commit to be landed failed or was not run, "
+            "stating for each the commit it accepts, the missing passes, the known vulnerabilities and the remaining "
+            "risk, and the final check's state at the commit to be landed: passed, failed with its output, or not run.",
+            "Main asks once, after every Claim of the Plan has finished its reviews and the final check has run or is "
             "recorded as not run, before landing or release.",
             "Until then a Claim that needs the decision stays under the Acceptance gate as it stands, and its ticket "
             "stays unfinished.",
             "Landing a Claim before the end of the Plan lands every Claim on that branch, so main's list covers every "
-            "gated Claim on the branch, and the decision states that the final check has not run.",
+            "gated Claim on the branch, and the decision states the final check's actual state at that commit; main runs "
+            "it whenever Execution allows, and records it as not run only when Execution does not.",
             "Main builds the list from the review results it received in this session, not by reading a record in the "
             "working tree, and reports any difference from such a record.",
             "Each missing pass names the step and the call that left it missing, and the known vulnerabilities appear as "
@@ -663,25 +857,38 @@ class CompletionCriteriaTests(unittest.TestCase):
             "Where main cannot establish a Claim's verdicts or missing passes, as after a context compaction, Unknown "
             "state applies and main stops and asks.",
             "Accept and land never relies on the Follow-up record.",
-            "- **What counts as the decision.** The user may confirm part of the list, the rest staying pending; "
-            "\"continue\", silence or turning automatic review off is not a confirmation, and the decision covers only "
-            "what was listed.",
+            "- **What counts as the decision.** The user may confirm part of the list by whole Claims, the rest staying "
+            "pending, and a Claim is accepted only with everything listed for it; \"continue\", silence or turning "
+            "automatic review off is not a confirmation, and the decision covers only what was listed.",
+            "A Blocking finding or known vulnerability reported after the decision is not covered and holds landing until "
+            "it is resolved or a new decision names it, and the final-check part covers only the commit and output it "
+            "states.",
             "This amends [ADR 0008](0008-repository-authority-acceptance-and-gate-lifetime.md): an Accept and land "
-            "decision may name several Claims, and main asks for it once at the end of the Plan, or earlier only for the "
-            "whole branch when the user asks to land a Claim earlier, with a list built from its own observations in "
-            "this session.",
+            "decision may name several Claims, including one whose passes are complete when the final check failed or "
+            "was not run, and main asks for it once at the end of the Plan, or earlier only for the whole branch when the "
+            "user asks to land a Claim earlier, with a list built from its own observations in this session.",
+            "A Claim whose passes are complete still needs the decision when the final check at the commit to be landed "
+            "failed or was not run, and after a compaction or in a new session the check must run again before that "
+            "state is known.",
             "- **Ask after every Claim that needs the decision**:",
             "- **Build the list from a record in the working tree**, such as a handoff or the Follow-up record:",
             "- **Merge or summarise known vulnerabilities across Claims**:",
             "- **Take \"continue\" or silence as a confirmation of the whole list**:",
         ),
         "ADR 0008": (
-            "(Amended by ADR 0013: one Accept and land decision may name several Claims, stating for each the commit it "
-            "accepts, the missing passes, the known vulnerabilities and the remaining risk, and that the final check has "
-            "not run when it is recorded as not run.",
-            "Main asks for it once, after every Claim of the Plan has finished its reviews and the final check has passed "
-            "or is recorded as not run, before landing or release, and earlier only when the user asks to land a Claim "
-            "earlier, which covers every gated Claim on that branch.",
+            "(Amended by ADR 0013: one Accept and land decision may name several Claims, including a gated Claim whose "
+            "passes are complete when the final check at the commit to be landed failed or was not run, stating for each "
+            "the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and the final "
+            "check's state at the commit to be landed: passed, failed with its output, or not run.",
+            "Main asks for it once, after every Claim of the Plan has finished its reviews and the final check has run or "
+            "is recorded as not run, before landing or release, and earlier only when the user asks to land a Claim "
+            "earlier, which covers every gated Claim on that branch and states the final check's actual state at that "
+            "commit.",
+            "Main builds the list from the review results it received in this session, not from a record in the working "
+            "tree, and the user may confirm part of it by whole Claims; a Blocking finding or known vulnerability "
+            "reported after the decision is not covered.",
+            "Landing and release the Acceptance gate covers also wait for the final check to pass at the commit to be "
+            "landed, unless such a decision states its actual state; the rest of this record is unchanged.)",
         ),
     }
 
@@ -689,22 +896,26 @@ class CompletionCriteriaTests(unittest.TestCase):
     ACCEPT_README_PAIRS = (
         ("Accept and land at the end", "最後一次決定接受並合併",
          "when claims of a plan need an accept-and-land decision, main asks you once, after every claim of the plan has "
-         "finished its reviews and the final check has passed or is recorded as not run, before landing or release, not "
+         "finished its reviews and the final check has run or is recorded as not run, before landing or release, not "
          "after each claim.",
-         "計畫中有 claim 需要你決定接受並合併時，主 Agent 只問你一次：在計畫的每個 claim 都完成審查、最終檢查已通過或記為未執行之後，"
+         "計畫中有 claim 需要你決定接受並合併時，主 Agent 只問你一次：在計畫的每個 claim 都完成審查、最終檢查已執行或記為未執行之後，"
          "進入預設 branch 或 release 之前，而不是每個 claim 各問一次。"),
         ("Accept and land at the end", "最後一次決定接受並合併",
-         "One decision may name several claims, stating for each the commit it accepts, the missing passes, the known "
-         "vulnerabilities and the remaining risk, and that the final check has not run when it is recorded as not run.",
-         "一個決定可以涵蓋多個 claim，並為每個 claim 寫明所接受的 commit、缺少的關卡、已知漏洞與剩餘風險；最終檢查記為未執行時，也會寫明它尚未執行。"),
+         "One decision may name several claims, including a claim whose passes are complete when the final check at the "
+         "commit to be landed failed or was not run, stating for each the commit it accepts, the missing passes, the "
+         "known vulnerabilities and the remaining risk, and the final check's state at the commit to be landed: passed, "
+         "failed with its output, or not run.",
+         "一個決定可以涵蓋多個 claim，包括關卡都已通過、但最終檢查在要進入預設 branch 的 commit 上失敗或未執行的 claim，並為每個 claim 寫明所接受的"
+         " commit、缺少的關卡、已知漏洞與剩餘風險，以及最終檢查在要進入預設 branch 的 commit 上的狀態：通過、失敗（附上輸出）或未執行。"),
         ("Accept and land at the end", "最後一次決定接受並合併",
          "Until then such a claim stays under the acceptance gate as it stands and its ticket stays unfinished.",
          "在那之前，這類 claim 照原樣受驗收把關，它的 ticket 也維持未完成。"),
         ("Accept and land at the end", "最後一次決定接受並合併",
          "Main asks earlier only when you ask to land a claim earlier; since that lands every claim on the branch, the "
-         "list then covers every gated claim on that branch and states that the final check has not run.",
+         "list then covers every gated claim on that branch and states the final check's actual state at that commit, "
+         "which main runs whenever running code is allowed.",
          "只有你要求提早合併某個 claim 時，主 Agent 才會提早問；因為那會讓整個 branch 上的 claim 一起合併，清單就涵蓋該 branch "
-         "上每個受把關的 claim，並寫明最終檢查尚未執行。"),
+         "上每個受把關的 claim，並寫明最終檢查在那個 commit 上的實際狀態，只要允許執行程式碼，主 Agent 都會執行它。"),
         ("Accept and land at the end", "最後一次決定接受並合併",
          "Main builds the list from the review results it received in this session, not from a record in the working "
          "tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
@@ -718,9 +929,16 @@ class CompletionCriteriaTests(unittest.TestCase):
          "stops and asks you.",
          "主 Agent 無法確定某個 claim 的結論或缺少的關卡時（例如 context 壓縮之後），會停下來問你。"),
         ("Accept and land at the end", "最後一次決定接受並合併",
-         "You may confirm part of the list, and the rest stays pending; saying \"continue\", silence or turning "
-         "automatic review off is not a confirmation, and the decision covers only what was listed.",
-         "你可以只確認清單的一部分，其餘維持待決；說「繼續」、沒有回應或關掉自動審查都不算確認，這個決定也只涵蓋清單上列出的內容。"),
+         "You may confirm part of the list by whole claims, and the rest stays pending; a claim is accepted only with "
+         "everything listed for it.",
+         "你可以以整個 claim 為單位只確認清單的一部分，其餘維持待決；claim 只有連同為它列出的所有內容一起，才算被接受。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "Saying \"continue\", silence or turning automatic review off is not a confirmation, and the decision covers "
+         "only what was listed: a blocking finding or known vulnerability reported after it is not covered and holds "
+         "landing until it is resolved or a new decision names it, and its final-check part covers only the commit and "
+         "output it states.",
+         "說「繼續」、沒有回應或關掉自動審查都不算確認，這個決定也只涵蓋清單上列出的內容：決定之後才回報的阻擋性問題或已知漏洞不在其中，在它解決或"
+         "新的決定寫明它之前，都會擋住合併；決定中最終檢查的部分也只涵蓋它寫明的 commit 與輸出。"),
     )
 
     # The replaced Accept and land entry, which named one Claim and listed known vulnerabilities only for a missing
@@ -734,11 +952,68 @@ class CompletionCriteriaTests(unittest.TestCase):
         ),
     }
 
+    # The interim wording of tickets 01 to 03 at INTERIM that the spec's amendment after the first Adversarial round
+    # replaced: absent now, present at INTERIM.
+    INTERIM = "7e23fbf"
+    INTERIM_WORDING = {
+        "review-state.md#Final check": (
+            "once at the final commit",
+            "It runs again at the new final commit after any fix.",
+        ),
+        ACCEPT_LABEL: (
+            "has passed or is recorded as not run",
+            "the decision states that the final check has not run",
+            "when the final check is recorded as not run, that the final check has not run",
+            "The user may confirm part of the list, and the rest stays pending, under the acceptance gate as it stands.",
+        ),
+        "outcome-verification.md#7": ("including the verifier's optional notes, do not hold completion",),
+        "outcome-verification.md#4": ("a security problem or data loss the change introduced is never rejected",),
+        "code-review.md#4": ("a security problem or data loss the change introduced is never rejected",),
+        "reviewer.md": ("the base revision you are given",),
+        "CONTEXT.md#Accept and land": (
+            "has passed or is recorded as not run",
+            "states that the final check has not run",
+            "and that the final check has not run when it is recorded as not run",
+            "and the user may confirm part of it;",
+        ),
+        "ADR 0013": (
+            "once at the final commit",
+            "has passed or is recorded as not run",
+            "the decision states that the final check has not run",
+            "It runs again at the new final commit after any fix.",
+            "ADR 0006's state model, validity rules and Acceptance gate are unchanged.",
+        ),
+        "ADR 0008": (
+            "has passed or is recorded as not run",
+            "and that the final check has not run when it is recorded as not run",
+        ),
+        "ADR 0006": ("the state model, validity rules and Acceptance gate are unchanged.)",),
+        "README.md#Final check": (
+            "once at the final commit",
+            "After any fix, the check runs again at the new final commit.",
+        ),
+        "README.md#Accept and land at the end": (
+            "has passed or is recorded as not run",
+            "states that the final check has not run",
+            "You may confirm part of the list, and the rest stays pending;",
+        ),
+        "README.zh-TW.md#最終檢查": (
+            "在最終 commit 上執行一次",
+            "任何修正之後，都會在新的最終 commit 上再執行一次。",
+        ),
+        "README.zh-TW.md#最後一次決定接受並合併": (
+            "最終檢查已通過或記為未執行",
+            "並寫明最終檢查尚未執行",
+            "你可以只確認清單的一部分",
+        ),
+    }
+
     def new_pins(self):
         pins = {}
         for group in (self.REVIEW_STATE, self.PROCEDURES, self.S1, self.S2, self.S3, self.REVIEWER, self.CONTEXT,
                       self.ADR, self.SERIAL, self.S7, self.FINAL_CHECK, self.S8, self.SERIAL_ADR, self.ACCEPT_ONCE,
-                      self.S4, self.S5, self.S8_AND_S3, self.ACCEPT_CONTEXT, self.ACCEPT_ADR):
+                      self.S4, self.S5, self.S8_AND_S3, self.ACCEPT_CONTEXT, self.ACCEPT_ADR, self.S1_VERIFIER_NOTE,
+                      self.S2_BRIEFS):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
         for en_label, zh_label, english, chinese in (self.README_PAIRS + self.SERIAL_README_PAIRS
@@ -756,8 +1031,19 @@ class CompletionCriteriaTests(unittest.TestCase):
     def test_s1_security_findings_still_block(self):
         self.assert_pinned(self.S1)
 
+    def test_s1_a_verifiers_security_note_withholds_its_confirmed(self):
+        self.assert_pinned(self.S1_VERIFIER_NOTE)
+
     def test_s2_regressions_are_judged_against_the_base_revision(self):
         self.assert_pinned(self.S2)
+
+    def test_s2_every_brief_names_the_claims_base_revision(self):
+        self.assert_pinned(self.S2_BRIEFS)
+        for prefix in ("", "cc-"):
+            rendered = config._render("reviewer", {"model": "sonnet", "effort": "high"}, prefix).decode("utf-8")
+            with self.subTest(prefix=prefix):
+                self.assertIn(self.S2_BRIEFS["reviewer.md"][0], rendered)
+                self.assertNotIn("the base revision you are given", rendered)
 
     def test_s3_the_follow_up_record_is_data(self):
         self.assert_pinned(self.S3)
@@ -883,19 +1169,35 @@ class CompletionCriteriaTests(unittest.TestCase):
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
 
-    def tagged(self, place):
-        """The whole file behind a place at the tag, '' when it did not exist there; skips without the tag."""
+    def test_the_interim_wording_is_gone(self):
+        for place, phrases in self.INTERIM_WORDING.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def tagged(self, place, revision=None):
+        """The whole file behind a place at the revision (the tag by default), '' when it did not exist there; skips
+            without that revision."""
+        revision = revision or self.TAG
         path = self.PATHS[place.partition("#")[0]]
         try:
-            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{self.TAG}:{path}"], cwd=config.ROOT,
+            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{revision}:{path}"], cwd=config.ROOT,
                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
-            known = subprocess.run([*self.GIT_READ, "rev-parse", "--verify", "--quiet", f"{self.TAG}^{{commit}}"],
+            known = subprocess.run([*self.GIT_READ, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"],
                                    cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
         except (OSError, subprocess.TimeoutExpired) as error:
-            self.skipTest(f"Git cannot be run, so the {self.TAG} text cannot be read: {error}")
+            self.skipTest(f"Git cannot be run, so the {revision} text cannot be read: {error}")
         if known.returncode != 0:
-            self.skipTest(f"no {self.TAG} tag in this checkout")
+            self.skipTest(f"no {revision} in this checkout")
         return shown.stdout.decode("utf-8") if shown.returncode == 0 else ""
+
+    def test_every_interim_absence_pin_matches_the_interim_text(self):
+        for place, phrases in self.INTERIM_WORDING.items():
+            text = self.tagged(place, self.INTERIM)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
 
     def test_every_new_pin_fails_on_the_v0_23_0_text(self):
         for place, sentences in self.new_pins().items():
