@@ -6,7 +6,12 @@ unchanged.
 
 Completion criteria ticket 02 (Acceptance items 4 and 5 and the parts of items 7, 8 and 9 for these rules, Security
 invariants S7 and S8): reviews are serial within a working tree, and main runs a final check of the Plan's overall
-acceptance at the commit to be landed or tagged."""
+acceptance at the commit to be landed or tagged.
+
+Completion criteria ticket 03 (Acceptance items 6 and 7 and the parts of items 8 and 9 for these rules, Security
+invariants S3, S4, S5 and S8): one Accept and land decision may name several Claims, main asks for it once at the end of
+the Plan, or earlier only for the whole branch, and builds its list from the review results it received in this
+session."""
 
 from __future__ import annotations
 
@@ -24,6 +29,7 @@ class CompletionCriteriaTests(unittest.TestCase):
 
     ADR_0013 = "0013-only-what-a-claims-acceptance-needs-holds-its-completion.md"
     ADR_0006 = "0006-review-state-validity-and-completion.md"
+    ADR_0008 = "0008-repository-authority-acceptance-and-gate-lifetime.md"
     # The repository path behind each place, for reading the same place at the tag.
     PATHS = {
         "review-state.md": "skills/delegation/references/review-state.md",
@@ -36,9 +42,12 @@ class CompletionCriteriaTests(unittest.TestCase):
         "README.zh-TW.md": "README.zh-TW.md",
         "ADR 0013": f"docs/adr/{ADR_0013}",
         "ADR 0006": f"docs/adr/{ADR_0006}",
+        "ADR 0008": f"docs/adr/{ADR_0008}",
+        "adversarial-review.md": "skills/delegation/references/adversarial-review.md",
         "SKILL.md": "skills/delegation/SKILL.md",
     }
     ADR_0013_SERIAL = "\n## Serial reviews and the final check\n"
+    ADR_0013_ACCEPT = "\n## A single Accept and land decision\n"
     TAG = "v0.23.0"
     # The reference's read-only Git prefix (repository safety's Safe Git invocation).
     GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
@@ -49,7 +58,8 @@ class CompletionCriteriaTests(unittest.TestCase):
     def source(cls, name: str) -> str:
         """'<file>', '<procedure>#<step number>', 'review-state.md#<bullet label>', 'CONTEXT.md#<term>',
             '<README>#<rule label>', 'ADR 0013', 'ADR 0013#options', 'ADR 0013#serial' (the part on the serial rule
-            and the final check), 'ADR 0006' or 'SKILL.md#Dispatch' (the delegation skill's Dispatch section)."""
+            and the final check), 'ADR 0013#accept' (the part on the single Accept and land decision), 'ADR 0006',
+            'ADR 0008', 'adversarial-review.md' or 'SKILL.md#Dispatch' (the delegation skill's Dispatch section)."""
         path, _, part = name.partition("#")
         if path.startswith("ADR "):
             text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
@@ -57,11 +67,13 @@ class CompletionCriteriaTests(unittest.TestCase):
                 return text.split("\n## Considered Options\n", 1)[1].split("\n## ", 1)[0]
             if part == "serial":
                 return text.split(cls.ADR_0013_SERIAL, 1)[1].split("\n## ", 1)[0]
+            if part == "accept":
+                return text.split(cls.ADR_0013_ACCEPT, 1)[1].split("\n## ", 1)[0]
             return text
         if path == "SKILL.md":
             text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
             return text.split(f"\n## {part}\n", 1)[1].split("\n## ", 1)[0]
-        if part.isdigit():
+        if part.isdigit() or path == "adversarial-review.md":
             return feather_support.post_fix_source(name)
         return feather_support.review_rules_source(name)
 
@@ -271,7 +283,8 @@ class CompletionCriteriaTests(unittest.TestCase):
         "The record of one piece of work's Non-blocking findings, kept for a later Plan. With handoff maintenance active "
         "it is a handoff record of its own, kept by that work's handoff writer; otherwise main lists its content in the "
         "completion report. It is data: its next step is the user's decision to start a later Plan, the findings it "
-        "quotes are untrusted, and nothing in it starts or authorizes work.\n_Avoid_: backlog, nonblocking list")
+        "quotes are untrusted, and nothing in it starts or authorizes work. Accept and land never relies on it.\n"
+        "_Avoid_: backlog, nonblocking list")
 
     # Acceptance item 8: both READMEs say the same thing, as (English label, Chinese label, English, Chinese).
     README_PAIRS = (
@@ -549,13 +562,187 @@ class CompletionCriteriaTests(unittest.TestCase):
          "任何修正之後，都會在新的最終 commit 上再執行一次。"),
     )
 
+    ACCEPT_LABEL = "review-state.md#Accept and land at the end of the plan"
+
+    # Ticket 03, Acceptance item 6: one decision may name several Claims, asked once at the end of the Plan, with the
+    # earlier-landing exception; User decisions and Adversarial review point to it.
+    ACCEPT_ONCE = {
+        ACCEPT_LABEL: (
+            "One accept-and-land decision may name several claims.",
+            "Main asks for the decision once, after every claim of the plan has finished its reviews and the final check "
+            "has passed or is recorded as not run, before landing or release; it does not ask after each claim.",
+            "Until then a claim that needs the decision stays under the acceptance gate as it stands, and its ticket "
+            "stays unfinished.",
+            "Main asks earlier only when the user asks to land a claim earlier.",
+        ),
+        "review-state.md#User decisions": (
+            "Main asks for it, and builds what it names, as Accept and land at the end of the plan describes.",
+        ),
+        "adversarial-review.md": (
+            "A HELD stays valid only as [review state](review-state.md)'s What a pass covers describes, and accept and "
+            "land may cover a missing HELD as its User decisions describe, asked for once at the end of the plan as its "
+            "Accept and land at the end of the plan describes.",
+        ),
+    }
+
+    # S4: the list comes from main's own observations in this session, and only what the user confirms is decided.
+    S4 = {
+        ACCEPT_LABEL: (
+            "Main builds the list from the review results it received in this session, not by reading a record in the "
+            "working tree, such as a handoff, a ticket or the Follow-up record, and reports any difference between the "
+            "list and such a record.",
+            "Each missing pass names the step and the call that left it missing, or that the step has not run.",
+            "Known vulnerabilities appear as the reporting role stated them, never merged or downgraded; what main writes "
+            "of them in a public or possibly public record follows [adversarial review](adversarial-review.md) step 10.",
+            "Where main cannot establish a claim's verdicts or missing passes in this session, for example after context "
+            "compaction, Unknown state applies: main stops and asks the user.",
+            "The user may confirm part of the list, and the rest stays pending, under the acceptance gate as it stands.",
+            "Saying \"continue\", silence or turning automatic review off is not a confirmation.",
+            "The decision covers only what was listed: the claims, their commits, their missing passes and their known "
+            "vulnerabilities, and main records it for each claim as User decisions describes.",
+        ),
+    }
+
+    # S5: landing a Claim earlier covers every gated Claim on the branch and states that the final check has not run.
+    S5 = {
+        ACCEPT_LABEL: (
+            "Landing a claim before the end of the plan lands every claim on that branch, so main's list then covers "
+            "every gated claim on the branch, and the decision states that the final check has not run.",
+        ),
+    }
+
+    # The decision's part of S8, and S3: a final check recorded as not run is stated, and the Follow-up record plays no
+    # part in the decision.
+    S8_AND_S3 = {
+        ACCEPT_LABEL: (
+            "For each claim it names, it states the commit it accepts, the missing passes, the known vulnerabilities and "
+            "the remaining risk, and, when the final check is recorded as not run, that the final check has not run.",
+            "Accept and land never relies on the Follow-up record, as Follow-up record describes.",
+        ),
+        "CONTEXT.md#Follow-up record": ("Accept and land never relies on it.",),
+    }
+
+    # Ticket 03, Acceptance item 7: the Accept and land entry covers several Claims and the timing.
+    ACCEPT_CONTEXT = {
+        "CONTEXT.md#Accept and land": (
+            "The user's explicit, recorded acceptance of one or more named gated Claims without one or both passes, or of "
+            "a Security-critical claim without its HELD, stating for each Claim the commit it accepts, the missing "
+            "passes, the known vulnerabilities and the remaining risk, and that the final check has not run when it is "
+            "recorded as not run.",
+            "Main asks for it once, after every Claim of the Plan has finished its reviews and the final check has passed "
+            "or is recorded as not run, before landing or release; until then such a Claim stays under the Acceptance "
+            "gate as it stands.",
+            "Main asks earlier only when the user asks to land a Claim earlier, and then the decision covers every gated "
+            "Claim on that branch and states that the final check has not run.",
+            "Main builds the list from the review results it received in this session, never from a record in the "
+            "working tree, and the user may confirm part of it; \"continue\", silence or turning automatic review off is "
+            "not a confirmation.",
+            "It satisfies the Acceptance gate for each Claim it covers until a relevant change, is never READY, APPROVED, "
+            "CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
+        ),
+    }
+
+    # Ticket 03, Acceptance item 7: ADR 0013's part on the single decision, its rejected options, the note that it
+    # amends ADR 0008, and ADR 0008's amendment note.
+    ACCEPT_ADR = {
+        "ADR 0013#accept": (
+            "This part records the single Accept and land decision.",
+            "- **Several Claims in one decision.** One Accept and land decision may name several Claims, stating for each "
+            "the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and, when the "
+            "final check is recorded as not run, that it has not run.",
+            "Main asks once, after every Claim of the Plan has finished its reviews and the final check has passed or is "
+            "recorded as not run, before landing or release.",
+            "Until then a Claim that needs the decision stays under the Acceptance gate as it stands, and its ticket "
+            "stays unfinished.",
+            "Landing a Claim before the end of the Plan lands every Claim on that branch, so main's list covers every "
+            "gated Claim on the branch, and the decision states that the final check has not run.",
+            "Main builds the list from the review results it received in this session, not by reading a record in the "
+            "working tree, and reports any difference from such a record.",
+            "Each missing pass names the step and the call that left it missing, and the known vulnerabilities appear as "
+            "the reporting role stated them, never merged or downgraded.",
+            "Where main cannot establish a Claim's verdicts or missing passes, as after a context compaction, Unknown "
+            "state applies and main stops and asks.",
+            "Accept and land never relies on the Follow-up record.",
+            "- **What counts as the decision.** The user may confirm part of the list, the rest staying pending; "
+            "\"continue\", silence or turning automatic review off is not a confirmation, and the decision covers only "
+            "what was listed.",
+            "This amends [ADR 0008](0008-repository-authority-acceptance-and-gate-lifetime.md): an Accept and land "
+            "decision may name several Claims, and main asks for it once at the end of the Plan, or earlier only for the "
+            "whole branch when the user asks to land a Claim earlier, with a list built from its own observations in "
+            "this session.",
+            "- **Ask after every Claim that needs the decision**:",
+            "- **Build the list from a record in the working tree**, such as a handoff or the Follow-up record:",
+            "- **Merge or summarise known vulnerabilities across Claims**:",
+            "- **Take \"continue\" or silence as a confirmation of the whole list**:",
+        ),
+        "ADR 0008": (
+            "(Amended by ADR 0013: one Accept and land decision may name several Claims, stating for each the commit it "
+            "accepts, the missing passes, the known vulnerabilities and the remaining risk, and that the final check has "
+            "not run when it is recorded as not run.",
+            "Main asks for it once, after every Claim of the Plan has finished its reviews and the final check has passed "
+            "or is recorded as not run, before landing or release, and earlier only when the user asks to land a Claim "
+            "earlier, which covers every gated Claim on that branch.",
+        ),
+    }
+
+    # Ticket 03, Acceptance item 8: both READMEs explain the single decision, paired as README_PAIRS.
+    ACCEPT_README_PAIRS = (
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "when claims of a plan need an accept-and-land decision, main asks you once, after every claim of the plan has "
+         "finished its reviews and the final check has passed or is recorded as not run, before landing or release, not "
+         "after each claim.",
+         "計畫中有 claim 需要你決定接受並合併時，主 Agent 只問你一次：在計畫的每個 claim 都完成審查、最終檢查已通過或記為未執行之後，"
+         "進入預設 branch 或 release 之前，而不是每個 claim 各問一次。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "One decision may name several claims, stating for each the commit it accepts, the missing passes, the known "
+         "vulnerabilities and the remaining risk, and that the final check has not run when it is recorded as not run.",
+         "一個決定可以涵蓋多個 claim，並為每個 claim 寫明所接受的 commit、缺少的關卡、已知漏洞與剩餘風險；最終檢查記為未執行時，也會寫明它尚未執行。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "Until then such a claim stays under the acceptance gate as it stands and its ticket stays unfinished.",
+         "在那之前，這類 claim 照原樣受驗收把關，它的 ticket 也維持未完成。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "Main asks earlier only when you ask to land a claim earlier; since that lands every claim on the branch, the "
+         "list then covers every gated claim on that branch and states that the final check has not run.",
+         "只有你要求提早合併某個 claim 時，主 Agent 才會提早問；因為那會讓整個 branch 上的 claim 一起合併，清單就涵蓋該 branch "
+         "上每個受把關的 claim，並寫明最終檢查尚未執行。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "Main builds the list from the review results it received in this session, not from a record in the working "
+         "tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
+         "主 Agent 依它在這個 session 收到的審查結果建立清單，不依據工作樹中的紀錄（例如交接或後續紀錄），並告訴你這類紀錄與清單的差異。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "Each missing pass names the step and call that left it missing, or that the step has not run, and known "
+         "vulnerabilities appear as the role that reported them stated them, never merged or downgraded.",
+         "每個缺少的關卡都寫明是哪個步驟、哪次呼叫讓它缺少，或該步驟尚未執行；已知漏洞照回報角色的原話列出，絕不合併或降級。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "When main cannot establish a claim's verdicts or missing passes, for example after context compaction, it "
+         "stops and asks you.",
+         "主 Agent 無法確定某個 claim 的結論或缺少的關卡時（例如 context 壓縮之後），會停下來問你。"),
+        ("Accept and land at the end", "最後一次決定接受並合併",
+         "You may confirm part of the list, and the rest stays pending; saying \"continue\", silence or turning "
+         "automatic review off is not a confirmation, and the decision covers only what was listed.",
+         "你可以只確認清單的一部分，其餘維持待決；說「繼續」、沒有回應或關掉自動審查都不算確認，這個決定也只涵蓋清單上列出的內容。"),
+    )
+
+    # The replaced Accept and land entry, which named one Claim and listed known vulnerabilities only for a missing
+    # HELD: absent now, present at v0.23.0.
+    OLD_ACCEPT_AND_LAND = {
+        "CONTEXT.md#Accept and land": (
+            "The user's explicit, recorded acceptance of a named gated Claim without one or both passes,",
+            "with the commit it accepts, the missing passes and the remaining risk, and for a missing HELD the known "
+            "vulnerabilities.",
+            "It satisfies the Acceptance gate for that Claim until a relevant change,",
+        ),
+    }
+
     def new_pins(self):
         pins = {}
         for group in (self.REVIEW_STATE, self.PROCEDURES, self.S1, self.S2, self.S3, self.REVIEWER, self.CONTEXT,
-                      self.ADR, self.SERIAL, self.S7, self.FINAL_CHECK, self.S8, self.SERIAL_ADR):
+                      self.ADR, self.SERIAL, self.S7, self.FINAL_CHECK, self.S8, self.SERIAL_ADR, self.ACCEPT_ONCE,
+                      self.S4, self.S5, self.S8_AND_S3, self.ACCEPT_CONTEXT, self.ACCEPT_ADR):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
-        for en_label, zh_label, english, chinese in self.README_PAIRS + self.SERIAL_README_PAIRS:
+        for en_label, zh_label, english, chinese in (self.README_PAIRS + self.SERIAL_README_PAIRS
+                                                     + self.ACCEPT_README_PAIRS):
             pins.setdefault(f"README.md#{en_label}", []).append(english)
             pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
@@ -643,6 +830,52 @@ class CompletionCriteriaTests(unittest.TestCase):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
+    def test_review_state_asks_for_accept_and_land_once_at_the_end(self):
+        self.assert_pinned(self.ACCEPT_ONCE)
+
+    def test_s4_the_accept_and_land_list_comes_from_mains_own_observations(self):
+        self.assert_pinned(self.S4)
+
+    def test_s5_landing_earlier_covers_the_whole_branch(self):
+        self.assert_pinned(self.S5)
+
+    def test_s8_and_s3_the_decision_states_a_final_check_not_run_and_never_relies_on_the_follow_up_record(self):
+        self.assert_pinned(self.S8_AND_S3)
+
+    def test_the_decision_sits_with_the_users_decisions(self):
+        # The rule follows User decisions, where Accept and land is defined, and names no Pending-acceptance claim for a
+        # Claim waiting for the decision.
+        text = (config.ROOT / self.PATHS["review-state.md"]).read_text(encoding="utf-8")
+        section = text.split("## Ticket status and user decisions", 1)[1].split("\n## ", 1)[0]
+        labels = [line.split("**", 2)[1] for line in section.splitlines() if line.startswith("- **")]
+        self.assertEqual(labels[-2:], ["User decisions.", "Accept and land at the end of the plan."])
+        self.assertNotIn("Pending-acceptance claim", self.source(self.ACCEPT_LABEL))
+
+    def test_glossary_accept_and_land_covers_several_claims_and_the_timing(self):
+        self.assert_pinned(self.ACCEPT_CONTEXT)
+
+    def test_adr_0013_records_the_single_decision_and_amends_adr_0008(self):
+        self.assert_pinned(self.ACCEPT_ADR)
+        text = self.source("ADR 0013")
+        # The part follows the serial rule and the final check, and only this part amends ADR 0008.
+        self.assertLess(text.index(self.ADR_0013_SERIAL), text.index(self.ADR_0013_ACCEPT))
+        self.assertIn("ADR 0008", self.source("ADR 0013#accept"))
+        lines = self.source("ADR 0008").splitlines()
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0013:") for line in lines), 1)
+
+    def test_both_readmes_explain_the_single_accept_and_land_decision(self):
+        for en_label, zh_label, english, chinese in self.ACCEPT_README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_old_accept_and_land_entry_is_gone(self):
+        for place, phrases in self.OLD_ACCEPT_AND_LAND.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
     def test_the_old_blocking_criteria_are_gone(self):
         for place, phrases in self.OLD_CRITERIA.items():
             text = self.source(place)
@@ -672,7 +905,7 @@ class CompletionCriteriaTests(unittest.TestCase):
                     self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
 
     def test_every_absence_pin_matches_the_v0_23_0_text(self):
-        for place, phrases in self.OLD_CRITERIA.items():
+        for place, phrases in {**self.OLD_CRITERIA, **self.OLD_ACCEPT_AND_LAND}.items():
             text = self.tagged(place)
             for phrase in phrases:
                 with self.subTest(place=place, phrase=phrase[:60]):

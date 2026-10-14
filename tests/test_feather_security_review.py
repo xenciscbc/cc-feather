@@ -871,8 +871,8 @@ class AdversarialReviewTests(unittest.TestCase):
             "is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, and for a Security-critical claim a valid HELD as well, or with the user's Accept and land decision.",
         ),
         "CONTEXT.md#Accept and land": (
-            "The user's explicit, recorded acceptance of a named gated Claim without one or both passes, or of a Security-critical claim without its HELD, with the commit it accepts, the missing passes and the remaining risk, and for a missing HELD the known vulnerabilities.",
-            "It satisfies the Acceptance gate for that Claim until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
+            "The user's explicit, recorded acceptance of one or more named gated Claims without one or both passes, or of a Security-critical claim without its HELD, stating for each Claim the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and that the final check has not run when it is recorded as not run.",
+            "It satisfies the Acceptance gate for each Claim it covers until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
         ),
         "CONTEXT.md#Adversarial review": (
             "An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE.",

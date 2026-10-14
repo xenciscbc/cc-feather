@@ -4016,6 +4016,10 @@ class FeatherConfigTests(unittest.TestCase):
         "Your decisions": ("你的決定", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land",
                            "重審、延後、取消、修改驗收、豁免或接受並合併",
                            "review-state.md", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land"),
+        # Completion criteria ticket 03 (Acceptance items 6 and 8): one accept-and-land decision at the end of the plan.
+        "Accept and land at the end": ("最後一次決定接受並合併", "main asks you once", "主 Agent 只問你一次",
+                                       "review-state.md", "Main asks for the decision once, after every claim of the plan "
+                                       "has finished its reviews"),
         "Ticket status": ("Ticket 狀態", "noting the version or commit", "並註明版本或 commit",
                           "review-state.md", "with a note naming the version or commit"),
         "Resumed session": ("恢復的 session", "an unfinished plan is reviewed again", "未完成的計畫會重新審查",

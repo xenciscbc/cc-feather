@@ -46,3 +46,26 @@ Considered options for this part:
 - **A counted final review step with its own verdict**: it would stop the flow by itself at the Stop threshold and add a verdict, while its failure already reopens Claims under the existing rules.
 
 Consequences of this part: a review call holds implementation in the working tree it judges until it ends, so work in one working tree takes longer than it would with a separate worktree per review, which the user can still set up. The final check adds one run of the Plan's acceptance checks before landing or release; it is the only safeguard this record adds for work merged from separate worktrees, and how passes carry over across such a merge is left to separate work.
+
+## A single Accept and land decision
+
+This part records the single Accept and land decision. When several Claims of a Plan needed an Accept and land decision, main could stop the user after each one, and nothing said how the list the user decides on is built.
+
+The user decided (2026-10-14, with the completion criteria above):
+
+- **Several Claims in one decision.** One Accept and land decision may name several Claims, stating for each the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and, when the final check is recorded as not run, that it has not run.
+- **Asked once, at the end of the Plan.** Main asks once, after every Claim of the Plan has finished its reviews and the final check has passed or is recorded as not run, before landing or release. Until then a Claim that needs the decision stays under the Acceptance gate as it stands, and its ticket stays unfinished.
+- **Landing earlier.** Main asks earlier only when the user asks to land a Claim earlier. Landing a Claim before the end of the Plan lands every Claim on that branch, so main's list covers every gated Claim on the branch, and the decision states that the final check has not run.
+- **The list comes from main's own observations.** Main builds the list from the review results it received in this session, not by reading a record in the working tree, and reports any difference from such a record. Each missing pass names the step and the call that left it missing, and the known vulnerabilities appear as the reporting role stated them, never merged or downgraded. Where main cannot establish a Claim's verdicts or missing passes, as after a context compaction, Unknown state applies and main stops and asks. Accept and land never relies on the Follow-up record.
+- **What counts as the decision.** The user may confirm part of the list, the rest staying pending; "continue", silence or turning automatic review off is not a confirmation, and the decision covers only what was listed.
+
+This amends [ADR 0008](0008-repository-authority-acceptance-and-gate-lifetime.md): an Accept and land decision may name several Claims, and main asks for it once at the end of the Plan, or earlier only for the whole branch when the user asks to land a Claim earlier, with a list built from its own observations in this session. ADR 0008's rule that Accept and land is the only way past the Acceptance gate without the passes, its recording and visibility, and the gate's conditions are unchanged.
+
+Considered options for this part:
+
+- **Ask after every Claim that needs the decision**: it stops the user once per Claim, while the decision can wait for the end of the Plan, when the whole list is known.
+- **Build the list from a record in the working tree**, such as a handoff or the Follow-up record: anyone who can edit the working tree, repository content included, could drop a finding or a missing pass from what the user decides on; main reports a difference from such a record instead.
+- **Merge or summarise known vulnerabilities across Claims**: a merged or downgraded entry hides what the user accepts.
+- **Take "continue" or silence as a confirmation of the whole list**: the user would accept Claims they never chose.
+
+Consequences of this part: the user is asked once per Plan for the Claims that need it, and a Claim waiting for the decision keeps its ticket unfinished until then. After a context compaction main may have to stop and ask instead of listing a Claim. A forged Accept and land note in a handoff is an existing weakness this part does not change.

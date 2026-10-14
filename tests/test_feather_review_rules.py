@@ -170,8 +170,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "完成只代表不再重做：ticket 要在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值，且之後沒有相關變更，才算已驗收；表示不會做的值（例如 `wontfix`）只在你取消時設定，絕不算驗收。",
         ),
         "CONTEXT.md#Accept and land": (
-            "The user's explicit, recorded acceptance of a named gated Claim without one or both passes, or of a Security-critical claim without its HELD, with the commit it accepts, the missing passes and the remaining risk, and for a missing HELD the known vulnerabilities.",
-            "It satisfies the Acceptance gate for that Claim until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
+            "The user's explicit, recorded acceptance of one or more named gated Claims without one or both passes, or of a Security-critical claim without its HELD, stating for each Claim the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and that the final check has not run when it is recorded as not run.",
+            "It satisfies the Acceptance gate for each Claim it covers until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
         ),
         "README.md#Not passed": ("Your accept-and-land decision is the only exception (see Your decisions).",),
         "README.zh-TW.md#未通過": ("唯一例外是你決定接受並合併（見你的決定）。",),
