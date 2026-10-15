@@ -3939,6 +3939,13 @@ class FeatherConfigTests(unittest.TestCase):
     README_RULES = {
         "Unplanned work": ("沒有計畫的工作", "first needs a written plan", "須先寫出計畫",
                            "plan-review.md", "must not start without one"),
+        # Retained passes ticket 01 (Acceptance items 1, 2, 3 and 17): per-Claim timing and dependent Claims.
+        "Per-claim timing": ("依 claim 審查的時機", "as soon as that claim is implemented and committed",
+                             "一實作完成並 commit", "review-state.md",
+                             "once that claim is implemented and committed, not once the whole plan is implemented"),
+        "Dependent claims": ("相依的 claim", "starts only after that claim has a valid APPROVED and CONFIRMED",
+                             "拿到有效的 APPROVED 與 CONFIRMED 才開始", "review-state.md",
+                             "starts only after that claim has a valid APPROVED and a valid CONFIRMED"),
         "Budget": ("次數上限", "each step counts consecutive automatic calls", "每個步驟計算連續沒通過的自動呼叫次數",
                    "plan-review.md", "Count consecutive automatic calls without a pass"),
         "Re-review during implementation": ("施工中的重審", "a plan is reviewed again only after a material deviation",

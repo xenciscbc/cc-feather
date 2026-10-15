@@ -57,7 +57,7 @@ The number of consecutive automatic calls without a pass that stops one step of 
 _Avoid_: budget, retry limit
 
 **Automatic flow**:
-The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work.
+The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work. Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; this is the only review timing in auto. A Claim that lists another under Blocked by starts only after that Claim has a valid APPROVED and CONFIRMED, and a Plan that states no dependencies is followed in order; when a Claim stops, every Claim that depends on it stops and main asks the user, who may let named dependent Claims proceed as a deferral of the stopped Claim.
 _Avoid_: three-layer protection, pipeline
 
 **Explicit request**:
@@ -68,11 +68,11 @@ _Avoid_: manual review
 An independent check that a Plan is ready to implement, answered READY or REVISE.
 
 **Code review**:
-An independent check of the code implementing a Claim, answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE. INCONCLUSIVE means evidence the review needs could not be obtained, safely or at all; it is not a pass and does not prove a defect. When the user says "review" about implemented work, this is what is meant.
+An independent check of the code implementing a Claim, answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE. INCONCLUSIVE means evidence the review needs could not be obtained, safely or at all; it is not a pass and does not prove a defect. When the user says "review" about implemented work, this is what is meant. In the Automatic flow it runs once the Claim is implemented and committed, without waiting for the rest of the Plan.
 _Avoid_: PR review, diff review
 
 **Outcome verification**:
-An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLUSIVE.
+An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLUSIVE. In the Automatic flow it follows the Claim's APPROVED once the Claim is implemented and committed, without waiting for the rest of the Plan.
 _Avoid_: testing, QA
 
 **Adversarial review**:

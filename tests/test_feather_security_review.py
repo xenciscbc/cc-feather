@@ -810,11 +810,15 @@ class AdversarialReviewTests(unittest.TestCase):
         ),
         "delegation SKILL.md": (
             "When the automatic flow requires them, follow [the code-review procedure](references/code-review.md), then [the outcome-verification procedure](references/outcome-verification.md) and, for a Security-critical claim, then [the adversarial-review procedure](references/adversarial-review.md) before reporting completion.",
-            "In auto, plan-driven work also needs code review and then outcome verification once implemented, and a Security-critical claim then Adversarial review; in off, an explicit plan-review request does not imply them.",
+            # Retained passes ticket 01 (Acceptance item 18): per-Claim timing replaces "plan-driven work also needs code
+            # review and then outcome verification once implemented".
+            "In auto, each claim of plan-driven work also needs code review and then outcome verification once that claim is implemented and committed, and a Security-critical claim then Adversarial review; in off, an explicit plan-review request does not imply them.",
         ),
         "plan-review.md": (
             "In auto, plan-driven work gets the full review flow: plan review before implementation, then [code review](code-review.md), then [outcome verification](outcome-verification.md), and for a Security-critical claim then [Adversarial review](adversarial-review.md).",
-            "In auto, once the reviewed plan is implemented, follow [code review](code-review.md), then [outcome verification](outcome-verification.md) and, for each Security-critical claim, then [Adversarial review](adversarial-review.md) before reporting it complete.",
+            # Retained passes ticket 01 (Acceptance item 18): per-Claim timing replaces "In auto, once the reviewed plan is
+            # implemented, follow".
+            "In auto, each claim of the reviewed plan gets [code review](code-review.md), then [outcome verification](outcome-verification.md) and, for a Security-critical claim, then [Adversarial review](adversarial-review.md) before main reports it complete;",
         ),
         "outcome-verification.md": (
             "For a Security-critical claim, [Adversarial review](adversarial-review.md) follows a valid CONFIRMED at the same commit before main reports it complete.",

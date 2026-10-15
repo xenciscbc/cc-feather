@@ -114,7 +114,9 @@ class CompletionCriteriaTests(unittest.TestCase):
     # Acceptance item 1: plan review and the code review and outcome verification procedures state the criteria.
     PROCEDURES = {
         "plan-review.md": (
-            "Once a plan is implemented, each claim's reviews judge it against the completion criteria [review "
+            # Retained passes ticket 01 (Acceptance item 18): per-Claim timing replaces "Once a plan is implemented, each
+            # claim's reviews judge it".
+            "Once a claim is implemented, its reviews judge it against the completion criteria [review "
             "state](review-state.md) states: its acceptance as written is met; existing behaviour is not broken, shown by "
             "a failing test or a reproduction judged against the claim's base revision; it introduces no security problem "
             "and no data loss; and it has no deviation from the plan.",
