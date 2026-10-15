@@ -485,19 +485,21 @@ class RepoTrustDefaultReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_25_0(self):
-        self.assertEqual("0.25.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.26.0 ticket 07).
 
     def test_updates_sections_start_with_the_execution_default_in_both_languages(self):
         previous = CompletionCriteriaReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, previous_first, _) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = RetainedPassesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, previous_first, _), (_, _, *newer_sentences) in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.25.0 note starts right after the section's opening sentence, its sentences in order, before 0.24.0's.
+            # The 0.25.0 note starts right after the 0.26.0 note, its sentences in order, before 0.24.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -542,6 +544,65 @@ class RepoTrustDefaultReleaseTests(unittest.TestCase):
         for claim in ("01", "02", "03"):
             with self.subTest(claim=claim):
                 self.assertEqual(entry.count(f"\n- {claim}: "), 1)
+
+
+class RetainedPassesReleaseTests(unittest.TestCase):
+    """0.26.0 ticket 07 (docs/specs/retained-passes.md, Acceptance item 20): the Updates note states the change to
+    review in auto, that no `/cc-feather:setup update` is needed because no installed role definition or policy
+    changed, and how to go back to 0.25.0, in both languages. The validation entry's pins are added with the entry."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.26.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.26.0 changes how a plan is reviewed in `auto`: each claim is reviewed when it is done and keeps its passes, the final check reruns every claim's primary acceptance and fixes a failure with fix claims, Adversarial review runs once at the final commit and its findings are recorded, a dispatch record carries review state across sessions, and main asks you once at the end.",
+         "It changes only the delegation skill's procedures, not an installed role definition or policy, so existing installations need only the plugin update and a fresh session, which picks up the new procedures; no `/cc-feather:setup update` is needed.",
+         "To go back to 0.25.0, reinstall the 0.25.0 plugin; no setup update or remove is needed, and earlier versions ignore dispatch records left under `.feather/dispatch/`."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.26.0 改了 `auto` 下計畫的審查方式：每個 claim 完成時就審查並保留它的通過結果，最終檢查會重跑每個 claim 的主要驗收，並以修正用的 claim 修正失敗，對抗式審查只在最終 commit 執行一次並記錄它的發現，派工紀錄讓審查狀態跨 session 延續，主 Agent 只在最後問你一次。",
+         "它只改了分派 skill 的流程，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session，新 session 就會使用新的流程；不需要做 `/cc-feather:setup update`。",
+         "要回到 0.25.0，重新安裝 0.25.0 的 plugin 即可；不需要做 setup update 或先移除，較早的版本會忽略留在 `.feather/dispatch/` 下的派工紀錄。"),
+    )
+    # The sentence of each language's note that states no setup update is needed.
+    NO_SETUP_UPDATE = (
+        "no `/cc-feather:setup update` is needed.",
+        "不需要做 `/cc-feather:setup update`。",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_26_0(self):
+        self.assertEqual("0.26.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_retained_passes_note_in_both_languages(self):
+        previous = RepoTrustDefaultReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.26.0 note starts right after the section's opening sentence, its sentences in order, before 0.25.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_state_that_no_setup_update_is_needed_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            section = self.section(self.text(name), heading)
+            note = section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                # The note names no setup update as needed before or after the plugin update.
+                self.assertNotIn("need the plugin update and then", note)
+                self.assertNotIn("再於每個裝有分派元件的範圍執行", note)
 
 
 class InstallDocumentTests(unittest.TestCase):
