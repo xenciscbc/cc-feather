@@ -1291,8 +1291,9 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         "review-state.md#What a pass covers": (
             "In auto, a Security-critical claim's HELD judges only the commit it attacked, the commit to be landed: when "
             "the commit to be landed is another commit, the claim's Adversarial review result counts as not run, so the "
-            "claim needs accept and land or a new call, and a BROKEN's findings stay listed until a HELD at the commit to "
-            "be landed replaces them, as [adversarial review](adversarial-review.md)'s At the final commit describes.",
+            "claim needs accept and land or a new call, and a BROKEN's findings stay listed, carried in every later "
+            "call's brief and treated as open, until a HELD at the commit to be landed that covered them replaces them, as "
+            "[adversarial review](adversarial-review.md)'s At the final commit describes.",
         ),
         "review-state.md#Clearing a stop": (
             "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the "
@@ -1326,8 +1327,8 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         "command#results": (
             "In auto, a result from an earlier or another commit than the commit to be landed counts as not run, a BROKEN "
             "that gives the claim's result is recorded in the work's Follow-up record rather than fixed in the plan, and "
-            "its findings stay listed until a HELD at the commit to be landed replaces them, as the procedure's At the "
-            "final commit describes.",
+            "its findings stay listed, carried in every later call's brief and treated as open, until a HELD at the "
+            "commit to be landed that covered them replaces them, as the procedure's At the final commit describes.",
         ),
     }
 
@@ -1346,6 +1347,44 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         "adversarial-review.md#4": (
             "In auto, a BROKEN at the final commit counts as a call without a pass, and main does not repeat a call on "
             "unchanged code to reach the Stop threshold, as At the final commit describes.",
+        ),
+    }
+
+    # S2 and code review call 1's B1: while a claim has listed BROKEN findings, every later call for it carries them at
+    # step 7's disclosure level, step 10 applying, and step 6 treats each as open, so only a HELD that covered it replaces
+    # it.
+    LISTED_FINDINGS = {
+        FINAL: (
+            "While a claim has listed BROKEN findings, every later Adversarial review call for it, automatic or explicit "
+            "and at any commit, carries those findings in its brief, at the disclosure level step 7 sets for findings it "
+            "passes on, with step 10 applying as usual, and step 6 treats each listed finding as open: a HELD replaces a "
+            "listed finding only when the call covered it, and a HELD that leaves one uncovered is treated as "
+            "INCONCLUSIVE with it open, as step 6 does for an uncovered earlier gap.",
+        ),
+        "adversarial-review.md#2": (
+            "In auto, while the claim has listed BROKEN findings, as At the final commit describes, the brief of every "
+            "later call for it, automatic or explicit and at any commit, also carries those findings, at the disclosure "
+            "level step 7 sets for findings it passes on, and step 10 applies as usual.",
+        ),
+        "adversarial-review.md#6": (
+            "In auto, main also treats each listed BROKEN finding of the claim as open, as At the final commit describes: "
+            "a HELD replaces a listed finding only when the call covered it, and a HELD that leaves one uncovered is not "
+            "accepted, and main treats the call as INCONCLUSIVE with that finding open.",
+        ),
+    }
+
+    # Code review call 1's N3: a call that counts as not run establishes no coverage and is never the previously judged
+    # call a narrowed follow-up starts from.
+    NOT_RUN_COVERAGE = {
+        FINAL: ("A call that counts as not run establishes no coverage, so it is never the previously judged call that a "
+                "narrowed follow-up starts from.",),
+        "adversarial-review.md#5": (
+            "In auto, a call that counts as not run under At the final commit establishes no coverage, so it is never the "
+            "previously judged call that a narrowed follow-up starts from.",
+        ),
+        "command#Gated and Security-critical": (
+            "A call that counts as not run under the procedure's At the final commit establishes no coverage, so it is "
+            "never the previously judged call a narrowed follow-up starts from.",
         ),
     }
 
@@ -1418,8 +1457,9 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "run.",
             "In the Automatic flow, a break of the Claim's security invariant at the final commit is its BROKEN whichever "
             "Claim's change caused it, and a BROKEN there is not fixed in the Plan: its findings are recorded in the work's "
-            "Follow-up record and stay listed until a HELD at the commit to be landed replaces them; in off, a BROKEN is "
-            "fixed before completion.",
+            "Follow-up record and stay listed, carried into every later attack on the Claim and treated as open there, "
+            "until a HELD at the commit to be landed that covered them replaces them; in off, a BROKEN is fixed before "
+            "completion.",
         ),
         "CONTEXT.md#Pending-acceptance claim": (
             "It also covers an upstream Claim that has passed no step yet and stays pending because the user let named "
@@ -1454,8 +1494,9 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "record, written as Adversarial review step 10 requires, so a tracked record carries only their summary unless "
             "the user agrees.",
             "The Claim stays a Pending-acceptance claim with its Adversarial review result, which the user's decision at "
-            "the end of the Plan lists, and a BROKEN's findings stay listed until a HELD at the commit to be landed "
-            "replaces them.",
+            "the end of the Plan lists, and a BROKEN's findings stay listed, carried into every later Adversarial review "
+            "of the Claim and treated as open there, until a HELD at the commit to be landed that covered them replaces "
+            "them.",
             "- **Off mode.** These rules hold in auto only: in off, Adversarial review keeps its premise of a valid "
             "APPROVED and CONFIRMED at the same commit, a BROKEN is fixed before completion, and the adversarial-review "
             "command keeps its rule for off.",
@@ -1526,9 +1567,10 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
          "寫進這項工作的後續紀錄，任何有追蹤的紀錄只寫摘要，除非你同意。"),
         ("README.md#disclosure", "README.zh-TW.md#disclosure",
          "The claim stays pending acceptance with its result, which main lists when it asks you at the end of the plan, "
-         "and the findings stay listed until a HELD at the commit to be landed replaces them.",
-         "這個 claim 帶著它的結果維持待驗收，主 Agent 在計畫最後問你時會列出這個結果，而這些發現會一直列著，直到要進入預設 "
-         "branch 的 commit 上的 HELD 取代它們。"),
+         "and the findings stay listed, and go with every later attack on the claim, until a HELD at the commit to be "
+         "landed that covered them replaces them.",
+         "這個 claim 帶著它的結果維持待驗收，主 Agent 在計畫最後問你時會列出這個結果，而這些發現會一直列著，也會隨之後每次"
+         "對它的攻擊提供，直到要進入預設 branch 的 commit 上涵蓋了它們的 HELD 取代它們。"),
         ("README.md#disclosure", "README.zh-TW.md#disclosure",
          "This has limits: the commit an Adversarial review attacks was not judged as a whole by the claim's own code "
          "review and verification, and its findings are not fixed in the plan.",
@@ -1589,7 +1631,8 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
 
     def new_pins(self):
         pins = {}
-        for group in (self.TIMING, self.S2, self.RECORDED, self.OFF, self.DEFERRAL, self.CONTEXT, self.ADR):
+        for group in (self.TIMING, self.S2, self.RECORDED, self.LISTED_FINDINGS, self.NOT_RUN_COVERAGE, self.OFF,
+                      self.DEFERRAL, self.CONTEXT, self.ADR):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
         pins[self.FINAL].append(self.LIMITS)
@@ -1621,6 +1664,19 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         # Step 10's disclosure rule, which the recorded findings follow, still stands.
         self.assertIn(feather_support.ADVERSARIAL_REVIEW_DISCLOSURE["adversarial-review.md"][1],
                       self.source("adversarial-review.md#10"))
+
+    def test_listed_broken_findings_go_with_every_later_call_and_stay_open_until_a_held_covers_them(self):
+        self.assert_pinned(self.LISTED_FINDINGS)
+        # Step 6's check of every earlier open gap, and step 7's disclosure default, still stand beside it.
+        self.assertIn("Before accepting a HELD, main checks it against every security invariant and every earlier open "
+                      "gap; a HELD that leaves one uncovered is not accepted, and main treats the call as INCONCLUSIVE "
+                      "with each uncovered invariant or gap open.", self.source("adversarial-review.md#6"))
+        self.assertIn("By default, each finding passed to code review or outcome verification carries the violated "
+                      "invariant, the location, the root cause and the observed and expected behaviour, without exploit "
+                      "steps.", self.source("adversarial-review.md#7"))
+
+    def test_a_call_that_counts_as_not_run_is_never_the_previously_judged_call(self):
+        self.assert_pinned(self.NOT_RUN_COVERAGE)
 
     def test_the_limits_of_adversarial_review_at_the_final_commit_are_stated(self):
         self.assert_pinned({self.FINAL: (self.LIMITS,)})
