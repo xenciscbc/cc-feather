@@ -681,13 +681,15 @@ class AdversarialReviewTests(unittest.TestCase):
     # C4 item 2: the step follows APPROVED and CONFIRMED at the same commit, and the gate needs HELD.
     POSITION = {
         "adversarial-review.md": (
-            "In auto, each Security-critical claim of plan-driven work gets Adversarial review after a valid APPROVED from [code review](code-review.md) and a valid CONFIRMED from [outcome verification](outcome-verification.md), at the same unchanged commit, and before main reports it complete.",
+            # Retained passes ticket 04 (Acceptance items 8 and 15): in off the step follows both passes at the same unchanged commit; in
+            # auto it runs at the final commit, as tests/test_feather_retained_passes.py pins.
+            "In off, an Adversarial review that counts as the step's pass for a Security-critical claim follows a valid APPROVED from [code review](code-review.md) and a valid CONFIRMED from [outcome verification](outcome-verification.md), at the same unchanged commit.",
             "The acceptance gate for a Security-critical claim requires a valid HELD as well, or the user's accept-and-land decision, as [review state](review-state.md) describes.",
-            "Dispatch a call that can count as the step's pass only for a claim with a valid APPROVED and a valid CONFIRMED at the same commit, with the workspace equal to that commit as [review state](review-state.md)'s What a gated pass judged describes.",
+            "In off, dispatch a call that can count as the step's pass only for a claim with a valid APPROVED and a valid CONFIRMED at the same commit, with the workspace equal to that commit as [review state](review-state.md)'s What a gated pass judged describes.",
         ),
         "review-state.md#What a gated pass judged": (
             "For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief:",
-            "An Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count.",
+            "In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count.",
         ),
         "review-state.md#Commit and completion": (
             "reports it complete or sets its ticket to a done value only with a valid APPROVED and a valid CONFIRMED, and for a Security-critical claim a valid HELD as well, or with the user's accept-and-land decision for it.",
@@ -821,9 +823,11 @@ class AdversarialReviewTests(unittest.TestCase):
             "In auto, each claim of the reviewed plan gets [code review](code-review.md), then [outcome verification](outcome-verification.md) and, for a Security-critical claim, then [Adversarial review](adversarial-review.md) before main reports it complete;",
         ),
         "outcome-verification.md": (
-            "For a Security-critical claim, [Adversarial review](adversarial-review.md) follows a valid CONFIRMED at the same commit before main reports it complete.",
+            # Retained passes ticket 04 (Acceptance items 8 and 15): the step follows a CONFIRMED at the same commit in off only.
+            "In off, for a Security-critical claim, [Adversarial review](adversarial-review.md) follows a valid CONFIRMED at the same commit before main reports it complete;",
             "Plan review checks the plan before work starts, code review checks the code, outcome verification checks the result and Adversarial review tries to break a Security-critical claim, so none replaces another.",
-            "With CONFIRMED, continue to completion under the existing authority; for a Security-critical claim in the automatic flow, continue first to [Adversarial review](adversarial-review.md) at the same commit.",
+            # Retained passes ticket 04 (Acceptance item 8): in the automatic flow the step follows at the final commit.
+            "With CONFIRMED, continue to completion under the existing authority; for a Security-critical claim in the automatic flow, [Adversarial review](adversarial-review.md) follows at the final commit once the final check has passed there, as its At the final commit describes.",
         ),
         "preview.md": (
             "3. One review section, listed once rather than under each Claim: plan review by analyst, code review by reviewer and outcome verification by verifier, and, when a Plan has a Security-critical claim, the security analysis by analyst before plan review and Adversarial review by adversary after outcome verification, each with model, effort and source.",
@@ -880,18 +884,22 @@ class AdversarialReviewTests(unittest.TestCase):
             "It satisfies the Acceptance gate for each Claim it covers until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
         ),
         "CONTEXT.md#Adversarial review": (
-            "An independent attempt to break a Security-critical claim, made in the Automatic flow after it is approved and confirmed at the same commit, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE.",
+            # Retained passes ticket 04 (Acceptance items 8, 15 and 16): the same-commit premise is stated for off only.
+            "An independent attempt to break a Security-critical claim, against disposable targets the brief names, answered HELD, BROKEN or INCONCLUSIVE.",
+            "In off, it counts only after the Claim is approved and confirmed at the same commit.",
             "For a Claim the Acceptance gate does not require it for, it needs no prior passes and, with no target, may be static.",
         ),
         "README.md": (
-            "| Adversarial review | After APPROVED and CONFIRMED at the same commit, for a Security-critical claim | adversary | HELD |",
+            # Retained passes ticket 04 (Acceptance items 8, 15 and 17): the table states the step's timing in auto and in off.
+            "| Adversarial review | For a Security-critical claim: in auto, once at the end, after the final check passes at the final commit; in `off`, after APPROVED and CONFIRMED at the same commit | adversary | HELD |",
             "- `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions above).",
             "The plan review, code review and outcome verification roles, and for a plan with a Security-critical claim the security analysis and Adversarial review roles, are listed once at the end, with the number of plans, claims and Security-critical claims and when each step stops (the Stop threshold in effect and its source, at most K(K+1) calls per claim, or K³ + K² + K for a Security-critical claim, in one uninterrupted attempt, each reopened claim or approved material deviation adding calls);",
         ),
         "README.zh-TW.md": (
-            "| 對抗式審查 | 安全關鍵 claim 在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |",
+            # Retained passes ticket 04 (Acceptance items 8, 15 and 17).
+            "| 對抗式審查 | 安全關鍵 claim：在 auto 下，最終檢查在最後的 commit 上通過後，最後做一次；在 `off` 下，在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |",
             "| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；",
             "但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |",
             "進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見上方 Commit 條件與你的決定）；",
@@ -906,10 +914,12 @@ class AdversarialReviewTests(unittest.TestCase):
             "對抗式審查回覆 INCONCLUSIVE 也算沒通過。",
         ),
         "README.md#Not passed": (
-            "A Security-critical claim without a valid HELD is not landed, released or reported complete either; the fix for a BROKEN goes through code review, verification and Adversarial review again, and when that step stops or a BROKEN stays unresolved, an active handoff records that the claim is pending acceptance with its Adversarial review missing, even if it had no note before.",
+            # Retained passes ticket 04 (Acceptance items 9 and 15): a BROKEN is fixed before completion in off only.
+            "A Security-critical claim without a valid HELD is not landed, released or reported complete either; in `off`, the fix for a BROKEN goes through code review, verification and Adversarial review again, while in auto a BROKEN is recorded rather than fixed, as [Security-critical work](#security-critical-work) says, and when that step stops or a BROKEN stays unresolved, an active handoff records that the claim is pending acceptance with its Adversarial review missing, even if it had no note before.",
         ),
         "README.zh-TW.md#未通過": (
-            "沒有有效 HELD 的安全關鍵 claim 同樣不進入預設 branch、不 release、不回報完成；BROKEN 的修正要重新經過程式碼審查、驗證與對抗式審查，而該步驟停下或 BROKEN 仍未解決時，進行中的交接會記下這個 claim 待驗收、缺少對抗式審查，即使之前沒有記錄也一樣。",
+            # Retained passes ticket 04 (Acceptance items 9 and 15).
+            "沒有有效 HELD 的安全關鍵 claim 同樣不進入預設 branch、不 release、不回報完成；在 `off` 下，BROKEN 的修正要重新經過程式碼審查、驗證與對抗式審查，在 auto 下 BROKEN 則只記錄、不修正，如[安全關鍵工作](#安全關鍵工作)所說，而該步驟停下或 BROKEN 仍未解決時，進行中的交接會記下這個 claim 待驗收、缺少對抗式審查，即使之前沒有記錄也一樣。",
         ),
         "README.md#Commit": (
             "For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED, plus a valid HELD for a Security-critical claim, or with your accept-and-land decision.",
@@ -1118,15 +1128,20 @@ class AdversarialReviewTests(unittest.TestCase):
     SCENARIOS = (
         ("the user asks for an Adversarial review of a gated claim before its APPROVED and CONFIRMED",
          "the call runs against the named commit with a clean workspace but does not count as the step's pass",
-         (("adversarial-review.md", "An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass."),
-          ("review-state.md#What a gated pass judged", "an explicit one the user requests before them runs but does not count.")),
+         # Retained passes ticket 04 (Acceptance items 8 and 15, S2): step 1's early-call rule now names off, beside the auto rule.
+         (("adversarial-review.md", "In off, an explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass."),
+          ("review-state.md#What a gated pass judged", "an explicit one the user requests before them runs but does not count."),
+          ("adversarial-review.md", "In auto, dispatch a call that can give the claim's result only after the final check has passed at the commit to be landed,")),
          (("adversarial-review.md", "1. Dispatch only for a claim with a valid APPROVED"),
           ("review-state.md", "An Adversarial review also needs a valid APPROVED"))),
         ("the change adds a route that skips an authorization check",
-         "BROKEN: a vulnerability the change introduced blocks the gate and loops back to a fix",
+         # Retained passes ticket 04 (Acceptance items 9 and 15): the loop back to a fix holds in off; in auto a BROKEN at the final
+         # commit is recorded.
+         "BROKEN: a vulnerability the change introduced blocks the gate and, in off, loops back to a fix",
          (("adversarial-review.md", "BROKEN means a vulnerability the change introduced or made exploitable,"),
           ("adversarial-review.md", "The acceptance gate for a Security-critical claim requires a valid HELD as well,"),
-          ("adversarial-review.md", "A fix goes through [code review](code-review.md), then [outcome verification](outcome-verification.md), then Adversarial review again;")),
+          ("adversarial-review.md", "A fix goes through [code review](code-review.md), then [outcome verification](outcome-verification.md), then Adversarial review again;"),
+          ("adversarial-review.md", "On BROKEN, other than a BROKEN at the final commit in auto, which is not fixed in the plan as At the final commit describes,")),
          ()),
         ("the change exposes an old unvalidated parser through a new data flow, the parser outside the diff",
          "BROKEN: the change made the flaw exploitable",
@@ -1261,9 +1276,11 @@ class AdversarialReviewCommandTests(unittest.TestCase):
             # 0.19.0 C5 items 1 and 9.1: the Outside the gate bullet is keyed on the gate's coverage, not its requirement.
             "For work the acceptance gate does not cover, such as unplanned edits or a claim in off that no active handoff records, the call reviews the range that What a call outside the gate reviews defines, needs no prior passes and satisfies no gate.",
             "For a claim whose Adversarial review the gate requires, a Security-critical claim in auto or a Security-critical claim an active handoff records in either mode, the call is classified as for the other steps, as [review state](../delegation/references/review-state.md) describes: when the flow is due to run Adversarial review for that claim it is an automatic call, and when the step has stopped, or in off, it is an explicit call.",
-            "Both must meet the procedure's prerequisites, a valid APPROVED and a valid CONFIRMED at the same commit with a clean workspace, and their HELD counts like any pass of that step, so an explicit HELD clears a stop and, in off, resolves the handoff's missing Adversarial review. The brief uses the claim's commit and base revision; paths or a narrower scope in the arguments only focus the attack and never reduce what a HELD must cover.",
+            # Retained passes ticket 04 (Acceptance items 8 and 15, S2): the prerequisites name off and auto.
+            "Both must meet the procedure's prerequisites, in off a valid APPROVED and a valid CONFIRMED at the same commit with a clean workspace and in auto the final check passed at the commit to be landed with the workspace equal to it, and their HELD counts like any pass of that step, so an explicit HELD clears a stop and, in off, resolves the handoff's missing Adversarial review. The brief uses the claim's commit and base revision; paths or a narrower scope in the arguments only focus the attack and never reduce what a HELD must cover.",
             # 0.19.0 C5 item 3: the early-call condition shared with the procedure's step 1, and the commit it reviews.
-            "A call in either mode for a Security-critical claim the gate covers that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, and does not count as the step's pass, as review state's What an explicit call runs says of explicit calls made before the flow reached a step.",
+            # Retained passes ticket 04 (Acceptance item 15): this early-call rule now names off; S2 is the auto rule.
+            "A call in off for a Security-critical claim the gate covers that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, and does not count as the step's pass, as review state's What an explicit call runs says of explicit calls made before the flow reached a step.",
             "The brief uses the claim's commit and base revision; paths or a narrower scope in the arguments only focus the attack and never reduce what a HELD must cover.",
             "State the classification before dispatching.",
             "It works in off mode: off starts no automatic Adversarial review, but this command runs one when the user asks.",
@@ -1305,7 +1322,9 @@ class AdversarialReviewCommandTests(unittest.TestCase):
          ()),
         ("in auto, the user runs the command on a Security-critical claim before its code review returned APPROVED",
          "an explicit call that does not count as the step's pass",
-         (("adversarial-review SKILL.md", "that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, and does not count as the step's pass,"),
+         # Retained passes ticket 04 (Acceptance item 15, S2): in auto the early call is decided by the auto rule, a call made before
+         # the final check passed at the commit to be landed.
+         (("adversarial-review SKILL.md", "A call in auto for a Security-critical claim the gate covers made before the final check passed at the commit to be landed, with the workspace equal to it, runs as an explicit call against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, and counts as not run,"),
           ("review-state.md", "An explicit review or verification made before the automatic flow reached that step does not count as that step's pass.")),
          ()),
         ("the user runs the command on unplanned edits, or on a commit range of work no handoff records in off",
@@ -1420,11 +1439,13 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
         # the approval rule and the switch from off to auto that follow it.
         ("In `auto`, a plan with a Security-critical claim gets two separate analyst calls in order before implementation: first a read-only security analysis, one per plan or per trust boundary that several claims share, whose findings main turns into security invariants in the acceptance of each Security-critical claim, recording the disposable test targets with their synthetic data, allowed effects, reachable dependencies and how to start and reset them; then plan review of the revised plan.",
          "在 `auto` 下，有安全關鍵 claim 的計畫在施工前，會依序跑兩次分開的 analyst 呼叫：先做唯讀的安全分析，每份計畫一次，或多個 claim 共用的信任邊界一次，主 Agent 把結果轉成各安全關鍵 claim 驗收條件中的安全不變條件，並記下可拋棄的測試目標，包括合成資料、允許的影響、可連到的相依服務，以及如何啟動與重設；再對修訂後的計畫做計畫審查。"),
-        ("Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit, adversary tries to break the claim and answers HELD, BROKEN or INCONCLUSIVE.",
-         "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE。"),
+        # Retained passes ticket 04 (Acceptance items 8, 15 and 17): the same-commit premise holds in off; auto runs at the end.
+        ("Adversarial review is the third step: adversary tries to break the claim and answers HELD, BROKEN or INCONCLUSIVE; in `off`, a call counts only after a valid APPROVED and CONFIRMED at the same commit, and in auto it runs at the end, as below.",
+         "對抗式審查是第三步：adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE；在 `off` 下，要在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後才算數，在 auto 下則在最後執行，如下所述。"),
         # 0.19.0 C4 item 7: "stay only in", and an ADR and a validation entry among the public records.
-        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN and goes back to a fix; a vulnerability that predates the change does not block the claim and becomes separate work in your tracker. For a BROKEN or a pre-existing vulnerability alike, exploit details and secrets stay only in untracked, non-public records: anything public or possibly public, such as a tracked handoff, a commit message, a pull request, a public tracker, an ADR or a validation entry, gets only a summary unless you agree, and main asks you before writing to a public tracker.",
-         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，要回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作。無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 handoff、commit message、pull request、公開 tracker、ADR 或驗證紀錄，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。"),
+        # Retained passes ticket 04 (Acceptance items 9 and 15): a BROKEN goes back to a fix before completion in off only.
+        ("A vulnerability the change introduced or made exploitable, or a promised security fix that still reproduces, is BROKEN, which in `off` goes back to a fix before completion; a vulnerability that predates the change does not block the claim and becomes separate work in your tracker. For a BROKEN or a pre-existing vulnerability alike, exploit details and secrets stay only in untracked, non-public records: anything public or possibly public, such as a tracked handoff, a commit message, a pull request, a public tracker, an ADR or a validation entry, gets only a summary unless you agree, and main asks you before writing to a public tracker.",
+         "這次變更引入或使其可被利用的漏洞，或承諾修好卻仍能重現的安全問題，都是 BROKEN，在 `off` 下要在完成前回頭修正；變更之前就存在的漏洞不會擋下這個 claim，而是成為 tracker 中另外的工作。無論是 BROKEN 還是既有漏洞，exploit 細節與機密只留在未追蹤、不公開的紀錄；任何公開或可能公開的地方，例如有追蹤的 handoff、commit message、pull request、公開 tracker、ADR 或驗證紀錄，都只寫摘要，除非你同意，而且主 Agent 寫入公開 tracker 前會先問你。"),
         ("There is no separate switch for the third step: to land a Security-critical claim without HELD, make an accept-and-land decision for it.",
          "第三步沒有單獨的開關：要讓安全關鍵 claim 沒有 HELD 就合併，請對它做接受並合併的決定。"),
         ("`/cc-feather:adversarial-review` runs an Adversarial review when you ask, in either mode.",
@@ -1931,7 +1952,10 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
          "the HELD does not clear the stop and does not count as the step's pass, in auto or off",
          (("review-state.md#Clearing a stop", EARLY_HELD),
           ("review-state.md#What an explicit call runs", EARLY_EITHER_MODE),
-          ("adversarial-review.md#1", "An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass.")),
+          # Retained passes ticket 04 (Acceptance items 8 and 15, S2): step 1's early-call rule names off, and in auto the early HELD
+          # counts as not run.
+          ("adversarial-review.md#1", "In off, an explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass."),
+          ("review-state.md#Clearing a stop", "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the workspace equal to it, does not clear a stop either, since it counts as not run,")),
          ()),
         ("Adversarial review stops with a tracked handoff active",
          "the pending-acceptance note records the open findings only as a summary unless the user agrees",

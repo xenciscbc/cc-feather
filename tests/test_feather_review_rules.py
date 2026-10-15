@@ -724,7 +724,8 @@ class PostFixReviewTests(unittest.TestCase):
         ("an early explicit BROKEN with no preceding code review call, then a fix",
          "the review of the fix covers the claim's full scope from its base revision",
          (("code-review.md#fix", FIX_RULE),
-          ("adversarial-review.md#1", "An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs,")),
+          # Retained passes ticket 04 (Acceptance item 15): step 1's early-call rule now names off.
+          ("adversarial-review.md#1", "In off, an explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs,")),
          ()),
         ("main rejects a verifier finding with evidence, then the review of the fix",
          "the reviewer does not adjudicate the rejection, which the verifier judges; it still upholds its own findings and reports blocking defects",

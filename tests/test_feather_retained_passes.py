@@ -19,7 +19,15 @@ reruns every Claim's primary acceptance; an attributed failure is fixed by its C
 one by a fix Claim main adds without asking, which never changes what it is judged by; no other Claim is reopened, and a
 final check that keeps failing at new commits stops at the Stop threshold's value. Every review brief names the Plan's
 base revision, and main judges from Git whether a finding reported as pre-existing was introduced after it. Off keeps
-today's final check. The adversary template is unchanged."""
+today's final check. The adversary template is unchanged.
+
+Retained passes ticket 04 (Acceptance items 8, 9 and 15, the parts of items 14, 16, 17 and 18 for these rules, and
+security invariant S2): in auto, once the final check has passed at the final commit with the workspace equal to it, each
+Security-critical claim other than a fix Claim gets one Adversarial review there; only a call made then gives the Claim's
+result, an earlier or other commit's result and an earlier explicit call counting as not run; a BROKEN is recorded in the
+Follow-up record rather than fixed in the Plan, and its findings stay listed until a HELD at the commit to be landed
+replaces them. Off keeps the same-commit premise, a BROKEN fixed before completion and the command's off rule. Ticket 03's
+pin of the unchanged adversary template covers this ticket too."""
 
 from __future__ import annotations
 
@@ -1155,6 +1163,530 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
             text = self.tagged(path, path).replace("\r\n", "\n")
             with self.subTest(path=path):
                 self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+
+
+class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
+    """Ticket 04: whole-sentence pins of Adversarial review at the final commit, S2, the recorded BROKEN, item 14's
+    limits for it, off keeping today's rules, the glossary, ADR 0015's part and the notes on ADR 0009 and ADR 0013, both
+    READMEs, absence pins of the replaced same-commit and fix-before-landing statements, and a check that every new pin
+    fails on the text at tag v0.25.0. The adversary template stays pinned by ticket 03's
+    test_the_adversary_template_is_unchanged, which this ticket reuses rather than duplicates."""
+
+    PATHS = {**PerClaimTimingTests.PATHS,
+             "adversarial-review.md": "skills/delegation/references/adversarial-review.md",
+             "command": "skills/adversarial-review/SKILL.md",
+             "ADR 0009": "docs/adr/0009-security-critical-claims-get-an-adversarial-review.md"}
+    TAG = PerClaimTimingTests.TAG
+    GIT_READ = PerClaimTimingTests.GIT_READ
+    PART = "Adversarial review at the final commit"
+    FINAL_LABEL = "**At the final commit.**"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """As ticket 01's reader, plus 'adversarial-review.md' (whole), 'adversarial-review.md#<step number>',
+            'adversarial-review.md#final' (its At the final commit paragraph), 'outcome-verification.md#<step number>',
+            'command' (the adversarial-review command),
+            'command#<bullet label>', 'command#classifying', 'command#results', '<README>#disclosure' (the third-step
+            paragraph), 'ADR 0015#part' (this ticket's part), 'ADR 0009' and 'ADR 0013'."""
+        path, _, part = name.partition("#")
+        if name == "ADR 0015#part":
+            text = (config.ROOT / cls.PATHS["ADR 0015"]).read_text(encoding="utf-8")
+            return text.split(f"\n## {cls.PART}\n", 1)[1].split("\n## ", 1)[0]
+        if path in ("ADR 0009", "ADR 0013"):
+            return (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+        if path == "adversarial-review.md":
+            if part == "final":
+                text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+                return next(line for line in text.splitlines() if line.startswith(cls.FINAL_LABEL))
+            return feather_support.post_fix_source(name)
+        if path == "outcome-verification.md" and part.isdigit():
+            return feather_support.post_fix_source(name)
+        if path == "command":
+            text = (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+            if not part:
+                return text
+            if part == "classifying":
+                return next(line for line in text.splitlines() if line.startswith("The command separates two questions."))
+            if part == "results":
+                return text.split("\n## Results\n", 1)[1]
+            return next(line for line in text.splitlines() if line.startswith(f"- **{part}.**"))
+        if part == "disclosure":
+            return feather_support.adversarial_retries_source(name)
+        return PerClaimTimingTests.source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    tagged = PerClaimTimingTests.tagged
+
+    FINAL = "adversarial-review.md#final"
+
+    # Acceptance item 8: the timing at the final commit, fix Claims excluded, the records of APPROVED and CONFIRMED, the
+    # brief, the composed review, the break whichever Claim caused it, and INCONCLUSIVE.
+    TIMING = {
+        "adversarial-review.md": (
+            "In auto, each Security-critical claim of plan-driven work, other than a fix claim, gets one Adversarial "
+            "review at the final commit, once the final check has passed there and the workspace equals it, and before "
+            "main reports it complete, as At the final commit below describes.",
+        ),
+        FINAL: (
+            "In auto, once the final check has passed at the final commit and the workspace equals it, as [review "
+            "state](review-state.md)'s Final check describes, each Security-critical claim of the plan, other than a fix "
+            "claim, gets one Adversarial review there, replacing the requirement of a valid APPROVED and a valid "
+            "CONFIRMED at the same commit: the claim's APPROVED and CONFIRMED are a record of the commits they judged, and "
+            "a HELD judges only the final commit.",
+            "The brief carries only the claim's own security invariants and test targets, as step 2 describes, never "
+            "another claim's of the plan, and names the plan's base revision; the composed review of an already accepted "
+            "claim is unchanged, as step 9 describes.",
+            "A break of the claim's security invariant at the final commit is the claim's BROKEN whichever claim's change "
+            "caused it, and a break introduced after the plan's base revision is not a pre-existing issue.",
+            "INCONCLUSIVE follows steps 4 and 5 within the Stop threshold in effect.",
+        ),
+        "adversarial-review.md#1": (
+            "In auto, dispatch a call that can give the claim's result only after the final check has passed at the "
+            "commit to be landed, with the workspace equal to that commit, as At the final commit describes; an explicit "
+            "call the user requests before then still runs, against the commit the user names, or HEAD when the user names "
+            "none, with the workspace equal to that commit, but it counts as not run.",
+        ),
+        "outcome-verification.md": (
+            "In off, for a Security-critical claim, [Adversarial review](adversarial-review.md) follows a valid CONFIRMED "
+            "at the same commit before main reports it complete; in auto, it runs once the final check has passed at the "
+            "final commit, as its At the final commit describes.",
+        ),
+        "outcome-verification.md#6": (
+            "With CONFIRMED, continue to completion under the existing authority; for a Security-critical claim in the "
+            "automatic flow, [Adversarial review](adversarial-review.md) follows at the final commit once the final check "
+            "has passed there, as its At the final commit describes.",
+        ),
+        # The carried note: the delegation skill and plan review state the fix-Claim exception for auto.
+        "SKILL.md#Plan review": (
+            "In auto, that Adversarial review runs once, at the final commit after the final check has passed there, for "
+            "each Security-critical claim except a fix claim, which gets none, as [the adversarial-review "
+            "procedure](references/adversarial-review.md) describes.",
+        ),
+        "plan-review.md": (
+            "In auto, a Security-critical claim's Adversarial review runs once, at the final commit after the final check "
+            "has passed there, and a fix claim gets none, as [Adversarial review](adversarial-review.md) describes.",
+        ),
+    }
+
+    # S2: only a call made after the final check passed at the commit to be landed gives the result; an earlier or other
+    # commit's result and an earlier explicit call count as not run; a BROKEN's findings stay listed until a HELD at the
+    # commit to be landed replaces them; the command states the same.
+    S2 = {
+        FINAL: (
+            "Only a call made after the final check passed at the commit to be landed, with the workspace equal to it, "
+            "gives the claim's result; a result from an earlier or another commit, and an explicit call made before then, "
+            "count as not run, so the claim needs accept and land or a new call.",
+            "A BROKEN's findings stay listed until a HELD at the commit to be landed replaces them.",
+        ),
+        "review-state.md#What a gated pass judged": (
+            "In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at "
+            "the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and "
+            "CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an "
+            "explicit call made before then, counts as not run, as [adversarial review](adversarial-review.md)'s At the "
+            "final commit describes.",
+        ),
+        "review-state.md#What a pass covers": (
+            "In auto, a Security-critical claim's HELD judges only the commit it attacked, the commit to be landed: when "
+            "the commit to be landed is another commit, the claim's Adversarial review result counts as not run, so the "
+            "claim needs accept and land or a new call, and a BROKEN's findings stay listed until a HELD at the commit to "
+            "be landed replaces them, as [adversarial review](adversarial-review.md)'s At the final commit describes.",
+        ),
+        "review-state.md#Clearing a stop": (
+            "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the "
+            "workspace equal to it, does not clear a stop either, since it counts as not run, as [adversarial "
+            "review](adversarial-review.md)'s At the final commit describes.",
+        ),
+        "review-state.md#What an explicit call runs": (
+            "In auto, an explicit Adversarial review made before the final check passed at the commit to be landed, with "
+            "the workspace equal to it, counts as not run even after the claim's valid APPROVED and CONFIRMED, as "
+            "[adversarial review](adversarial-review.md)'s At the final commit describes.",
+        ),
+        "command#classifying": (
+            "In auto, such a call needs, in place of a valid APPROVED and a valid CONFIRMED at the same commit, the final "
+            "check to have passed at the commit to be landed, with the workspace equal to it, as the procedure's At the "
+            "final commit describes.",
+        ),
+        "command#Gated and Security-critical": (
+            "Both must meet the procedure's prerequisites, in off a valid APPROVED and a valid CONFIRMED at the same "
+            "commit with a clean workspace and in auto the final check passed at the commit to be landed with the "
+            "workspace equal to it, and their HELD counts like any pass of that step, so an explicit HELD clears a stop "
+            "and, in off, resolves the handoff's missing Adversarial review.",
+            "In auto, the claim's commit is the commit to be landed, and the brief also names the plan's base revision.",
+        ),
+        "command#Before the passes": (
+            "A call in auto for a Security-critical claim the gate covers made before the final check passed at the "
+            "commit to be landed, with the workspace equal to it, runs as an explicit call against the commit the user "
+            "names, or HEAD when the user names none, with the workspace equal to that commit, and counts as not run, as "
+            "review state's What an explicit call runs and the procedure's At the final commit describe; only a call made "
+            "after then gives the claim's result.",
+        ),
+        "command#results": (
+            "In auto, a result from an earlier or another commit than the commit to be landed counts as not run, a BROKEN "
+            "that gives the claim's result is recorded in the work's Follow-up record rather than fixed in the plan, and "
+            "its findings stay listed until a HELD at the commit to be landed replaces them, as the procedure's At the "
+            "final commit describes.",
+        ),
+    }
+
+    # Acceptance item 9: a BROKEN is recorded, not fixed, counted, not repeated on unchanged code, written under step 10,
+    # and the Claim stays a Pending-acceptance claim listed in the decision at the end of the plan.
+    RECORDED = {
+        FINAL: (
+            "A BROKEN is not fixed in the plan, and step 7 does not apply to it: it counts as a call without a pass, main "
+            "does not repeat a call on unchanged code to reach the Stop threshold, and its findings go to the work's "
+            "Follow-up record, written as step 10 requires, so a tracked record carries only their summary unless the "
+            "user agrees.",
+            "The claim stays a Pending-acceptance claim with its Adversarial review result, and main lists that result, a "
+            "BROKEN with its findings as the adversary stated them, in the decision [review state](review-state.md)'s "
+            "Accept and land at the end of the plan describes.",
+        ),
+        "adversarial-review.md#4": (
+            "In auto, a BROKEN at the final commit counts as a call without a pass, and main does not repeat a call on "
+            "unchanged code to reach the Stop threshold, as At the final commit describes.",
+        ),
+    }
+
+    # Acceptance item 14, for these rules.
+    LIMITS = ("This flow does not check everything: the commit an Adversarial review attacks was not judged as a whole by "
+              "the claim's own code review and outcome verification, and its findings are not fixed in the plan.")
+
+    # Acceptance item 15: off keeps the same-commit premise, a BROKEN fixed before completion and the command's off rule.
+    OFF = {
+        FINAL: (
+            "These rules hold in auto only: in off, the same-commit premise of step 1, a BROKEN fixed under step 7 before "
+            "completion and [the adversarial-review command](../../adversarial-review/SKILL.md)'s rule for off are kept.",
+        ),
+        "adversarial-review.md": (
+            "In off, an Adversarial review that counts as the step's pass for a Security-critical claim follows a valid "
+            "APPROVED from [code review](code-review.md) and a valid CONFIRMED from [outcome "
+            "verification](outcome-verification.md), at the same unchanged commit.",
+        ),
+        "adversarial-review.md#1": (
+            "In off, dispatch a call that can count as the step's pass only for a claim with a valid APPROVED and a valid "
+            "CONFIRMED at the same commit, with the workspace equal to that commit as [review state](review-state.md)'s "
+            "What a gated pass judged describes.",
+            "In off, an explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid "
+            "CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, "
+            "with the workspace equal to that commit, but it does not count as the step's pass.",
+        ),
+        "adversarial-review.md#7": (
+            "On BROKEN, other than a BROKEN at the final commit in auto, which is not fixed in the plan as At the final "
+            "commit describes, disposition each finding as FIX, correcting it within the authorized scope, or REJECT with "
+            "concrete evidence: a failed reproduction within the brief's limits, a source citation or the claim's own "
+            "scope, never preference.",
+            "A fix goes through [code review](code-review.md), then [outcome verification](outcome-verification.md), then "
+            "Adversarial review again; if code review or outcome verification stops, the claim is unreviewed or unverified "
+            "under that procedure.",
+        ),
+        "review-state.md#What a gated pass judged": (
+            "In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid "
+            "CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; "
+            "an explicit one the user requests before them runs but does not count.",
+        ),
+        "command#Before the passes": (
+            "A call in off for a Security-critical claim the gate covers that does not yet have a valid APPROVED and a "
+            "valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD when "
+            "the user names none, with the workspace equal to that commit, and does not count as the step's pass, as "
+            "review state's What an explicit call runs says of explicit calls made before the flow reached a step.",
+        ),
+    }
+
+    # Acceptance item 18 for review state's Completion criteria: the statements that BROKEN is unchanged now defer to the
+    # procedure, while the completion conditions themselves stay as they are.
+    DEFERRAL = {
+        "review-state.md#Completion conditions": (
+            "Plan review checks a plan before these reviews, and Adversarial review and its BROKEN follow the [adversarial "
+            "review](adversarial-review.md) procedure.",
+        ),
+        "review-state.md#Security findings": (
+            "The adversary's BROKEN is handled as the [adversarial review](adversarial-review.md) procedure describes, and "
+            "a pre-existing vulnerability still becomes separate work in the project's tracker, as its step 10 describes.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: the glossary's Adversarial review and Pending-acceptance claim entries, the
+    # latter also covering ticket 01's upstream Claim that has passed no step yet.
+    CONTEXT = {
+        "CONTEXT.md#Adversarial review": (
+            "In the Automatic flow it is made once, at the final commit, after the final check has passed there with the "
+            "workspace equal to it, for each Security-critical claim of the Plan other than a fix Claim; the Claim's "
+            "APPROVED and CONFIRMED are a record of the commits they judged, only a call made then gives the Claim's "
+            "result, and a result from an earlier or another commit, or an explicit call made before then, counts as not "
+            "run.",
+            "In the Automatic flow, a break of the Claim's security invariant at the final commit is its BROKEN whichever "
+            "Claim's change caused it, and a BROKEN there is not fixed in the Plan: its findings are recorded in the work's "
+            "Follow-up record and stay listed until a HELD at the commit to be landed replaces them; in off, a BROKEN is "
+            "fixed before completion.",
+        ),
+        "CONTEXT.md#Pending-acceptance claim": (
+            "It also covers an upstream Claim that has passed no step yet and stays pending because the user let named "
+            "dependent Claims proceed after it stopped, as a deferral of it, and, in the Automatic flow, a "
+            "Security-critical claim whose Adversarial review at the final commit returned BROKEN, which stays pending "
+            "with that result and its findings listed until the user's decision at the end of the Plan.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: ADR 0015's part, amending ADR 0009 (BROKEN holds the Claim) and ADR 0013
+    # (Adversarial review timing).
+    ADR = {
+        "ADR 0015#part": (
+            "This part records Adversarial review at the final commit and its recorded findings.",
+            "The user decided (2026-10-14 and 2026-10-15, the second day after a security analysis; the "
+            "[spec](../specs/retained-passes.md) carries the acceptance and its security invariants):",
+            "- **Timing.** In auto, once the final check has passed at the final commit and the workspace equals it, each "
+            "Security-critical claim of the Plan, other than a fix Claim, gets one Adversarial review there, replacing the "
+            "requirement of a valid APPROVED and CONFIRMED at the same commit: the Claim's APPROVED and CONFIRMED are a "
+            "record of the commits they judged, and a HELD judges only the final commit.",
+            "- **The premise.** Only an Adversarial review call made after the final check passed at the commit to be "
+            "landed, with the workspace equal to it, gives that Claim's result; a result from an earlier or another "
+            "commit, and an explicit call made before then, counts as not run, so the Claim needs Accept and land or a new "
+            "call.",
+            "The adversarial-review command's rule for when a call counts as the step's pass states the same.",
+            "- **The brief.** The brief carries only the Claim's own security invariants and test targets and the Plan's "
+            "base revision, and the composed review of an already accepted Claim is unchanged.",
+            "A break of a Claim's invariant at the final commit is reported whichever Claim's change caused it, and a "
+            "break introduced after the Plan's base revision is not a pre-existing issue.",
+            "- **Recorded findings.** A BROKEN is not fixed in the Plan: it counts as a call without a pass, main does not "
+            "repeat a call on unchanged code to reach the Stop threshold, and its findings go to the work's Follow-up "
+            "record, written as Adversarial review step 10 requires, so a tracked record carries only their summary unless "
+            "the user agrees.",
+            "The Claim stays a Pending-acceptance claim with its Adversarial review result, which the user's decision at "
+            "the end of the Plan lists, and a BROKEN's findings stay listed until a HELD at the commit to be landed "
+            "replaces them.",
+            "- **Off mode.** These rules hold in auto only: in off, Adversarial review keeps its premise of a valid "
+            "APPROVED and CONFIRMED at the same commit, a BROKEN is fixed before completion, and the adversarial-review "
+            "command keeps its rule for off.",
+            "- **Limits.** The commit an Adversarial review attacks was not judged as a whole by the Claim's own code "
+            "review and outcome verification, and its findings are not fixed in the Plan.",
+            "This amends [ADR 0009](0009-security-critical-claims-get-an-adversarial-review.md) (BROKEN holds the Claim): "
+            "in auto, a BROKEN at the final commit no longer starts a fix within the Plan but is recorded in the Follow-up "
+            "record, and the Claim stays pending acceptance with it until the user decides at the end of the Plan.",
+            "It also amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md) (Adversarial "
+            "review timing): in auto, Adversarial review no longer keeps its timing after a Claim's APPROVED and CONFIRMED "
+            "at the same commit, but runs once at the final commit.",
+            "- **Adversarial review after each Claim**: it attacks a commit that will not land, and its HELD would need its "
+            "own reopening rules.",
+            "- **Fix BROKEN within the Plan**: it restarts the loop at its costliest step.",
+        ),
+    }
+    ADR_0009_NOTE = (
+        "(Amended by ADR 0015: in auto, Adversarial review runs once, at the final commit after the final check has passed "
+        "there, for each Security-critical claim other than a fix Claim, rather than after a valid APPROVED and CONFIRMED "
+        "at the same unchanged commit; a BROKEN there is not fixed within the Plan but recorded in the work's Follow-up "
+        "record, and the Claim stays pending acceptance with it until the user's decision at the end of the Plan, so a "
+        "known flaw still ships only through the user's explicit Accept and land. In off, the third step and a BROKEN's "
+        "fix are unchanged.)")
+    # A line of its own, so that tickets 01's and 03's notes on ADR 0013 stay as they are.
+    ADR_0013_NOTE = (
+        "(Also amended by ADR 0015: in auto, Adversarial review no longer keeps its timing above: it runs once, at the "
+        "final commit after the final check has passed there, for each Security-critical claim other than a fix Claim, "
+        "and a BROKEN there is recorded in the work's Follow-up record rather than fixed within the Plan; BROKEN keeps its "
+        "meaning, and off keeps the timing above.)")
+    # ADR 0013's statement that Adversarial review keeps its timing stays as history.
+    ADR_0013_HISTORY = "BROKEN keeps its meaning, Adversarial review keeps its timing,"
+
+    # Acceptance item 17, for these rules: (README place, Chinese place, English sentence, Chinese sentence).
+    README_PAIRS = (
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "Adversarial review is the third step: adversary tries to break the claim and answers HELD, BROKEN or "
+         "INCONCLUSIVE; in `off`, a call counts only after a valid APPROVED and CONFIRMED at the same commit, and in auto "
+         "it runs at the end, as below.",
+         "對抗式審查是第三步：adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE；在 `off` 下，要在同一個 commit "
+         "拿到有效的 APPROVED 與 CONFIRMED 之後才算數，在 auto 下則在最後執行，如下所述。"),
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "In auto, Adversarial review runs once, at the end: when the final check has passed at the final commit with the "
+         "workspace equal to it, each Security-critical claim of the plan except a fix claim gets one Adversarial review "
+         "there, whose brief carries only that claim's own security invariants and test targets and the plan's base "
+         "revision.",
+         "在 auto 下，對抗式審查只在最後執行一次：最終檢查在最後的 commit 上通過、且工作區與它相同時，計畫中除了修正用的 "
+         "claim 以外，每個安全關鍵 claim 都在那裡做一次對抗式審查，brief 只帶該 claim 自己的安全不變條件與測試目標，以及計畫"
+         "的基準版本。"),
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "The claim's APPROVED and CONFIRMED are then a record of the commits they judged, and only a call made after the "
+         "final check passed at the commit to be landed gives the claim's result: a result from an earlier or another "
+         "commit, or an explicit call made before then, counts as not run, so the claim needs a new call or your "
+         "accept-and-land decision.",
+         "這時 claim 的 APPROVED 與 CONFIRMED 是它們所審 commit 的紀錄，只有在最終檢查於要進入預設 branch 的 commit 上通過之後"
+         "才做的呼叫，才給出該 claim 的結果：來自較早或其他 commit 的結果，或在那之前明確要求的呼叫，都視為沒有執行，所以這個 "
+         "claim 需要重新呼叫，或你決定接受並合併。"),
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "A break of the claim's security invariant at that commit is reported whichever claim's change caused it, and one "
+         "introduced after the plan's base revision is not pre-existing; an INCONCLUSIVE is handled as in any Adversarial "
+         "review, within the Stop threshold.",
+         "在那個 commit 上破壞 claim 的安全不變條件，不論是哪個 claim 的改動造成的都會回報，在計畫的基準版本之後才引入的也不算"
+         "先前就存在；INCONCLUSIVE 和任何對抗式審查一樣處理，在停止門檻之內。"),
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "A BROKEN there is recorded, not fixed in the plan: it counts as a call without a pass, main does not repeat the "
+         "call on unchanged code, and its findings go to the work's Follow-up record, with only a summary in any tracked "
+         "record unless you agree.",
+         "在那裡得到的 BROKEN 只記錄、不在這份計畫中修正：它算一次沒通過的呼叫，程式碼沒變時主 Agent 不會重複呼叫，它的發現"
+         "寫進這項工作的後續紀錄，任何有追蹤的紀錄只寫摘要，除非你同意。"),
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "The claim stays pending acceptance with its result, which main lists when it asks you at the end of the plan, "
+         "and the findings stay listed until a HELD at the commit to be landed replaces them.",
+         "這個 claim 帶著它的結果維持待驗收，主 Agent 在計畫最後問你時會列出這個結果，而這些發現會一直列著，直到要進入預設 "
+         "branch 的 commit 上的 HELD 取代它們。"),
+        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+         "This has limits: the commit an Adversarial review attacks was not judged as a whole by the claim's own code "
+         "review and verification, and its findings are not fixed in the plan.",
+         "這有其限制：對抗式審查攻擊的 commit，沒有整體經過該 claim 自己的程式碼審查與驗證，它的發現也不在這份計畫中修正。"),
+        ("README.md#Not passed", "README.zh-TW.md#未通過",
+         "A Security-critical claim without a valid HELD is not landed, released or reported complete either; in `off`, "
+         "the fix for a BROKEN goes through code review, verification and Adversarial review again, while in auto a "
+         "BROKEN is recorded rather than fixed, as [Security-critical work](#security-critical-work) says, and when that "
+         "step stops or a BROKEN stays unresolved, an active handoff records that the claim is pending acceptance with "
+         "its Adversarial review missing, even if it had no note before.",
+         "沒有有效 HELD 的安全關鍵 claim 同樣不進入預設 branch、不 release、不回報完成；在 `off` 下，BROKEN 的修正要重新經過"
+         "程式碼審查、驗證與對抗式審查，在 auto 下 BROKEN 則只記錄、不修正，如[安全關鍵工作](#安全關鍵工作)所說，而該步驟停下"
+         "或 BROKEN 仍未解決時，進行中的交接會記下這個 claim 待驗收、缺少對抗式審查，即使之前沒有記錄也一樣。"),
+        ("README.md#Findings", "README.zh-TW.md#問題分級",
+         "Security findings still block as before: a security problem the change introduced or made exploitable, even "
+         "through code outside the diff, and data loss it introduced block whatever the acceptance says and need no "
+         "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review follow the "
+         "adversarial-review procedure, and a vulnerability that predates the change becomes separate work in your "
+         "tracker.",
+         "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收"
+         "條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查依對抗式審查程序處理，變更之前"
+         "就存在的漏洞則成為 tracker 中另外的工作。"),
+        ("README.md", "README.zh-TW.md",
+         "| Adversarial review | For a Security-critical claim: in auto, once at the end, after the final check passes at "
+         "the final commit; in `off`, after APPROVED and CONFIRMED at the same commit | adversary | HELD |",
+         "| 對抗式審查 | 安全關鍵 claim：在 auto 下，最終檢查在最後的 commit 上通過後，最後做一次；在 `off` 下，在同一個 commit "
+         "拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |"),
+    )
+
+    # Acceptance item 18: the replaced statements of the same-commit premise in auto, a BROKEN fixed before landing in
+    # auto, and that the Adversarial review procedure and its BROKEN are unchanged.
+    REPLACED = {
+        "adversarial-review.md": (
+            "In auto, each Security-critical claim of plan-driven work gets Adversarial review after a valid APPROVED",
+            "1. Dispatch a call that can count as the step's pass only for a claim with a valid APPROVED",
+            "7. On BROKEN, disposition each finding",
+        ),
+        "review-state.md": (
+            "the Adversarial review procedure and its BROKEN are unchanged.",
+            "The adversary's BROKEN and the [adversarial review](adversarial-review.md) procedure are unchanged,",
+            "during the call. An Adversarial review that can count as the step's pass also needs",
+        ),
+        "command": ("A call in either mode for a Security-critical claim",
+                    "Both must meet the procedure's prerequisites, a valid APPROVED and a valid CONFIRMED at the same commit"),
+        "outcome-verification.md": ("continue first to [Adversarial review](adversarial-review.md) at the same commit.",
+                                    "For a Security-critical claim, [Adversarial review](adversarial-review.md) follows a "
+                                    "valid CONFIRMED"),
+        "CONTEXT.md#Adversarial review": ("made in the Automatic flow after it is approved and confirmed at the same commit",),
+        "README.md": ("BROKEN and Adversarial review are unchanged", "is BROKEN and goes back to a fix;",
+                      "Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit,",
+                      "| Adversarial review | After APPROVED and CONFIRMED at the same commit,",
+                      "either; the fix for a BROKEN goes through"),
+        "README.zh-TW.md": ("BROKEN 與對抗式審查不變", "都是 BROKEN，要回頭修正；",
+                            "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，",
+                            "| 對抗式審查 | 安全關鍵 claim 在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 |",
+                            "不回報完成；BROKEN 的修正要重新經過"),
+    }
+
+    def new_pins(self):
+        pins = {}
+        for group in (self.TIMING, self.S2, self.RECORDED, self.OFF, self.DEFERRAL, self.CONTEXT, self.ADR):
+            for place, sentences in group.items():
+                pins.setdefault(place, []).extend(sentences)
+        pins[self.FINAL].append(self.LIMITS)
+        pins.setdefault("ADR 0009", []).append(self.ADR_0009_NOTE)
+        pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
+        for english_place, chinese_place, english, chinese in self.README_PAIRS:
+            pins.setdefault(english_place, []).append(english)
+            pins.setdefault(chinese_place, []).append(chinese)
+        # The off sentence that keeps a fix after BROKEN is unchanged text in a step that now names auto's exception;
+        # the off pin checks it stands, and it is not a new statement.
+        pins["adversarial-review.md#7"].remove(self.OFF["adversarial-review.md#7"][1])
+        return pins
+
+    def test_adversarial_review_runs_once_at_the_final_commit_in_auto(self):
+        self.assert_pinned(self.TIMING)
+        # The At the final commit paragraph comes before the steps it governs.
+        text = self.source("adversarial-review.md")
+        self.assertEqual(sum(line.startswith(self.FINAL_LABEL) for line in text.splitlines()), 1)
+        self.assertLess(text.index(self.FINAL_LABEL), text.index("\n1. "))
+        # Ticket 03's statement that a fix claim gets no Adversarial review still stands beside it.
+        self.assertIn("In auto, a fix claim gets no Adversarial review even when it is Security-critical, as [review "
+                      "state](review-state.md)'s Final check describes.", text)
+
+    def test_s2_only_a_call_at_the_commit_to_be_landed_gives_the_result(self):
+        self.assert_pinned(self.S2)
+
+    def test_a_broken_at_the_final_commit_is_recorded_not_fixed(self):
+        self.assert_pinned(self.RECORDED)
+        # Step 10's disclosure rule, which the recorded findings follow, still stands.
+        self.assertIn(feather_support.ADVERSARIAL_REVIEW_DISCLOSURE["adversarial-review.md"][1],
+                      self.source("adversarial-review.md#10"))
+
+    def test_the_limits_of_adversarial_review_at_the_final_commit_are_stated(self):
+        self.assert_pinned({self.FINAL: (self.LIMITS,)})
+
+    def test_off_keeps_the_same_commit_premise_the_fix_after_broken_and_the_commands_off_rule(self):
+        # Fails if off loses the same-commit premise, a BROKEN fixed before completion or the command's off rule.
+        self.assert_pinned(self.OFF)
+        self.assertTrue(self.source("adversarial-review.md#7").startswith("7. " + self.OFF["adversarial-review.md#7"][0]))
+        self.assertIn("Off mode starts no automatic Adversarial review; existing notes, counts and obligations persist.",
+                      self.source("adversarial-review.md"))
+
+    def test_the_completion_criteria_defer_to_the_adversarial_review_procedure(self):
+        self.assert_pinned(self.DEFERRAL)
+        # The completion conditions themselves are unchanged.
+        self.assertIn("A claim's reviews judge it against these conditions: its acceptance as written is met; existing "
+                      "behaviour is not broken, shown by a failing test or a reproduction; it introduces no security "
+                      "problem and no data loss, as Security findings below describes; and it has no deviation from the "
+                      "plan.", self.source("review-state.md#Completion conditions"))
+
+    def test_glossary_states_the_final_commit_and_the_recorded_findings(self):
+        self.assert_pinned(self.CONTEXT)
+
+    def test_adr_0015_records_adversarial_review_at_the_final_commit_and_amends_adr_0009_and_adr_0013(self):
+        self.assert_pinned(self.ADR)
+        text = self.source("ADR 0015")
+        self.assertEqual(text.count(f"\n## {self.PART}\n"), 1)
+        # This part follows ticket 03's part.
+        self.assertLess(text.index(f"\n## {FinalCheckAndFixClaimsTests.PART}\n"), text.index(f"\n## {self.PART}\n"))
+        self.assertIn(self.ADR_0009_NOTE, self.source("ADR 0009").splitlines())
+        lines = self.source("ADR 0013").splitlines()
+        self.assertIn(self.ADR_0013_NOTE, lines)
+        # Tickets 01's and 03's notes keep their own lines, and ADR 0013's statement stays as history.
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
+        self.assertEqual(sum(line.startswith("(Further amended by ADR 0015:") for line in lines), 1)
+        self.assertIn(self.ADR_0013_HISTORY, self.source("ADR 0013"))
+
+    def test_both_readmes_explain_adversarial_review_at_the_end_with_recorded_findings(self):
+        for english_place, chinese_place, english, chinese in self.README_PAIRS:
+            for place, sentence in ((english_place, english), (chinese_place, chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_replaced_statements_are_gone(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def tagged_place(self, place):
+        """The whole file behind a place at the tag; this ticket's ADR part included."""
+        return self.tagged(place, self.PATHS[place.partition("#")[0]])
+
+    def test_every_new_pin_fails_on_the_v0_25_0_text(self):
+        for place, sentences in self.new_pins().items():
+            text = self.tagged_place(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
+
+    def test_every_absence_pin_matches_the_v0_25_0_text(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.tagged_place(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
 
 
 if __name__ == "__main__":

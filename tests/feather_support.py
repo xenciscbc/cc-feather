@@ -95,7 +95,9 @@ ADVERSARY_SAFETY_LIMITS = {
 }
 ADVERSARIAL_REVIEW_FIXES = {
     "adversarial-review.md": (
-        "On BROKEN, disposition each finding as FIX, correcting it within the authorized scope, or REJECT with concrete evidence: a failed reproduction within the brief's limits, a source citation or the claim's own scope, never preference.",
+        # Retained passes ticket 04 (Acceptance items 9 and 15): a BROKEN is fixed before completion in off only; in auto a BROKEN at
+        # the final commit is recorded, as tests/test_feather_retained_passes.py pins.
+        "On BROKEN, other than a BROKEN at the final commit in auto, which is not fixed in the plan as At the final commit describes, disposition each finding as FIX, correcting it within the authorized scope, or REJECT with concrete evidence: a failed reproduction within the brief's limits, a source citation or the claim's own scope, never preference.",
         "A fix goes through [code review](code-review.md), then [outcome verification](outcome-verification.md), then Adversarial review again; if code review or outcome verification stops, the claim is unreviewed or unverified under that procedure.",
     ),
 }

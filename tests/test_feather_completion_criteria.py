@@ -91,8 +91,9 @@ class CompletionCriteriaTests(unittest.TestCase):
             "A Blocking finding is a finding that shows one of these conditions unmet; every other finding is a "
             "Non-blocking finding.",
             "The criteria apply in both review modes and to every user; there is no setting that changes them.",
-            "Plan review checks a plan before these reviews, and the Adversarial review procedure and its BROKEN are "
-            "unchanged.",
+            # Retained passes ticket 04 (Acceptance item 16): the statement that BROKEN is unchanged now defers to the procedure.
+            "Plan review checks a plan before these reviews, and Adversarial review and its BROKEN follow the "
+            "[adversarial review](adversarial-review.md) procedure.",
         ),
         "review-state.md#Evidence for a regression": (
             "A regression that is only inferred and is neither a security problem nor data loss does not block: such a "
@@ -173,8 +174,9 @@ class CompletionCriteriaTests(unittest.TestCase):
             "They block on the reviewer's evidence as before: the rule that a regression needs a failing test or a "
             "reproduction applies only to regressions that are neither security problems nor data loss, so a removed or "
             "weakened security control is a Blocking finding without a reproduction.",
-            "The adversary's BROKEN and the [adversarial review](adversarial-review.md) procedure are unchanged, and a "
-            "pre-existing vulnerability still becomes separate work in the project's tracker, as its step 10 describes.",
+            # Retained passes ticket 04 (Acceptance item 16): the statement that BROKEN is unchanged now defers to the procedure.
+            "The adversary's BROKEN is handled as the [adversarial review](adversarial-review.md) procedure describes, "
+            "and a pre-existing vulnerability still becomes separate work in the project's tracker, as its step 10 describes.",
         ),
         "code-review.md#5": (
             "A pre-existing vulnerability also becomes separate work in the project's tracker, as [Adversarial "
@@ -387,12 +389,15 @@ class CompletionCriteriaTests(unittest.TestCase):
          "a reproduction, judged against the claim's base revision, so a change cannot redefine what it must not break; "
          "a regression that is only inferred does not block.",
          "既有行為被破壞而且不是安全問題或資料遺失時，要有失敗的測試或重現步驟，並以 claim 的基準版本判斷，才會擋下，所以變更無法重新定義它不能破壞的東西；只是推測的 regression 不會擋下。"),
+        # Retained passes ticket 04 (Acceptance items 16 and 17): "BROKEN and Adversarial review are unchanged" now defers to the
+        # procedure.
         ("Findings", "問題分級",
          "Security findings still block as before: a security problem the change introduced or made exploitable, even "
          "through code outside the diff, and data loss it introduced block whatever the acceptance says and need no "
-         "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review are unchanged, "
+         "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review follow the "
+         "adversarial-review procedure, "
          "and a vulnerability that predates the change becomes separate work in your tracker.",
-         "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查不變，變更之前就存在的漏洞則成為 tracker 中另外的工作。"),
+         "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查依對抗式審查程序處理，變更之前就存在的漏洞則成為 tracker 中另外的工作。"),
         ("Findings", "問題分級",
          "A verifier's note that main judges to be, or cannot rule out as, such a security problem or data loss blocks "
          "too: that verification's CONFIRMED is not used as a pass until main fixes the note or rejects it with "

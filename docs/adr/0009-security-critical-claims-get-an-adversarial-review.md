@@ -41,6 +41,8 @@ This amends ADR 0006, ADR 0007 and ADR 0008: a Security-critical claim also need
 
 (Amended by ADR 0010: the two consecutive non-passes that stop Adversarial review and the fourteen automatic calls per Security-critical claim are the values at the default Stop threshold of 2; with Stop threshold K, from 2 to 10, the step stops after K consecutive automatic calls without a pass and a Security-critical claim makes at most K³ + K² + K automatic calls in one uninterrupted attempt.)
 
+(Amended by ADR 0015: in auto, Adversarial review runs once, at the final commit after the final check has passed there, for each Security-critical claim other than a fix Claim, rather than after a valid APPROVED and CONFIRMED at the same unchanged commit; a BROKEN there is not fixed within the Plan but recorded in the work's Follow-up record, and the Claim stays pending acceptance with it until the user's decision at the end of the Plan, so a known flaw still ships only through the user's explicit Accept and land. In off, the third step and a BROKEN's fix are unchanged.)
+
 ## Amendment note for 0.19.0
 
 The [0.19.0 review follow-ups spec](../specs/review-followups-0-19-0.md) adds the following to this record without rewriting the decision text above.

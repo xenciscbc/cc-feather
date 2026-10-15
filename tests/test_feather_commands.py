@@ -98,10 +98,12 @@ class CommandScopeTests(unittest.TestCase):
     # Item 3 (ar-7, ar-11): one early-call condition and the commit an early call reviews, in step 1 and the command.
     EARLY_CONDITION = "that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit"
     EARLY_COMMIT = "against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit"
-    STEP_1 = ("An explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED "
-              "at the same commit still runs, against the commit the user names, or HEAD when the user names none, with "
+    # Retained passes ticket 04 (Acceptance items 8 and 15, S2): the same-commit premise of step 1 and of the command's Before the
+    # passes now holds in off only; the auto rule is pinned in tests/test_feather_retained_passes.py.
+    STEP_1 = ("In off, an explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid "
+              "CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with "
               "the workspace equal to that commit, but it does not count as the step's pass.")
-    BEFORE = ("A call in either mode for a Security-critical claim the gate covers that does not yet have a valid APPROVED "
+    BEFORE = ("A call in off for a Security-critical claim the gate covers that does not yet have a valid APPROVED "
               "and a valid CONFIRMED at the same commit runs as an explicit call against the commit the user names, or HEAD "
               "when the user names none, with the workspace equal to that commit, and does not count as the step's pass, as "
               "review state's What an explicit call runs says of explicit calls made before the flow reached a step.")

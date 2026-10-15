@@ -16,6 +16,8 @@ The user decided (2026-10-14, in a grilling and after a security analysis of a f
 
 This amends [ADR 0006](0006-review-state-validity-and-completion.md): what holds a Claim's completion is now these four conditions, not every correctness problem or inferred regression a review finds. ADR 0006's state model, validity rules and Acceptance gate are unchanged, apart from the verifier's note above, the call whose pass is not used and the final check, which the next part records.
 
+(Also amended by ADR 0015: in auto, Adversarial review no longer keeps its timing above: it runs once, at the final commit after the final check has passed there, for each Security-critical claim other than a fix Claim, and a BROKEN there is recorded in the work's Follow-up record rather than fixed within the Plan; BROKEN keeps its meaning, and off keeps the timing above.)
+
 ## Considered Options
 
 - **Block on every correctness problem in the change**: the earlier criteria; rounds widen and loop, since each fix can surface the next finding.
