@@ -21,7 +21,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
     REPOSITORY_AUTHORITY = {
         "review-state.md#Commits before the passes": (
             "Before its passes, main may commit a claim of plan-driven work in the automatic flow on any branch, push it to a branch main created for the current work and open a pull request whose description lists the claims still unaccepted, without the user's permission, and keeps that list current as claims pass or are accepted.",
-            "Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a resumed session main treats a branch as its own only when an active handoff records that main created it for this work, and otherwise asks.",
+            "Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a resumed session main treats a branch as its own only when a record shows that main created it for this work, and otherwise asks: in auto the plan's dispatch record, in place of an active handoff, as Dispatch record describes, and in off an active handoff.",
             "For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks.",
             "Before dispatching a gated code review, outcome verification or Adversarial review, main ensures the claim's content is committed and the precondition of What a gated pass judged holds; when a commit is needed, the authority above permits it without asking, and an already suitable commit needs no new one.",
         ),
@@ -43,13 +43,13 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ),
         "README.md#Commit": (
             "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking.",
-            "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when an active handoff records that it created it for this work.",
+            "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when a record shows that it created it for this work: in auto the dispatch record, in place of an active handoff, and in `off` an active handoff.",
             "Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked.",
             "For a claim gated only because an active handoff records it as unreviewed, unverified or pending acceptance, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`.",
         ),
         "README.zh-TW.md#Commit 條件": (
             "在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。",
-            "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。",
+            "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有紀錄顯示它為這項工作建立了該 branch，才算它自己的 branch：在 auto 下看派工紀錄，取代進行中的交接，在 `off` 下看進行中的交接。",
             "開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。",
             "只因進行中的交接記錄為未審查、未驗證或待驗收而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。",
         ),
@@ -226,7 +226,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "An accept-and-land decision does not remove the note: main records the decision in it, turning an unreviewed or unverified note into a pending-acceptance note, and the note then counts as the record that keeps the claim under the gate until it is landed.",
             "Main removes the note only when the claim is landed, released or reported complete, or cancelled with its commits disposed of; a deferral keeps it and a waiver stays visible in it.",
             "When a relevant change ends an accept-and-land decision, the note returns to pending acceptance, naming what is missing.",
-            "A resumed session that finds a pending-acceptance note keeps the claim under the gate and obtains passes from the current session, as passing verdicts do not cross sessions, unless the note records an accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions.",
+            "In off, a resumed session that finds a pending-acceptance note keeps the claim under the gate and obtains passes from the current session, as passing verdicts do not cross sessions, unless the note records an accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions.",
         ),
         "review-state.md#Commit and completion": ("and for any claim an active handoff records as unreviewed, unverified or pending acceptance, main lands the claim",),
         "review-state.md#Existing handoff notes": ("An active handoff's record that a claim is unreviewed, unverified or pending acceptance restricts it under the acceptance gate whatever its wording,",),
@@ -242,14 +242,14 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "通過其中一關後，記錄會改成這個 claim 待驗收，並寫明還缺什麼；只有在 claim 進入預設 branch、release、回報完成，或取消且其 commit 已有決定時才移除，所以單靠一次通過（例如 `off` 下明確要求的審查）絕不會讓 claim 進入預設 branch。",
         ),
         "README.md#Resumed session": (
-            "A claim whose handoff note says it is pending acceptance stays gated and needs both passes, plus HELD for a Security-critical claim, in the new session, unless the note records your accept-and-land decision and nothing relevant changed since, or its ticket was set to a done value as above.",
+            "In `off`, a claim whose handoff note says it is pending acceptance stays gated and needs both passes, plus HELD for a Security-critical claim, in the new session, unless the note records your accept-and-land decision and nothing relevant changed since, or its ticket was set to a done value as above.",
         ),
         "README.zh-TW.md#恢復的 session": (
-            "交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關（安全關鍵 claim 還要加上 HELD），除非記錄裡有你接受並合併的決定且之後沒有相關變更，或它的 ticket 已如上所述設成表示已完成的完成值。",
+            "在 `off` 下，交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關（安全關鍵 claim 還要加上 HELD），除非記錄裡有你接受並合併的決定且之後沒有相關變更，或它的 ticket 已如上所述設成表示已完成的完成值。",
         ),
         "CONTEXT.md#Active handoff": (
             "An unfinished Feather handoff record for the work under the project's `.feather/handoffs/`.",
-            "It is how unresolved verdicts and gate notes reach a resumed session.",
+            "In off, it is how unresolved verdicts and gate notes reach a resumed session.",
         ),
         "CONTEXT.md#Pending-acceptance claim": (
             "A gated Claim whose Active handoff note says it has passed one or more of the steps it needs (code review, outcome verification and, for a Security-critical claim, Adversarial review), or has an Accept and land decision, but is not yet landed, released or reported complete.",
@@ -431,10 +431,10 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          # or to what they depend on reopens code review and outcome verification for that claim;".
          (("review-state.md", "A later change to a claim's files or to what they depend on reopens code review and outcome verification for that claim, except where its passes stay fixed in auto as described below;"),),
          ()),
-        ("a resumed session finds a pending-acceptance note",
+        ("off mode, a resumed session finds a pending-acceptance note",
          "the claim stays gated and needs passes from the new session unless the note records accept and land that still holds",
-         (("review-state.md#Pending acceptance", "A resumed session that finds a pending-acceptance note keeps the claim under the gate and obtains passes from the current session, as passing verdicts do not cross sessions, unless the note records an accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions."),
-          ("README.zh-TW.md#恢復的 session", "交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關")),
+         (("review-state.md#Pending acceptance", "In off, a resumed session that finds a pending-acceptance note keeps the claim under the gate and obtains passes from the current session, as passing verdicts do not cross sessions, unless the note records an accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions."),
+          ("README.zh-TW.md#恢復的 session", "在 `off` 下，交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關")),
          ()),
         ("off mode, accept and land recorded in the note, then a relevant change before landing",
          "the claim stays gated: the note keeps it and returns to pending acceptance",

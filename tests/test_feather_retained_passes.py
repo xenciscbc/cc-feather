@@ -27,7 +27,15 @@ Security-critical claim other than a fix Claim gets one Adversarial review there
 result, an earlier or other commit's result and an earlier explicit call counting as not run; a BROKEN is recorded in the
 Follow-up record rather than fixed in the Plan, and its findings stay listed until a HELD at the commit to be landed
 replaces them. Off keeps the same-commit premise, a BROKEN fixed before completion and the command's off rule. Ticket 03's
-pin of the unchanged adversary template covers this ticket too."""
+pin of the unchanged adversary template covers this ticket too.
+
+Retained passes ticket 05 (Acceptance items 11, 12 and 15, the parts of items 13, 14, 16, 17 and 18 for these rules, and
+the residual risk "The dispatch record is trusted"): in auto, main keeps one dispatch record per Plan under
+`.feather/dispatch/`, holding what a later session needs and no counts, exploit details or secrets, written only between
+review calls and kept out of Git; a resumed session, and main after a context compaction, take the Plan's READY, reading
+sets, passes, Adversarial review results and the user's decisions from it as if received in this session, while counts,
+the Stop threshold and the final check's state still come only from this session. Off writes none and keeps the earlier
+cross-session rules. The handoff skill and its tool are unchanged."""
 
 from __future__ import annotations
 
@@ -1725,6 +1733,584 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
+
+    def tagged_place(self, place):
+        """The whole file behind a place at the tag; this ticket's ADR part included."""
+        return self.tagged(place, self.PATHS[place.partition("#")[0]])
+
+    def test_every_new_pin_fails_on_the_v0_25_0_text(self):
+        for place, sentences in self.new_pins().items():
+            text = self.tagged_place(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
+
+    def test_every_absence_pin_matches_the_v0_25_0_text(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.tagged_place(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
+
+
+class DispatchRecordTests(unittest.TestCase):
+    """Ticket 05: whole-sentence pins of the dispatch record, what crosses sessions and compaction through it in auto,
+    the branches a resumed session takes from it, item 13's interim record, the notes carried from tickets 03 and 04 (the
+    Plan's base revision, fix Claims and listed BROKEN findings), item 14's limit and the residual risk "The dispatch
+    record is trusted", off keeping the earlier cross-session rules, the glossary, ADR 0015's part and the note on ADR
+    0002, both READMEs, absence pins of the replaced statements, the unchanged handoff skill and tool, and a check that
+    every new pin fails on the text at tag v0.25.0.
+
+    The existing pins this ticket replaces, updated so that they hold for off only (item 18): in test_feather_config,
+    FeatherConfigTests.test_resumed_sessions_and_plan_changes_follow_the_review_state_rules (the review-state, plan-review
+    and README phrases that passing verdicts do not cross sessions and that no restriction carries over without an active
+    handoff record), FOLLOW_UP_SENTENCES (plan review step 1's two sentences and the whole Resumed sessions bullet),
+    ACCEPTANCE_GATE_SENTENCES and test_acceptance_gates_landing_release_and_completion_not_commits (the Commits before the
+    passes bullet's branch sentence and "Before a gated operation"), ACCEPTANCE_GATE_README (Commit and Resumed session in
+    both languages) and ClaimsAtImplementationTests.KEPT (plan review's restriction across a spec and its tickets); in
+    test_feather_review_rules, ReviewRulesFollowUpTests.REPOSITORY_AUTHORITY (the branch sentence in review state and both
+    READMEs), GATE_LIFETIME (Pending acceptance, both READMEs' Resumed session and the Active handoff entry) and the
+    transition scenario of a resumed session finding a pending-acceptance note; in test_feather_security_review,
+    AdversarialReviewTests' pins of Adversarial review step 4's recovery sentence and of the two-pass statements in Resumed
+    sessions and both READMEs' Resumed session. README_RULES in test_feather_config gains the Dispatch record bullet."""
+
+    PART = "The dispatch record"
+    PATHS = {**PerClaimTimingTests.PATHS,
+             "adversarial-review.md": "skills/delegation/references/adversarial-review.md",
+             "ADR 0002": "docs/adr/0002-session-scoped-review-counts.md"}
+    TAG = PerClaimTimingTests.TAG
+    GIT_READ = PerClaimTimingTests.GIT_READ
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """As ticket 04's reader, plus '<procedure>#<step number>' for plan review and code review,
+            'review-state.md' (whole), 'ADR 0015#part' (this ticket's part) and 'ADR 0002'."""
+        path, _, part = name.partition("#")
+        if name == "ADR 0015#part":
+            text = (config.ROOT / cls.PATHS["ADR 0015"]).read_text(encoding="utf-8")
+            return text.split(f"\n## {cls.PART}\n", 1)[1].split("\n## ", 1)[0]
+        if path == "ADR 0002":
+            return (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+        if path in ("plan-review.md", "code-review.md") and part.isdigit():
+            return feather_support.post_fix_source(name)
+        return AdversarialReviewAtTheFinalCommitTests.source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    tagged = PerClaimTimingTests.tagged
+
+    # Acceptance item 11: the dispatch record's place and name, content, what it never holds, writing only between
+    # review calls, the ignore rule, never staged or committed, written by main and not the handoff tool, and its role
+    # in place of an active handoff's notes in auto.
+    RECORD = {
+        "review-state.md#Dispatch record": (
+            "In auto, main keeps one dispatch record for each plan of plan-driven work, at `.feather/dispatch/<name>.md` "
+            "in the project, named after the plan: the spec's slug when the plan is a spec or tickets of it, the "
+            "ticket's slug for a single ticket, the plan file's name, or, for a plan-mode or conversation plan, a short "
+            "name main states to the user.",
+            "It holds what a later session needs: the plan, its base revision and its plan-review READY; for each claim, "
+            "its classification, its reading set's hash, its base revision, and each review call's judged commit and "
+            "verdict with a one-line summary; each fix claim with its problem and a summary of the fix; the branches "
+            "main created for the work; and the user's decisions with their scope.",
+            "It holds no counts, and no exploit details or secrets, which follow [adversarial "
+            "review](adversarial-review.md) step 10.",
+            "Main writes it only between review calls, as Serial within a working tree states for handoff records, and "
+            "keeps it out of Git: when no rule already ignores it, main adds `/.feather/dispatch/` to `.gitignore`, and "
+            "it never stages or commits the record.",
+            "Main writes it itself; the handoff tool does not write it.",
+            "In auto it replaces an active handoff's notes as the place review state crosses sessions; an active handoff "
+            "records progress and names the dispatch record.",
+        ),
+        "SKILL.md#Plan review": (
+            "In auto, main keeps one dispatch record for each plan of plan-driven work, at `.feather/dispatch/<name>.md`, "
+            "named after the plan, holding the plan, its base revision and READY, each claim's classification, reading "
+            "set hash, base revision and review calls with their judged commits and verdicts, the fix claims, the "
+            "branches main created and the user's decisions, but no counts, exploit details or secrets; main writes it "
+            "only between review calls, keeps it out of Git and never stages or commits it, as [review "
+            "state](references/review-state.md)'s Dispatch record describes.",
+        ),
+    }
+
+    # Acceptance item 12: what a resumed session and main after a compaction take from the record, as if received in
+    # this session; counts, the Stop threshold and the final check's state from this session only; Unknown state where
+    # the record lacks what main needs; the replaced rules named; and every place that restated the earlier rules.
+    ACROSS_SESSIONS = {
+        "review-state.md": (
+            "In auto, a plan's review state crosses sessions through its dispatch record, as Dispatch record and Resumed "
+            "sessions describe.",
+            "In auto, a plan whose READY its dispatch record holds has plan-review state in a resumed session or after a "
+            "context compaction, as Resumed sessions describes, so main does not ask.",
+        ),
+        "review-state.md#Resumed sessions": (
+            "In auto, a resumed session reviews an unfinished plan again before implementing it unless the plan's "
+            "dispatch record holds its READY; in either mode it does not redo tickets that are finished.",
+            "In either mode, an unresolved verdict that an active handoff records for a spec's plan restricts that "
+            "spec's tickets when they are named, and one recorded for a ticket's plan still restricts that ticket when "
+            "the whole spec is named, and in auto one that a plan's dispatch record holds restricts in the same way; in "
+            "off, without an active handoff record, no restriction carries into a resumed session.",
+            "For a plan in auto, a resumed session, and main after a context compaction, take the plan's READY, each "
+            "claim's reading set, its passes, its Adversarial review results and the user's decisions from the plan's "
+            "dispatch record, as Dispatch record describes, and they count as if received in this session: a claim is "
+            "not reviewed again for having passed in an earlier session, and implemented work whose READY the record "
+            "holds does not ask again under Implemented before plan review.",
+            "Counts still restart in each session, as ADR 0002 decided, and the Stop threshold in effect and the final "
+            "check's state come only from this session, so main runs the final check again in the new session before "
+            "landing, as Final check describes.",
+            "Where the dispatch record lacks what main needs, Unknown state applies.",
+            "For a plan in auto, this replaces the rules above that passing verdicts do not cross sessions and that an "
+            "unresolved verdict reaches a resumed session only through an active handoff, and the rule that the list "
+            "Accept and land at the end of the plan describes is never built from a record in the working tree: what "
+            "main takes from the dispatch record counts as received in this session.",
+        ),
+        "review-state.md#Unknown state": (
+            "In auto, what a plan's dispatch record holds counts as established in this session, after a context "
+            "compaction too, as Resumed sessions describes; the record holds no counts, so after a context compaction a "
+            "count that cannot be established from this session still makes its step stopped, and where the dispatch "
+            "record lacks what main needs, this rule applies.",
+        ),
+        "review-state.md#Pending acceptance": (
+            "In auto, a plan's dispatch record, not these notes, is where its claims' review state crosses sessions: main "
+            "records each claim's pass state there, and a resumed session takes the claim's passes and the user's "
+            "decisions from it, as Resumed sessions describes, while a note an active handoff still holds keeps "
+            "restricting the claim as Existing handoff notes describes.",
+        ),
+        "plan-review.md#1": (
+            "In off, passing verdicts do not cross sessions either; in auto, a resumed session reviews an unfinished "
+            "plan again before implementing it unless the plan's dispatch record holds its READY; in either mode, "
+            "finished tickets are not redone, as [review state](review-state.md) describes.",
+            "In auto, a resumed session, and main after a context compaction, take the plan's READY, its claims' "
+            "reading sets, passes and Adversarial review results, unresolved verdicts and the user's decisions from the "
+            "plan's dispatch record, and they count as if received in this session, while counts, the Stop threshold in "
+            "effect and the final check's state still come only from this session, as [review "
+            "state](review-state.md)'s Resumed sessions describes.",
+            "In off, an unresolved verdict restricts a resumed session only when an active handoff records it, and in "
+            "auto when an active handoff or the plan's dispatch record records it; it then applies, in either mode, "
+            "until a later call passes it or the user cancels the work, changes its acceptance or waives it.",
+        ),
+        "plan-review.md": (
+            "In a resumed session, an unresolved verdict that an active handoff records for a spec's plan applies to "
+            "that spec's tickets when they are named; one recorded for a ticket's plan still restricts that ticket when "
+            "the whole spec is named, and in off, without such a record no restriction carries over; in auto, an "
+            "unresolved verdict a plan's dispatch record holds restricts in the same way, as [review "
+            "state](review-state.md)'s Resumed sessions describes.",
+        ),
+        "code-review.md#3": (
+            "Recover the count, verdicts and open findings as in [plan review](plan-review.md) step 1: counts are per "
+            "session, a resumed session starts a new count, an in-session state that cannot be established makes the "
+            "step stopped until the user decides, and in off an unresolved verdict restricts a resumed session only when "
+            "an active handoff records it; in auto, a resumed session, and main after a context compaction, take the "
+            "claim's passes, verdicts and open findings from the plan's dispatch record as if received in this session, "
+            "as [review state](review-state.md)'s Resumed sessions describes.",
+        ),
+        "outcome-verification.md#3": (
+            "Recover the count, verdicts and open findings as in [plan review](plan-review.md) step 1: counts are per "
+            "session, a resumed session starts a new count, an in-session state that cannot be established makes the "
+            "step stopped until the user decides, and in off an unresolved verdict restricts a resumed session only when "
+            "an active handoff records it; in auto, a resumed session, and main after a context compaction, take the "
+            "claim's passes, verdicts and open findings from the plan's dispatch record as if received in this session, "
+            "as [review state](review-state.md)'s Resumed sessions describes.",
+        ),
+        "adversarial-review.md#4": (
+            "Recover the count, verdicts, coverage and open gaps as in [plan review](plan-review.md) step 1: counts are "
+            "per session, a resumed session starts a new count, in off HELD does not cross sessions, an in-session state "
+            "that cannot be established makes the step stopped until the user decides, and in off an unresolved verdict "
+            "restricts a resumed session only when an active handoff records it; in auto, a resumed session, and main "
+            "after a context compaction, take the claim's Adversarial review result and a BROKEN's listed findings, by "
+            "their one-line summary, from the plan's dispatch record as if received in this session, their details "
+            "staying where step 10 puts them, as [review state](review-state.md)'s Resumed sessions describes.",
+        ),
+        "SKILL.md#Plan review": (
+            "Keep the review count and unresolved verdicts across mode changes within a session; a resumed session "
+            "starts a new count, while unresolved verdicts recorded in an active handoff still apply and, in auto, so "
+            "does what the plan's dispatch record holds.",
+            "A resumed session, and main after a context compaction, take the plan's READY, reading sets, passes, "
+            "Adversarial review results and the user's decisions from it as if received in this session, while counts, "
+            "the Stop threshold in effect and the final check's state still come only from this session, as [review "
+            "state](references/review-state.md)'s Resumed sessions describes; an active handoff records progress and "
+            "names the dispatch record.",
+        ),
+    }
+
+    # In auto, a resumed session takes the branches main created for the work from the dispatch record, in place of an
+    # active handoff.
+    COMMITS = {
+        "review-state.md#Commits before the passes": (
+            "Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a "
+            "resumed session main treats a branch as its own only when a record shows that main created it for this "
+            "work, and otherwise asks: in auto the plan's dispatch record, in place of an active handoff, as Dispatch "
+            "record describes, and in off an active handoff.",
+        ),
+    }
+
+    # Acceptance item 13's interim record, pointing to the existing Accept and land at the end of the plan.
+    INTERIM = {
+        "review-state.md#Dispatch record": (
+            "Until the user's decision at the end of the plan, as Accept and land at the end of the plan describes, main "
+            "records each claim's pass state in it.",
+        ),
+    }
+
+    # The notes carried from tickets 03 and 04: the Plan's base revision may come from the record (S1), fix Claims are
+    # kept in it, and listed BROKEN findings stay listed in a resumed session.
+    CARRIED = {
+        "review-state.md#Evidence for a regression": (
+            "In auto, main may instead take the plan's base revision from the plan's dispatch record, as Dispatch record "
+            "describes.",
+        ),
+        "review-state.md#Final check": (
+            "In auto, main keeps each fix claim, with its problem and a summary of the fix, in the plan's dispatch "
+            "record, as Dispatch record describes.",
+        ),
+        "review-state.md#Resumed sessions": (
+            "Unresolved verdicts and open findings the record holds restrict their claims as if received in this "
+            "session, and a BROKEN's findings that the record lists by their one-line summary stay listed, their details "
+            "staying where [adversarial review](adversarial-review.md) step 10 puts them.",
+            "Main may also take the plan's base revision and the branches it created for the work from it, as Evidence "
+            "for a regression and Commits before the passes describe.",
+        ),
+        "adversarial-review.md#final": (
+            "In a resumed session, and after a context compaction, they stay listed from the plan's dispatch record, "
+            "which holds each BROKEN's one-line summary, and from the work's Follow-up record, which holds what step 10 "
+            "allows, as [review state](review-state.md)'s Resumed sessions describes.",
+        ),
+    }
+
+    # Acceptance item 14's limit and the residual risk "The dispatch record is trusted".
+    TRUSTED = {
+        "review-state.md#Dispatch record": (
+            "Main takes the dispatch record as written, so an edit to it, by repository code a review or the final check "
+            "runs or by a person, changes which passes and results main believes; this flow does not defend against "
+            "that.",
+        ),
+        "SKILL.md#Plan review": ("Main takes the dispatch record as written, so an edit to it changes what main believes.",),
+    }
+
+    # Acceptance item 15: off writes no dispatch record and keeps the earlier cross-session rules.
+    OFF = {
+        "review-state.md#Dispatch record": (
+            "Off mode writes none, and in off the cross-session rules of Resumed sessions hold without it.",
+        ),
+        "review-state.md": (
+            "Counts are per session; in off, an unresolved verdict reaches a resumed session only through an active "
+            "handoff record.",
+        ),
+        "review-state.md#Resumed sessions": (
+            "Counts do not cross sessions.",
+            "In off, passing verdicts do not cross sessions either.",
+            "In off, before a gated operation, a claim needs valid passes from this session, so a claim that passed in "
+            "an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review "
+            "again, counted as usual.",
+        ),
+        "review-state.md#Pending acceptance": (
+            "In off, a resumed session that finds a pending-acceptance note keeps the claim under the gate and obtains "
+            "passes from the current session, as passing verdicts do not cross sessions, unless the note records an "
+            "accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions.",
+        ),
+        "SKILL.md#Plan review": (
+            "Off mode writes no dispatch record and keeps the cross-session rules of [review "
+            "state](references/review-state.md)'s Resumed sessions for off.",
+        ),
+        "README.md#Dispatch record": ("In `off`, main writes none and the rules under Resumed session hold as before.",),
+        "README.zh-TW.md#派工紀錄": ("在 `off` 下，主 Agent 不寫派工紀錄，「恢復的 session」的規則照舊。",),
+        "README.md#Resumed session": (
+            "In `off`, passing verdicts do not carry over either, and without an active handoff record no restriction "
+            "carries over.",
+            "In `off`, before landing, release or completion, a claim that passed in an earlier session is reviewed and "
+            "verified again, and a Security-critical claim gets Adversarial review again, unless its ticket was set to a "
+            "done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and "
+            "nothing relevant changed since.",
+        ),
+        "README.zh-TW.md#恢復的 session": (
+            "在 `off` 下，通過的結論也不會帶到新的 session，沒有進行中的交接記錄時，不會有任何限制帶過去。",
+        ),
+        "CONTEXT.md#Active handoff": ("In off, it is how unresolved verdicts and gate notes reach a resumed session.",),
+    }
+
+    # Acceptance item 16, for these rules: the Dispatch record entry and the Active handoff and Pending-acceptance claim
+    # entries.
+    CONTEXT = {
+        "CONTEXT.md#Dispatch record": (
+            "Main's record of one Plan's review state in the Automatic flow, at `.feather/dispatch/<name>.md` in the "
+            "project, named after the Plan.",
+            "It holds the Plan, its base revision and READY; each Claim's classification, reading set hash and base "
+            "revision, and each review call's judged commit and verdict with a one-line summary; each fix Claim with its "
+            "problem and a summary of the fix; the branches main created for the work; and the user's decisions with "
+            "their scope; never counts, exploit details or secrets.",
+            "Main writes it only between review calls and keeps it out of Git, never staging or committing it.",
+            "A resumed session, and main after a context compaction, take the Plan's READY, reading sets, passes, "
+            "Adversarial review results and the user's decisions from it as if received in this session, while counts, "
+            "the Stop threshold in effect and the final check's state still come only from this session.",
+            "Main takes it as written, so an edit to it changes what main believes.",
+            "Off mode writes none.",
+        ),
+        "CONTEXT.md#Active handoff": (
+            "In the Automatic flow, a Plan's review state crosses sessions through its Dispatch record instead, and an "
+            "Active handoff records progress and names the Dispatch record.",
+        ),
+        "CONTEXT.md#Pending-acceptance claim": (
+            "In the Automatic flow, main records each Claim's pass state in the Plan's Dispatch record until the user's "
+            "decision at the end of the Plan, and a resumed session takes it from there rather than from an Active "
+            "handoff note.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: ADR 0015's part on the dispatch record amends ADR 0002.
+    ADR = {
+        "ADR 0015#part": (
+            "This part records the dispatch record.",
+            "- **The record.** In auto, main keeps one dispatch record for each Plan of Plan-driven work, at "
+            "`.feather/dispatch/<name>.md`, named after the Plan: the spec's slug when the Plan is a spec or tickets of "
+            "it, the ticket's slug for a single ticket, the plan file's name, or for a plan-mode or conversation plan a "
+            "short name main states to the user.",
+            "It holds no counts and no exploit details or secrets, which follow Adversarial review step 10.",
+            "- **Writing it.** Main writes it only between review calls, as Serial within a working tree states for "
+            "handoff records, and keeps it out of Git: when no rule already ignores it, main adds `/.feather/dispatch/` "
+            "to `.gitignore`, and it never stages or commits the record.",
+            "Until the user's decision at the end of the Plan, main records each Claim's pass state in it.",
+            "- **A new session.** A resumed session, and main after a context compaction, take the Plan's READY, reading "
+            "sets, passes, Adversarial review results and the user's decisions from the dispatch record, and they count "
+            "as if received in this session: a Claim is not reviewed again for having passed in an earlier session, and "
+            "implemented work whose READY the record holds does not ask again under Implemented before plan review.",
+            "Counts restart in each session, as ADR 0002 decided, and the Stop threshold in effect and the final check's "
+            "state still come only from this session, so main runs the final check again in the new session before "
+            "landing.",
+            "For a Plan in auto this replaces the rules that passing verdicts do not cross sessions, that the Accept and "
+            "land list is never built from a record in the working tree, and that an unresolved verdict reaches a "
+            "resumed session only through an Active handoff.",
+            "- **Off mode.** These rules hold in auto only: off writes no dispatch record and keeps the earlier "
+            "cross-session rules.",
+            "- **Trusted.** Main takes the dispatch record as written.",
+            "Repository code a review or the final check runs, or a person, can edit it and so change which passes and "
+            "results main believes; cc-feather does not defend against that.",
+            "This amends [ADR 0002](0002-session-scoped-review-counts.md) (what crosses sessions): in auto, a Plan's "
+            "READY, reading sets, passes, Adversarial review results and the user's decisions cross sessions through its "
+            "dispatch record, not only an unresolved verdict an active handoff records.",
+            "- **Carry counts across sessions**: ADR 0002 restarts them on resume.",
+        ),
+    }
+    ADR_0002_NOTE = ("(Amended by ADR 0015: in auto, a Plan's review state crosses sessions through its dispatch record "
+                     "under `.feather/dispatch/`: a resumed session, and main after a context compaction, take the Plan's "
+                     "READY, reading sets, passes, Adversarial review results and the user's decisions from it as if "
+                     "received in that session, while counts still restart in each session; in off, only an unresolved "
+                     "verdict an active handoff records crosses sessions, as above.)")
+
+    # Acceptance item 17, for these rules: (English place, Chinese place, English sentence, Chinese sentence).
+    README_PAIRS = (
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "in auto, main keeps one dispatch record for each plan at `.feather/dispatch/<name>.md`, named after the plan: "
+         "the spec's slug for a spec or its tickets, the ticket's slug for a single ticket, the plan file's name, or a "
+         "short name main tells you for a plan-mode or conversation plan.",
+         "在 auto 下，主 Agent 為每份計畫保留一份派工紀錄，放在 `.feather/dispatch/<name>.md`，以計畫命名：spec 或它的 "
+         "ticket 用 spec 的 slug，單一 ticket 用該 ticket 的 slug，計畫檔用檔名，plan mode 或對話中的計畫則用主 Agent "
+         "告訴你的簡短名稱。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "It holds what a later session needs: the plan, its base revision and its plan-review READY; for each claim, "
+         "its classification, its reading set's hash, its base revision, and each review call's judged commit and "
+         "verdict with a one-line summary; each fix claim with its problem and a summary of the fix; the branches main "
+         "created for the work; and your decisions with their scope.",
+         "它保存之後的 session 需要的內容：計畫、計畫的基準版本與計畫審查的 READY；每個 claim 的分類、閱讀範圍的雜湊、"
+         "基準版本，以及每次審查呼叫所審的 commit 與結論，附一行摘要；每個修正用的 claim 及其問題與修正摘要；主 Agent "
+         "為這項工作建立的 branch；以及你的決定和範圍。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "It holds no counts, exploit details or secrets, and until your decision at the end of the plan it holds each "
+         "claim's pass state.",
+         "它不保存次數、攻擊細節或機密，而在你對計畫做出最後決定之前，它保存每個 claim 的通過狀態。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "Main writes it only between review calls and keeps it out of Git: when no rule already ignores it, main adds "
+         "`/.feather/dispatch/` to `.gitignore`, and it never stages or commits the record.",
+         "主 Agent 只在審查呼叫之間寫入它，並讓它不進 Git：沒有規則已經忽略它時，主 Agent 會把 `/.feather/dispatch/` "
+         "加進 `.gitignore`，且從不 stage 或 commit 這份紀錄。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "In auto it, not an active handoff's notes, is where review state crosses sessions; an active handoff records "
+         "progress and names the dispatch record.",
+         "在 auto 下，審查狀態是靠它、而不是進行中交接的記錄帶到新的 session；進行中的交接記錄進度，並寫明派工紀錄。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "A new session, and main after context compaction, take the plan's READY, reading sets, passes, Adversarial "
+         "review results and your decisions from it as if received in that session, so a claim that passed earlier is "
+         "not reviewed again and implemented work whose READY it holds is not asked about again, and the unresolved "
+         "verdicts and a BROKEN's listed findings it holds stay with their claims.",
+         "新的 session，以及 context 壓縮後的主 Agent，會從它取得計畫的 READY、閱讀範圍、通過、對抗式審查結果與你的決定，"
+         "視同在該 session 中收到，所以之前通過的 claim 不會重新審查，它記有 READY 的已實作工作也不會再問一次，而它記錄的"
+         "未解決結論與 BROKEN 列出的發現仍跟著各自的 claim。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "Counts still restart in each session, and the Stop threshold and the final check's state come only from the "
+         "current session, so main runs the final check again before landing; where the record lacks what main needs, "
+         "main treats the step as stopped and asks you.",
+         "次數仍在每個 session 重新計算，停止門檻與最終檢查的狀態只來自目前的 session，所以主 Agent 會在進入預設 branch "
+         "前重新執行最終檢查；紀錄缺少主 Agent 需要的內容時，主 Agent 會視為已停下並問你。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "Main takes the dispatch record as written, so an edit to it, by repository code a review or the final check "
+         "runs or by a person, changes which passes and results main believes; cc-feather does not defend against that.",
+         "主 Agent 照紀錄所寫的內容採信，所以有人或審查、最終檢查執行的儲存庫程式碼修改它，就會改變主 Agent 相信哪些通過"
+         "與結果；cc-feather 不防範這一點。"),
+        ("README.md#Resumed session", "README.zh-TW.md#恢復的 session",
+         "In auto, an unfinished plan is reviewed again unless its dispatch record holds its READY, and the plan's "
+         "passes, Adversarial review results, unresolved verdicts and your decisions carry over through the dispatch "
+         "record, as Dispatch record says.",
+         "在 auto 下，未完成的計畫會重新審查，除非它的派工紀錄記有 READY，而計畫的通過、對抗式審查結果、未解決的結論與你的"
+         "決定都透過派工紀錄帶過去，如「派工紀錄」所說。"),
+        ("README.md#Resumed session", "README.zh-TW.md#恢復的 session",
+         "Counts do not carry over, and in either mode finished tickets are not redone.",
+         "次數不會帶到新的 session，而且不論哪種模式，已完成的 ticket 都不會重做。"),
+        ("README.md#Commit", "README.zh-TW.md#Commit 條件",
+         "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a "
+         "branch counts as its own only when a record shows that it created it for this work: in auto the dispatch "
+         "record, in place of an active handoff, and in `off` an active handoff.",
+         "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有紀錄顯示它為這項工作建立了該 branch，"
+         "才算它自己的 branch：在 auto 下看派工紀錄，取代進行中的交接，在 `off` 下看進行中的交接。"),
+        ("README.md#Implemented before plan review", "README.zh-TW.md#實作完才做計畫審查",
+         "In auto, a plan whose dispatch record holds its READY counts as reviewed in a new session or after context "
+         "compaction too, so main does not ask.",
+         "在 auto 下，派工紀錄記有 READY 的計畫，在新的 session 或 context 壓縮後也算已審查，主 Agent 不會再問。"),
+    )
+
+    # Acceptance item 18: the replaced statements that passing verdicts and HELD do not cross sessions and that an
+    # unresolved verdict, or a branch main created, reaches a resumed session only through an active handoff, unscoped.
+    REPLACED = {
+        "review-state.md": (
+            "Counts and passing verdicts do not cross sessions.",
+            "Counts are per session; an unresolved verdict reaches a resumed session only through an active handoff "
+            "record.",
+            "is named; without an active handoff record, no restriction carries into a resumed session.",
+            "Before a gated operation, a claim needs valid passes from this session",
+            "the note returns to pending acceptance, naming what is missing. A resumed session that finds a "
+            "pending-acceptance note",
+            "in a resumed session main treats a branch as its own only when an active handoff records that main created "
+            "it for this work, and otherwise asks.",
+        ),
+        "plan-review.md": (
+            "Passing verdicts do not cross sessions either:",
+            "An unresolved verdict restricts a resumed session only when an active handoff records it;",
+            "is named, and without such a record no restriction carries over.",
+        ),
+        "code-review.md": ("and an unresolved verdict restricts a resumed session only when an active handoff records it.",),
+        "outcome-verification.md": (
+            "and an unresolved verdict restricts a resumed session only when an active handoff records it.",
+        ),
+        "adversarial-review.md": (
+            "a resumed session starts a new count, HELD does not cross sessions,",
+            "and an unresolved verdict restricts a resumed session only when an active handoff records it.",
+        ),
+        "CONTEXT.md#Active handoff": ("It is how unresolved verdicts and gate notes reach a resumed session.",),
+        "README.md": (
+            "Counts and passing verdicts do not carry over",
+            "in a resumed session a branch counts as its own only when an active handoff records that it created it for "
+            "this work.",
+        ),
+        "README.zh-TW.md": (
+            "次數與通過的結論不會帶到新的 session",
+            "恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。",
+        ),
+    }
+
+    # The handoff skill and its tool are unchanged: the dispatch record is written by main, not by the handoff tool (as
+    # at v0.25.0, line endings normalised to LF, as .gitattributes stores them).
+    UNCHANGED = {
+        "skills/handoff/SKILL.md": "b750854f9770a8e96bba8617748d74445705191a3fc9cae624a1da39d66d665d",
+        "skills/handoff/scripts/handoff.py": "cb18fa4a4d3c350e1cba2f13162a5d03d87262651c6be5ae09e3d3abaeeeb491",
+    }
+
+    def new_pins(self):
+        pins = {}
+        for group in (self.RECORD, self.ACROSS_SESSIONS, self.COMMITS, self.INTERIM, self.CARRIED, self.TRUSTED,
+                      self.OFF, self.CONTEXT, self.ADR):
+            for place, sentences in group.items():
+                pins.setdefault(place, []).extend(sentences)
+        pins.setdefault("ADR 0002", []).append(self.ADR_0002_NOTE)
+        for english_place, chinese_place, english, chinese in self.README_PAIRS:
+            pins.setdefault(english_place, []).append(english)
+            pins.setdefault(chinese_place, []).append(chinese)
+        return pins
+
+    def test_the_dispatch_record_is_kept_in_auto_out_of_git_and_written_between_calls(self):
+        self.assert_pinned(self.RECORD)
+        # It sits first among the rules for resumed sessions, which it feeds.
+        text = (config.ROOT / self.PATHS["review-state.md"]).read_text(encoding="utf-8")
+        section = text.split("## Resumed sessions and plan changes", 1)[1].split("\n## ", 1)[0]
+        labels = [line.split("**", 2)[1] for line in section.splitlines() if line.startswith("- **")]
+        self.assertEqual(labels[:2], ["Dispatch record.", "Resumed sessions."])
+
+    def test_a_resumed_session_and_a_compaction_take_review_state_from_the_record(self):
+        self.assert_pinned(self.ACROSS_SESSIONS)
+
+    def test_a_resumed_session_takes_the_branches_main_created_from_the_record_in_auto(self):
+        self.assert_pinned(self.COMMITS)
+
+    def test_until_the_decision_at_the_end_main_records_each_claims_pass_state(self):
+        self.assert_pinned(self.INTERIM)
+
+    def test_the_base_revision_fix_claims_and_listed_broken_findings_go_through_the_record(self):
+        self.assert_pinned(self.CARRIED)
+        # Ticket 03's statement that main establishes the Plan's base revision from Git, and ticket 04's that a BROKEN's
+        # findings stay listed, still stand beside the new sentences.
+        self.assertIn("which main establishes itself from Git in this session. In auto, main may instead take the "
+                      "plan's base revision from the plan's dispatch record",
+                      self.source("review-state.md#Evidence for a regression"))
+        self.assertIn("A BROKEN's findings stay listed until a HELD at the commit to be landed replaces them. In a resumed "
+                      "session, and after a context compaction, they stay listed", self.source("adversarial-review.md#final"))
+
+    def test_the_dispatch_record_is_trusted_as_written(self):
+        # Item 14's limit and the residual risk "The dispatch record is trusted", with no control against forgery.
+        self.assert_pinned(self.TRUSTED)
+
+    def test_off_writes_no_dispatch_record_and_keeps_the_earlier_cross_session_rules(self):
+        # Fails if off loses the earlier cross-session rules or starts writing a dispatch record.
+        self.assert_pinned(self.OFF)
+        self.assertTrue(self.source("review-state.md#Dispatch record").startswith(
+            "- **Dispatch record.** In auto, main keeps one dispatch record"))
+        self.assertTrue(self.source("README.md#Dispatch record").startswith(" in auto, main keeps one dispatch record"))
+        self.assertTrue(self.source("README.zh-TW.md#派工紀錄").startswith("在 auto 下，主 Agent 為每份計畫保留一份派工紀錄"))
+        self.assertTrue(self.source("CONTEXT.md#Dispatch record").startswith(
+            "Main's record of one Plan's review state in the Automatic flow"))
+        # The toggle procedure and the installed policy name no dispatch record, so turning auto off writes none.
+        for path in ("skills/setup/references/auto-review.md", "templates/review-auto.md"):
+            with self.subTest(path=path):
+                self.assertNotIn("dispatch record", (config.ROOT / path).read_text(encoding="utf-8").lower())
+
+    def test_glossary_states_the_dispatch_record_and_its_role(self):
+        self.assert_pinned(self.CONTEXT)
+        entries = feather_support.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        terms = list(entries)
+        self.assertEqual(terms[terms.index("Dispatch record") + 1], "Active handoff")
+
+    def test_adr_0015_records_the_dispatch_record_and_amends_adr_0002(self):
+        self.assert_pinned(self.ADR)
+        text = self.source("ADR 0015")
+        self.assertEqual(text.count(f"\n## {self.PART}\n"), 1)
+        # This part follows ticket 04's part.
+        self.assertLess(text.index(f"\n## {AdversarialReviewAtTheFinalCommitTests.PART}\n"),
+                        text.index(f"\n## {self.PART}\n"))
+        lines = self.source("ADR 0002").splitlines()
+        self.assertIn(self.ADR_0002_NOTE, lines)
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
+
+    def test_both_readmes_explain_the_dispatch_record_and_continuing_in_a_new_session(self):
+        for english_place, chinese_place, english, chinese in self.README_PAIRS:
+            for place, sentence in ((english_place, english), (chinese_place, chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_replaced_statements_are_gone(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def digest(self, text):
+        return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+    def test_the_handoff_skill_and_its_tool_are_unchanged(self):
+        for path, digest in self.UNCHANGED.items():
+            with self.subTest(path=path):
+                self.assertEqual(self.digest((config.ROOT / path).read_text(encoding="utf-8")), digest)
+
+    def test_the_handoff_skill_and_its_tool_match_the_v0_25_0_text(self):
+        for path, digest in self.UNCHANGED.items():
+            with self.subTest(path=path):
+                self.assertEqual(self.digest(self.tagged(path, path)), digest)
 
     def tagged_place(self, place):
         """The whole file behind a place at the tag; this ticket's ADR part included."""

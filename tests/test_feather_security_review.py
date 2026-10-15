@@ -724,7 +724,7 @@ class AdversarialReviewTests(unittest.TestCase):
             "An automatic HELD that main accepts under step 6 resets the count to zero; an explicit call's verdict does not change it, and changing the adversary's model or the brief's wording never resets it.",
             "A count that reaches the Stop threshold in effect without HELD stops automatic Adversarial review (step 8).",
             "Explicit and automatic calls are classified as for the other steps, as [review state](review-state.md) describes.",
-            "Recover the count, verdicts, coverage and open gaps as in [plan review](plan-review.md) step 1: counts are per session, a resumed session starts a new count, HELD does not cross sessions, an in-session state that cannot be established makes the step stopped until the user decides, and an unresolved verdict restricts a resumed session only when an active handoff records it.",
+            "Recover the count, verdicts, coverage and open gaps as in [plan review](plan-review.md) step 1: counts are per session, a resumed session starts a new count, in off HELD does not cross sessions, an in-session state that cannot be established makes the step stopped until the user decides, and in off an unresolved verdict restricts a resumed session only when an active handoff records it; in auto, a resumed session, and main after a context compaction, take the claim's Adversarial review result and a BROKEN's listed findings, by their one-line summary, from the plan's dispatch record as if received in this session, their details staying where step 10 puts them, as [review state](review-state.md)'s Resumed sessions describes.",
         ),
         "review-state.md": (
             "Plan review, code review, outcome verification and Adversarial review keep the same kind of state for each step.",
@@ -808,7 +808,7 @@ class AdversarialReviewTests(unittest.TestCase):
             "Main records its scope, the commit it accepts, the missing passes and the remaining risk; it stays visible in the report and in any active handoff, is never recorded as READY, APPROVED, CONFIRMED or HELD, and satisfies the acceptance gate for that claim as it stands.",
         ),
         "review-state.md#Resumed sessions": (
-            "Before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, counted as usual.",
+            "In off, before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, counted as usual.",
         ),
         "delegation SKILL.md": (
             "When the automatic flow requires them, follow [the code-review procedure](references/code-review.md), then [the outcome-verification procedure](references/outcome-verification.md) and, for a Security-critical claim, then [the adversarial-review procedure](references/adversarial-review.md) before reporting completion.",
@@ -940,11 +940,11 @@ class AdversarialReviewTests(unittest.TestCase):
             "接受並合併是你明確接受某個 claim，即使它缺少一關或兩關，或安全關鍵 claim 缺少 HELD：主 Agent 會記下所接受的 commit、缺少的關卡與剩餘風險，缺少 HELD 時還會記下已知漏洞，在回報與進行中的交接中持續列出，",
         ),
         "README.md#Resumed session": (
-            "Before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, unless its ticket was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since.",
-            "A claim whose handoff note says it is pending acceptance stays gated and needs both passes, plus HELD for a Security-critical claim, in the new session,",
+            "In `off`, before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, unless its ticket was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since.",
+            "In `off`, a claim whose handoff note says it is pending acceptance stays gated and needs both passes, plus HELD for a Security-critical claim, in the new session,",
         ),
         "README.zh-TW.md#恢復的 session": (
-            "在進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證，安全關鍵 claim 也要重新做對抗式審查；只有 ticket 是在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值、且之後沒有相關變更的 claim 例外。",
+            "在 `off` 下，進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證，安全關鍵 claim 也要重新做對抗式審查；只有 ticket 是在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值、且之後沒有相關變更的 claim 例外。",
             "交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關（安全關鍵 claim 還要加上 HELD），",
         ),
         "README.md#Ticket status": (

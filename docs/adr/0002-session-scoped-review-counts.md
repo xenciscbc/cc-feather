@@ -14,3 +14,5 @@ A resume may run up to two more automatic calls for the same plan or claim. Rest
 (Amended by ADR 0007: the restriction now applies to landing on the default branch, release and reporting complete rather than to committing; a restricted claim may be committed before its passes.)
 
 (Amended by ADR 0010: the two more automatic calls a resume may run are the value at the default Stop threshold of 2; the Stop threshold is now one user-configurable number from 2 to 10, and a resume starts a fresh count toward the Stop threshold in effect.)
+
+(Amended by ADR 0015: in auto, a Plan's review state crosses sessions through its dispatch record under `.feather/dispatch/`: a resumed session, and main after a context compaction, take the Plan's READY, reading sets, passes, Adversarial review results and the user's decisions from it as if received in that session, while counts still restart in each session; in off, only an unresolved verdict an active handoff records crosses sessions, as above.)
