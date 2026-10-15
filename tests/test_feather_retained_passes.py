@@ -310,11 +310,7 @@ class PerClaimTimingTests(unittest.TestCase):
     def test_adr_0015_records_per_claim_timing_and_amends_adr_0013(self):
         self.assert_pinned(self.ADR)
         lines = self.source("ADR 0013").splitlines()
-        # Ticket 03 extends this note with its own amendment; the whole line is pinned there and starts with this
-        # ticket's note unchanged.
-        note = FinalCheckAndFixClaimsTests.ADR_0013_NOTE
-        self.assertTrue(note.startswith(self.ADR_0013_NOTE[:-1] + " "))
-        self.assertIn(note, lines)
+        self.assertIn(self.ADR_0013_NOTE, lines)
         self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
 
     def test_both_readmes_explain_per_claim_timing_and_dependent_claims(self):
@@ -935,11 +931,11 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
             "and ignores stops, INCONCLUSIVE, REJECT and deferral.",
         ),
     }
-    # Ticket 01's note on ADR 0013, extended by this ticket's amendment; ticket 01's pin now names this line.
-    ADR_0013_NOTE = (PerClaimTimingTests.ADR_0013_NOTE[:-1] + " In auto, a final check failure that cannot be attributed "
-                     "with evidence no longer reopens every Claim the check covers: it is fixed as a fix Claim, an "
-                     "attributed failure is fixed by its Claim without reopening any other, and the final check also "
-                     "reruns every Claim's primary acceptance.)")
+    # This ticket's note on ADR 0013's part on the final check, a line of its own beside ticket 01's note.
+    ADR_0013_NOTE = ("(Further amended by ADR 0015: in auto, a final check failure that cannot be attributed with evidence "
+                     "no longer reopens every Claim the check covers: it is fixed as a fix Claim, an attributed failure "
+                     "is fixed by its Claim without reopening any other, and the final check also reruns every Claim's "
+                     "primary acceptance.)")
 
     # Acceptance item 17, for these rules: (English label, Chinese label, English sentence, Chinese sentence).
     README_PAIRS = (
@@ -1108,9 +1104,14 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
         self.assertEqual(text.count(f"\n## {self.PART}\n"), 1)
         # This part follows ticket 02's part.
         self.assertLess(text.index(f"\n## {FixedPassesTests.PART}\n"), text.index(f"\n## {self.PART}\n"))
-        lines = self.source("ADR 0013").splitlines()
+        text = self.source("ADR 0013")
+        lines = text.splitlines()
         self.assertIn(self.ADR_0013_NOTE, lines)
-        self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
+        self.assertEqual(sum(line.startswith("(Further amended by ADR 0015:") for line in lines), 1)
+        # The note sits in ADR 0013's part on the serial rule and the final check, after its considered options.
+        part = text.split("\n## Serial reviews and the final check\n", 1)[1].split("\n## ", 1)[0]
+        self.assertLess(part.index("Considered options for this part:"), part.index(self.ADR_0013_NOTE))
+        self.assertLess(part.index(self.ADR_0013_NOTE), part.index("Consequences of this part:"))
 
     def test_both_readmes_explain_the_final_checks_reruns_fix_claims_and_stop(self):
         for en_label, zh_label, english, chinese in self.README_PAIRS:
@@ -1118,7 +1119,7 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
-    def test_the_final_check_no_longer_reopens_claims_in_either_mode(self):
+    def test_the_unqualified_reopening_sentences_are_gone_and_only_off_reopens(self):
         for place, phrases in self.REPLACED.items():
             text = self.source(place)
             for phrase in phrases:

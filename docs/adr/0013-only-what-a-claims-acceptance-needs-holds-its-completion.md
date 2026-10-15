@@ -24,7 +24,7 @@ This amends [ADR 0006](0006-review-state-validity-and-completion.md): what holds
 - **Let security defects outside the acceptance land through Accept and land, with deferred Adversarial reviews**: the 2026-10-14 security analysis found that the promise to show every such defect to the user could be broken in many places, mostly through repository content alone, and ADR 0009 had already rejected letting a flaw the change introduced land.
 - **Per-Claim review timing with Review schedules and Review groups**: where Claims share files, as nearly all of this project's Plans do, the groups collapse to reviewing after the whole Plan, so the 0.20.0 case that motivated it is not fixed; it is deferred to separate work on retained passes.
 
-(Amended by ADR 0015: per-Claim review timing, deferred above to separate work on retained passes, is now the only review timing in auto: each Claim's code review and then outcome verification run once that Claim is implemented and committed, and a Claim that depends on another waits for its valid APPROVED and CONFIRMED. In auto, a final check failure that cannot be attributed with evidence no longer reopens every Claim the check covers: it is fixed as a fix Claim, an attributed failure is fixed by its Claim without reopening any other, and the final check also reruns every Claim's primary acceptance.)
+(Amended by ADR 0015: per-Claim review timing, deferred above to separate work on retained passes, is now the only review timing in auto: each Claim's code review and then outcome verification run once that Claim is implemented and committed, and a Claim that depends on another waits for its valid APPROVED and CONFIRMED.)
 
 ## Consequences
 
@@ -49,6 +49,8 @@ Considered options for this part:
 - **No final check, relying on each Claim's passes**: each pass judges one Claim, so a dependency between Claims that main missed could land unchecked.
 - **Take the final check's state from a record or an earlier session**: anyone who can edit the working tree could record a pass, and an earlier session's run cannot show that nothing failed since; a record can only make the state failed.
 - **A counted final review step with its own verdict**: it would stop the flow by itself at the Stop threshold and add a verdict, while its failure already reopens Claims under the existing rules.
+
+(Further amended by ADR 0015: in auto, a final check failure that cannot be attributed with evidence no longer reopens every Claim the check covers: it is fixed as a fix Claim, an attributed failure is fixed by its Claim without reopening any other, and the final check also reruns every Claim's primary acceptance.)
 
 Consequences of this part: a review call holds implementation in the working tree it judges until it ends, so work in one working tree takes longer than it would with a separate worktree per review, which the user can still set up. The final check adds one run of the Plan's acceptance checks before landing or release; it is the only safeguard this record adds for work merged from separate worktrees, and how passes carry over across such a merge is left to separate work. Because the final check's state never crosses a context compaction or a session, a final commit whose check ran before one can no longer pass cleanly without a rerun: main runs the check again, and if that commit had failed, or main cannot establish that it had not, landing needs a decision that names the failure or a new commit.
 
