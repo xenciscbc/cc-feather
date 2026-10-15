@@ -68,11 +68,11 @@ _Avoid_: manual review
 An independent check that a Plan is ready to implement, answered READY or REVISE.
 
 **Code review**:
-An independent check of the code implementing a Claim, answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE. INCONCLUSIVE means evidence the review needs could not be obtained, safely or at all; it is not a pass and does not prove a defect. When the user says "review" about implemented work, this is what is meant. In the Automatic flow it runs once the Claim is implemented and committed, without waiting for the rest of the Plan.
+An independent check of the code implementing a Claim, answered APPROVED, CHANGES_REQUESTED or INCONCLUSIVE. INCONCLUSIVE means evidence the review needs could not be obtained, safely or at all; it is not a pass and does not prove a defect. When the user says "review" about implemented work, this is what is meant. In the Automatic flow it runs once the Claim is implemented and committed, without waiting for the rest of the Plan. In the Automatic flow its APPROVED stays fixed when another Claim of the same Plan changes the Claim's files or what they depend on within the range that Claim's own completed Code review and Outcome verification judged, both of which passed; any other change, and in off any change to the Claim's files or what they depend on, reopens it.
 _Avoid_: PR review, diff review
 
 **Outcome verification**:
-An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLUSIVE. In the Automatic flow it follows the Claim's APPROVED once the Claim is implemented and committed, without waiting for the rest of the Plan.
+An independent check that a Claim holds, answered CONFIRMED, REFUTED or INCONCLUSIVE. In the Automatic flow it follows the Claim's APPROVED once the Claim is implemented and committed, without waiting for the rest of the Plan. In the Automatic flow its CONFIRMED stays fixed when another Claim of the same Plan changes the Claim's files or what they depend on within the range that Claim's own completed Code review and Outcome verification judged, both of which passed; any other change, and in off any change to the Claim's files or what they depend on, reopens it.
 _Avoid_: testing, QA
 
 **Adversarial review**:

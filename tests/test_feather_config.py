@@ -3946,6 +3946,9 @@ class FeatherConfigTests(unittest.TestCase):
         "Dependent claims": ("相依的 claim", "starts only after that claim has a valid APPROVED and CONFIRMED",
                              "拿到有效的 APPROVED 與 CONFIRMED 才開始", "review-state.md",
                              "starts only after that claim has a valid APPROVED and a valid CONFIRMED"),
+        # Retained passes ticket 02 (Acceptance items 4, 5, 15 and 17): fixed passes in auto.
+        "Fixed passes": ("固定的通過", "they stay fixed", "它們就保持固定", "review-state.md",
+                         "are a judgement of the commit they judged and stay fixed"),
         "Budget": ("次數上限", "each step counts consecutive automatic calls", "每個步驟計算連續沒通過的自動呼叫次數",
                    "plan-review.md", "Count consecutive automatic calls without a pass"),
         "Re-review during implementation": ("施工中的重審", "a plan is reviewed again only after a material deviation",

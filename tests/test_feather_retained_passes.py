@@ -4,7 +4,14 @@ implemented and committed, as the only review timing in auto, replacing the rule
 Plan is implemented; a Claim that lists another under Blocked by, or otherwise depends on it as its Plan states, waits for that Claim's valid APPROVED and CONFIRMED, a
 Plan that states no dependencies is followed in order, and a stopped upstream Claim stops the Claims that depend on it
 until the user decides, a decision recorded as a deferral of the upstream Claim. The verifier template and the
-installed policy are unchanged, since no ticket of the spec changes them."""
+installed policy are unchanged, since no ticket of the spec changes them.
+
+Retained passes ticket 02 (Acceptance items 4, 5 and 15, the parts of items 14, 16, 17 and 18 for these rules, and
+security invariants S5 and S7): in auto, a Claim's APPROVED and CONFIRMED stay fixed for a change within the range
+another Claim of the same Plan had judged by a completed code review and outcome verification that both passed; any
+other change, and every change in off, keeps file-level reopening; a Claim changes another Claim's acceptance checks
+only where its reading set says so, and its code review brief then carries that acceptance for a weakening check;
+turning automatic review off during a Plan reopens fixed passes. The reviewer template is unchanged."""
 
 from __future__ import annotations
 
@@ -347,6 +354,335 @@ class PerClaimTimingTests(unittest.TestCase):
                     self.assertIn(phrase, text)
 
     def test_the_unchanged_pins_match_the_v0_25_0_text(self):
+        for path, digest in self.UNCHANGED.items():
+            text = self.tagged(path, path).replace("\r\n", "\n")
+            with self.subTest(path=path):
+                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+
+
+class FixedPassesTests(unittest.TestCase):
+    """Ticket 02: whole-sentence pins of fixed passes, S5, S7, off mode and the brief for another Claim's acceptance
+    checks, absence pins of the replaced file-level reopening in auto, a pin of the unchanged reviewer template, and a
+    check that every new pin fails on the text at tag v0.25.0. It reuses ticket 01's readers rather than changing them."""
+
+    ADR_0006 = "0006-review-state-validity-and-completion.md"
+    PATHS = {**PerClaimTimingTests.PATHS, "ADR 0006": f"docs/adr/{ADR_0006}"}
+    TAG = PerClaimTimingTests.TAG
+    GIT_READ = PerClaimTimingTests.GIT_READ
+    PART = "Fixed passes"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """As ticket 01's reader, plus 'ADR 0015#part' (this ticket's part of ADR 0015) and 'ADR 0006'."""
+        if name == "ADR 0015#part":
+            text = (config.ROOT / cls.PATHS["ADR 0015"]).read_text(encoding="utf-8")
+            return text.split(f"\n## {cls.PART}\n", 1)[1].split("\n## ", 1)[0]
+        if name == "ADR 0006":
+            return (config.ROOT / cls.PATHS[name]).read_text(encoding="utf-8")
+        return PerClaimTimingTests.source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    tagged = PerClaimTimingTests.tagged
+
+    # Acceptance item 4 and S5: fixed passes in auto, their condition, who fixes a finding and what still reopens.
+    FIXED = {
+        "review-state.md#What a pass covers": (
+            "A later change to a claim's files or to what they depend on reopens code review and outcome verification "
+            "for that claim, except where its passes stay fixed in auto as described below;",
+            "In auto, a claim's valid APPROVED and CONFIRMED are a judgement of the commit they judged and stay fixed: "
+            "they are not reopened by a change to the claim's files or to what they depend on that lies within the range "
+            "judged by another claim's completed code review and outcome verification of the same plan, both of which "
+            "passed; a fix claim counts as another claim.",
+            "A Blocking finding in that other claim's reviews is that claim's to fix.",
+            "Which files of another claim's acceptance checks a claim may change, and what its code review then checks, "
+            "are as [code review](code-review.md) step 2 describes.",
+            "Any other change keeps the file-level rules above, such as an edit outside the plan's claims, a rebase, an "
+            "environment or test target change, a change to the claim's reading set, or a change whose claim ends without "
+            "both passes.",
+            "Fixed passes do not change what reopens a Security-critical claim's HELD.",
+        ),
+    }
+    S5 = ("Passes stay fixed only for a change inside the range judged by another claim's completed code review and "
+          "outcome verification of the same plan that both passed: when that claim's review stops, is cancelled, is "
+          "deferred or ends in accept and land without both passes, its changes reopen the claims whose files or "
+          "dependencies they touch, under the file-level rules above.")
+    # Acceptance item 15 for these rules: off keeps file-level reopening whichever claim made the change.
+    OFF = ("Fixed passes hold in auto only: in off, a later change to a claim's files or to what they depend on reopens "
+           "its code review and outcome verification under the file-level rules above, whichever claim made it.")
+    S7 = ("When automatic review is turned off for a plan before the user's decision at the end of the plan, as Accept "
+          "and land at the end of the plan describes, every fixed pass whose claim's files or dependencies another claim "
+          "changed after it is reopened under the file-level rules above, and the cross-session rules of off apply from "
+          "then on, as Resumed sessions describes.")
+    # Acceptance item 14, the limits of fixed passes.
+    LIMITS = ("Fixed passes have limits this flow does not check: a later claim's reviewer reads only its own reading set "
+              "and may not know an earlier claim's design intent, and a property of an earlier claim that no acceptance "
+              "check the final check runs covers can be broken without the final check noticing.")
+
+    # Acceptance item 5: the reading-set condition, how main decides the files, the brief's stated exception and the
+    # weakening check; review state's Reading set points to it.
+    ACCEPTANCE_CHECKS = {
+        "code-review.md": (
+            "In auto, a claim may change a file that another claim's acceptance checks run or read, such as its tests, "
+            "expected values, fixtures, discovery or runner configuration and their support code, only where the "
+            "changing claim's own reading set states that it does; otherwise the change is a Deviation and a Blocking "
+            "finding.",
+            "Main decides which files these are from the changing claim's commit, files it adds included, and counts a "
+            "file it cannot rule out as one of them.",
+            "When the changing claim's diff changes such a file, the brief names those files and also carries the "
+            "acceptance of each claim whose checks the file serves, as a stated exception to the rule that a brief "
+            "carries only the recorded reading set, and the reviewer checks from the diff that the change does not "
+            "weaken that acceptance, for example by loosening an assertion, replacing a fixture or turning off discovery; "
+            "a weakening is a Blocking finding.",
+            "The installed reviewer definition is unchanged: the brief states this check.",
+        ),
+        "review-state.md#Reading set": (
+            "In auto, a code review brief also carries another claim's acceptance where [code review](code-review.md) "
+            "step 2 adds it for a claim that changes that claim's acceptance checks.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: the glossary entries state fixed passes.
+    CONTEXT = {
+        "CONTEXT.md#Code review": (
+            "In the Automatic flow its APPROVED stays fixed when another Claim of the same Plan changes the Claim's files "
+            "or what they depend on within the range that Claim's own completed Code review and Outcome verification "
+            "judged, both of which passed; any other change, and in off any change to the Claim's files or what they "
+            "depend on, reopens it.",
+        ),
+        "CONTEXT.md#Outcome verification": (
+            "In the Automatic flow its CONFIRMED stays fixed when another Claim of the same Plan changes the Claim's "
+            "files or what they depend on within the range that Claim's own completed Code review and Outcome "
+            "verification judged, both of which passed; any other change, and in off any change to the Claim's files or "
+            "what they depend on, reopens it.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: ADR 0015's part on fixed passes and S5 amends ADR 0006 (what a pass covers).
+    ADR = {
+        "ADR 0015#part": (
+            "This part records fixed passes.",
+            "The user decided (2026-10-14 and 2026-10-15, the second day after a security analysis; the "
+            "[spec](../specs/retained-passes.md) carries the acceptance and its security invariants):",
+            "- **Passes stay fixed.** In auto, a Claim's valid APPROVED and CONFIRMED are a judgement of the commit they "
+            "judged and are not reopened by a change to the Claim's files or to what they depend on that lies within the "
+            "range judged by another Claim's completed code review and outcome verification of the same Plan, both of "
+            "which passed; a fix Claim counts as another Claim.",
+            "A Blocking finding in that other Claim's reviews is that Claim's to fix.",
+            "- **A fixed pass needs a passing review of the change.** A Claim's passes stay fixed only for a change "
+            "inside that range.",
+            "When that other Claim's review stops, is cancelled, is deferred or ends in Accept and land without both "
+            "passes, its changes reopen the Claims whose files or dependencies they touch, under the earlier rules.",
+            "- **What still reopens.** Any other change keeps the earlier rules: an edit outside the Plan's Claims, a "
+            "rebase, an environment or test target change, a change to the Claim's reading set, or a change whose Claim "
+            "ends without both passes.",
+            "What reopens a Security-critical claim's HELD is unchanged by this part.",
+            "- **Another Claim's acceptance checks.** A Claim may change a file that another Claim's acceptance checks "
+            "run or read, such as its tests, expected values, fixtures, discovery or runner configuration and their "
+            "support code, only where the changing Claim's own reading set states that it does; otherwise the change is "
+            "a Deviation and a Blocking finding.",
+            "Main decides which files these are from the changing Claim's commit, files it adds included, and counts a "
+            "file it cannot rule out as one of them.",
+            "When the changing Claim's diff changes such a file, its code review brief also carries the acceptance of "
+            "each Claim whose checks the file serves, as a stated exception to the rule that a brief carries only the "
+            "recorded reading set, and the reviewer checks from the diff that the change does not weaken that "
+            "acceptance; a weakening is a Blocking finding.",
+            "The installed reviewer definition is unchanged; the code review procedure states this in the brief.",
+            "- **Off mode and leaving auto.** Fixed passes hold in auto only, and off keeps the earlier rules.",
+            "When automatic review is turned off for a Plan before the user's decision at the end of the Plan, every "
+            "fixed pass whose Claim's files or dependencies another Claim changed after it is reopened under the earlier "
+            "rules, and the cross-session rules of off apply from then on.",
+            "- **Limits.** A later Claim's reviewer reads only its own reading set and may not know an earlier Claim's "
+            "design intent, and a property of an earlier Claim that no acceptance check the final check runs covers can "
+            "be broken without the final check noticing.",
+            "This amends [ADR 0006](0006-review-state-validity-and-completion.md) (what a pass covers): in auto, a "
+            "change to a Claim's files or dependencies within the range another Claim's passing code review and outcome "
+            "verification of the same Plan judged no longer reopens the Claim's code review and outcome verification.",
+            "- **Keep file-level reopening in auto**: it chains reviews through shared files.",
+            "- **Carry every earlier Claim's acceptance into later reviews**: it widens every review.",
+        ),
+    }
+    ADR_0006_NOTE = ("(Amended by ADR 0015: in auto, a Claim's valid APPROVED and CONFIRMED are not reopened by a change "
+                     "to its files or dependencies that lies within the range another Claim of the same Plan had judged "
+                     "by a completed code review and outcome verification that both passed; every other change, and "
+                     "every change in off, still reopens them as above.)")
+
+    # Acceptance item 17, for these rules: (English label, Chinese label, English sentence, Chinese sentence).
+    README_PAIRS = (
+        ("Fixed passes", "固定的通過",
+         "in auto, once a claim has a valid APPROVED and CONFIRMED, they stay fixed: when another claim of the same "
+         "plan, a fix claim included, changes its files or what they depend on, they are not reopened as long as that "
+         "change lies within what that other claim's own completed code review and verification judged, and both "
+         "passed.",
+         "在 auto 下，claim 一拿到有效的 APPROVED 與 CONFIRMED，它們就保持固定：同一份計畫的另一個 claim（包括修正用的 "
+         "claim）改動它的檔案或其相依項目時，只要這項改動落在那個 claim 自己完成的程式碼審查與驗證所審過的範圍內，而且兩者"
+         "都通過，就不會重新打開它們。"),
+        ("Fixed passes", "固定的通過",
+         "A problem the change causes is that other claim's to fix, in its own reviews.",
+         "這項改動造成的問題，由那個 claim 在它自己的審查中修正。"),
+        ("Fixed passes", "固定的通過",
+         "A pass stays fixed only for a change a passing review judged: when that other claim's review stops, is "
+         "cancelled, is deferred or ends in your accept-and-land decision without both passes, its changes reopen the "
+         "claims whose files or dependencies they touch, as Validity says.",
+         "只有通過的審查審過的改動，才會讓通過保持固定：那個 claim 的審查停下、被取消、被延後，或沒拿到兩項通過就以你決定"
+         "接受並合併結束時，它的改動會依「有效範圍」重新打開它碰到的檔案或相依項目所屬的 claim。"),
+        ("Fixed passes", "固定的通過",
+         "Every other change still reopens as Validity says, such as your own edit outside the plan's claims, a rebase, "
+         "an environment or test target change, a change to the claim's reading set, or a change whose claim ends "
+         "without both passes; fixed passes do not change what reopens a HELD.",
+         "其他改動仍依「有效範圍」重新打開，例如你在計畫的 claim 以外所做的修改、rebase、環境或測試目標的變更、claim 閱讀"
+         "範圍的變更，或所屬 claim 沒拿到兩項通過就結束的改動；固定的通過也不改變什麼會重新打開 HELD。"),
+        ("Fixed passes", "固定的通過",
+         "A claim may change a file another claim's acceptance checks run or read, such as its tests, expected values, "
+         "fixtures, test discovery or runner configuration and their support code, only where its own reading set says "
+         "it does; otherwise that is a deviation and blocks.",
+         "claim 只有在它自己的閱讀範圍寫明時，才能改動另一個 claim 的驗收檢查會執行或讀取的檔案，例如它的測試、預期值、"
+         "fixture、測試探索或執行器設定，以及它們的輔助程式碼；否則就是偏離，會擋下。"),
+        ("Fixed passes", "固定的通過",
+         "Main decides which files these are from the changing claim's commit, files it adds included, and counts any "
+         "file it cannot rule out; that claim's code review then also reads the acceptance of each claim whose checks it "
+         "changed and checks that the change does not weaken it, for example by loosening an assertion, replacing a "
+         "fixture or turning off discovery, and a weakening blocks.",
+         "主 Agent 從做出改動的 claim 的 commit 判斷是哪些檔案，包括它新增的檔案，無法排除的檔案也算在內；該 claim 的程式碼"
+         "審查接著也會讀每個驗收檢查被它改動的 claim 的驗收條件，並檢查這項改動沒有削弱它，例如放寬斷言、換掉 fixture 或關掉"
+         "測試探索，削弱就會擋下。"),
+        ("Fixed passes", "固定的通過",
+         "Fixed passes hold in auto only: in `off`, any change to a claim's files or what they depend on still reopens "
+         "its code review and verification as Validity says, and turning automatic review off for a plan before your "
+         "decision at the end of the plan reopens every fixed pass whose claim's files or dependencies another claim "
+         "changed after it, with `off`'s rules for resumed sessions from then on.",
+         "固定的通過只在 auto 下成立：在 `off` 下，改動 claim 的檔案或其相依項目，仍依「有效範圍」重新打開它的程式碼審查與"
+         "驗證；在你對計畫做出最後決定之前就關掉自動審查，會重新打開每一個在通過之後被另一個 claim 改動了檔案或相依項目的"
+         "固定通過，之後恢復 session 的規則也改用 `off` 的。"),
+        ("Fixed passes", "固定的通過",
+         "Fixed passes have limits: a later claim's reviewer reads only its own reading set and may not know an earlier "
+         "claim's design intent, and a property of an earlier claim that no acceptance check the final check runs covers "
+         "can be broken without the final check noticing.",
+         "固定的通過有其限制：後面 claim 的 reviewer 只讀它自己的閱讀範圍，可能不知道前面 claim 的設計用意；前面 claim 的某項"
+         "性質，若沒有任何最終檢查執行的驗收檢查涵蓋，就可能被破壞而最終檢查沒有發現。"),
+        ("Validity", "有效範圍",
+         "Changing a claim's files or what they depend on reopens its code review and verification, except where its "
+         "passes stay fixed in auto, as Fixed passes says;",
+         "改動 claim 的檔案或其相依項目，會重新打開程式碼審查與驗證，但 auto 下依「固定的通過」保持固定的通過除外；只改環境"
+         "則只重新打開驗證；其他改動，主 Agent 會說明為什麼通過仍然有效。"),
+    )
+
+    # Acceptance item 18: the replaced statements of file-level reopening in auto, which said any later change to a
+    # claim's files reopens its passes.
+    REPLACED = {
+        "review-state.md": (
+            "A later change to a claim's files or to what they depend on reopens code review and outcome verification "
+            "for that claim;",
+        ),
+        "README.md": ("Changing a claim's files or what they depend on reopens its code review and verification;",),
+        "README.zh-TW.md": ("改動 claim 的檔案或其相依項目，會重新打開程式碼審查與驗證；",),
+    }
+
+    # Acceptance item 5 and the Implementation Decisions "Unchanged": the reviewer template is unchanged, as at v0.25.0
+    # (line endings normalised to LF, as .gitattributes stores them).
+    UNCHANGED = {"templates/agents/reviewer.md": "5c1684aed6bb3371beaf083f51232ed58e14fa383507f30deaa0d0469ad2beff"}
+
+    def new_pins(self):
+        pins = {}
+        for group in (self.FIXED, self.ACCEPTANCE_CHECKS, self.CONTEXT, self.ADR):
+            for place, sentences in group.items():
+                pins.setdefault(place, []).extend(sentences)
+        pins["review-state.md#What a pass covers"].extend((self.S5, self.OFF, self.S7, self.LIMITS))
+        pins.setdefault("ADR 0006", []).append(self.ADR_0006_NOTE)
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            pins.setdefault(f"README.md#{en_label}", []).append(english)
+            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+        return pins
+
+    def test_passes_stay_fixed_in_auto_and_every_other_change_keeps_file_level_reopening(self):
+        self.assert_pinned(self.FIXED)
+
+    def test_s5_a_fixed_pass_needs_a_passing_review_of_the_change(self):
+        self.assert_pinned({"review-state.md#What a pass covers": (self.S5,)})
+
+    def test_off_mode_keeps_file_level_reopening(self):
+        # Fails if off loses file-level reopening: the off sentence and the rule it keeps must both stand.
+        self.assert_pinned({"review-state.md#What a pass covers": (self.OFF, self.FIXED[
+            "review-state.md#What a pass covers"][0])})
+
+    def test_s7_leaving_auto_during_a_plan_reopens_fixed_passes(self):
+        self.assert_pinned({"review-state.md#What a pass covers": (self.S7,)})
+
+    def test_the_limits_of_fixed_passes_are_stated(self):
+        self.assert_pinned({"review-state.md#What a pass covers": (self.LIMITS,)})
+
+    def test_another_claims_acceptance_checks_get_a_weakening_check(self):
+        self.assert_pinned(self.ACCEPTANCE_CHECKS)
+        # The brief's rule that it carries only the recorded reading set still stands beside the stated exception.
+        self.assertIn("Before dispatch, main confirms that the reading set is unchanged and supplies only the reading "
+                      "set it recorded, as [review state](review-state.md)'s Reading set describes.",
+                      self.source("code-review.md"))
+        self.assertIn("and the briefs use only the recorded reading set, except as [adversarial review]"
+                      "(adversarial-review.md) step 2 adds for a claim that owns a composed review.",
+                      self.source("review-state.md#Reading set"))
+
+    def test_glossary_states_fixed_passes(self):
+        self.assert_pinned(self.CONTEXT)
+
+    def test_adr_0015_records_fixed_passes_and_amends_adr_0006(self):
+        self.assert_pinned(self.ADR)
+        text = self.source("ADR 0015")
+        self.assertEqual(text.count(f"\n## {self.PART}\n"), 1)
+        # This part follows ticket 01's part, after its Consequences.
+        self.assertLess(text.index("\n## Consequences\n"), text.index(f"\n## {self.PART}\n"))
+        lines = self.source("ADR 0006").splitlines()
+        self.assertIn(self.ADR_0006_NOTE, lines)
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
+
+    def test_both_readmes_explain_fixed_passes(self):
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_fixed_passes_bullet_follows_ticket_01s_bullets(self):
+        for path, label, previous in (("README.md", "Fixed passes", "Dependent claims"),
+                                      ("README.zh-TW.md", "固定的通過", "相依的 claim")):
+            labels = [line[4:].split("**", 1)[0].rstrip(":：") for line in self.source(path).splitlines()
+                      if line.startswith("- **")]
+            with self.subTest(path=path):
+                self.assertEqual(labels[labels.index(previous) + 1], label)
+
+    def test_file_level_reopening_in_auto_is_replaced(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def test_the_reviewer_template_is_unchanged(self):
+        for path, digest in self.UNCHANGED.items():
+            text = (config.ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n")
+            with self.subTest(path=path):
+                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+
+    def tagged_place(self, place):
+        """The whole file behind a place at the tag; this ticket's ADR part and ADR 0006 included."""
+        name = place.partition("#")[0]
+        return self.tagged(place, self.PATHS[name])
+
+    def test_every_new_pin_fails_on_the_v0_25_0_text(self):
+        for place, sentences in self.new_pins().items():
+            text = self.tagged_place(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
+
+    def test_every_absence_pin_matches_the_v0_25_0_text(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.tagged_place(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
+
+    def test_the_reviewer_template_matches_the_v0_25_0_text(self):
         for path, digest in self.UNCHANGED.items():
             text = self.tagged(path, path).replace("\r\n", "\n")
             with self.subTest(path=path):

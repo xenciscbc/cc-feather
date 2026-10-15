@@ -427,7 +427,9 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          ()),
         ("a relevant edit after a pass",
          "code review and outcome verification reopen for the claim",
-         (("review-state.md", "A later change to a claim's files or to what they depend on reopens code review and outcome verification for that claim;"),),
+         # Retained passes ticket 02 (Acceptance item 18): fixed passes in auto replace "A later change to a claim's files
+         # or to what they depend on reopens code review and outcome verification for that claim;".
+         (("review-state.md", "A later change to a claim's files or to what they depend on reopens code review and outcome verification for that claim, except where its passes stay fixed in auto as described below;"),),
          ()),
         ("a resumed session finds a pending-acceptance note",
          "the claim stays gated and needs passes from the new session unless the note records accept and land that still holds",
