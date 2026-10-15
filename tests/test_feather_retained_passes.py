@@ -1,7 +1,7 @@
 """Retained passes ticket 01 (docs/specs/retained-passes.md, Acceptance items 1, 2 and 3 and the parts of items 16, 17
 and 18 for these rules): in auto, each Claim's code review and then outcome verification run once that Claim is
 implemented and committed, as the only review timing in auto, replacing the rule that reviews start once the reviewed
-Plan is implemented; a Claim that lists another under Blocked by waits for that Claim's valid APPROVED and CONFIRMED, a
+Plan is implemented; a Claim that lists another under Blocked by, or otherwise depends on it as its Plan states, waits for that Claim's valid APPROVED and CONFIRMED, a
 Plan that states no dependencies is followed in order, and a stopped upstream Claim stops the Claims that depend on it
 until the user decides, a decision recorded as a deferral of the upstream Claim. The verifier template and the
 installed policy are unchanged, since no ticket of the spec changes them."""
@@ -114,7 +114,8 @@ class PerClaimTimingTests(unittest.TestCase):
             "as depending on those before it.",
         ),
         "SKILL.md#Plan review": (
-            "A claim that lists another under `Blocked by` starts only after that claim has a valid APPROVED and "
+            "A claim that lists another under `Blocked by`, or otherwise depends on it as its plan states, starts only "
+            "after that claim has a valid APPROVED and "
             "CONFIRMED, a plan that states no dependencies is followed in order, and when a claim stops, the claims that "
             "depend on it stop and main asks the user, who may let named dependent claims proceed as a deferral of the "
             "stopped claim, as [review state](references/review-state.md)'s Per-claim timing and Dependent claims "
@@ -145,7 +146,8 @@ class PerClaimTimingTests(unittest.TestCase):
         "CONTEXT.md#Automatic flow": (
             "Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; "
             "this is the only review timing in auto.",
-            "A Claim that lists another under Blocked by starts only after that Claim has a valid APPROVED and "
+            "A Claim that lists another under Blocked by, or otherwise depends on it as its Plan states, starts only "
+            "after that Claim has a valid APPROVED and "
             "CONFIRMED, and a Plan that states no dependencies is followed in order; when a Claim stops, every Claim that "
             "depends on it stops and main asks the user, who may let named dependent Claims proceed as a deferral of the "
             "stopped Claim.",
@@ -166,13 +168,16 @@ class PerClaimTimingTests(unittest.TestCase):
             "This record is written in parts, each by the ticket that implements its rule, so that its implementation "
             "and reviews can check it against the procedures they change.",
             "This part records per-Claim timing.",
+            "The user decided (2026-10-14 and 2026-10-15; the [spec](../specs/retained-passes.md) carries the "
+            "acceptance):",
             "In the Automatic flow, each Claim's code review and then outcome verification run once that Claim is "
             "implemented and committed, replacing the rule that reviews start once the reviewed Plan is implemented.",
             "It is the only review timing in auto: no setting or Plan statement selects another.",
             "A single-Claim Plan is unchanged.",
             "Implementation and reviews in one working tree stay serial, so a Claim with no dependency still waits for a "
             "review call running in the same working tree.",
-            "A Claim that lists another under Blocked by starts only after that Claim has valid APPROVED and CONFIRMED.",
+            "A Claim that lists another under Blocked by, or otherwise depends on it as its Plan states, starts only "
+            "after that Claim has valid APPROVED and CONFIRMED.",
             "Claims with no such dependency do not wait for other Claims' passes.",
             "Where a Plan states no dependencies between its Claims, main follows the Plan's order and treats each Claim "
             "as depending on those before it.",

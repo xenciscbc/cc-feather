@@ -57,7 +57,7 @@ The number of consecutive automatic calls without a pass that stops one step of 
 _Avoid_: budget, retry limit
 
 **Automatic flow**:
-The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work. Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; this is the only review timing in auto. A Claim that lists another under Blocked by starts only after that Claim has a valid APPROVED and CONFIRMED, and a Plan that states no dependencies is followed in order; when a Claim stops, every Claim that depends on it stops and main asks the user, who may let named dependent Claims proceed as a deferral of the stopped Claim.
+The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work. Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; this is the only review timing in auto. A Claim that lists another under Blocked by, or otherwise depends on it as its Plan states, starts only after that Claim has a valid APPROVED and CONFIRMED, and a Plan that states no dependencies is followed in order; when a Claim stops, every Claim that depends on it stops and main asks the user, who may let named dependent Claims proceed as a deferral of the stopped Claim.
 _Avoid_: three-layer protection, pipeline
 
 **Explicit request**:
