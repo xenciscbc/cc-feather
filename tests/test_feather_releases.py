@@ -549,7 +549,8 @@ class RepoTrustDefaultReleaseTests(unittest.TestCase):
 class RetainedPassesReleaseTests(unittest.TestCase):
     """0.26.0 ticket 07 (docs/specs/retained-passes.md, Acceptance item 20): the Updates note states the change to
     review in auto, that no `/cc-feather:setup update` is needed because no installed role definition or policy
-    changed, and how to go back to 0.25.0, in both languages. The validation entry's pins are added with the entry."""
+    changed, and how to go back to 0.25.0, in both languages; the validation entry records the test counts, the
+    rehearsal, the tag and the review round."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.26.0 note in order.
     UPDATES = (
@@ -603,6 +604,42 @@ class RetainedPassesReleaseTests(unittest.TestCase):
                 # The note names no setup update as needed before or after the plugin update.
                 self.assertNotIn("need the plugin update and then", note)
                 self.assertNotIn("再於每個裝有分派元件的範圍執行", note)
+
+    # The validation entry: no setup update, the test counts, the rehearsal's environment and results with what it
+    # did not exercise and its deviations, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.26.0 retained passes\n"
+    ENTRY = (
+        "**No setup update is required.** No file under `templates/`, `skills/setup/` or `scripts/` changed since v0.25.0;",
+        "856 at c945852 and 857 at the commit carrying this entry, all passing with 30 skips and the same count in both forms",
+        "Live rehearsal (Acceptance item 19, test target T1), 2026-10-15, run twice at the user's choice.",
+        "The commit under test was c945852,",
+        "Every session's init event listed exactly one cc-feather plugin, version 0.26.0, source `cc-feather@inline`, at the path of the candidate directory; the installed cc-feather 0.25.0 did not load.",
+        "so the Stop threshold in effect was 6 from user guidance, as each session stated.",
+        "The dispatch record's path was `.feather/dispatch/paths.md` in the clone in both runs;",
+        "03's encoded `..` was found by neither 03's code review nor 01's Adversarial review:",
+        "Ticket 07's first acceptance check, which asks for these to appear in the record, is therefore not met, and goes to the decision at the end.",
+        "Deviations from the rules were observed and are recorded as a finding, not a pass:",
+        "so the absence of other deviations is not claimed.",
+        "the user-scope agent definitions, CLAUDE.md and settings.json were byte-identical to the baseline recorded before the first.",
+        "`v0.26.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "The deferred items are kept in an untracked handoff record, not here.",
+    )
+
+    def test_validation_entry_records_the_checks_rehearsal_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        # Both runs have their paragraph, in order, and each ticket its line in the review round.
+        positions = [entry.index(run) for run in ("First run (", "Second run (")]
+        self.assertEqual(positions, sorted(positions))
+        for claim in ("01", "02", "03", "04", "05", "06", "07"):
+            with self.subTest(claim=claim):
+                self.assertEqual(entry.count(f"\n- {claim}: "), 1)
 
 
 class InstallDocumentTests(unittest.TestCase):
