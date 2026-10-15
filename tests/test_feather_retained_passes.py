@@ -35,7 +35,15 @@ the residual risk "The dispatch record is trusted"): in auto, main keeps one dis
 review calls and kept out of Git; a resumed session, and main after a context compaction, take the Plan's READY, reading
 sets, passes, Adversarial review results and the user's decisions from it as if received in this session, while counts,
 the Stop threshold and the final check's state still come only from this session. Off writes none and keeps the earlier
-cross-session rules. The handoff skill and its tool are unchanged."""
+cross-session rules. The handoff skill and its tool are unchanged.
+
+Retained passes ticket 06 (Acceptance items 10, 13, 14 and 15, the parts of items 16, 17 and 18 for these rules, security
+invariants S3 and S6 and the residual risks): in auto, after every Claim's reviews, the final check and the Adversarial
+reviews have run or are recorded as not run, main confirms each Claim's reading set and asks the user once to land as it
+stands or re-review named Claims, with a list built from the dispatch record and its own observations in this session;
+landing as it stands is recorded as Accept and land only for the Claims that need it, a clean Plan's question being only
+the authority to land, and tickets are set to done only after the decision. Off keeps today's Accept and land at the end
+of the plan, its list built only from this session's observations."""
 
 from __future__ import annotations
 
@@ -2329,6 +2337,615 @@ class DispatchRecordTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertIn(phrase, text)
+
+
+class DecisionAtTheEndTests(unittest.TestCase):
+    """Ticket 06: whole-sentence pins of the decision at the end (item 10), S3 before it, S6, the end-of-Plan done value
+    (item 13), item 14 as one list, off keeping today's Accept and land at the end of the plan (item 15), the notes
+    carried from earlier reviews, the glossary, ADR 0015's part and the notes on ADR 0008 and ADR 0013, ADR 0015's
+    rejected options and residual risks, both READMEs with the rewritten cost explanation, absence pins of the replaced
+    statements, and a check that every new pin fails on the text at tag v0.25.0.
+
+    The existing pins this ticket replaces, updated so that the Accept and land list built only from this session's review
+    results holds for off only (item 18): in test_feather_completion_criteria, CompletionCriteriaTests.S4 (review state's
+    list sentence), ACCEPT_CONTEXT (the Accept and land entry's list sentence, split from its confirmation sentence) and
+    ACCEPT_README_PAIRS (the list sentence in both languages). The cost explanation's pins, updated for item 17: in
+    test_feather_review_rules, StopThresholdProceduresTests.PREVIEW (preview.md's bound) and README_PAIRS (the K = 2
+    example in both languages); in test_feather_security_review, AdversarialReviewTests' pins of preview.md's bound, both
+    READMEs' delegation preview bound and both READMEs' first Cost sentence."""
+
+    PART = "The decision at the end"
+    PATHS = {**DispatchRecordTests.PATHS,
+             "ADR 0008": "docs/adr/0008-repository-authority-acceptance-and-gate-lifetime.md",
+             "preview.md": "skills/delegation/references/preview.md"}
+    TAG = PerClaimTimingTests.TAG
+    GIT_READ = PerClaimTimingTests.GIT_READ
+    LABEL = "review-state.md#Accept and land at the end of the plan"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """As ticket 05's reader, plus 'ADR 0015#part' (this ticket's part), 'ADR 0008', 'ADR 0013' and 'preview.md'."""
+        path = name.partition("#")[0]
+        if name == "ADR 0015#part":
+            text = (config.ROOT / cls.PATHS["ADR 0015"]).read_text(encoding="utf-8")
+            return text.split(f"\n## {cls.PART}\n", 1)[1].split("\n## ", 1)[0]
+        if path in ("ADR 0008", "ADR 0013", "preview.md"):
+            return (config.ROOT / cls.PATHS[path]).read_text(encoding="utf-8")
+        return DispatchRecordTests.source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    tagged = PerClaimTimingTests.tagged
+
+    # Acceptance item 10: the trigger, the list's source and every entry it states, the two choices, which Claims landing
+    # as it stands records as Accept and land, a clean Plan's question, the re-review loop and what stays as today.
+    DECISION = {
+        LABEL: (
+            "In auto, the decision at the end of the plan replaces when main asks and where its list comes from.",
+            "Main asks the user once, after every claim's code review and outcome verification, the final check and the "
+            "Adversarial reviews at the final commit have run or are recorded as not run, before landing or release, "
+            "and it asks even when no claim needs accept and land.",
+            "In auto, main builds the list from the plan's dispatch record and its own observations in this session, "
+            "never from another record in the working tree, such as a handoff, a ticket or the Follow-up record, and "
+            "reports any difference between the list and such a record.",
+            "The list states the final check's state at the commit to be landed, as Final check describes; for each "
+            "claim, the commit its passes judged, each pass, each missing pass and each unresolved Blocking finding "
+            "listed under it; for each Security-critical claim, its Adversarial review result at the commit to be "
+            "landed, as [adversarial review](adversarial-review.md)'s At the final commit describes, that is a BROKEN "
+            "with its findings as the adversary stated them, or by the one-line summary the dispatch record holds for "
+            "findings reported in an earlier session, an INCONCLUSIVE with its gaps, or not run; each fix claim that is "
+            "Security-critical, with its problem, a summary of the fix and that it had no Adversarial review; the work's "
+            "Follow-up record, which the list names without relying on it; and what this flow does not check, as the "
+            "next sentence states.",
+            "The user chooses to land the branch as it stands or to re-review named claims.",
+            "Landing as it stands is recorded as accept and land, as User decisions describes, only for the claims that "
+            "need it: a claim with a missing pass or an unresolved Blocking finding; a Security-critical claim whose "
+            "BROKEN the user lands with, each of its findings named as a known vulnerability; a Security-critical claim "
+            "whose Adversarial review is INCONCLUSIVE or not run; a Security-critical fix claim; and, when the final "
+            "check at the commit to be landed failed or was not run, each claim landed with it, the decision stating "
+            "that state.",
+            "When nothing listed needs it, the question is only the user's authority to land, which landing needs as "
+            "before, and nothing is recorded as accept and land.",
+            "A re-review follows the existing rules, classified as Classifying a request describes; when it changes the "
+            "code, main runs the final check again at the new commit to be landed, treats each Adversarial review result "
+            "that no longer judges the commit to be landed as not run, as [adversarial review](adversarial-review.md)'s "
+            "At the final commit describes, and asks again.",
+            "Confirming part of the list, what is not a confirmation and what a decision covers stay as the sentences "
+            "above state.",
+        ),
+    }
+
+    # S3, the part "before the decision of item 10".
+    S3 = {
+        LABEL: (
+            "Before asking, main again confirms that each claim's reading set is unchanged from its recorded content or "
+            "hash, as Reading set describes; a change the user did not authorise is a material deviation, as [plan "
+            "review](plan-review.md) step 5 describes.",
+        ),
+    }
+
+    # S6: an unresolved Blocking finding reported after a Claim's passes is listed under it and needs Accept and land.
+    S6 = {
+        LABEL: (
+            "A Blocking finding about a claim, reported after its passes and not yet resolved, is listed under that "
+            "claim, and that claim needs accept and land.",
+        ),
+    }
+
+    # Acceptance item 14, stated as one list.
+    NOT_CHECKED = {
+        LABEL: (
+            "What this flow does not check is: a later claim's reviewer reads only its own reading set and may not know "
+            "an earlier claim's design intent; a property of an earlier claim that no rerun acceptance check covers can "
+            "be broken without the final check noticing, and acceptance items other than the primary acceptance are not "
+            "rerun at the final commit; an acceptance check that cannot be rerun, such as a manual check, is not "
+            "repeated at the final commit; the commit an Adversarial review attacks was not judged as a whole by the "
+            "claim's own code review and outcome verification; Adversarial review findings are not fixed in the plan; a "
+            "Security-critical fix claim gets no Adversarial review; and main takes the dispatch record as written, so "
+            "an edit to it changes what main believes.",
+            "A re-review chosen at the decision can recover part of this.",
+        ),
+    }
+
+    # Acceptance item 13: in auto, a ticket is set to a done value only after the decision.
+    TICKETS = {
+        "review-state.md#Ticket status": (
+            "In auto, main sets the ticket of a claim of plan-driven work to a done value only after the user's decision "
+            "at the end of the plan, as Accept and land at the end of the plan describes, even when the claim has "
+            "passed; until then main records the claim's pass state in the plan's dispatch record.",
+        ),
+    }
+
+    # The notes carried from earlier reviews: (a) the stopped upstream Claim's decision is the decision at the end; (b) the
+    # decision takes a BROKEN only from the dispatch record and main's observations, never from the Follow-up record; (c)
+    # an active handoff's notes still restrict in auto; (d) the user's decisions cross sessions through the dispatch
+    # record in auto.
+    CARRIED = {
+        "review-state.md#Dependent claims": (
+            "In auto, that decision is the decision at the end of the plan, whose list states the upstream claim's "
+            "missing passes and unresolved Blocking findings, and landing as it stands records accept and land for it.",
+        ),
+        "adversarial-review.md#final": (
+            "The decision at the end of the plan takes each BROKEN only from main's own observations in this session, "
+            "with its findings as the adversary stated them, or from the plan's dispatch record, with its one-line "
+            "summary, never from the Follow-up record, which stays data that the decision never relies on; the "
+            "findings' details the Follow-up record holds reach only a later Adversarial review call's brief, as the "
+            "next sentence describes.",
+        ),
+        "review-state.md#Dispatch record": (
+            "A note an active handoff still holds keeps restricting its claim, as Existing handoff notes describes.",
+        ),
+        "CONTEXT.md#Pending-acceptance claim": ("A note an Active handoff still holds keeps restricting its Claim.",),
+        "review-state.md#User decisions": (
+            "In auto, the plan's dispatch record, which holds the user's decisions with their scope, is where such a "
+            "decision crosses sessions, as Resumed sessions describes: one it holds satisfies the gate in a resumed "
+            "session in the same way, and main reports any difference between it and an active handoff's record of the "
+            "decision.",
+        ),
+    }
+
+    # Acceptance item 15: off keeps today's Accept and land at the end of the plan, its list built only from this
+    # session's observations.
+    OFF = {
+        LABEL: (
+            "In off, main builds the list from the review results it received in this session, not by reading a record "
+            "in the working tree, such as a handoff, a ticket or the Follow-up record, and reports any difference "
+            "between the list and such a record.",
+            "These rules of the decision at the end hold in auto only: in off, main asks at the time stated above, only "
+            "for claims that need accept and land, and builds the list only from the review results it received in this "
+            "session.",
+        ),
+        "CONTEXT.md#Accept and land": (
+            "In off, main builds the list from the review results it received in this session, never from a record in "
+            "the working tree.",
+        ),
+    }
+    # Today's sentences that off keeps unchanged, present at v0.25.0 too.
+    OFF_KEPT = {
+        LABEL: (
+            "Main asks for the decision once, after every claim of the plan has finished its reviews and the final check "
+            "has run or is recorded as not run, before landing or release; it does not ask after each claim.",
+            "Each missing pass names the step and the call that left it missing, or that the step has not run.",
+            "The user may confirm part of the list by whole claims, and the rest stays pending, under the acceptance "
+            "gate as it stands; a claim is accepted only with everything listed for it.",
+            "Saying \"continue\", silence or turning automatic review off is not a confirmation.",
+            "The decision covers only what was listed: the claims, their commits, their missing passes and their known "
+            "vulnerabilities, and main records it for each claim as User decisions describes.",
+            "Accept and land never relies on the Follow-up record, as Follow-up record describes.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: the Accept and land and Acceptance gate entries.
+    CONTEXT = {
+        "CONTEXT.md#Accept and land": (
+            "The user may confirm part of the list by whole Claims, a Claim being accepted only with everything listed "
+            "for it; \"continue\", silence or turning automatic review off is not a confirmation.",
+            "In the Automatic flow it is asked for in the decision at the end of the Plan: after every Claim's code "
+            "review and outcome verification, the final check and the Adversarial reviews have run or are recorded as "
+            "not run, main confirms each Claim's reading set and asks the user once to land as it stands or to re-review "
+            "named Claims, with a list built from the Plan's Dispatch record and main's own observations in this "
+            "session, never from another record in the working tree.",
+            "The list states the final check, each Claim's passes, missing passes and unresolved Blocking findings, each "
+            "Adversarial review result, each Security-critical fix Claim with its problem and fix, the Follow-up record "
+            "and what the flow does not check.",
+            "Landing as it stands is recorded as Accept and land only for the Claims that need it; when nothing listed "
+            "needs it, the question is only the user's authority to land.",
+        ),
+        "CONTEXT.md#Acceptance gate": (
+            "In the Automatic flow, a Plan's Claims are landed only after the user's decision at the end of the Plan, "
+            "which records Accept and land only for the Claims that need it, and their tickets are set to a done value "
+            "only after that decision.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: ADR 0015's part, amending ADR 0008 and ADR 0013.
+    ADR = {
+        "ADR 0015#part": (
+            "This part records the decision at the end of the Plan.",
+            "- **When main asks.** In auto, after every Claim's reviews, the final check and the Adversarial reviews have "
+            "run or are recorded as not run, main confirms that each Claim's reading set is unchanged from its recorded "
+            "hash and asks the user once, before landing or release, replacing the time Accept and land at the end of "
+            "the plan was asked for.",
+            "- **Where the list comes from.** Main builds the list from the Plan's dispatch record and its own "
+            "observations in this session, never from another record in the working tree such as a handoff, a ticket "
+            "or the Follow-up record.",
+            "- **Unresolved findings stay with their Claim.** A Blocking finding about a Claim, reported after its "
+            "passes and not yet resolved, is listed under that Claim, and that Claim needs Accept and land.",
+            "An upstream Claim that stays pending after the user let named dependent Claims proceed is decided here, "
+            "listed with its missing passes.",
+            "- **Two choices.** The user chooses to land as it stands or to re-review named Claims.",
+            "When nothing listed needs it, the question is only the user's authority to land, which landing needed "
+            "before.",
+            "- **Tickets.** In auto, a ticket of a Plan reviewed per Claim is set to a done value only after this "
+            "decision; until then main records each Claim's pass state in the dispatch record.",
+            "- **Off mode.** These rules hold in auto only: off keeps Accept and land at the end of the plan as before, "
+            "asked only when a Claim needs it, with its list built only from the review results main received in this "
+            "session.",
+            "The decision lists the three residual risks the user accepted with these rules, stated in the parts above: "
+            "the dispatch record is trusted as written, repository code a check runs controls its own output, and a "
+            "Security-critical fix Claim gets no plan review, security analysis or Adversarial review.",
+            "This amends [ADR 0008](0008-repository-authority-acceptance-and-gate-lifetime.md) (Accept and land): in "
+            "auto, landing as it stands at the decision at the end records Accept and land only for the Claims that need "
+            "it, and a clean Plan's question is only the user's authority to land.",
+            "It also amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md) (the single "
+            "decision and its list): in auto, main asks once after the Adversarial reviews as well, even when no Claim "
+            "needs Accept and land, and builds the list from the dispatch record and its own observations in this "
+            "session, stating what this part lists.",
+            "- **Record every landing as Accept and land**: Accept and land would no longer mean that the user accepted "
+            "something missing.",
+            "- **Build the list from a handoff, a ticket or the Follow-up record**: they are not where review state is "
+            "kept, and the Follow-up record is data that Accept and land never relies on; main reports a difference from "
+            "such a record instead.",
+        ),
+    }
+    ADR_0008_NOTE = ("(Amended by ADR 0015: in auto, main asks once at the end of the Plan, after every Claim's reviews, the "
+                     "final check and the Adversarial reviews have run or are recorded as not run, whether to land as it "
+                     "stands or re-review named Claims, with a list built from the Plan's dispatch record and its own "
+                     "observations in this session; landing as it stands is recorded as Accept and land only for the "
+                     "Claims that need it, and when nothing listed needs it the question is only the user's authority to "
+                     "land. In off, Accept and land is unchanged.)")
+    ADR_0013_NOTE = ("(Amended for the decision at the end by ADR 0015: in auto, main asks once after every Claim's "
+                     "reviews, the final check and the Adversarial reviews have run or are recorded as not run, even when "
+                     "no Claim needs Accept and land, confirms each Claim's reading set first, and builds the list from "
+                     "the Plan's dispatch record and its own observations in this session, never from another record in "
+                     "the working tree; the list also states each pass, each unresolved Blocking finding, each "
+                     "Adversarial review result, each Security-critical fix Claim, the Follow-up record and what the flow "
+                     "does not check. In off, the decision above is unchanged.)")
+
+    # Item 16's rejected options, as the spec's "ADR 0015" Implementation Decision lists them, and the three residual
+    # risks: ADR 0015, complete after this ticket, states each in some part.
+    REJECTED = (
+        "- **Keep file-level reopening in auto**:",
+        "- **The Retention check**,",
+        "- **Review after the whole Plan is implemented**:",
+        "- **A setting or Plan statement that chooses the timing**:",
+        "- **Carry every earlier Claim's acceptance into later reviews**:",
+        "- **Adversarial review after each Claim**:",
+        "- **Fix BROKEN within the Plan**:",
+        "- **Review every Claim from an earlier session again**:",
+        "- **List earlier passes as only recorded, for the user to judge**:",
+        "- **Label every commit with its Claim to rebuild state in a new session**:",
+        "- **Carry counts across sessions**:",
+        "- **Reopen an earlier Claim for a defect it introduced**:",
+        "- **Count a fix's own review calls to stop fixes that break each other**:",
+        "- **A new glossary term for a fix outside every Claim**:",
+        "- **Ask the user before a fix Claim that changes a security control**:",
+        "- **A forced fix round in which every Claim must pass a step before the next**:",
+    )
+    RESIDUAL_RISKS = ("- **Trusted.** Main takes the dispatch record as written.",
+                      "- **Check output.** Repository code that a check runs controls its own output,",
+                      "- **Security-critical fix Claims.** A fix Claim that changes a security control gets no plan "
+                      "review, security analysis or Adversarial review;")
+
+    # Acceptance item 17, for these rules: (English place, Chinese place, English sentence, Chinese sentence).
+    ACCEPT = ("README.md#Accept and land at the end", "README.zh-TW.md#最後一次決定接受並合併")
+    README_PAIRS = (
+        (*ACCEPT,
+         "In auto, this becomes one decision at the end of the plan: after every claim's code review and verification, "
+         "the final check and the Adversarial reviews at the end have run or are recorded as not run, main confirms that "
+         "each claim's reading set is unchanged and asks you once, before landing or release, even when no claim needs "
+         "your accept-and-land decision.",
+         "在 auto 下，這會成為計畫最後的一個決定：在每個 claim 的程式碼審查與驗證、最終檢查與最後的對抗式審查都已執行或記為未執行之後，"
+         "主 Agent 會確認每個 claim 的閱讀範圍沒有改變，並在進入預設 branch 或 release 之前只問你一次，即使沒有 claim 需要你決定接受並合併也會問。"),
+        (*ACCEPT,
+         "Main builds the list from the dispatch record and what it observed itself in this session, never from another "
+         "record in the working tree such as a handoff, a ticket or the Follow-up record, and tells you where such a "
+         "record differs.",
+         "主 Agent 依派工紀錄與它自己在這個 session 觀察到的內容建立清單，絕不依據工作樹中的其他紀錄（例如交接、ticket 或後續紀錄），"
+         "並告訴你這類紀錄與清單的差異。"),
+        (*ACCEPT,
+         "The list states the final check's state at the commit to be landed; for each claim, the commit its passes "
+         "judged, each pass, each missing pass and each unresolved blocking finding; for each Security-critical claim, "
+         "its Adversarial review result at that commit, that is a BROKEN with its findings as the adversary stated them, "
+         "or by their one-line summary from the dispatch record when they were reported in an earlier session, an "
+         "INCONCLUSIVE with its gaps, or not run; each Security-critical fix claim, with its problem, a summary of the "
+         "fix and that it had no Adversarial review; the Follow-up record, which the list names without relying on it; "
+         "and what this flow does not check.",
+         "清單寫明最終檢查在要進入預設 branch 的 commit 上的狀態；每個 claim 的通過所審的 commit、每個通過、每個缺少的關卡與每個未解決的阻擋性問題；"
+         "每個安全關鍵 claim 在該 commit 上的對抗式審查結果，也就是 BROKEN 連同 adversary 原話列出的發現（若發現是在先前的 session 回報，"
+         "則列出派工紀錄中的一行摘要）、INCONCLUSIVE 連同它的缺口，或未執行；每個安全關鍵的修正用 claim，連同它的問題、修正摘要，"
+         "以及它沒有經過對抗式審查；後續紀錄，清單只寫明它而不依據它；以及這個流程不檢查的事項。"),
+        (*ACCEPT,
+         "What this flow does not check is: a later claim's reviewer reads only its own reading set and may not know an "
+         "earlier claim's design intent; a property of an earlier claim that no rerun acceptance check covers can be "
+         "broken without the final check noticing, and acceptance items other than the primary acceptance are not rerun "
+         "at the final commit; an acceptance check that cannot be rerun, such as a manual check, is not repeated at the "
+         "final commit; the commit an Adversarial review attacks was not judged as a whole by the claim's own code "
+         "review and verification; Adversarial review findings are not fixed in the plan; a Security-critical fix claim "
+         "gets no Adversarial review; and main takes the dispatch record as written, so an edit to it changes what main "
+         "believes.",
+         "這個流程不檢查的事項是：後面 claim 的審查者只讀自己的閱讀範圍，可能不知道前面 claim 的設計意圖；"
+         "沒有任何重新執行的驗收檢查涵蓋的前面 claim 特性，可能被破壞而最終檢查不會發現，主要驗收以外的驗收項目也不會在最後的 commit 上重新執行；"
+         "無法重新執行的驗收檢查（例如人工檢查）不會在最後的 commit 上重做；對抗式審查攻擊的 commit 並沒有被 claim 自己的程式碼審查與驗證整體審過；"
+         "對抗式審查的發現不在這份計畫中修正；安全關鍵的修正用 claim 不經過對抗式審查；以及主 Agent 照派工紀錄所寫的內容採信，"
+         "所以修改它就會改變主 Agent 相信的內容。"),
+        (*ACCEPT, "A re-review you choose at the decision can recover part of this.", "你在這個決定中選擇的重審可以補回其中一部分。"),
+        (*ACCEPT,
+         "A blocking finding about a claim, reported after its passes and not yet resolved, is listed under that claim, "
+         "and that claim needs your accept-and-land decision.",
+         "某個 claim 通過之後才回報、尚未解決的阻擋性問題，會列在該 claim 底下，而該 claim 需要你決定接受並合併。"),
+        (*ACCEPT, "You choose to land the branch as it stands or to re-review named claims.",
+         "你可以選擇讓 branch 照現狀合併，或指名重審某些 claim。"),
+        (*ACCEPT,
+         "Landing as it stands is recorded as your accept-and-land decision only for the claims that need it: a claim "
+         "with a missing pass or an unresolved blocking finding, a Security-critical claim whose BROKEN you land with, "
+         "each finding named as a known vulnerability, a Security-critical claim whose Adversarial review is "
+         "INCONCLUSIVE or not run, a Security-critical fix claim, and, when the final check at the commit to be landed "
+         "failed or was not run, each claim landed with it.",
+         "照現狀合併只會為需要的 claim 記為你決定接受並合併：缺少關卡或有未解決阻擋性問題的 claim、你帶著 BROKEN 合併的安全關鍵 claim"
+         "（每個發現都寫明為已知漏洞）、對抗式審查為 INCONCLUSIVE 或未執行的安全關鍵 claim、安全關鍵的修正用 claim，"
+         "以及最終檢查在要進入預設 branch 的 commit 上失敗或未執行時，隨它一起合併的每個 claim。"),
+        (*ACCEPT,
+         "When nothing listed needs it, the question is only your authority to land, which landing needs anyway.",
+         "清單上沒有任何項目需要時，這個問題只是在問你是否授權合併，而合併本來就需要你的授權。"),
+        (*ACCEPT,
+         "A re-review follows the usual rules; when it changes the code, main runs the final check again, treats each "
+         "Adversarial review result that no longer judges the commit to be landed as not run, and asks you again.",
+         "重審依一般規則進行；重審改動了程式碼時，主 Agent 會重新執行最終檢查，把不再針對要進入預設 branch 的 commit 的對抗式審查結果視為未執行，"
+         "並再問你一次。"),
+        (*ACCEPT,
+         "Confirming part of the list, what is not a confirmation and what the decision covers stay as above.",
+         "只確認清單的一部分、什麼不算確認，以及決定涵蓋什麼，都照上面所說。"),
+        ("README.md#Ticket status", "README.zh-TW.md#Ticket 狀態",
+         "In auto, main sets a claim's ticket to a done value only after your decision at the end of the plan, even when "
+         "the claim has passed; until then the dispatch record holds the claim's pass state.",
+         "在 auto 下，即使 claim 已經通過，主 Agent 也要等你對計畫做出最後決定之後，才把它的 ticket 設成表示已完成的完成值；"
+         "在那之前，派工紀錄保存該 claim 的通過狀態。"),
+        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+         "A note an active handoff still holds that a claim is unreviewed, unverified or pending acceptance still "
+         "restricts that claim.",
+         "進行中的交接仍記著某個 claim 未審查、未驗證或待驗收時，這筆記錄仍會限制該 claim。"),
+        ("README.md#Your decisions", "README.zh-TW.md#你的決定",
+         "In auto, the dispatch record holds your decisions with their scope and carries them into a resumed session in "
+         "the same way, and main tells you where an active handoff's record of a decision differs from it.",
+         "在 auto 下，派工紀錄保存你的決定和範圍，並以同樣方式把它們帶到恢復的 session；進行中交接對某個決定的記錄與它不同時，"
+         "主 Agent 會告訴你。"),
+    )
+    # Item 15 in both READMEs: off keeps the list built only from this session's review results.
+    README_OFF_PAIRS = (
+        (*ACCEPT,
+         "In `off`, main builds the list from the review results it received in this session, not from a record in the "
+         "working tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
+         "在 `off` 下，主 Agent 依它在這個 session 收到的審查結果建立清單，不依據工作樹中的紀錄（例如交接或後續紀錄），"
+         "並告訴你這類紀錄與清單的差異。"),
+        (*ACCEPT,
+         "In `off`, main asks at the time above, only for claims that need your accept-and-land decision, and builds "
+         "the list only from the review results it received in this session.",
+         "在 `off` 下，主 Agent 在上面所說的時間點、只為需要你決定接受並合併的 claim 詢問，並只依它在這個 session 收到的審查結果建立清單。"),
+    )
+    # The cost explanation, rewritten for per-Claim timing, fixed passes, the final check's reruns and fix Claims, and
+    # Adversarial review at the end; the per-claim bound stays one uninterrupted attempt.
+    COST_PAIRS = (
+        ("README.md#Cost", "README.zh-TW.md#成本",
+         "in one uninterrupted attempt in a session, with K the Stop threshold, a plan with N claims, S of them "
+         "Security-critical, makes at least 1 + 2N + S automatic calls and up to about K³ + K(K+1)N + KS, since a claim "
+         "makes at most K(K+1) (up to K verification calls, between which up to K − 1 fixes each get up to K code "
+         "reviews, plus up to K code reviews before the first verification), a Security-critical claim at most "
+         "K(K+1) + K (also up to K Adversarial reviews, once at the end, where a BROKEN is recorded rather than fixed), "
+         "and the plan reviews and the final check's fixes at most K³ together (up to K plan reviews, and up to K − 1 "
+         "fixes in a row before the final check stops, each getting up to K(K+1) code review and verification calls in "
+         "the claim that caused the failure or in a fix claim).",
+         "在一個 session 內一次不中斷的完成過程中，停止門檻為 K 時，一份有 N 個 claim、其中 S 個是安全關鍵 claim 的計畫，"
+         "至少自動呼叫 1 + 2N + S 次，最多約 K³ + K(K+1)N + KS 次，因為每個 claim 最多 K(K+1) 次（最多 K 次驗證，其間最多 "
+         "K − 1 次修正各最多 K 次程式碼審查，再加上第一次驗證前最多 K 次程式碼審查），安全關鍵 claim 最多 K(K+1) + K 次"
+         "（再加上最後一次執行的最多 K 次對抗式審查，那裡的 BROKEN 只記錄、不修正），計畫審查與最終檢查的修正合計最多 K³ 次"
+         "（最多 K 次計畫審查，加上最終檢查停下前連續最多 K − 1 次修正，每次修正在造成失敗的 claim 或修正用的 claim 中最多 "
+         "K(K+1) 次程式碼審查與驗證）。"),
+        ("README.md#Cost", "README.zh-TW.md#成本",
+         "At the default K = 2 that is, in one uninterrupted attempt, at most 6 calls per claim, 8 per Security-critical "
+         "claim and about 8 + 6N + 2S per plan; at K = 10 it is 110, 120 and about 1000 + 110N + 10S.",
+         "預設 K = 2 時，一次不中斷的完成過程中每個 claim 最多 6 次、安全關鍵 claim 最多 8 次，整份計畫約 8 + 6N + 2S 次；"
+         "K = 10 時則是 110 次、120 次與約 1000 + 110N + 10S 次。"),
+        ("README.md#Cost", "README.zh-TW.md#成本",
+         "Per-claim timing changes when a claim is reviewed, not how many calls it makes; fixed passes remove the "
+         "reviews that another claim's reviewed change used to reopen; the final check and its reruns of every claim's "
+         "primary acceptance are main's own runs and make no calls, while each fix after a failure adds calls as above; "
+         "and Adversarial review runs once at the end, with no fix after a BROKEN, which removes the rounds of code "
+         "review, verification and attack that a BROKEN used to start.",
+         "依 claim 審查的時機只改變 claim 何時審查，不改變它的呼叫次數；固定的通過省去了以往另一個 claim 已審查的變更所重新打開的審查；"
+         "最終檢查與它對每個 claim 主要驗收的重新執行是主 Agent 自己的執行，不算呼叫，但失敗後的每次修正會如上增加呼叫；"
+         "對抗式審查只在最後執行一次，BROKEN 之後不修正，省去以往 BROKEN 引發的程式碼審查、驗證與攻擊的循環。"),
+        ("README.md#Cost", "README.zh-TW.md#成本",
+         "A re-review you choose in the decision at the end adds the calls of the reviews you choose, and when it changes "
+         "the code, the final check runs again.",
+         "你在最後的決定中選擇重審時，選擇的審查會再增加呼叫，若重審改動了程式碼，最終檢查也會再執行。"),
+    )
+    PREVIEW = {
+        "preview.md": (
+            "Under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial "
+            "review](adversarial-review.md) procedures, in one uninterrupted attempt, a Claim makes at most K(K+1) "
+            "automatic calls (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, "
+            "plus up to K code reviews before the first verification), a Security-critical claim at most K(K+1) + K "
+            "(also up to K Adversarial reviews, once at the final commit, where a BROKEN is recorded rather than fixed), "
+            "and a Plan with N Claims of which S are Security-critical about K³ + K(K+1)N + KS (counting up to K plan "
+            "reviews and up to K − 1 fixes in a row before the final check stops, each fix getting up to K(K+1) code "
+            "review and verification calls in the Claim that caused the failure or in a fix Claim).",
+        ),
+    }
+    # The three residual risks in both READMEs, as earlier tickets stated them.
+    README_RISKS = {
+        "README.md#Dispatch record": (
+            "Main takes the dispatch record as written, so an edit to it, by repository code a review or the final check "
+            "runs or by a person, changes which passes and results main believes; cc-feather does not defend against "
+            "that.",
+        ),
+        "README.zh-TW.md#派工紀錄": (
+            "主 Agent 照紀錄所寫的內容採信，所以有人或審查、最終檢查執行的儲存庫程式碼修改它，就會改變主 Agent 相信哪些通過"
+            "與結果；cc-feather 不防範這一點。",
+        ),
+        "README.md#Final check": (
+            "Repository code a check runs controls its own output, so it can make a check pass that should fail, hide "
+            "that a check ran fewer tests, or make a failure point at the wrong claim; the last only misdirects a fix, "
+            "after which the check runs again.",
+            "A fix claim that changes a security control is Security-critical, but main still adds it without asking: it "
+            "gets no plan review, security analysis or Adversarial review, and main discloses it at the end with its "
+            "problem and a summary of the fix, so you decide whether to land with it.",
+        ),
+        "README.zh-TW.md#最終檢查": (
+            "檢查所執行的儲存庫程式碼掌控自己的輸出，所以它可以讓該失敗的檢查通過、隱藏檢查少跑了測試，或讓失敗指向錯誤的 claim；"
+            "最後這種只會讓修正找錯對象，修正之後檢查會再執行一次。",
+            "修正用的 claim 若改動安全控制，就屬於安全關鍵，但主 Agent 仍不先問你就加入：它沒有計畫審查、安全分析或對抗式審查，"
+            "主 Agent 會在最後揭露它，附上問題與修正摘要，由你決定是否帶著它合併。",
+        ),
+    }
+
+    # Acceptance item 18: the replaced statements: the list built only from this session's review results, unscoped, and
+    # the cost explanation that counted fixes after a BROKEN.
+    REPLACED = {
+        LABEL: ("Main builds the list from the review results it received in this session",),
+        "CONTEXT.md#Accept and land": ("Main builds the list from the review results it received in this session",),
+        "README.md#Accept and land at the end": ("Main builds the list from the review results it received in this session",),
+        "README.zh-TW.md#最後一次決定接受並合併": ("。主 Agent 依它在這個 session 收到的審查結果建立清單",),
+        "README.md#Cost": ("K³ + K² + K", "fixes after a BROKEN each get", "14 per Security-critical claim",
+                           "K + K(K+1)N + K³S"),
+        "README.zh-TW.md#成本": ("K³ + K² + K", "BROKEN 後的修正各最多", "安全關鍵 claim 最多 14 次", "K + K(K+1)N + K³S"),
+        "preview.md": ("K³ + K² + K", "fixes after BROKEN each get", "K + K(K+1)N + K³S"),
+        "README.md": ("or K³ + K² + K for a Security-critical claim",),
+        "README.zh-TW.md": ("安全關鍵 claim 最多 K³ + K² + K 次",),
+    }
+
+    def new_pins(self):
+        pins = {}
+        for group in (self.DECISION, self.S3, self.S6, self.NOT_CHECKED, self.TICKETS, self.CARRIED, self.OFF,
+                      self.CONTEXT, self.ADR, self.PREVIEW):
+            for place, sentences in group.items():
+                pins.setdefault(place, []).extend(sentences)
+        pins.setdefault("ADR 0008", []).append(self.ADR_0008_NOTE)
+        pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
+        for english_place, chinese_place, english, chinese in (self.README_PAIRS + self.README_OFF_PAIRS
+                                                               + self.COST_PAIRS):
+            pins.setdefault(english_place, []).append(english)
+            pins.setdefault(chinese_place, []).append(chinese)
+        return pins
+
+    def assert_pairs(self, pairs):
+        for english_place, chinese_place, english, chinese in pairs:
+            for place, sentence in ((english_place, english), (chinese_place, chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_decision_at_the_end_asks_once_from_the_dispatch_record_and_mains_observations(self):
+        self.assert_pinned(self.DECISION)
+
+    def test_s3_reading_sets_are_confirmed_before_the_decision(self):
+        self.assert_pinned(self.S3)
+        # The confirmation comes before the list is built and the user is asked.
+        text = self.source(self.LABEL)
+        self.assertLess(text.index(self.S3[self.LABEL][0]), text.index(self.DECISION[self.LABEL][2]))
+
+    def test_s6_an_unresolved_blocking_finding_is_listed_under_its_claim_and_needs_accept_and_land(self):
+        self.assert_pinned(self.S6)
+
+    def test_item_14_is_one_list_in_review_state_and_both_readmes(self):
+        self.assert_pinned(self.NOT_CHECKED)
+        self.assertEqual(self.source(self.LABEL).count("What this flow does not check is:"), 1)
+        for place in self.ACCEPT:
+            with self.subTest(place=place):
+                text = self.source(place)
+                self.assertEqual(text.count("What this flow does not check is:" if place.startswith("README.md")
+                                            else "這個流程不檢查的事項是："), 1)
+
+    def test_tickets_are_set_to_done_only_after_the_decision_in_auto(self):
+        self.assert_pinned(self.TICKETS)
+
+    def test_the_carried_notes_are_resolved(self):
+        self.assert_pinned(self.CARRIED)
+        # The Follow-up record stays data the decision never relies on, in review state and the glossary.
+        self.assertIn("Accept and land never relies on it.", self.source("CONTEXT.md#Follow-up record"))
+        self.assertIn("and Accept and land never relies on it.", self.source("review-state.md#Follow-up record"))
+
+    def test_off_keeps_todays_accept_and_land_at_the_end_of_the_plan(self):
+        # Fails if off loses today's decision, asked at today's time with its list built only from this session's
+        # review results, or if the auto rules stop being scoped to auto.
+        self.assert_pinned(self.OFF)
+        self.assert_pinned(self.OFF_KEPT)
+        self.assert_pairs(self.README_OFF_PAIRS)
+        text = self.source(self.LABEL)
+        self.assertLess(text.index(self.OFF[self.LABEL][0]), text.index(self.DECISION[self.LABEL][0]))
+        for sentence in self.DECISION[self.LABEL][1:]:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertGreater(text.index(sentence), text.index(self.DECISION[self.LABEL][0]))
+
+    def test_glossary_states_the_decision_at_the_end(self):
+        self.assert_pinned(self.CONTEXT)
+
+    def test_adr_0015_records_the_decision_at_the_end_and_amends_adr_0008_and_adr_0013(self):
+        self.assert_pinned(self.ADR)
+        text = self.source("ADR 0015")
+        self.assertEqual(text.count(f"\n## {self.PART}\n"), 1)
+        # This part follows ticket 05's part.
+        self.assertLess(text.index(f"\n## {DispatchRecordTests.PART}\n"), text.index(f"\n## {self.PART}\n"))
+        lines = self.source("ADR 0008").splitlines()
+        self.assertIn(self.ADR_0008_NOTE, lines)
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
+        lines = self.source("ADR 0013").splitlines()
+        self.assertIn(self.ADR_0013_NOTE, lines)
+        # The notes of tickets 01, 03 and 04 keep their own lines.
+        for prefix in ("(Amended by ADR 0015:", "(Further amended by ADR 0015:", "(Also amended by ADR 0015:"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(sum(line.startswith(prefix) for line in lines), 1)
+        # The note sits in ADR 0013's part on the single Accept and land decision.
+        part = self.source("ADR 0013").split("\n## A single Accept and land decision\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(self.ADR_0013_NOTE, part.splitlines())
+
+    def test_adr_0015_states_every_rejected_option_and_the_three_residual_risks(self):
+        text = self.source("ADR 0015")
+        for phrase in self.REJECTED + self.RESIDUAL_RISKS:
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, text)
+
+    def test_both_readmes_explain_the_decision_at_the_end(self):
+        self.assert_pairs(self.README_PAIRS)
+
+    def test_both_readmes_explain_the_cost_of_this_flow(self):
+        self.assert_pairs(self.COST_PAIRS)
+        self.assert_pinned(self.PREVIEW)
+        # The stated bounds agree with the per-step counts they are derived from, and the K = 2 and K = 10 examples
+        # with them.
+        for k in range(2, 11):
+            with self.subTest(k=k):
+                claim = k + (k - 1) * k + k
+                self.assertEqual(claim, k * (k + 1))
+                self.assertEqual(k + (k - 1) * claim, k ** 3)
+        self.assertEqual((2 * 3, 2 * 3 + 2, 2 ** 3, 2), (6, 8, 8, 2))
+        self.assertEqual((10 * 11, 10 * 11 + 10, 10 ** 3, 10), (110, 120, 1000, 10))
+
+    def test_both_readmes_state_the_three_residual_risks(self):
+        self.assert_pinned(self.README_RISKS)
+
+    def test_the_replaced_statements_are_gone(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def tagged_place(self, place):
+        """The whole file behind a place at the tag; this ticket's ADR part included."""
+        return self.tagged(place, self.PATHS[place.partition("#")[0]])
+
+    def test_every_new_pin_fails_on_the_v0_25_0_text(self):
+        for place, sentences in self.new_pins().items():
+            text = self.tagged_place(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
+
+    def test_every_absence_pin_matches_the_v0_25_0_text(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.tagged_place(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
+
+    def test_off_keeps_the_sentences_it_had_at_v0_25_0(self):
+        # The sentences off keeps are today's text, unchanged since the tag.
+        text = self.tagged_place(self.LABEL)
+        for sentence in self.OFF_KEPT[self.LABEL]:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, text)
 
 
 if __name__ == "__main__":

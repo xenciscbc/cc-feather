@@ -904,7 +904,8 @@ class StopThresholdProceduresTests(unittest.TestCase):
             "- **Stop threshold:** resolve it as [review state](review-state.md) describes: a task or session choice, then the value the project guidance states, then the value the user guidance states, then 2, with a value saved in this conversation resolved again from the saved values.",
             "A task or session choice takes precedence over the saved values reported by `show`.",
             "State the number of Plans, Claims and Security-critical claims covered, that the security analysis runs once per Plan or per trust boundary that several Security-critical claims share, the Stop threshold in effect, written K, with its source (task, session, project, user or default), and that each step stops after K consecutive automatic calls without a pass, per Plan for plan review and per Claim for code review, outcome verification and Adversarial review, an automatic pass resetting the count.",
-            "Under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures, in one uninterrupted attempt, a Claim makes at most K(K+1) automatic calls (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification), a Security-critical claim at most K³ + K² + K (also up to K Adversarial reviews, between which up to K − 1 fixes after BROKEN each get up to K(K+1) code review and verification calls), and a Plan with N Claims of which S are Security-critical about K + K(K+1)N + K³S.",
+            # Retained passes ticket 06 (Acceptance items 8, 9, 10 and 17): the cost explanation states per-Claim timing, fixed passes, the final check's fixes and Adversarial review once at the end, with no fix after BROKEN.
+            "Under the [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) procedures, in one uninterrupted attempt, a Claim makes at most K(K+1) automatic calls (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification), a Security-critical claim at most K(K+1) + K (also up to K Adversarial reviews, once at the final commit, where a BROKEN is recorded rather than fixed), and a Plan with N Claims of which S are Security-critical about K³ + K(K+1)N + KS (counting up to K plan reviews and up to K − 1 fixes in a row before the final check stops, each fix getting up to K(K+1) code review and verification calls in the Claim that caused the failure or in a fix Claim).",
             "Each reopened Claim or approved Material deviation adds calls, including up to K plan reviews for each deviation.",
         ),
     }
@@ -932,9 +933,10 @@ class StopThresholdProceduresTests(unittest.TestCase):
         ("Partial overlap", "部分重疊",
          "Where that plan had stopped, the overlapping work keeps its count and stop and gains no new automatic calls while that count is at or above the Stop threshold: an automatic READY of the new plan does not clear that stop, while an explicit pass covering the work does.",
          "若既有計畫已停下，重疊的工作保留它的次數與停止狀態，在這個次數大於或等於停止門檻時，不會多出新的自動呼叫：新計畫的自動 READY 不會解除那個停止，涵蓋這些工作的明確通過才會。"),
+        # Retained passes ticket 06 (Acceptance items 8, 9, 10 and 17): the cost explanation states per-Claim timing, fixed passes, the final check's fixes and Adversarial review once at the end, with no fix after BROKEN.
         ("Cost", "成本",
-         "At the default K = 2 that is, in one uninterrupted attempt, at most 6 calls per claim, 14 per Security-critical claim and about 2 + 6N + 8S per plan; at K = 10 it is 110, 1110 and about 10 + 110N + 1000S.",
-         "預設 K = 2 時，一次不中斷的完成過程中每個 claim 最多 6 次、安全關鍵 claim 最多 14 次，整份計畫約 2 + 6N + 8S 次；K = 10 時則是 110 次、1110 次與約 10 + 110N + 1000S 次。"),
+         "At the default K = 2 that is, in one uninterrupted attempt, at most 6 calls per claim, 8 per Security-critical claim and about 8 + 6N + 2S per plan; at K = 10 it is 110, 120 and about 1000 + 110N + 10S.",
+         "預設 K = 2 時，一次不中斷的完成過程中每個 claim 最多 6 次、安全關鍵 claim 最多 8 次，整份計畫約 8 + 6N + 2S 次；K = 10 時則是 110 次、120 次與約 1000 + 110N + 10S 次。"),
         ("Cost", "成本",
          "The bounds grow faster than K because each fix is reviewed and verified again.",
          "因為每次修正都要重新審查與驗證，上限增加得比 K 快。"),

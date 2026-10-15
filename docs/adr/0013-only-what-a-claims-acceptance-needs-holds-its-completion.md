@@ -70,6 +70,8 @@ The user decided (2026-10-14, with the completion criteria above):
 
 This amends [ADR 0008](0008-repository-authority-acceptance-and-gate-lifetime.md): an Accept and land decision may name several Claims, including one whose passes are complete when the final check failed or was not run, and main asks for it once at the end of the Plan, or earlier only for the whole branch when the user asks to land a Claim earlier, with a list built from its own observations in this session. ADR 0008's rule that Accept and land is the only way past the Acceptance gate without the passes, its recording and visibility, and the gate's conditions are unchanged.
 
+(Amended for the decision at the end by ADR 0015: in auto, main asks once after every Claim's reviews, the final check and the Adversarial reviews have run or are recorded as not run, even when no Claim needs Accept and land, confirms each Claim's reading set first, and builds the list from the Plan's dispatch record and its own observations in this session, never from another record in the working tree; the list also states each pass, each unresolved Blocking finding, each Adversarial review result, each Security-critical fix Claim, the Follow-up record and what the flow does not check. In off, the decision above is unchanged.)
+
 Considered options for this part:
 
 - **Ask after every Claim that needs the decision**: it stops the user once per Claim, while the decision can wait for the end of the Plan, when the whole list is known.

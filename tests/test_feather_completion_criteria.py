@@ -844,7 +844,8 @@ class CompletionCriteriaTests(unittest.TestCase):
     # S4: the list comes from main's own observations in this session, and only what the user confirms is decided.
     S4 = {
         ACCEPT_LABEL: (
-            "Main builds the list from the review results it received in this session, not by reading a record in the "
+            # Retained passes ticket 06 (Acceptance items 10, 15 and 18): the list built only from this session's review results holds for off.
+            "In off, main builds the list from the review results it received in this session, not by reading a record in the "
             "working tree, such as a handoff, a ticket or the Follow-up record, and reports any difference between the "
             "list and such a record.",
             "Each missing pass names the step and the call that left it missing, or that the step has not run.",
@@ -899,9 +900,11 @@ class CompletionCriteriaTests(unittest.TestCase):
             "Main asks earlier only when the user asks to land a Claim earlier, and then the decision covers every gated "
             "Claim on that branch and states the final check's actual state at that commit, which main runs whenever "
             "Execution allows.",
-            "Main builds the list from the review results it received in this session, never from a record in the "
-            "working tree, and the user may confirm part of it by whole Claims, a Claim being accepted only with "
-            "everything listed for it; \"continue\", silence or turning automatic review off is not a confirmation.",
+            # Retained passes ticket 06 (Acceptance items 10, 15 and 18): the list built only from this session's review results holds for off.
+            "In off, main builds the list from the review results it received in this session, never from a record "
+            "in the working tree.",
+            "The user may confirm part of the list by whole Claims, a Claim being accepted only with everything "
+            "listed for it; \"continue\", silence or turning automatic review off is not a confirmation.",
             "A Blocking finding or known vulnerability reported after the decision is not covered and holds landing until "
             "it is resolved or a new decision names it, and its final-check part covers only the commit and output it "
             "states.",
@@ -992,10 +995,11 @@ class CompletionCriteriaTests(unittest.TestCase):
          "which main runs whenever running code is allowed.",
          "只有你要求提早合併某個 claim 時，主 Agent 才會提早問；因為那會讓整個 branch 上的 claim 一起合併，清單就涵蓋該 branch "
          "上每個受把關的 claim，並寫明最終檢查在那個 commit 上的實際狀態，只要允許執行程式碼，主 Agent 都會執行它。"),
+        # Retained passes ticket 06 (Acceptance items 10, 15 and 18): the list built only from this session's review results holds for off.
         ("Accept and land at the end", "最後一次決定接受並合併",
-         "Main builds the list from the review results it received in this session, not from a record in the working "
-         "tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
-         "主 Agent 依它在這個 session 收到的審查結果建立清單，不依據工作樹中的紀錄（例如交接或後續紀錄），並告訴你這類紀錄與清單的差異。"),
+         "In `off`, main builds the list from the review results it received in this session, not from a record in "
+         "the working tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
+         "在 `off` 下，主 Agent 依它在這個 session 收到的審查結果建立清單，不依據工作樹中的紀錄（例如交接或後續紀錄），並告訴你這類紀錄與清單的差異。"),
         ("Accept and land at the end", "最後一次決定接受並合併",
          "Each missing pass names the step and call that left it missing, or that the step has not run, and known "
          "vulnerabilities appear as the role that reported them stated them, never merged or downgraded.",
