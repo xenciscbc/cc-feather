@@ -645,9 +645,12 @@ class CompletionCriteriaTests(unittest.TestCase):
             "and a decision states that state as \"failed (presumed: not established as unfailed in this session)\", with "
             "the reason and this session's outputs.",
             "A record can only make the state failed, never passed.",
-            "A failure reopens the claims it affects under the existing rules, and its output goes with it to the "
-            "reopened claims' reviews as evidence; landing and release wait for their passes again.",
-            "A failure that cannot be attributed with evidence reopens every claim the check covers.",
+            # Retained passes ticket 03 (Acceptance items 7 and 15): a failure reopens claims in off only; in auto it
+            # is fixed by its claim or a fix claim, as tests/test_feather_retained_passes.py pins.
+            "In off, the final check keeps its earlier rules, without the reruns, fix claims and stop above: a failure "
+            "reopens the claims it affects under the existing rules, and its output goes with it to the reopened claims' "
+            "reviews as evidence; landing and release wait for their passes again.",
+            "In off, a failure that cannot be attributed with evidence reopens every claim the check covers.",
             "For a landing or release the acceptance gate does not cover, main runs the final check when Execution "
             "allows, reports its state before landing, and waits for the user's instruction given after that report.",
         ),
@@ -794,12 +797,13 @@ class CompletionCriteriaTests(unittest.TestCase):
          "the commit has not failed, it treats the commit as failed.",
          "主 Agent 只採用它在這個 session 於該 commit 上自己執行的結果，絕不採用紀錄或先前 session 的結果，context 壓縮之後也會再執行一次；"
          "無法從這個 session 確定該 commit 沒有失敗時，就視為失敗。"),
+        # Retained passes ticket 03 (Acceptance items 7 and 15): a failure reopens claims in off only.
         ("Final check", "最終檢查",
-         "A failure reopens the claims it affects, with its output as evidence for their reviews, and landing and release "
-         "wait for their passes again; a failure main cannot attribute with evidence reopens every claim the check "
-         "covers.",
-         "檢查失敗會重新打開受影響的 claim，並把輸出當作它們審查的證據，進入預設 branch 與 release 都要等它們再次通過；主 Agent 無法以證據歸因的"
-         "失敗，會重新打開這項檢查涵蓋的每個 claim。"),
+         "In `off`, a failure reopens the claims it affects, with its output as evidence for their reviews, and landing "
+         "and release wait for their passes again; a failure main cannot attribute with evidence reopens every claim the "
+         "check covers.",
+         "在 `off` 下，檢查失敗會重新打開受影響的 claim，並把輸出當作它們審查的證據，進入預設 branch 與 release 都要等它們"
+         "再次通過；主 Agent 無法以證據歸因的失敗，會重新打開這項檢查涵蓋的每個 claim。"),
         ("Final check", "最終檢查",
          "For a landing the acceptance gate does not cover, main runs the check when running code is allowed, tells you "
          "its state before landing and waits for your instruction.",

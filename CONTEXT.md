@@ -25,7 +25,7 @@ A Claim whose outcome includes a Security-critical change. It is identified when
 _Avoid_: security claim
 
 **Claim**:
-One independently verifiable outcome with its own acceptance: a named spec without a Claims list of its own, a single named ticket, one a spec lists itself, or one unfinished ticket among those named. A spec lists Claims only when the user asked for them. Code review and outcome verification each judge one Claim, reading what it is written in, the parts of a spec it cites and, for a Claim a spec lists, the spec's parts that state they hold for every Claim. A ticket is one place a Claim may be written, not a synonym for it; a ticket being "claimed" in a ticket workflow means someone took it and is unrelated.
+One independently verifiable outcome with its own acceptance: a named spec without a Claims list of its own, a single named ticket, one a spec lists itself, or one unfinished ticket among those named. A spec lists Claims only when the user asked for them. Code review and outcome verification each judge one Claim, reading what it is written in, the parts of a spec it cites and, for a Claim a spec lists, the spec's parts that state they hold for every Claim. A ticket is one place a Claim may be written, not a synonym for it; a ticket being "claimed" in a ticket workflow means someone took it and is unrelated. In the Automatic flow, main may add a fix Claim to a Plan for one fix that the final check or a later Claim's review needs, without asking; it is a Claim with its own acceptance, reading set and counts, as review state's Final check states.
 _Avoid_: change, slice
 
 **Implementation phase**:
@@ -53,7 +53,7 @@ The setting, `auto` or `off`, that decides whether the Automatic flow runs.
 _Avoid_: auto review, review switch
 
 **Stop threshold**:
-The number of consecutive automatic calls without a pass that stops one step of the Automatic flow for a Plan or Claim, after which the step waits for the user's explicit request. The same number applies to every step; the default is 2.
+The number of consecutive automatic calls without a pass that stops one step of the Automatic flow for a Plan or Claim, after which the step waits for the user's explicit request. The same number applies to every step; the default is 2. In the Automatic flow, the final check, which is not a counted step, also stops for the user when it fails at that many different commits in a row.
 _Avoid_: budget, retry limit
 
 **Automatic flow**:
@@ -87,7 +87,7 @@ _Avoid_: git hook, safe git
 A finding of any review step that holds completion. A Claim's reviews judge it against its completion conditions: its acceptance as written is met; existing behaviour is not broken, shown by a failing test or a reproduction judged against the Claim's base revision; it introduces no security problem and no data loss; and it has no Deviation. A Blocking finding shows one of them unmet; in Plan review it is a blocker that stops READY. A security problem the change introduced or made exploitable, even outside the diff, and data loss it introduced block whatever the acceptance states and without a reproduction, so a removed or weakened security control blocks; a regression that is only inferred and is neither a security problem nor data loss does not block. The criteria hold in both Review modes, for every user, with no setting.
 
 **Non-blocking finding**:
-A finding of any review step that does not hold completion: an issue that predates the change, a correctness problem outside what the acceptance states, a regression that is only inferred and is neither a security problem nor data loss, style, naming or a refactoring suggestion. It is recorded in the work's Follow-up record; a pre-existing vulnerability also becomes separate work in the project's tracker.
+A finding of any review step that does not hold completion: an issue that predates the change, a correctness problem outside what the acceptance states, a regression that is only inferred and is neither a security problem nor data loss, style, naming or a refactoring suggestion. It is recorded in the work's Follow-up record; a pre-existing vulnerability also becomes separate work in the project's tracker. In the Automatic flow, a defect that an earlier Claim of the same Plan introduced after the Plan's base revision is not a pre-existing issue, and is fixed rather than only recorded.
 _Avoid_: nit, minor issue
 
 **Follow-up record**:

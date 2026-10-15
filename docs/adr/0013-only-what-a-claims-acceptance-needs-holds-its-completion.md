@@ -24,7 +24,7 @@ This amends [ADR 0006](0006-review-state-validity-and-completion.md): what holds
 - **Let security defects outside the acceptance land through Accept and land, with deferred Adversarial reviews**: the 2026-10-14 security analysis found that the promise to show every such defect to the user could be broken in many places, mostly through repository content alone, and ADR 0009 had already rejected letting a flaw the change introduced land.
 - **Per-Claim review timing with Review schedules and Review groups**: where Claims share files, as nearly all of this project's Plans do, the groups collapse to reviewing after the whole Plan, so the 0.20.0 case that motivated it is not fixed; it is deferred to separate work on retained passes.
 
-(Amended by ADR 0015: per-Claim review timing, deferred above to separate work on retained passes, is now the only review timing in auto: each Claim's code review and then outcome verification run once that Claim is implemented and committed, and a Claim that depends on another waits for its valid APPROVED and CONFIRMED.)
+(Amended by ADR 0015: per-Claim review timing, deferred above to separate work on retained passes, is now the only review timing in auto: each Claim's code review and then outcome verification run once that Claim is implemented and committed, and a Claim that depends on another waits for its valid APPROVED and CONFIRMED. In auto, a final check failure that cannot be attributed with evidence no longer reopens every Claim the check covers: it is fixed as a fix Claim, an attributed failure is fixed by its Claim without reopening any other, and the final check also reruns every Claim's primary acceptance.)
 
 ## Consequences
 

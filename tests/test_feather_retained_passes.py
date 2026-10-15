@@ -11,7 +11,15 @@ security invariants S5 and S7): in auto, a Claim's APPROVED and CONFIRMED stay f
 another Claim of the same Plan had judged by a completed code review and outcome verification that both passed; any
 other change, and every change in off, keeps file-level reopening; a Claim changes another Claim's acceptance checks
 only where its reading set says so, and its code review brief then carries that acceptance for a weakening check;
-turning automatic review off during a Plan reopens fixed passes. The reviewer template is unchanged."""
+turning automatic review off during a Plan reopens fixed passes. The reviewer template is unchanged.
+
+Retained passes ticket 03 (Acceptance items 6, 7 and 15, the parts of items 10, 14, 16, 17 and 18 for these rules, and
+security invariants S1, S3 and S4): in auto, main confirms each Claim's reading set before the final check, which also
+reruns every Claim's primary acceptance; an attributed failure is fixed by its Claim through its reviews, an unattributed
+one by a fix Claim main adds without asking, which never changes what it is judged by; no other Claim is reopened, and a
+final check that keeps failing at new commits stops at the Stop threshold's value. Every review brief names the Plan's
+base revision, and main judges from Git whether a finding reported as pre-existing was introduced after it. Off keeps
+today's final check. The adversary template is unchanged."""
 
 from __future__ import annotations
 
@@ -302,7 +310,11 @@ class PerClaimTimingTests(unittest.TestCase):
     def test_adr_0015_records_per_claim_timing_and_amends_adr_0013(self):
         self.assert_pinned(self.ADR)
         lines = self.source("ADR 0013").splitlines()
-        self.assertIn(self.ADR_0013_NOTE, lines)
+        # Ticket 03 extends this note with its own amendment; the whole line is pinned there and starts with this
+        # ticket's note unchanged.
+        note = FinalCheckAndFixClaimsTests.ADR_0013_NOTE
+        self.assertTrue(note.startswith(self.ADR_0013_NOTE[:-1] + " "))
+        self.assertIn(note, lines)
         self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
 
     def test_both_readmes_explain_per_claim_timing_and_dependent_claims(self):
@@ -683,6 +695,461 @@ class FixedPassesTests(unittest.TestCase):
                     self.assertIn(phrase, text)
 
     def test_the_reviewer_template_matches_the_v0_25_0_text(self):
+        for path, digest in self.UNCHANGED.items():
+            text = self.tagged(path, path).replace("\r\n", "\n")
+            with self.subTest(path=path):
+                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+
+
+class FinalCheckAndFixClaimsTests(unittest.TestCase):
+    """Ticket 03: whole-sentence pins of the final check's reruns, attributed fixes, fix Claims, S4 and the stop, the
+    Plan's base revision in every brief (S1), the reading-set confirmation (S3), findings about an earlier Claim, off
+    keeping today's final check, a pin of the unchanged adversary template, and a check that every new pin fails on the
+    text at tag v0.25.0. It reuses ticket 01's readers rather than changing them."""
+
+    PATHS = {**PerClaimTimingTests.PATHS,
+             "adversarial-review.md": "skills/delegation/references/adversarial-review.md"}
+    TAG = PerClaimTimingTests.TAG
+    GIT_READ = PerClaimTimingTests.GIT_READ
+    PART = "The final check and fix Claims"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """As ticket 01's reader, plus '<procedure>#<step number>', 'adversarial-review.md' (the whole procedure) and
+            'ADR 0015#part' (this ticket's part of ADR 0015)."""
+        if name == "ADR 0015#part":
+            text = (config.ROOT / cls.PATHS["ADR 0015"]).read_text(encoding="utf-8")
+            return text.split(f"\n## {cls.PART}\n", 1)[1].split("\n## ", 1)[0]
+        path, _, part = name.partition("#")
+        if part.isdigit() or path == "adversarial-review.md":
+            return feather_support.post_fix_source(name)
+        return PerClaimTimingTests.source(name)
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    tagged = PerClaimTimingTests.tagged
+
+    FINAL = "review-state.md#Final check"
+
+    # S3 and Acceptance item 7: the reading-set confirmation before the final check, and the reruns.
+    S3 = ("In auto, before the final check main confirms that each claim's reading set is unchanged from its recorded "
+          "content or hash, as Reading set describes; a change the user did not authorise is a material deviation, as "
+          "[plan review](plan-review.md) step 5 describes.")
+    RERUNS = ("In auto, the final check also reruns every claim's primary acceptance at the commit to be landed or "
+              "tagged, taken from the claim's recorded reading set, within the same Execution rules.")
+
+    # Acceptance item 7: the attributed fix, the fix Claim for an unattributed failure, the rerun and the stop.
+    FIXES = (
+        "In auto, a failure attributed with evidence to a claim is fixed by that claim: the fix goes through that claim's "
+        "code review and outcome verification, with the failure's output as evidence, their counts continuing as for a "
+        "reopened call, as Reopened calls describes, and no other claim is reopened.",
+        "In auto, a failure that cannot be attributed with evidence is fixed as a fix claim, and no claim is reopened.",
+        "The final check runs again after each fix.",
+        "When the final check fails at as many different commits in a row as the Stop threshold in effect, without "
+        "passing in between, main stops fixing and asks the user.",
+    )
+
+    # Acceptance item 7: what a fix Claim is, added without asking, classified by what it changes.
+    FIX_CLAIM = (
+        "A fix claim is a claim main adds to the plan for one fix: its acceptance is that the failing check passes, or, "
+        "for a defect [code review](code-review.md) step 5 assigns to a fix claim, that the reported defect is fixed; its "
+        "reading set is the plan's text with that failure or defect; and it gets code review and outcome verification "
+        "with counts of its own.",
+        "Main adds a fix claim without asking, as it makes a fix today: it gets no plan review and no ticket, and main "
+        "keeps it in the session's state and in any active handoff; a fix beyond the plan's scope is a Deviation, as "
+        "Deviations describes.",
+        "A fix claim is classified as Security-critical by what it changes, and main still does not ask: a fix claim that "
+        "changes a security control gets no Adversarial review, so it needs accept and land for its missing HELD, and "
+        "main discloses it, with its problem and a summary of the fix, in the decision Accept and land at the end of the "
+        "plan describes.",
+    )
+
+    # S4: a fix Claim never changes what it is judged by.
+    S4 = ("A fix claim never changes the check whose failure it fixes or another claim's acceptance checks, the files "
+          "[code review](code-review.md) step 2 describes; a fix that needs to is a Deviation and stops main to ask the "
+          "user.")
+
+    # Acceptance item 14 for the final check, and the residual risks "Check output" and "Security-critical fix Claims".
+    LIMITS = (
+        "The final check does not repeat everything at the final commit: acceptance items other than a claim's primary "
+        "acceptance are not rerun there, and an acceptance check that cannot be rerun, such as a manual check, is not "
+        "repeated there.",
+        "Repository code that a check runs controls its own output, so it can make a check pass that should fail, hide "
+        "that a check ran fewer tests, or make a failure point at the wrong claim; the last only misdirects a fix, after "
+        "which the final check runs again.",
+        "A fix claim that changes a security control gets no plan review, security analysis or Adversarial review; it is "
+        "disclosed at the end, and the user decides whether to land with it.",
+    )
+
+    # Acceptance item 15: off keeps today's final check, a failure that cannot be attributed reopening every claim. These
+    # replace completion criteria ticket 02's two failure sentences, whose pins (S8) now name off.
+    OFF = (
+        "In off, the final check keeps its earlier rules, without the reruns, fix claims and stop above: a failure "
+        "reopens the claims it affects under the existing rules, and its output goes with it to the reopened claims' "
+        "reviews as evidence; landing and release wait for their passes again.",
+        "In off, a failure that cannot be attributed with evidence reopens every claim the check covers.",
+    )
+
+    # The Stop threshold section's "Not counted": still not a counted step, while the stop uses the value.
+    NOT_COUNTED = ("In auto, the stop after the final check fails at as many different commits in a row as the Stop "
+                   "threshold in effect, as Final check describes, uses the Stop threshold's value, while the final "
+                   "check is still not a counted step: its runs change no step's count.")
+
+    # S1 and Acceptance item 6: the Plan's base revision in every brief, main's judgement from Git, and a defect
+    # introduced after it fixed rather than only recorded.
+    S1 = {
+        "review-state.md#Evidence for a regression": (
+            "In auto, every such brief also names, beside the claim's base revision, the plan's base revision, the "
+            "commit the plan's implementation started from, which main establishes itself from Git in this session.",
+            "Main, not the role, judges from Git whether a finding a role reports as pre-existing was introduced after "
+            "the plan's base revision; such a finding is a defect of the plan, handled as [code review](code-review.md) "
+            "step 5 describes, or, for a broken security invariant, a BROKEN of the claim whose invariant it breaks.",
+        ),
+        "code-review.md#2": (
+            "In auto, every such brief also names the plan's base revision beside the claim's base revision, as that "
+            "bullet describes, and main, not the reviewer, judges from Git whether a finding the reviewer reports as "
+            "pre-existing was introduced after it.",
+        ),
+        "outcome-verification.md#2": (
+            "In auto, every such brief also names the plan's base revision beside the claim's base revision, as that "
+            "bullet describes, and main, not the verifier, judges from Git whether a finding the verifier reports as "
+            "pre-existing was introduced after it.",
+        ),
+        "adversarial-review.md#2": (
+            "In auto, every such brief also names the plan's base revision beside the claim's base revision, as that "
+            "bullet describes, and main, not the adversary, judges from Git whether a vulnerability the adversary "
+            "reports as pre-existing was introduced after it; one introduced after it that breaks a security invariant "
+            "is a BROKEN of the claim whose invariant it breaks, not separate pre-existing work.",
+        ),
+    }
+    EARLIER_CLAIM = {
+        "code-review.md#5": (
+            "In auto, when a claim's review finds a problem in an earlier claim of the same plan, main judges from Git "
+            "whether it predates the plan's base revision, as [review state](review-state.md)'s Evidence for a "
+            "regression describes.",
+            "A problem that predates the plan's base revision is a Non-blocking finding, recorded in the Follow-up "
+            "record, and the later claim fixes it only when its own acceptance needs it, reviewed in its own reviews.",
+            "A defect introduced after the plan's base revision is not a pre-existing issue and is not only recorded: "
+            "when the later claim's acceptance needs it fixed, the later claim fixes it within its own reviews; "
+            "otherwise main fixes it as a fix claim, as [review state](review-state.md)'s Final check describes, "
+            "without reopening the earlier claim.",
+            "A security problem or data loss that the later claim's change introduces into what an earlier claim "
+            "delivers is the later claim's Blocking finding, as [review state](review-state.md)'s Security findings "
+            "describes; when a later claim changes a security control, main classifies it again as Security-critical "
+            "by what the change does, as [plan review](plan-review.md) describes.",
+        ),
+        "review-state.md#Non-blocking findings": (
+            "In auto, a defect that an earlier claim of the same plan introduced after the plan's base revision is not a "
+            "pre-existing issue and is not only recorded: it is fixed as [code review](code-review.md) step 5 describes, "
+            "without reopening the earlier claim.",
+        ),
+        "adversarial-review.md": (
+            "In auto, a fix claim gets no Adversarial review even when it is Security-critical, as [review "
+            "state](review-state.md)'s Final check describes.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: the glossary states fix Claims, the Plan's base revision and the stop.
+    CONTEXT = {
+        "CONTEXT.md#Claim": (
+            "In the Automatic flow, main may add a fix Claim to a Plan for one fix that the final check or a later "
+            "Claim's review needs, without asking; it is a Claim with its own acceptance, reading set and counts, as "
+            "review state's Final check states.",
+        ),
+        "CONTEXT.md#Non-blocking finding": (
+            "In the Automatic flow, a defect that an earlier Claim of the same Plan introduced after the Plan's base "
+            "revision is not a pre-existing issue, and is fixed rather than only recorded.",
+        ),
+        "CONTEXT.md#Stop threshold": (
+            "In the Automatic flow, the final check, which is not a counted step, also stops for the user when it fails "
+            "at that many different commits in a row.",
+        ),
+    }
+
+    # Acceptance item 16, for these rules: ADR 0015's part on the final check, fix Claims and the Plan's base revision,
+    # amending ADR 0013 (the unattributed final check failure).
+    ADR = {
+        "ADR 0015#part": (
+            "This part records the final check's reruns, fix Claims and the Plan's base revision.",
+            "The user decided (2026-10-14 and 2026-10-15, the second day after a security analysis; the "
+            "[spec](../specs/retained-passes.md) carries the acceptance and its security invariants):",
+            "- **Reruns.** Before the final check, main confirms that each Claim's reading set is unchanged from its "
+            "recorded content or hash; a change the user did not authorise is a material Deviation.",
+            "In auto the final check runs at the final commit, as before, and also reruns every Claim's primary "
+            "acceptance there, taken from its recorded reading set, within repository safety's Execution rules.",
+            "- **Attributed failures.** A failure attributed with evidence to a Claim is fixed by that Claim: the fix "
+            "goes through that Claim's code review and outcome verification, their counts continuing as for a reopened "
+            "call, and no other Claim is reopened.",
+            "- **Fix Claims.** A failure that cannot be attributed with evidence is fixed as a fix Claim, and no Claim is "
+            "reopened.",
+            "A fix Claim is a Claim main adds to the Plan for one fix: its acceptance is that the failing check passes, "
+            "or, for a defect a later Claim's review found, that the reported defect is fixed; its reading set is the "
+            "Plan's text with that failure or defect; and it gets code review and outcome verification with counts of "
+            "its own.",
+            "Main adds it without asking, as it makes a fix today: it gets no plan review and no ticket; a fix beyond the "
+            "Plan's scope is a Deviation.",
+            "A fix Claim never changes the check whose failure it fixes or another Claim's acceptance checks; a fix that "
+            "needs to is a Deviation and stops main to ask the user.",
+            "A fix Claim that changes a security control is classified as Security-critical by what it does, and main "
+            "still does not ask: it gets no Adversarial review and is disclosed at the end with its problem and a "
+            "summary of the fix.",
+            "- **The stop.** The final check runs again after each fix.",
+            "When it fails at as many different commits in a row as the Stop threshold in effect, without passing in "
+            "between, main stops fixing and asks the user.",
+            "The final check is still not a counted step; this stop only uses the Stop threshold's value.",
+            "- **The Plan's base revision.** Every brief of a Claim's code review, outcome verification and Adversarial "
+            "review names, besides the Claim's base revision, the Plan's base revision, which main establishes itself "
+            "from Git in this session.",
+            "Main, not the role, judges from Git whether a finding a role reports as pre-existing was introduced after "
+            "it; such a finding is a defect of the Plan or, for a broken security invariant, a BROKEN of the Claim whose "
+            "invariant it breaks.",
+            "When a later Claim's review finds a problem in an earlier Claim of the same Plan, a problem that predates "
+            "the Plan's base revision is a Non-blocking finding that the later Claim fixes only when its own acceptance "
+            "needs it; a defect introduced after it is not a pre-existing issue: the later Claim fixes it when its "
+            "acceptance needs it, and otherwise main fixes it as a fix Claim, without reopening the earlier Claim.",
+            "A later Claim that changes a security control is classified again as Security-critical by what the change "
+            "does.",
+            "- **Off mode.** These rules hold in auto only: in off the final check keeps the earlier rules, a failure "
+            "that cannot be attributed with evidence reopening every Claim the check covers.",
+            "- **Limits.** Acceptance items other than the primary acceptance, and acceptance checks that cannot be "
+            "rerun, such as a manual check, are not repeated at the final commit.",
+            "- **Check output.** Repository code that a check runs controls its own output, so it can make a check pass "
+            "that should fail, hide that a check ran fewer tests, or make a failure point at the wrong Claim; the last "
+            "only misdirects a fix, after which the final check runs again.",
+            "- **Security-critical fix Claims.** A fix Claim that changes a security control gets no plan review, "
+            "security analysis or Adversarial review; it is disclosed at the end, and the user decides whether to land "
+            "with it.",
+            "This amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md) (the unattributed "
+            "final check failure): in auto, a final check failure that cannot be attributed with evidence no longer "
+            "reopens every Claim the check covers but is fixed as a fix Claim, and an attributed failure is fixed by its "
+            "Claim without reopening any other.",
+            "- **Reopen an earlier Claim for a defect it introduced**: it restores the chain fixed passes remove.",
+            "- **Count a fix's own review calls to stop fixes that break each other**: each fix can pass its own "
+            "reviews, so the count never reaches the Stop threshold.",
+            "- **A new glossary term for a fix outside every Claim**: a fix Claim works as any Claim.",
+            "- **Ask the user before a fix Claim that changes a security control**: it stops the Plan for a fix whose "
+            "purpose is to make it work, so it is disclosed at the end instead.",
+            "- **A forced fix round in which every Claim must pass a step before the next**: it adds a global ordering "
+            "and ignores stops, INCONCLUSIVE, REJECT and deferral.",
+        ),
+    }
+    # Ticket 01's note on ADR 0013, extended by this ticket's amendment; ticket 01's pin now names this line.
+    ADR_0013_NOTE = (PerClaimTimingTests.ADR_0013_NOTE[:-1] + " In auto, a final check failure that cannot be attributed "
+                     "with evidence no longer reopens every Claim the check covers: it is fixed as a fix Claim, an "
+                     "attributed failure is fixed by its Claim without reopening any other, and the final check also "
+                     "reruns every Claim's primary acceptance.)")
+
+    # Acceptance item 17, for these rules: (English label, Chinese label, English sentence, Chinese sentence).
+    README_PAIRS = (
+        ("Final check", "最終檢查",
+         "In auto it still counts toward no step, but it stops at the Stop threshold's value, as below.",
+         "在 auto 下它仍不計入任何步驟，但會依停止門檻的值停下，如下所述。"),
+        ("Final check", "最終檢查",
+         "In auto, before the check main confirms that each claim's reading set is unchanged from what it recorded, and "
+         "the check also reruns every claim's primary acceptance at that commit, taken from the claim's recorded reading "
+         "set.",
+         "在 auto 下，檢查之前主 Agent 會確認每個 claim 的閱讀範圍與它記錄的相同，檢查也會在該 commit 上重跑每個 claim "
+         "的主要驗收，依據的是該 claim 記錄下來的閱讀範圍。"),
+        ("Final check", "最終檢查",
+         "A failure main attributes with evidence to a claim is fixed by that claim, through its code review and "
+         "verification, whose counts continue as for a reopened call, and no other claim is reopened.",
+         "主 Agent 以證據歸因於某個 claim 的失敗，由那個 claim 修正，並經過它的程式碼審查與驗證，次數像重新打開的呼叫一樣接續"
+         "計算，其他 claim 都不會重新打開。"),
+        ("Final check", "最終檢查",
+         "A failure main cannot attribute with evidence is fixed by a fix claim, and no claim is reopened.",
+         "主 Agent 無法以證據歸因的失敗，由修正用的 claim 修正，任何 claim 都不會重新打開。"),
+        ("Final check", "最終檢查",
+         "A fix claim is a claim main adds to the plan for one fix, without asking you and with no plan review and no "
+         "ticket: its acceptance is that the failing check passes, or that a defect a later claim's review found is "
+         "fixed, its reading set is the plan's text with that failure or defect, and it gets code review and "
+         "verification with counts of its own.",
+         "修正用的 claim 是主 Agent 為一項修正加進計畫的 claim，不會先問你，也沒有計畫審查與 ticket：它的驗收條件是失敗的"
+         "檢查通過，或後面 claim 的審查找到的缺陷已修正；它的閱讀範圍是計畫的文字加上那項失敗或缺陷；它有自己的程式碼審查"
+         "與驗證，次數也自己計算。"),
+        ("Final check", "最終檢查",
+         "A fix claim never changes the check whose failure it fixes or another claim's acceptance checks; a fix that "
+         "needs to, or a fix beyond the plan's scope, is a deviation, and main asks you.",
+         "修正用的 claim 絕不改動它所修正的那項失敗檢查，也不改動其他 claim 的驗收檢查；需要改動它們的修正，或超出計畫範圍"
+         "的修正，都是偏離，主 Agent 會問你。"),
+        ("Final check", "最終檢查",
+         "A fix claim that changes a security control is Security-critical, but main still adds it without asking: it "
+         "gets no plan review, security analysis or Adversarial review, and main discloses it at the end with its problem "
+         "and a summary of the fix, so you decide whether to land with it.",
+         "修正用的 claim 若改動安全控制，就屬於安全關鍵，但主 Agent 仍不先問你就加入：它沒有計畫審查、安全分析或對抗式審查，"
+         "主 Agent 會在最後揭露它，附上問題與修正摘要，由你決定是否帶著它合併。"),
+        ("Final check", "最終檢查",
+         "The check runs again after each fix, and when it fails at as many different commits in a row as the Stop "
+         "threshold, without passing in between, main stops fixing and asks you.",
+         "每次修正後檢查都會再執行一次；檢查在連續幾個不同的 commit 上失敗，次數達到停止門檻，而且其間沒有通過時，主 Agent "
+         "就停止修正並問你。"),
+        ("Final check", "最終檢查",
+         "The check does not repeat everything at the final commit: acceptance items other than a claim's primary "
+         "acceptance are not rerun, and an acceptance check that cannot be rerun, such as a manual check, is not "
+         "repeated.",
+         "檢查不會在最後的 commit 上重做所有事：claim 主要驗收以外的驗收項目不會重跑，無法重跑的驗收檢查（例如手動檢查）"
+         "也不會重做。"),
+        ("Final check", "最終檢查",
+         "Repository code a check runs controls its own output, so it can make a check pass that should fail, hide that "
+         "a check ran fewer tests, or make a failure point at the wrong claim; the last only misdirects a fix, after "
+         "which the check runs again.",
+         "檢查所執行的儲存庫程式碼掌控自己的輸出，所以它可以讓該失敗的檢查通過、隱藏檢查少跑了測試，或讓失敗指向錯誤的 "
+         "claim；最後這種只會讓修正找錯對象，修正之後檢查會再執行一次。"),
+        ("Final check", "最終檢查",
+         "In `off`, a failure reopens the claims it affects, with its output as evidence for their reviews, and landing "
+         "and release wait for their passes again; a failure main cannot attribute with evidence reopens every claim the "
+         "check covers.",
+         "在 `off` 下，檢查失敗會重新打開受影響的 claim，並把輸出當作它們審查的證據，進入預設 branch 與 release 都要等它們"
+         "再次通過；主 Agent 無法以證據歸因的失敗，會重新打開這項檢查涵蓋的每個 claim。"),
+        ("Findings", "問題分級",
+         "In auto, every review brief also names the plan's base revision, and main, not the role, judges from Git "
+         "whether a finding reported as pre-existing was introduced after it.",
+         "在 auto 下，每份審查的 brief 也會寫明計畫的基準版本，由主 Agent 而不是角色依 Git 判斷被回報為先前就存在的問題，"
+         "是否在那之後才引入。"),
+        ("Findings", "問題分級",
+         "A problem in an earlier claim of the same plan that predates the plan's base revision is non-blocking, and a "
+         "later claim fixes it only when its own acceptance needs it; a defect an earlier claim introduced after it is "
+         "fixed by the later claim when its acceptance needs it and otherwise by a fix claim, as Final check says, "
+         "without reopening the earlier claim.",
+         "同一份計畫中前面 claim 的問題若早於計畫的基準版本，就是非阻擋問題，後面的 claim 只在自己的驗收需要時才修正；前面 "
+         "claim 在那之後引入的缺陷，後面 claim 的驗收需要時由它修正，否則依「最終檢查」由修正用的 claim 修正，都不會重新打開"
+         "前面的 claim。"),
+        ("Findings", "問題分級",
+         "When a later claim changes a security control, main classifies it again as Security-critical by what the "
+         "change does.",
+         "後面的 claim 改動安全控制時，主 Agent 會依改動的作用重新判斷它是否屬於安全關鍵。"),
+    )
+
+    # Acceptance item 18: the replaced statement that a failure reopens claims in either mode; in auto no claim is
+    # reopened by the final check.
+    REPLACED = {
+        FINAL: (
+            " A failure reopens the claims it affects under the existing rules,",
+            " A failure that cannot be attributed with evidence reopens every claim the check covers.",
+        ),
+        "README.md#Final check": (" A failure reopens the claims it affects,",),
+        "README.zh-TW.md#最終檢查": ("。檢查失敗會重新打開受影響的 claim",),
+    }
+
+    # The Implementation Decisions "Unchanged": the adversary template is unchanged, as at v0.25.0 (line endings
+    # normalised to LF, as .gitattributes stores them).
+    UNCHANGED = {"templates/agents/adversary.md": "9652dc3cde73dad6853c83ae93aa4be7eafb1fea6685cbc969ca2dae1b3f1bf2"}
+
+    def new_pins(self):
+        pins = {self.FINAL: [self.S3, self.RERUNS, *self.FIXES, *self.FIX_CLAIM, self.S4, *self.LIMITS, *self.OFF],
+                "review-state.md#Not counted": [self.NOT_COUNTED]}
+        for group in (self.S1, self.EARLIER_CLAIM, self.CONTEXT, self.ADR):
+            for place, sentences in group.items():
+                pins.setdefault(place, []).extend(sentences)
+        pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            pins.setdefault(f"README.md#{en_label}", []).append(english)
+            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+        return pins
+
+    def test_s3_reading_sets_are_confirmed_before_the_final_check_which_reruns_every_primary_acceptance(self):
+        self.assert_pinned({self.FINAL: (self.S3, self.RERUNS)})
+        # The confirmation and the reruns come before the final check's own rules, which still run first.
+        text = self.source(self.FINAL)
+        self.assertLess(text.index("It is main's own run, not a review step"), text.index(self.S3))
+        self.assertLess(text.index(self.RERUNS), text.index("It runs only when the workspace equals"))
+
+    def test_a_failure_is_fixed_by_its_claim_or_a_fix_claim_and_the_final_check_stops_at_the_threshold(self):
+        self.assert_pinned({self.FINAL: self.FIXES})
+
+    def test_a_fix_claim_is_a_claim_main_adds_without_asking(self):
+        self.assert_pinned({self.FINAL: self.FIX_CLAIM})
+
+    def test_s4_a_fix_claim_does_not_change_what_it_is_judged_by(self):
+        self.assert_pinned({self.FINAL: (self.S4,)})
+
+    def test_the_final_checks_limits_and_residual_risks_are_stated(self):
+        self.assert_pinned({self.FINAL: self.LIMITS})
+
+    def test_off_keeps_todays_final_check(self):
+        # Fails if off loses today's final check: its run, its fail-closed state and an unattributed failure reopening
+        # every claim must all stand beside the off sentences.
+        self.assert_pinned({self.FINAL: (
+            *self.OFF,
+            "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at "
+            "the commit to be landed or tagged, within [repository safety](repository-safety.md)'s Execution rules.",
+            "Once it has failed at a commit, that commit's state is failed, and a later pass at the same commit lets "
+            "landing proceed only through an accept-and-land decision that names the failure.",
+        )})
+
+    def test_the_final_check_is_still_not_a_counted_step(self):
+        self.assert_pinned({"review-state.md#Not counted": (
+            "The final check before landing or release, as Validity and completion's Final check describes, is not a "
+            "counted step either.", self.NOT_COUNTED)})
+
+    def test_s1_every_brief_names_the_plans_base_revision_and_main_judges_pre_existing_findings(self):
+        self.assert_pinned(self.S1)
+        # The claim's base revision is still named beside it in every procedure.
+        for place in ("code-review.md#2", "outcome-verification.md#2", "adversarial-review.md#2"):
+            with self.subTest(place=place):
+                self.assertIn("names the claim's base revision, which main establishes itself from Git in this session",
+                              self.source(place))
+
+    def test_findings_about_an_earlier_claim_follow_the_plans_base_revision(self):
+        self.assert_pinned(self.EARLIER_CLAIM)
+        # The completion conditions themselves are unchanged.
+        self.assertIn("A claim's reviews judge it against these conditions: its acceptance as written is met; existing "
+                      "behaviour is not broken, shown by a failing test or a reproduction; it introduces no security "
+                      "problem and no data loss, as Security findings below describes; and it has no deviation from the "
+                      "plan.", self.source("review-state.md#Completion conditions"))
+
+    def test_glossary_states_fix_claims_and_the_plans_base_revision(self):
+        self.assert_pinned(self.CONTEXT)
+
+    def test_adr_0015_records_the_final_check_and_fix_claims_and_amends_adr_0013(self):
+        self.assert_pinned(self.ADR)
+        text = self.source("ADR 0015")
+        self.assertEqual(text.count(f"\n## {self.PART}\n"), 1)
+        # This part follows ticket 02's part.
+        self.assertLess(text.index(f"\n## {FixedPassesTests.PART}\n"), text.index(f"\n## {self.PART}\n"))
+        lines = self.source("ADR 0013").splitlines()
+        self.assertIn(self.ADR_0013_NOTE, lines)
+        self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
+
+    def test_both_readmes_explain_the_final_checks_reruns_fix_claims_and_stop(self):
+        for en_label, zh_label, english, chinese in self.README_PAIRS:
+            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+                with self.subTest(place=place, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, self.source(place))
+
+    def test_the_final_check_no_longer_reopens_claims_in_either_mode(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.source(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertNotIn(phrase, text)
+
+    def test_the_adversary_template_is_unchanged(self):
+        for path, digest in self.UNCHANGED.items():
+            text = (config.ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n")
+            with self.subTest(path=path):
+                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+
+    def tagged_place(self, place):
+        """The whole file behind a place at the tag; this ticket's ADR part included."""
+        return self.tagged(place, self.PATHS[place.partition("#")[0]])
+
+    def test_every_new_pin_fails_on_the_v0_25_0_text(self):
+        for place, sentences in self.new_pins().items():
+            text = self.tagged_place(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assertFalse(sentence in text, f"{place} already said this at {self.TAG}")
+
+    def test_every_absence_pin_matches_the_v0_25_0_text(self):
+        for place, phrases in self.REPLACED.items():
+            text = self.tagged_place(place)
+            for phrase in phrases:
+                with self.subTest(place=place, phrase=phrase[:60]):
+                    self.assertIn(phrase, text)
+
+    def test_the_adversary_template_matches_the_v0_25_0_text(self):
         for path, digest in self.UNCHANGED.items():
             text = self.tagged(path, path).replace("\r\n", "\n")
             with self.subTest(path=path):
