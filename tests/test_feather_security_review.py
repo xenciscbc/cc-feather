@@ -95,7 +95,9 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
             "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation first needs a written, reviewed plan the user approves; other unplanned edits get no automatic review.",
         ),
         "CLAUDE.md template": (
-            "Also use it for requested security analysis, explicitly requested plan review, code review or outcome verification, requests to turn automatic review on or off, and before implementing a Security-critical change.",
+            # 0.28.0 (docs/specs/weigh-findings-before-rules.md, Acceptance item 4) adds the trigger for a requirement or
+            # fix derived from a finding.
+            "Also use it for requested security analysis, explicitly requested plan review, code review or outcome verification, requests to turn automatic review on or off, before proposing or adopting a requirement or fix derived from a finding, and before implementing a Security-critical change.",
         ),
         "auto-review.md#Meaning": (
             "Unplanned work that makes a Security-critical change, migrates data or performs an irreversible operation first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically.",

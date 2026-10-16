@@ -7,6 +7,8 @@ description: "Coordinate Feather delegation: dispatch independent work, accept c
 
 Run this workflow in the main conversation. Main owns decisions and final acceptance; children complete assigned work as leaves. Loading this skill neither installs roles nor grants authority. Use the required managed native role; if unavailable, report the limitation and keep the affected delegation or required review blocked. Installation belongs to cc-feather:setup.
 
+Before proposing or adopting a requirement or fix derived from any finding, main briefly states, alongside the proposed remedy and without a separate recap, grouping findings that share one remedy and reason, when the case can occur in normal use or under the applicable threat model, its worst credible outcome, and whether an existing rule covers it, preferring to reuse or correct a rule. For optional work, main recommends fixes for cases normal use encounters, data loss, or security problems under that threat model. Normal-use rarity alone never justifies discounting such a security problem. This weighing selects remedies and recommendations only: existing blocking conditions, rejection evidence, security-disposition procedures and user decisions still govern, and rarity or a minor outcome alone is not rejection evidence for a Blocking finding or a plan-review blocker.
+
 ## Select and prepare
 
 Keep small or tightly coupled work with main. Select a bounded independent responsibility and route by its actual work:

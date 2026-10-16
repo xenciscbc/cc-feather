@@ -1335,5 +1335,112 @@ class CompletionCriteriaTests(unittest.TestCase):
                     self.assertIn(phrase, text)
 
 
+class WeighFindingsBeforeRulesTests(unittest.TestCase):
+    """0.28.0 (docs/specs/weigh-findings-before-rules.md, Acceptance items 1 to 6): the delegation skill weighs a finding
+    before main proposes or adopts a requirement or fix derived from it, in its own paragraph right after the paragraph on
+    main's ownership; the installed policy loads the skill for that; both references describe it in one sentence."""
+
+    SKILL = "skills/delegation/SKILL.md"
+    OWNERSHIP = "Run this workflow in the main conversation. Main owns decisions and final acceptance;"
+    # Acceptance items 1, 2 and 3, in order: the paragraph is exactly these sentences, so it lists no paths, defines no
+    # attacker model and adds no approval step.
+    PARAGRAPH = (
+        "Before proposing or adopting a requirement or fix derived from any finding, main briefly states, alongside the "
+        "proposed remedy and without a separate recap, grouping findings that share one remedy and reason, when the case "
+        "can occur in normal use or under the applicable threat model, its worst credible outcome, and whether an "
+        "existing rule covers it, preferring to reuse or correct a rule.",
+        "For optional work, main recommends fixes for cases normal use encounters, data loss, or security problems under "
+        "that threat model.",
+        "Normal-use rarity alone never justifies discounting such a security problem.",
+        "This weighing selects remedies and recommendations only: existing blocking conditions, rejection evidence, "
+        "security-disposition procedures and user decisions still govern, and rarity or a minor outcome alone is not "
+        "rejection evidence for a Blocking finding or a plan-review blocker.",
+    )
+    # Acceptance item 4: the policy's loading sentence with the new trigger.
+    POLICY = ("Also use it for requested security analysis, explicitly requested plan review, code review or outcome "
+              "verification, requests to turn automatic review on or off, before proposing or adopting a requirement or "
+              "fix derived from a finding, and before implementing a Security-critical change.")
+    TRIGGER = "before proposing or adopting a requirement or fix derived from a finding"
+    # Acceptance item 5: one sentence in each reference, in the Follow-up record bullet beside Findings.
+    REFERENCES = (
+        ("reference.md#Follow-up record",
+         "Before main proposes or adopts a requirement or fix derived from any finding, it briefly states when the case "
+         "can occur in normal use or under the applicable threat model, its worst credible outcome and whether an "
+         "existing rule already covers it, prefers reusing or correcting a rule, and for optional work recommends fixes "
+         "for what normal use encounters, data loss and security problems, which normal-use rarity never discounts; the "
+         "weighing never changes what blocks, what counts as rejection evidence, how security findings are "
+         "dispositioned or your decisions."),
+        ("reference.zh-TW.md#後續紀錄",
+         "主 Agent 依任何問題提出或採用一項要求或修正之前，會先簡短說明這個情況在一般使用中或適用的威脅模型下何時會發生、"
+         "最壞而可信的後果，以及既有規則是否已經涵蓋，並優先沿用或修正既有規則；對可選的工作，它會建議修正一般使用會遇到的"
+         "情況、資料遺失與安全問題，安全問題不會只因一般使用中少見就被輕忽；這項權衡從不改變什麼會擋下、什麼算駁回證據、"
+         "安全問題的處置方式或你的決定。"),
+    )
+    PREVIOUS = "v0.27.1"
+    GIT_READ = CompletionCriteriaTests.GIT_READ
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    @classmethod
+    def paragraphs(cls, text):
+        body = text.replace("\r\n", "\n").split("\n---\n", 1)[1]
+        return [paragraph.strip() for paragraph in body.split("\n\n") if paragraph.strip()]
+
+    def test_the_paragraph_follows_the_ownership_paragraph(self):
+        paragraphs = self.paragraphs((config.ROOT / self.SKILL).read_text(encoding="utf-8"))
+        owners = [index for index, paragraph in enumerate(paragraphs) if paragraph.startswith(self.OWNERSHIP)]
+        self.assertEqual(len(owners), 1)
+        self.assertEqual(paragraphs[owners[0] + 1], " ".join(self.PARAGRAPH))
+        # Stated once, in the skill only: no section or other paragraph repeats it.
+        self.assertEqual(sum(self.PARAGRAPH[0] in paragraph for paragraph in paragraphs), 1)
+
+    def test_the_paragraph_names_only_the_existing_limits(self):
+        paragraph = " ".join(self.PARAGRAPH)
+        for phrase in ("existing blocking conditions", "rejection evidence", "security-disposition procedures",
+                       "user decisions still govern", "the applicable threat model"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, paragraph)
+        for absent in ("approval", "approve", "attacker", "`", "](", "references/"):
+            with self.subTest(absent=absent):
+                self.assertNotIn(absent, paragraph)
+
+    def test_the_policy_template_loads_the_skill_for_it(self):
+        template = (config.ROOT / "templates" / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertEqual(template.count(self.POLICY), 1)
+        self.assertEqual(template.count(self.TRIGGER), 1)
+
+    def test_every_rendered_policy_carries_the_trigger(self):
+        for mode in ("auto", "off"):
+            for scope in ("project", "user"):
+                for prefix in ("", config.ROLE_PREFIX):
+                    with self.subTest(mode=mode, scope=scope, prefix=prefix):
+                        self.assertEqual(config._delegation_block(mode, prefix, scope, None).count(self.POLICY), 1)
+
+    def test_both_references_describe_the_rule_in_one_sentence(self):
+        for place, sentence in self.REFERENCES:
+            with self.subTest(place=place):
+                self.assert_whole_sentence(sentence, feather_support.review_rules_source(place))
+                whole = (config.ROOT / "docs" / place.partition("#")[0]).read_text(encoding="utf-8")
+                self.assertEqual(whole.count(sentence), 1)
+
+    def previous(self, path):
+        try:
+            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{self.PREVIOUS}:{path}"], cwd=config.ROOT,
+                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run, so the {self.PREVIOUS} text cannot be read: {error}")
+        if shown.returncode != 0:
+            self.skipTest(f"no {self.PREVIOUS} in this checkout")
+        return shown.stdout.decode("utf-8")
+
+    def test_every_new_pin_fails_on_the_v0_27_1_text(self):
+        pins = [(self.SKILL, sentence) for sentence in self.PARAGRAPH]
+        pins += [("templates/CLAUDE.md", self.TRIGGER)]
+        pins += [(f"docs/{place.partition('#')[0]}", sentence) for place, sentence in self.REFERENCES]
+        for path, sentence in pins:
+            with self.subTest(path=path, sentence=sentence[:60]):
+                self.assertNotIn(sentence, self.previous(path))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -807,19 +807,21 @@ class HandoffTidyWriteEdgesReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_27_1(self):
-        self.assertEqual("0.27.1", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.28.0, weigh findings before rules).
 
     def test_updates_sections_start_with_the_write_edges_note_in_both_languages(self):
         previous = HandoffTidyReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = WeighFindingsBeforeRulesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.27.1 note starts right after the section's opening sentence, its sentences in order, before 0.27.0's.
+            # The 0.27.1 note starts right after the 0.28.0 note, its sentences in order, before 0.27.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -856,6 +858,100 @@ class HandoffTidyWriteEdgesReleaseTests(unittest.TestCase):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("Setup update is required", entry)
         # The single claim has its line in the review round.
+        self.assertEqual(entry.count("\n- The claim: "), 1)
+
+
+class WeighFindingsBeforeRulesReleaseTests(unittest.TestCase):
+    """0.28.0 (docs/specs/weigh-findings-before-rules.md, Acceptance item 7): the manifest version is 0.28.0; the
+    Updates note states what 0.28.0 changes, that the installed delegation policy changed so existing installations run
+    `/cc-feather:setup update` and start a fresh session, and how to go back to 0.27.1, in both languages; the validation
+    entry records the validation, a setup update bringing a 0.27.1 installation's policy to the new template, that no
+    live rehearsal was run and that the tests cannot show a model follows the rule, the tag and the review round."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.28.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.28.0 asks main, before it proposes or adopts a requirement or fix derived from a finding, to state briefly when the case can occur in normal use or under the applicable threat model, its worst credible outcome and whether an existing rule covers it, and to prefer reusing or correcting a rule; the weighing never changes what blocks.",
+         "It changes the installed delegation policy, which now also loads the delegation skill before such a requirement or fix is proposed or adopted, so existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` warns that the delegation guidance is from an older template.",
+         "To go back to 0.27.1, reinstall the 0.27.1 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.27.1 policy; no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.28.0 要求主 Agent 依問題提出或採用一項要求或修正之前，先簡短說明這個情況在一般使用中或適用的威脅模型下何時會發生、最壞而可信的後果，以及既有規則是否已經涵蓋，並優先沿用或修正既有規則；這項權衡不改變什麼會擋下。",
+         "它改了已安裝的分派政策，讓主 Agent 在提出或採用這類要求或修正之前也會載入分派 skill，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒分派指引來自較舊的範本。",
+         "要回到 0.27.1，重新安裝 0.27.1 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.27.1 的政策；不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_28_0(self):
+        self.assertEqual("0.28.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_weigh_findings_note_in_both_languages(self):
+        previous = HandoffTidyWriteEdgesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.28.0 note starts right after the section's opening sentence, its sentences in order, before 0.27.1's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            section = self.section(self.text(name), heading)
+            note = section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+            with self.subTest(readme=name):
+                # The note asks for setup update after the plugin update and for going back, and never says it is not needed.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                self.assertNotIn(no_update, note)
+                self.assertNotIn("need only the plugin update", note)
+                self.assertNotIn("只要更新 plugin", note)
+
+    # The validation entry: what it implements, the setup update and the changed template, the validation, the
+    # setup-update check from a 0.27.1 installation, no rehearsal and what the tests cannot show, the tag and the review
+    # round.
+    ENTRY_HEADING = "\n## 0.28.0 weigh findings before rules\n"
+    ENTRY = (
+        "Implements [the weigh findings before rules spec](specs/weigh-findings-before-rules.md), committed in 9a0b69e;",
+        "**Setup update is required.** This release changes the delegation policy template, `templates/CLAUDE.md`, the only file under `templates/`, `skills/setup/` or `scripts/` that changed since v0.27.1;",
+        "as `git diff-tree -r --name-only v0.27.1 HEAD` shows.",
+        "To go back to 0.27.1, reinstall the 0.27.1 plugin and run `/cc-feather:setup update` the same way.",
+        "(the 0.27.1 release ran 875).",
+        "now expects `templates/CLAUDE.md` among the changed non-role templates,",
+        "v0.27.1 was exported read-only with `git archive --format=tar v0.27.1 | tar -x -C <scratch>/v0.27.1`,",
+        "the warning `delegation guidance is from an older template; run setup update`,",
+        "previewed changes to `project/CLAUDE.md` and `project/.claude/cc-feather/state.json` only, no role definition;",
+        "`check` with `<tool>` then reported status `ok` with no warning and no issue;",
+        "No live rehearsal was run for this release.",
+        "they cannot show that a model weighs findings as the rule says.",
+        "`v0.28.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "and READY on call 2, after the user's change to the claim",
+        "a Codex second opinion ran in parallel.",
+    )
+
+    def test_validation_entry_records_the_checks_setup_update_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
+        # The setup-update check has its three steps, in order, and the single claim its line in the review round.
+        positions = [entry.index(f"\n- {step}") for step in ("`check --project", "`python -I -B <tool> update", "`check` with")]
+        self.assertEqual(positions, sorted(positions))
         self.assertEqual(entry.count("\n- The claim: "), 1)
 
 

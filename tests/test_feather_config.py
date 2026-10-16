@@ -1649,9 +1649,10 @@ class FeatherConfigTests(unittest.TestCase):
                 changed[name] = shown.stdout
         recorded = self.recorded_0_20_0()
         # Repository safety C1 changes the automatic-review guidance template, which is not a role template; the fixture
-        # records role templates only, and changed guidance is reported by check's older-template warning instead.
+        # records role templates only, and changed guidance is reported by check's older-template warning instead. 0.28.0
+        # (docs/specs/weigh-findings-before-rules.md, Acceptance item 4) changes the delegation policy template too.
         guidance = {name for name in changed if not name.startswith("templates/agents/")}
-        self.assertEqual(guidance, {"templates/review-auto.md"})
+        self.assertEqual(guidance, {"templates/review-auto.md", "templates/CLAUDE.md"})
         changed = {name: text for name, text in changed.items() if name not in guidance}
         self.assertEqual(sorted(changed), sorted(f"templates/agents/{role}.md" for role in self.CHANGED_SINCE_0_20_0))
         for role, text in recorded.items():
