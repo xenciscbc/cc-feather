@@ -110,6 +110,10 @@ _Avoid_: dispatch log, review log
 An unfinished Feather handoff record for the work under the project's `.feather/handoffs/`. In off, it is how unresolved verdicts and gate notes reach a resumed session. In the Automatic flow, a Plan's review state crosses sessions through its Dispatch record instead, and an Active handoff records progress and names the Dispatch record.
 _Avoid_: handoff file, notes
 
+**Handoff tidy**:
+Organizing the project's existing handoff records, run only when the user explicitly invokes it. It either proposes which work to take up next and which records to merge, from the records alone, or checks the recorded items and progress of the work the user selects, or of every record, against the current project. It only proposes: merges, reclassified items and removed items are written only after the user confirms them. It neither authorizes the work it recommends nor starts handoff maintenance.
+_Avoid_: handoff review, triage, cleanup
+
 **Pending-acceptance claim**:
 A gated Claim whose Active handoff note says it has passed one or more of the steps it needs (code review, outcome verification and, for a Security-critical claim, Adversarial review), or has an Accept and land decision, but is not yet landed, released or reported complete. It stays under the Acceptance gate until then, or until it is cancelled with its commits decided. It also covers an upstream Claim that has passed no step yet and stays pending because the user let named dependent Claims proceed after it stopped, as a deferral of it, and, in the Automatic flow, a Security-critical claim whose Adversarial review at the final commit returned BROKEN, which stays pending with that result and its findings listed until the user's decision at the end of the Plan. In the Automatic flow, main records each Claim's pass state in the Plan's Dispatch record until the user's decision at the end of the Plan, and a resumed session takes it from there rather than from an Active handoff note. A note an Active handoff still holds keeps restricting its Claim.
 _Avoid_: approved claim, half-passed claim
