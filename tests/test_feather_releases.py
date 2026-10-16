@@ -592,19 +592,21 @@ class RetainedPassesReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_26_0(self):
-        self.assertEqual("0.26.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.27.0 ticket 05).
 
     def test_updates_sections_start_with_the_retained_passes_note_in_both_languages(self):
         previous = RepoTrustDefaultReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = HandoffTidyReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.26.0 note starts right after the section's opening sentence, its sentences in order, before 0.25.0's.
+            # The 0.26.0 note starts right after the 0.27.0 note, its sentences in order, before 0.25.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -651,6 +653,125 @@ class RetainedPassesReleaseTests(unittest.TestCase):
         positions = [entry.index(run) for run in ("First run (", "Second run (")]
         self.assertEqual(positions, sorted(positions))
         for claim in ("01", "02", "03", "04", "05", "06", "07"):
+            with self.subTest(claim=claim):
+                self.assertEqual(entry.count(f"\n- {claim}: "), 1)
+
+
+class HandoffTidyReleaseTests(unittest.TestCase):
+    """0.27.0 ticket 05 (docs/specs/handoff-tidy.md, Acceptance item 13): both READMEs list and describe
+    `/cc-feather:handoff-tidy`; the Updates note states what 0.27.0 adds, that no `/cc-feather:setup update` is needed
+    and how to go back to 0.26.0, in both languages; the validation entry records the checks, the rehearsal on copies
+    of real records with what it left unexercised, the tag and the review round."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.27.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.27.0 adds `/cc-feather:handoff-tidy`, a command only you can run that proposes the next work, merges and stale or incomplete records from the handoff records, or checks the recorded items of named or all work against the current project without running project code, and writes only what you confirm.",
+         "It changes no installed role definition or policy, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "To go back to 0.26.0, reinstall the 0.26.0 plugin; no setup update or remove is needed, and records the command wrote stay ordinary handoff records."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.27.0 新增 `/cc-feather:handoff-tidy`：只能由你執行的指令，從交接紀錄建議下一項工作，指出可合併、過時或不完整的紀錄，或不執行專案程式碼，拿指定或全部工作的紀錄項目對照目前專案，並只寫入你確認的部分。",
+         "它沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "要回到 0.26.0，重新安裝 0.26.0 的 plugin 即可；不需要做 setup update 或先移除，這個指令寫入的紀錄仍是一般的交接紀錄。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    # Each README's command list entry and the Handoff compatibility examples, with the section that holds them.
+    LISTINGS = (
+        ("README.md", "## Skills\n", "\n- `/cc-feather:handoff-tidy [work names | all]`: ", "## Handoff compatibility\n",
+         ("only you can run it.", "Proposal", "Full check", "Selected check", "Checks are read-only and run no project code.",
+          "written after your confirmation", "never authorizes the work it recommends or starts handoff maintenance.")),
+        ("README.zh-TW.md", "## 入口\n", "\n| `/cc-feather:handoff-tidy [工作名稱或 all]` | ", "## 交接相容性\n",
+         ("只能由你執行。", "Proposal", "Full check", "Selected check", "檢查唯讀，不執行專案程式碼。",
+          "都在你確認後才寫入", "也不會授權它建議的工作或開始交接維護")),
+    )
+    EXAMPLES = "/cc-feather:handoff-resume login\n/cc-feather:handoff-tidy\n/cc-feather:handoff-tidy login\n```"
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_27_0(self):
+        self.assertEqual("0.27.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_readmes_list_and_describe_the_command_in_both_languages(self):
+        for name, skills, entry, compatibility, phrases in self.LISTINGS:
+            text = self.text(name)
+            listing = self.section(text, skills)
+            with self.subTest(readme=name):
+                self.assertEqual(listing.count(entry), 1)
+                line = listing[listing.index(entry):].split("\n", 2)[1]
+                # Listed right after handoff-resume, with the other handoff commands.
+                self.assertIn("/cc-feather:handoff-resume", listing[:listing.index(entry)].rsplit("\n", 2)[-1])
+                for phrase in phrases:
+                    with self.subTest(readme=name, phrase=phrase):
+                        self.assertIn(phrase, line)
+                self.assertIn(self.EXAMPLES, self.section(text, compatibility))
+
+    def test_updates_sections_start_with_the_handoff_tidy_note_in_both_languages(self):
+        previous = RetainedPassesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.27.0 note starts right after the section's opening sentence, its sentences in order, before 0.26.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_state_that_no_setup_update_is_needed_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            section = self.section(self.text(name), heading)
+            note = section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertNotIn("need the plugin update and then", note)
+                self.assertNotIn("再於每個裝有分派元件的範圍執行", note)
+
+    # The validation entry: no setup update, the test counts, the rehearsal on copies of the real records with its
+    # three scenarios, what it did not exercise and its observations, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.27.0 handoff tidy\n"
+    ENTRY = (
+        "**No setup update is required.** No file under `templates/`, `skills/setup/` or `scripts/` changed since v0.26.0;",
+        "To go back to 0.26.0, reinstall the 0.26.0 plugin; no setup update or remove is needed.",
+        "866 at e49958d and at 64cff50,",
+        "all passing with 30 skips and the same count in both forms (the 0.26.0 release ran 857).",
+        "Live rehearsal (Acceptance item 13), 2026-10-16.",
+        "The commit under test was 64cff50,",
+        "held copies of this project's nine real handoff records and `history.md`",
+        "the installed cc-feather did not load.",
+        "Writes were confirmed only for the copies; the real records were left unchanged,",
+        "it read no project source.",
+        "was copied word for word into the target and kept in the source,",
+        "Nothing was written and no analyst was dispatched;",
+        "ran no project code:",
+        "set the verification field to the baseline and time of the check, and kept its earlier value, which was empty, in the details.",
+        "Not exercised: running a Full check;",
+        "Observations, recorded as findings rather than passes:",
+        "`v0.27.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+    )
+
+    def test_validation_entry_records_the_checks_rehearsal_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        # The three scenarios have their paragraph, in order, and each ticket its line in the review round.
+        positions = [entry.index(f"\n- {scenario} (") for scenario in ("A", "B", "C")]
+        self.assertEqual(positions, sorted(positions))
+        for claim in ("01", "02", "03", "04", "05"):
             with self.subTest(claim=claim):
                 self.assertEqual(entry.count(f"\n- {claim}: "), 1)
 

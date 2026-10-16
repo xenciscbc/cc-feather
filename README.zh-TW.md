@@ -29,6 +29,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:handoff-list` | 列出交接工作摘要（唯讀，不接續） |
 | `/cc-feather:handoff-save [工作]` | 保存指定工作；省略時保存目前工作 |
 | `/cc-feather:handoff-resume [工作]` | 接續指定工作或唯一未完成的工作；有多項時詢問 |
+| `/cc-feather:handoff-tidy [工作名稱或 all]` | 整理既有的交接紀錄，只能由你執行。不帶參數時詢問模式：Proposal（只讀紀錄，建議下一項工作，並指出可合併、過時或不完整的紀錄）、Full check（先說明成本並等你確認，再拿每筆紀錄對照目前專案）或 Selected check（核對你指定的工作）；帶工作名稱直接做 Selected check，帶 `all` 做 Full check。檢查唯讀，不執行專案程式碼。它只提出建議：合併、搬移項目與更新進度都在你確認後才寫入，也不會授權它建議的工作或開始交接維護 |
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:delegation-preview [計畫、ticket 或工作]` | 預覽工作會如何分派，不實際派工；見[分派預覽](#分派預覽) |
@@ -257,15 +258,17 @@ cc-feather 寧可讓審查有界、可預期，也不追求什麼都檢查。下
 /cc-feather:handoff-list
 /cc-feather:handoff-save login
 /cc-feather:handoff-resume login
+/cc-feather:handoff-tidy
+/cc-feather:handoff-tidy login
 ```
 
-沿用 [codex-feather](https://github.com/xenciscbc/codex-feather) 的 `.feather/handoffs/<work>.md`、`history.md` 與 `archive/<batch>.md`。讀取不接續執行；接續核對來源後繼續已授權工作。完成自動歸檔，失敗保留可重試資料；清除與封存需要明確範圍。來源基準只涵蓋選定檔案，不代表測試通過。明確指定 Claude memory 才做外部記憶唯讀查找。
+沿用 [codex-feather](https://github.com/xenciscbc/codex-feather) 的 `.feather/handoffs/<work>.md`、`history.md` 與 `archive/<batch>.md`。讀取不接續執行；接續核對來源後繼續已授權工作。完成自動歸檔，失敗保留可重試資料；清除與封存需要明確範圍。來源基準只涵蓋選定檔案，不代表測試通過。明確指定 Claude memory 才做外部記憶唯讀查找。Handoff tidy 透過同一個交接工具與紀錄格式，寫入你確認的部分。
 
 Claude 與 Codex 需使用同一個專案目錄並協調單一寫入者；無跨 session 交易鎖或 worktree 自動同步。交接工具依原有規則處理 Git 忽略與使用者追蹤選擇。
 
 ## 更新、移除與驗證
 
-Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。0.26.0 改了 `auto` 下計畫的審查方式：每個 claim 完成時就審查並保留它的通過結果，最終檢查會重跑每個 claim 的主要驗收，並以修正用的 claim 修正失敗，對抗式審查只在最終 commit 執行一次並記錄它的發現，派工紀錄讓審查狀態跨 session 延續，主 Agent 只在最後問你一次。它只改了分派 skill 的流程，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session，新 session 就會使用新的流程；不需要做 `/cc-feather:setup update`。要回到 0.25.0，重新安裝 0.25.0 的 plugin 即可；不需要做 setup update 或先移除，較早的版本會忽略留在 `.feather/dispatch/` 下的派工紀錄。從 0.25.0 起，審查不再詢問就會執行儲存庫的程式碼，而審查別人的變更時，需要由你說明它來自別人。詳見[儲存庫安全](#儲存庫安全)。此外，較早版本的安裝在更新前仍保留舊的指引格式，check 也會提醒分派指引來自較舊的範本。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
+Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。0.27.0 新增 `/cc-feather:handoff-tidy`：只能由你執行的指令，從交接紀錄建議下一項工作，指出可合併、過時或不完整的紀錄，或不執行專案程式碼，拿指定或全部工作的紀錄項目對照目前專案，並只寫入你確認的部分。它沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.26.0，重新安裝 0.26.0 的 plugin 即可；不需要做 setup update 或先移除，這個指令寫入的紀錄仍是一般的交接紀錄。0.26.0 改了 `auto` 下計畫的審查方式：每個 claim 完成時就審查並保留它的通過結果，最終檢查會重跑每個 claim 的主要驗收，並以修正用的 claim 修正失敗，對抗式審查只在最終 commit 執行一次並記錄它的發現，派工紀錄讓審查狀態跨 session 延續，主 Agent 只在最後問你一次。它只改了分派 skill 的流程，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session，新 session 就會使用新的流程；不需要做 `/cc-feather:setup update`。要回到 0.25.0，重新安裝 0.25.0 的 plugin 即可；不需要做 setup update 或先移除，較早的版本會忽略留在 `.feather/dispatch/` 下的派工紀錄。從 0.25.0 起，審查不再詢問就會執行儲存庫的程式碼，而審查別人的變更時，需要由你說明它來自別人。詳見[儲存庫安全](#儲存庫安全)。此外，較早版本的安裝在更新前仍保留舊的指引格式，check 也會提醒分派指引來自較舊的範本。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
 
 ```text
 /cc-feather:setup 更新目前專案已安裝的角色與指引，保留模型與審查模式
