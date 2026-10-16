@@ -15,6 +15,7 @@
     "./skills/handoff-list",
     "./skills/handoff-save",
     "./skills/handoff-resume",
+    "./skills/handoff-tidy",
     "./skills/setup",
     "./skills/delegation",
     "./skills/delegation-preview",

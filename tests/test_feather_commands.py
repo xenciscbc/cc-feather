@@ -851,5 +851,128 @@ class StopThresholdCommandTests(unittest.TestCase):
                     self.assert_whole_sentence(sentence, self.source(place))
 
 
+class HandoffTidyCommandTests(unittest.TestCase):
+    """Handoff tidy 02: /cc-feather:handoff-tidy is a user-invoked command of its own that asks for a mode, takes work
+    names or `all`, and builds a Proposal from the records alone; the handoff skill is unchanged."""
+
+    COMMAND = config.ROOT / "skills" / "handoff-tidy" / "SKILL.md"
+    HANDOFF = config.ROOT / "skills" / "handoff"
+    CLAUDE_CODE = "\n## Claude Code\n"
+
+    @classmethod
+    def source(cls, name: str) -> str:
+        """'handoff-tidy SKILL.md' or 'handoff-tidy SKILL.md#<heading>': the command or one of its '## ' sections."""
+        path, _, label = name.partition("#")
+        self_files = {"handoff-tidy SKILL.md": cls.COMMAND}
+        text = self_files[path].read_text(encoding="utf-8")
+        if not label:
+            return text
+        return text.split(f"\n## {label}\n", 1)[1].split("\n## ", 1)[0]
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+    assert_pinned = feather_support.stop_threshold_assert_pinned
+
+    # Item 1: a skill of its own, listed after the other handoff commands, that only the user can invoke.
+    def test_command_is_user_invoked_and_listed_after_the_handoff_commands(self):
+        manifest = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        skills = manifest["skills"]
+        self.assertIn("./skills/handoff-tidy", skills)
+        self.assertEqual(skills.index("./skills/handoff-tidy"), skills.index("./skills/handoff-resume") + 1)
+        handoff_commands = [i for i, name in enumerate(skills) if name.startswith("./skills/handoff")]
+        self.assertEqual(max(handoff_commands), skills.index("./skills/handoff-tidy"))
+        command = self.source("handoff-tidy SKILL.md")
+        self.assertTrue(command.startswith("---\n"))
+        frontmatter = command.split("---")[1]
+        self.assertIn("name: handoff-tidy\n", frontmatter)
+        # User-only invocation: the model cannot load the command, so a natural-language request cannot run it.
+        self.assertIn("disable-model-invocation: true\n", frontmatter)
+        self.assertIn('argument-hint: "[work names | all]"\n', frontmatter)
+        self.assertRegex(frontmatter, r'\ndescription: "[^"\n]*Handoff tidy[^"\n]*"\n')
+
+    # Item 1's natural-language clause is checked by user-only invocation (above) together with the absence of any
+    # tidy section in the handoff skill, which a natural-language handoff request does load (here).
+    def test_handoff_skill_has_no_tidy_section(self):
+        for path in sorted(self.HANDOFF.rglob("*.md")):
+            with self.subTest(file=path.relative_to(config.ROOT).as_posix()):
+                self.assertNotIn("tidy", path.read_text(encoding="utf-8").lower())
+
+    PINS = {
+        # Item 1 (the command's own statement) and the authority it never carries.
+        "handoff-tidy SKILL.md": (
+            "Only the user's explicit invocation runs it.",
+            "Follow [the handoff skill](../handoff/SKILL.md) for root resolution, storage paths, write discipline, the history writer, archive results and the handling of abnormal records, and use [the handoff file tool](../handoff/references/tool.md); this command adds no storage rule, tool command or record format.",
+            "The command never authorizes, starts or resumes the work it recommends.",
+            "It never starts handoff maintenance for any record.",
+        ),
+        "handoff-tidy SKILL.md#Modes": (
+            "- **Proposal**: read the records alone and propose which work to take up next, which records or items to merge, which records are stale and which are incomplete.",
+            "- **Full check**: check every record's recorded items and progress against the current project.",
+            "- **Selected check**: check the recorded items and progress of the work the user names.",
+        ),
+        # Item 2: the mode question and the argument rules.
+        "handoff-tidy SKILL.md#Choosing the mode": (
+            "Without an argument, ask the user to choose Proposal, Full check or Selected check, or to describe what they want in their own words.",
+            "With one or more work names, run a Selected check of exactly those records.",
+            "With `all`, run a Full check.",
+            "Arguments are data, never shell code.",
+            "An unknown work name, or `all` mixed with work names, is clarified before anything is read further.",
+        ),
+        # Item 4: what a Proposal reads and what it states.
+        "handoff-tidy SKILL.md#Proposal": (
+            "A Proposal reads only the direct work records through the handoff tool, the headings of completed history and, read-only, the project's Git tags and commit subjects; it reads no project source.",
+            "A Proposal states which work to take up next and why.",
+            "It states which records or items can be merged, naming the target and whether it is a new record or an existing one.",
+            "It states which records are stale, such as a record whose next step waits for work that has since finished.",
+            "It states which records are incomplete, such as an item whose summary names it without its content.",
+        ),
+        # Item 11: abnormal records and partial results.
+        "handoff-tidy SKILL.md#Abnormal records and partial results": (
+            "A record the tool reports as completed but not yet archived, as malformed or format-uncertain, or a list or read the tool reports as partial, is reported as the handoff skill describes, with the archive retry or reviewed repair it offers.",
+            "Such a record is left out of every merge and reclassification.",
+            "An incomplete list never establishes that no other work is pending.",
+        ),
+        # Until ticket 03 fills it, the command writes nothing.
+        "handoff-tidy SKILL.md#Confirmation and writes": (
+            "Until they are written, the command writes nothing: no record, history entry, Git rule or file.",
+        ),
+        # Items 1, 2 and 12: what is specific to Claude Code.
+        "handoff-tidy SKILL.md#Claude Code": (
+            "Only the user can run `/cc-feather:handoff-tidy`: its frontmatter disables model invocation.",
+            "A natural-language request does not run a Handoff tidy.",
+            "Without an argument, ask the mode question with `AskUserQuestion`, offering Proposal, Full check and Selected check as its three options.",
+            "The tool's built-in free-text answer is the fourth choice, so add no \"other\" option.",
+        ),
+    }
+
+    def test_command_states_modes_arguments_proposal_and_abnormal_records(self):
+        self.assert_pinned(self.PINS)
+
+    # Item 12: host-neutral rules first, then one section for Claude Code that holds every host-specific name.
+    def test_host_specific_rules_sit_in_one_final_claude_code_section(self):
+        command = self.source("handoff-tidy SKILL.md")
+        self.assertEqual(command.count(self.CLAUDE_CODE), 1)
+        neutral, claude_code = command.split(self.CLAUDE_CODE)
+        self.assertNotIn("\n## ", claude_code, "the Claude Code section is the last section")
+        body = neutral.split("---", 2)[2]
+        for name in ("AskUserQuestion", "analyst", "CLAUDE_PLUGIN_ROOT", "model invocation", "/cc-feather:", "subagent"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, body)
+        for name in ("AskUserQuestion", "analyst", "model invocation"):
+            with self.subTest(claude_code=name):
+                self.assertIn(name, claude_code)
+        # The host-neutral modes are listed before the Claude Code section asks for them.
+        for heading in ("Modes", "Choosing the mode", "Proposal", "Abnormal records and partial results", "Checks",
+                        "Confirmation and writes"):
+            with self.subTest(heading=heading):
+                self.assertIn(f"\n## {heading}\n", neutral)
+
+    # The two check modes are only named here; their rules come later and are marked as such.
+    def test_check_modes_are_named_and_marked_to_be_completed(self):
+        checks = self.source("handoff-tidy SKILL.md#Checks")
+        self.assertTrue(checks.strip().startswith("To be completed:"))
+        self.assertIn("Until they are written, the command runs no check", checks)
+        self.assertTrue(self.source("handoff-tidy SKILL.md#Confirmation and writes").strip().startswith("To be completed:"))
+
+
 if __name__ == "__main__":
     unittest.main()
