@@ -853,7 +853,9 @@ class StopThresholdCommandTests(unittest.TestCase):
 
 class HandoffTidyCommandTests(unittest.TestCase):
     """Handoff tidy 02: /cc-feather:handoff-tidy is a user-invoked command of its own that asks for a mode, takes work
-    names or `all`, and builds a Proposal from the records alone; the handoff skill is unchanged."""
+    names or `all`, and builds a Proposal from the records alone; the handoff skill is unchanged. Handoff tidy 03: it
+    writes only what the user confirms, compares record versions first, and follows the merge write order and the gate
+    note rules."""
 
     COMMAND = config.ROOT / "skills" / "handoff-tidy" / "SKILL.md"
     HANDOFF = config.ROOT / "skills" / "handoff"
@@ -930,10 +932,33 @@ class HandoffTidyCommandTests(unittest.TestCase):
             "A record the tool reports as completed but not yet archived, as malformed or format-uncertain, or a list or read the tool reports as partial, is reported as the handoff skill describes, with the archive retry or reviewed repair it offers.",
             "Such a record is left out of every merge and reclassification.",
             "An incomplete list never establishes that no other work is pending.",
+            # A retry or repair the user asks for does not contradict "writes nothing until confirmed".
+            "A retry or repair the user asks for is the user's own request, run as the handoff skill describes; it is not one of a Handoff tidy's confirmed writes.",
         ),
-        # Until ticket 03 fills it, the command writes nothing.
         "handoff-tidy SKILL.md#Confirmation and writes": (
-            "Until they are written, the command writes nothing: no record, history entry, Git rule or file.",
+            # Item 7: nothing is written before confirmation, and a confirmation authorizes only what it names.
+            "Until the user confirms, the command writes nothing: no record, history entry, Git rule or file.",
+            "The user may confirm the whole proposal or named parts of it.",
+            "A confirmation authorizes only the writes it names.",
+            "It does not authorize, start or resume the recommended work, and it does not start handoff maintenance for any record.",
+            "A confirmation is never a waiver, a deferral or an accept-and-land decision under the delegation skill's review state.",
+            "When a confirmed write would create a record and the handoff tool may then add a Git ignore rule for the handoff records, the proposal says so.",
+            # Item 8: version comparison before each write.
+            "When proposing, note each record's version as the handoff tool reports it.",
+            "Before writing a confirmed change to a record, read the record again and compare its version with the one noted.",
+            "A record that changed since the proposal is not written, and its part of the proposal is proposed again.",
+            "Confirmed changes to unchanged records proceed.",
+            # Item 9: the existing operations, the merge write order and the completion of an emptied source.
+            "Every write goes through the handoff tool's existing operations and follows the handoff skill's write discipline, history writer included; the command adds no tool command or record format.",
+            "A merge writes the target first, a new record through create or an existing one through update, and reads it back.",
+            "Only then are the moved items removed from each source, through update.",
+            "A source left with nothing to do is saved as completed, its progress saying it was merged into the target, and the tool archives it.",
+            "When a target write fails, or the target read back does not hold the moved items, no item is removed from any source and the actual state is reported.",
+            # Item 9: gate notes.
+            "A gate note is any text of a record that keeps a claim under the Acceptance gate or restricts it: a claim recorded as unreviewed, unverified or pending acceptance, an unresolved verdict, a waiver, a deferral, an accept-and-land decision, commits listed as unaccepted, or the text naming a plan's Dispatch record.",
+            "A merge that moves items a gate note restricts copies that note word for word into the target.",
+            "The note stays in the source as long as the source holds any item it restricts, and leaves the source only when every such item has moved.",
+            "A record that still holds a gate note or an open `待決：` question is never left with nothing to do, so a Handoff tidy never completes or archives it, whether or not it is a merge source.",
         ),
         # Items 1, 2 and 12: what is specific to Claude Code.
         "handoff-tidy SKILL.md#Claude Code": (
@@ -941,6 +966,7 @@ class HandoffTidyCommandTests(unittest.TestCase):
             "A natural-language request does not run a Handoff tidy.",
             "Without an argument, ask the mode question with `AskUserQuestion`, offering Proposal, Full check and Selected check as its three options.",
             "The tool's built-in free-text answer is the fourth choice, so add no \"other\" option.",
+            "The tool is the handoff skill's `scripts/handoff.py`, at `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.py` when installed as a plugin, never a path under this command's own directory.",
         ),
     }
 
@@ -971,7 +997,7 @@ class HandoffTidyCommandTests(unittest.TestCase):
         checks = self.source("handoff-tidy SKILL.md#Checks")
         self.assertTrue(checks.strip().startswith("To be completed:"))
         self.assertIn("Until they are written, the command runs no check", checks)
-        self.assertTrue(self.source("handoff-tidy SKILL.md#Confirmation and writes").strip().startswith("To be completed:"))
+        self.assertNotIn("To be completed", self.source("handoff-tidy SKILL.md#Confirmation and writes"))
 
 
 if __name__ == "__main__":

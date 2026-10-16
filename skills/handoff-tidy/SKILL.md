@@ -33,7 +33,7 @@ Everything a Proposal states is a proposal.
 
 A record the tool reports as completed but not yet archived, as malformed or format-uncertain, or a list or read the tool reports as partial, is reported as the handoff skill describes, with the archive retry or reviewed repair it offers. Such a record is left out of every merge and reclassification. An incomplete list never establishes that no other work is pending. A Proposal built from an incomplete list says so and names the affected files.
 
-The archive retry follows [Archive completed work](../handoff/SKILL.md#archive-completed-work), and a reviewed repair follows [Update and completion](../handoff/references/tool.md#update-and-completion). The command only offers them; it runs neither unless the user asks for it.
+The archive retry follows [Archive completed work](../handoff/SKILL.md#archive-completed-work), and a reviewed repair follows [Update and completion](../handoff/references/tool.md#update-and-completion). The command only offers them; it runs neither unless the user asks for it. A retry or repair the user asks for is the user's own request, run as the handoff skill describes; it is not one of a Handoff tidy's confirmed writes.
 
 ## Checks
 
@@ -41,11 +41,27 @@ To be completed: the rules of a Full check and a Selected check belong in this s
 
 ## Confirmation and writes
 
-To be completed: confirmation, version comparison, write order and written-back results belong in this section. Until they are written, the command writes nothing: no record, history entry, Git rule or file.
+### Confirmation
+
+Until the user confirms, the command writes nothing: no record, history entry, Git rule or file. The user may confirm the whole proposal or named parts of it. A confirmation authorizes only the writes it names. It does not authorize, start or resume the recommended work, and it does not start handoff maintenance for any record. A confirmation is never a waiver, a deferral or an accept-and-land decision under the delegation skill's review state. When a confirmed write would create a record and the handoff tool may then add a Git ignore rule for the handoff records, the proposal says so.
+
+### Version comparison
+
+When proposing, note each record's version as the handoff tool reports it. Before writing a confirmed change to a record, read the record again and compare its version with the one noted. A record that changed since the proposal is not written, and its part of the proposal is proposed again. Confirmed changes to unchanged records proceed.
+
+### Write order
+
+Every write goes through the handoff tool's existing operations and follows the handoff skill's write discipline, history writer included; the command adds no tool command or record format. A merge writes the target first, a new record through create or an existing one through update, and reads it back. Only then are the moved items removed from each source, through update. A source left with nothing to do is saved as completed, its progress saying it was merged into the target, and the tool archives it. When a target write fails, or the target read back does not hold the moved items, no item is removed from any source and the actual state is reported. An archive result other than success is handled as the handoff skill's [Archive completed work](../handoff/SKILL.md#archive-completed-work) describes.
+
+### Gate notes
+
+A gate note is any text of a record that keeps a claim under the Acceptance gate or restricts it: a claim recorded as unreviewed, unverified or pending acceptance, an unresolved verdict, a waiver, a deferral, an accept-and-land decision, commits listed as unaccepted, or the text naming a plan's Dispatch record. A merge that moves items a gate note restricts copies that note word for word into the target. The note stays in the source as long as the source holds any item it restricts, and leaves the source only when every such item has moved. A record that still holds a gate note or an open `待決：` question is never left with nothing to do, so a Handoff tidy never completes or archives it, whether or not it is a merge source.
+
+How a confirmed check result is written back belongs in [Checks](#checks).
 
 ## Claude Code
 
-Only the user can run `/cc-feather:handoff-tidy`: its frontmatter disables model invocation. A natural-language request does not run a Handoff tidy. Run the handoff tool as the handoff skill's [Claude Code entry](../handoff/SKILL.md#claude-code-entry) describes, passing the user's project with `--project`.
+Only the user can run `/cc-feather:handoff-tidy`: its frontmatter disables model invocation. A natural-language request does not run a Handoff tidy. Run the handoff tool as the handoff skill's [Claude Code entry](../handoff/SKILL.md#claude-code-entry) describes, passing the user's project with `--project`. The tool is the handoff skill's `scripts/handoff.py`, at `${CLAUDE_PLUGIN_ROOT}/skills/handoff/scripts/handoff.py` when installed as a plugin, never a path under this command's own directory.
 
 Without an argument, ask the mode question with `AskUserQuestion`, offering Proposal, Full check and Selected check as its three options. The tool's built-in free-text answer is the fourth choice, so add no "other" option. A free-text answer is the user's description of what they want.
 
