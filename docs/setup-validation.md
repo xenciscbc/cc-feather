@@ -466,7 +466,7 @@ Live rehearsal (Acceptance item 13), 2026-10-16. The commit under test was 64cff
 
 Not exercised: running a Full check; a full merge that completes and archives a source; a new record that adds a Git ignore rule; a version mismatch before a write; an abnormal record or a partial list; an unknown work name, or `all` mixed with work names; choosing the mode in free text; a write-back to a record that holds a gate note; an open `待決：` question keeping a record from completion; and a check without the delegation roles, where main reads itself. Observations, recorded as findings rather than passes: a gate note that refers to its own record, such as the heading copied in A that says its record does not track the item, is copied word for word as the rules require and can then read inaccurately in the target, as A's main pointed out itself; and C reported what it had not established, the files outside its allowlist and where items left unexercised by earlier rehearsals belong, in a separate list after its per-item table rather than as items with the "not established" outcome; B and C ran `git status` in the scratch clone and B started `python -c` there without `-I`, so the working tree could reach the interpreter's module path, which the rule that a check runs no project code does not state. Main did not audit every command of the rehearsal, so no claim is made that it held no other deviation. The transcripts, the analyst's brief and the record copies before and after are kept in the session scratchpad, not in the repository.
 
-`v0.27.0` does not exist when this entry is written. Before it is created, main checks that the manifest version is 0.27.0 and that no `v0.27.0` tag exists; it is created only after the user's go-ahead.
+`v0.27.0` does not exist when this entry is written. Before it is created, main checks that the manifest version is 0.27.0 and that no `v0.27.0` tag exists; it is created only after the user's go-ahead. The user first chose to land 0.27.0 without a tag; later on 2026-10-16, at the user's request, annotated `v0.27.0` was created at 3ce8e80, after main checked that the manifest there is 0.27.0 and that the tag existed neither locally nor on `origin`, and pushed together with `v0.27.1`.
 
 Review round (2026-10-16). Plan review returned REVISE on call 1 (gate notes could be lost when a check writes back results or a merge removes items from a source), REVISE on call 2 (whether a merge moves or copies a gate note), and READY on call 3; the user authorised the resulting change to the claims. Per Claim:
 
@@ -486,7 +486,7 @@ Validation on 2026-10-16 (Windows 11 Pro 10.0.26100, Python 3.11.9, Claude Code 
 
 No live rehearsal was run for this patch. The tests show the command's text and that the unchanged tool can carry these rules out; they cannot show that a model follows them.
 
-`v0.27.1` does not exist when this entry is written. Before it is created, main checks that the manifest version is 0.27.1 and that no `v0.27.1` tag exists; it is created only after the user's go-ahead.
+`v0.27.1` does not exist when this entry is written. Before it is created, main checks that the manifest version is 0.27.1 and that no `v0.27.1` tag exists; it is created only after the user's go-ahead. On the user's go-ahead on 2026-10-16, after 0.27.1 was landed on `main`, annotated `v0.27.1` was created at b3c0b0b, after main checked that the manifest there is 0.27.1 and that the tag existed neither locally nor on `origin`, and pushed.
 
 Review round (2026-10-16). Plan review returned READY on call 1.
 
