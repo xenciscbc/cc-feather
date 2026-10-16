@@ -475,3 +475,19 @@ Review round (2026-10-16). Plan review returned REVISE on call 1 (gate notes cou
 - 03: at e49958d code review APPROVED and outcome verification CONFIRMED on the first call.
 - 04: at 64cff50 code review APPROVED and outcome verification CONFIRMED on the first call.
 - 05: the manifest version, both READMEs and this entry; its code review and outcome verification follow the commit carrying this entry.
+
+## 0.27.1 handoff tidy write edges
+
+Implements [the handoff tidy write edges spec](specs/handoff-tidy-write-edges.md), committed in 01a75b3; the spec is one claim, implemented in the commit carrying this entry. `/cc-feather:handoff-tidy`'s version comparison now compares each write with the version the tidy last saw, which after the tidy's own write to a record is the version the tool reported as saved by that write, builds each write from the record's content as read for that comparison so an earlier write of the same tidy is kept, and treats a read-back version that differs from the reported one as a change the tidy did not make. The statement that the command only offers an archive retry or a reviewed repair now covers the abnormal records found when reading, and a failed archive of a source the tidy itself completed follows the handoff skill's Archive completed work. The handoff tool, the record format, the handoff skill, the installed roles and the policy are unchanged.
+
+**No setup update is required.** No file under `templates/`, `skills/setup/` or `scripts/` changed since v0.27.0; this was checked with `git diff-tree -r --name-only 3ce8e80 HEAD`, against 3ce8e80, the last commit of 0.27.0, because no `v0.27.0` tag exists in this repository. Existing installations need only the plugin update and a fresh session. To go back to 0.27.0, reinstall the 0.27.0 plugin; no setup update or remove is needed.
+
+Validation on 2026-10-16 (Windows 11 Pro 10.0.26100, Python 3.11.9, Claude Code 2.1.301, Git 2.43.0.windows.1): `python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests` each ran 875 tests at the commit carrying this entry, all passing with 30 skips and the same count in both forms (the 0.27.0 release ran 870). `claude plugin validate .` passed with one warning, that the repository's own CLAUDE.md at the plugin root is not loaded as project context. The command contract tests pin the new sentences and check that the replaced ones are gone, and a tool scenario drives the unchanged handoff tool through two merges into one target: the second update, made with the version the first returned and built from the content it saved, keeps the first merge's item and gate note, while an update with the version noted before the first write is refused with `conflict`.
+
+No live rehearsal was run for this patch. The tests show the command's text and that the unchanged tool can carry these rules out; they cannot show that a model follows them.
+
+`v0.27.1` does not exist when this entry is written. Before it is created, main checks that the manifest version is 0.27.1 and that no `v0.27.1` tag exists; it is created only after the user's go-ahead.
+
+Review round (2026-10-16). Plan review returned READY on call 1.
+
+- The claim: the command, its tests, the manifest version, both READMEs and this entry; its code review and outcome verification follow the commit carrying this entry.

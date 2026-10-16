@@ -33,7 +33,9 @@ Everything a Proposal states is a proposal.
 
 A record the tool reports as completed but not yet archived, as malformed or format-uncertain, or a list or read the tool reports as partial, is reported as the handoff skill describes, with the archive retry or reviewed repair it offers. Such a record is left out of every merge and reclassification. An incomplete list never establishes that no other work is pending. A Proposal built from an incomplete list says so and names the affected files.
 
-The archive retry follows [Archive completed work](../handoff/SKILL.md#archive-completed-work), and a reviewed repair follows [Update and completion](../handoff/references/tool.md#update-and-completion). The command only offers them; it runs neither unless the user asks for it. A retry or repair the user asks for is the user's own request, run as the handoff skill describes; it is not one of a Handoff tidy's confirmed writes.
+The archive retry follows [Archive completed work](../handoff/SKILL.md#archive-completed-work), and a reviewed repair follows [Update and completion](../handoff/references/tool.md#update-and-completion). For the abnormal records a Handoff tidy finds when reading, the command only offers them; it runs neither unless the user asks for it. A retry or repair the user asks for is the user's own request, run as the handoff skill describes; it is not one of a Handoff tidy's confirmed writes.
+
+A failed archive of a source the tidy itself completed is handled as the handoff skill's [Archive completed work](../handoff/SKILL.md#archive-completed-work) describes, with the tool's archive command and the result-specific rules that skill states. That retry first makes the comparison of [Version comparison](#version-comparison), and it belongs to the confirmed write that completed the source.
 
 ## Checks
 
@@ -69,7 +71,7 @@ Until the user confirms, the command writes nothing: no record, history entry, G
 
 ### Version comparison
 
-When proposing, note each record's version as the handoff tool reports it. Before writing a confirmed change to a record, read the record again and compare its version with the one noted. A record that changed since the proposal is not written, and its part of the proposal is proposed again. Confirmed changes to unchanged records proceed.
+When proposing, note each record's version as the handoff tool reports it. Before each write to a record, read the record again and compare its version with the version the tidy last saw. The version the tidy last saw is the one noted when proposing or, after the tidy's own write to that record, the version the tool reported as saved by that write: the `version` of an `ok` result, or the `saved_version` of a `partial` one. A version seen only in a later read never becomes the version the tidy last saw. A record whose version differs is not written, and its part of the proposal is proposed again, while confirmed changes to other records proceed. A merge's writes to its sources belong to its target's part, so they wait for the target as [Write order](#write-order) describes. Each write is built from the record's content as read for that comparison, applying only the confirmed change, so an earlier write of the same tidy, such as an earlier merge into the same target, is kept. A version observed in a read-back that differs from the version the tool reported as saved by the tidy's write counts as a change the tidy did not make: the record is not written again and its remaining part is proposed again.
 
 ### Write order
 

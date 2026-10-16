@@ -857,7 +857,9 @@ class HandoffTidyCommandTests(unittest.TestCase):
     writes only what the user confirms, compares record versions first, and follows the merge write order and the gate
     note rules. Handoff tidy 04: a Full check confirms its cost first, a check is read-only and delegated where a
     read-only analysis role exists, reports each item in one of five outcomes, never resolves a gate note, ends with a
-    Proposal and writes back confirmed results."""
+    Proposal and writes back confirmed results. Handoff tidy write edges (0.27.1): each write compares with the version
+    the tidy last saw and is built from the content read for that comparison, and a failed archive of a source the
+    tidy completed follows the handoff skill."""
 
     COMMAND = config.ROOT / "skills" / "handoff-tidy" / "SKILL.md"
     HANDOFF = config.ROOT / "skills" / "handoff"
@@ -934,8 +936,13 @@ class HandoffTidyCommandTests(unittest.TestCase):
             "A record the tool reports as completed but not yet archived, as malformed or format-uncertain, or a list or read the tool reports as partial, is reported as the handoff skill describes, with the archive retry or reviewed repair it offers.",
             "Such a record is left out of every merge and reclassification.",
             "An incomplete list never establishes that no other work is pending.",
+            # Write edges item 4: "only offers" covers the abnormal records found when reading.
+            "For the abnormal records a Handoff tidy finds when reading, the command only offers them; it runs neither unless the user asks for it.",
             # A retry or repair the user asks for does not contradict "writes nothing until confirmed".
             "A retry or repair the user asks for is the user's own request, run as the handoff skill describes; it is not one of a Handoff tidy's confirmed writes.",
+            # Write edges item 4: a failed archive of a source the tidy completed follows the handoff skill.
+            "A failed archive of a source the tidy itself completed is handled as the handoff skill's [Archive completed work](../handoff/SKILL.md#archive-completed-work) describes, with the tool's archive command and the result-specific rules that skill states.",
+            "That retry first makes the comparison of [Version comparison](#version-comparison), and it belongs to the confirmed write that completed the source.",
         ),
         "handoff-tidy SKILL.md#Confirmation and writes": (
             # Item 7: nothing is written before confirmation, and a confirmation authorizes only what it names.
@@ -945,11 +952,18 @@ class HandoffTidyCommandTests(unittest.TestCase):
             "It does not authorize, start or resume the recommended work, and it does not start handoff maintenance for any record.",
             "A confirmation is never a waiver, a deferral or an accept-and-land decision under the delegation skill's review state.",
             "When a confirmed write would create a record and the handoff tool may then add a Git ignore rule for the handoff records, the proposal says so.",
-            # Item 8: version comparison before each write.
+            # Item 8, as replaced by the write edges spec's Acceptance items 1 to 3: version comparison before each
+            # write, against the version the tidy last saw.
             "When proposing, note each record's version as the handoff tool reports it.",
-            "Before writing a confirmed change to a record, read the record again and compare its version with the one noted.",
-            "A record that changed since the proposal is not written, and its part of the proposal is proposed again.",
-            "Confirmed changes to unchanged records proceed.",
+            "Before each write to a record, read the record again and compare its version with the version the tidy last saw.",
+            "The version the tidy last saw is the one noted when proposing or, after the tidy's own write to that record, the version the tool reported as saved by that write: the `version` of an `ok` result, or the `saved_version` of a `partial` one.",
+            "A version seen only in a later read never becomes the version the tidy last saw.",
+            "A record whose version differs is not written, and its part of the proposal is proposed again, while confirmed changes to other records proceed.",
+            "A merge's writes to its sources belong to its target's part, so they wait for the target as [Write order](#write-order) describes.",
+            # Write edges item 2: each write is built from the content read for the comparison.
+            "Each write is built from the record's content as read for that comparison, applying only the confirmed change, so an earlier write of the same tidy, such as an earlier merge into the same target, is kept.",
+            # Write edges item 3: an unexpected read-back version is a change the tidy did not make.
+            "A version observed in a read-back that differs from the version the tool reported as saved by the tidy's write counts as a change the tidy did not make: the record is not written again and its remaining part is proposed again.",
             # Item 9: the existing operations, the merge write order and the completion of an emptied source.
             "Every write goes through the handoff tool's existing operations and follows the handoff skill's write discipline, history writer included; the command adds no tool command or record format.",
             "A merge writes the target first, a new record through create or an existing one through update, and reads it back.",
@@ -1004,6 +1018,20 @@ class HandoffTidyCommandTests(unittest.TestCase):
 
     def test_command_states_modes_arguments_proposal_and_abnormal_records(self):
         self.assert_pinned(self.PINS)
+
+    # Write edges items 1 and 4: the replaced version comparison and the unscoped "only offers" sentence are gone, so
+    # no earlier rule refuses a tidy's second write to a record or forbids the archive retry of a completed source.
+    def test_replaced_write_rules_are_gone(self):
+        command = self.source("handoff-tidy SKILL.md")
+        for sentence in ("Before writing a confirmed change to a record, read the record again and compare its version with the one noted.",
+                         "A record that changed since the proposal is not written,",
+                         "Confirmed changes to unchanged records proceed.",
+                         "The command only offers them;"):
+            with self.subTest(sentence=sentence[:40]):
+                self.assertNotIn(sentence, command)
+        for heading in ("### Version comparison", "### Write order"):
+            with self.subTest(heading=heading):
+                self.assertEqual(command.count(f"\n{heading}\n"), 1)
 
     # Item 12: host-neutral rules first, then one section for Claude Code that holds every host-specific name.
     def test_host_specific_rules_sit_in_one_final_claude_code_section(self):

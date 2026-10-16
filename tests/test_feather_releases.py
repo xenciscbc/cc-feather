@@ -697,8 +697,7 @@ class HandoffTidyReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_27_0(self):
-        self.assertEqual("0.27.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.27.1, handoff tidy write edges).
 
     def test_readmes_list_and_describe_the_command_in_both_languages(self):
         for name, skills, entry, compatibility, phrases in self.LISTINGS:
@@ -716,14 +715,17 @@ class HandoffTidyReleaseTests(unittest.TestCase):
 
     def test_updates_sections_start_with_the_handoff_tidy_note_in_both_languages(self):
         previous = RetainedPassesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = HandoffTidyWriteEdgesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.27.0 note starts right after the section's opening sentence, its sentences in order, before 0.26.0's.
+            # The 0.27.0 note starts right after the 0.27.1 note, its sentences in order, before 0.26.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -774,6 +776,87 @@ class HandoffTidyReleaseTests(unittest.TestCase):
         for claim in ("01", "02", "03", "04", "05"):
             with self.subTest(claim=claim):
                 self.assertEqual(entry.count(f"\n- {claim}: "), 1)
+
+
+class HandoffTidyWriteEdgesReleaseTests(unittest.TestCase):
+    """0.27.1 (docs/specs/handoff-tidy-write-edges.md, Acceptance item 6): the manifest version is 0.27.1; the Updates
+    note states what 0.27.1 fixes, that no `/cc-feather:setup update` is needed because no installed role definition or
+    policy changed, and how to go back to 0.27.0, in both languages; the validation entry records the validation, that
+    no live rehearsal was run and that the tests cannot show a model follows the rules, the tag and the review round."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.27.1 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.27.1 fixes two write rules of `/cc-feather:handoff-tidy`: a confirmed proposal that writes the same record more than once, such as two merges into one target, now completes, each write built from the record as the previous write saved it so nothing that write added is lost, and a failed archive of a record the command completed is retried as the handoff skill describes.",
+         "It changes only the command's text, not an installed role definition or policy, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "To go back to 0.27.0, reinstall the 0.27.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.27.1 修正 `/cc-feather:handoff-tidy` 的兩條寫入規則：一次確認要寫入同一份紀錄多次時（例如兩項合併進同一個目標），現在能全部寫完，每次寫入都以前一次寫入存下的內容為基礎，不會蓋掉前一次加入的內容；這個指令完成的紀錄若封存失敗，會依交接 skill 的規則重試。",
+         "它只改了這個指令的文字，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "要回到 0.27.0，重新安裝 0.27.0 的 plugin 即可；不需要做 setup update 或先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def test_manifest_is_0_27_1(self):
+        self.assertEqual("0.27.1", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_write_edges_note_in_both_languages(self):
+        previous = HandoffTidyReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.27.1 note starts right after the section's opening sentence, its sentences in order, before 0.27.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_state_that_no_setup_update_is_needed_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            section = self.section(self.text(name), heading)
+            note = section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertNotIn("need the plugin update and then", note)
+                self.assertNotIn("再於每個裝有分派元件的範圍執行", note)
+
+    # The validation entry: what it implements, no setup update, the validation, no rehearsal and what the tests cannot
+    # show, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.27.1 handoff tidy write edges\n"
+    ENTRY = (
+        "Implements [the handoff tidy write edges spec](specs/handoff-tidy-write-edges.md), committed in 01a75b3;",
+        "**No setup update is required.** No file under `templates/`, `skills/setup/` or `scripts/` changed since v0.27.0;",
+        "To go back to 0.27.0, reinstall the 0.27.0 plugin; no setup update or remove is needed.",
+        "(the 0.27.0 release ran 870).",
+        "No live rehearsal was run for this patch.",
+        "they cannot show that a model follows them.",
+        "`v0.27.1` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "Plan review returned READY on call 1.",
+    )
+
+    def test_validation_entry_records_the_checks_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        # The single claim has its line in the review round.
+        self.assertEqual(entry.count("\n- The claim: "), 1)
 
 
 class InstallDocumentTests(unittest.TestCase):
