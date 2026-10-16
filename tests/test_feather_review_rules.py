@@ -41,23 +41,23 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "auto-on": (
             "which lets main commit, push to branches it created and open pull requests before acceptance without asking, while landing, release and completion still wait for both passes, plus HELD for a Security-critical claim, or the user's explicit accept-and-land decision",
         ),
-        "README.md#Commit": (
+        "reference.md#Commit": (
             "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking.",
             "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when a record shows that it created it for this work: in auto the dispatch record, in place of an active handoff, and in `off` an active handoff.",
             "Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked.",
             "For a claim gated only because an active handoff records it as unreviewed, unverified or pending acceptance, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`.",
         ),
-        "README.zh-TW.md#Commit 條件": (
+        "reference.zh-TW.md#Commit 條件": (
             "在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。",
             "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有紀錄顯示它為這項工作建立了該 branch，才算它自己的 branch：在 auto 下看派工紀錄，取代進行中的交接，在 `off` 下看進行中的交接。",
             "開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。",
             "只因進行中的交接記錄為未審查、未驗證或待驗收而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。",
         ),
         "README.md": (
-            "enabled mode `auto` reviews plan-driven work and lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions above).",
+            "enabled mode `auto` reviews plan-driven work and lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions in the [reference](docs/reference.md#automatic-review)).",
         ),
         "README.zh-TW.md": (
-            "開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見上方 Commit 條件與你的決定）；",
+            "開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見[參考文件](docs/reference.zh-TW.md#自動審查)的 Commit 條件與你的決定）；",
         ),
         "CONTEXT.md#Acceptance gate": (
             "The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed, unverified or pending acceptance, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, and for a Security-critical claim a valid HELD as well, or with the user's Accept and land decision.",
@@ -77,6 +77,10 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                       "push it to any branch other than the default branch"),
         "README.zh-TW.md": ("以及進行中的交接記錄為未審查或未驗證的 claim，主 Agent 可以在通過前先 commit",
                             "並推到預設 branch 以外的 branch"),
+        "reference.md": ("in the automatic flow, and for any claim an active handoff records as unreviewed or unverified, main may commit",
+                         "push it to any branch other than the default branch"),
+        "reference.zh-TW.md": ("以及進行中的交接記錄為未審查或未驗證的 claim，主 Agent 可以在通過前先 commit",
+                               "並推到預設 branch 以外的 branch"),
         "auto-review.md": ("Turning a mode on/off does not grant implementation authority",),
     }
 
@@ -133,39 +137,39 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "review-state.md#Claim changes": ("such as setting a value for work that will not be done after a cancellation.",),
         "review-auto.md": ("still wait for both passes, plus a valid HELD for a Security-critical claim, or the user's explicit accept-and-land decision, as cc-feather:delegation's review state describes.",),
         "auto-review.md#Meaning": ("still wait for both passes, plus a valid HELD for a Security-critical claim, or the user's explicit accept-and-land decision.",),
-        "README.md#Commit": (
+        "reference.md#Commit": (
             "main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED, plus a valid HELD for a Security-critical claim, or with your accept-and-land decision.",
             "A cancelled claim's commits left on a branch stay listed as unaccepted until you decide to revert them, keep them off the default branch or accept and land them; a branch carrying them is not landed before that.",
         ),
-        "README.md#Your decisions": (
+        "reference.md#Your decisions": (
             "main records what you decide as one of re-review, deferral, cancellation, changed acceptance, waiver or accept and land, with its scope.",
             "A waiver names the finding or missing pass it waives, stays visible with its remaining risk and never counts as READY, APPROVED, CONFIRMED or HELD, so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass or your accept-and-land decision.",
             "A work-in-progress push you allow can move its commits to the default branch, but it is neither a release nor completion.",
             "Accept and land is your explicit acceptance of a named claim without one or both passes, or of a Security-critical claim without its HELD: main records the commit it accepts, the missing passes and the remaining risk, and for a missing HELD the known vulnerabilities, keeps them visible in reports and any active handoff, and the acceptance gate then no longer holds back landing, release or completion of that claim; a later relevant change ends it, and one recorded in an active handoff still holds in a resumed session until such a change.",
             "Saying the work is done counts as acceptance only after main confirms it with you and records it as accept and land;",
         ),
-        "README.md#Resumed session": (
+        "reference.md#Resumed session": (
             "unless its ticket was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since.",
         ),
-        "README.md#Ticket status": (
+        "reference.md#Ticket status": (
             "After an accept-and-land decision main does the same and notes the decision and its remaining risk.",
             "Finished only means it is not redone: a ticket counts as accepted only when it was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since, and a value for work that will not be done, such as `wontfix`, is set only when you cancel and never counts as acceptance.",
         ),
-        "README.zh-TW.md#Commit 條件": (
+        "reference.zh-TW.md#Commit 條件": (
             "以上 claim 都只有在 APPROVED 與 CONFIRMED（安全關鍵 claim 還要加上 HELD）都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。",
             "取消的 claim 留在 branch 上的 commit 會一直列為未驗收，直到你決定用新 commit revert、不讓它進入預設 branch，或接受並合併；在那之前，帶著它們的 branch 不會被合併。",
         ),
-        "README.zh-TW.md#你的決定": (
+        "reference.zh-TW.md#你的決定": (
             "主 Agent 會把你的決定記為重審、延後、取消、修改驗收、豁免或接受並合併其中一種，並註明範圍。",
             "豁免會寫明它豁免的是哪個問題或缺少的哪一關，",
             "你允許的工作中途推送可以把它的 commit 推到預設 branch，但不算 release，也不算完成。",
             "接受並合併是你明確接受某個 claim，即使它缺少一關或兩關，或安全關鍵 claim 缺少 HELD：主 Agent 會記下所接受的 commit、缺少的關卡與剩餘風險，缺少 HELD 時還會記下已知漏洞，在回報與進行中的交接中持續列出，之後驗收把關就不再擋下該 claim 的合併、release 或完成；之後若有相關變更就失效，記在進行中交接的決定在恢復的 session 仍然有效，直到發生這種變更。",
             "你說工作已完成，要等主 Agent 向你確認並記為接受並合併，才算驗收；",
         ),
-        "README.zh-TW.md#恢復的 session": (
+        "reference.zh-TW.md#恢復的 session": (
             "之前 session 通過的 claim 要重新審查與驗證，安全關鍵 claim 也要重新做對抗式審查；只有 ticket 是在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值、且之後沒有相關變更的 claim 例外。",
         ),
-        "README.zh-TW.md#Ticket 狀態": (
+        "reference.zh-TW.md#Ticket 狀態": (
             "你決定接受並合併後，主 Agent 也會這樣做，並註明這個決定與剩餘風險。",
             "完成只代表不再重做：ticket 要在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值，且之後沒有相關變更，才算已驗收；表示不會做的值（例如 `wontfix`）只在你取消時設定，絕不算驗收。",
         ),
@@ -173,8 +177,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "The user's explicit, recorded acceptance of one or more named gated Claims without one or both passes, or of a Security-critical claim without its HELD, or of a gated Claim whose passes are complete when the final check at the commit to be landed failed or was not run, stating for each Claim the commit it accepts, the missing passes, the known vulnerabilities and the remaining risk, and the final check's state at the commit to be landed: passed, failed with its output, or not run.",
             "It satisfies the Acceptance gate for each Claim it covers until a relevant change, is never READY, APPROVED, CONFIRMED or HELD, and a casual \"done\" becomes one only after main confirms and records it.",
         ),
-        "README.md#Not passed": ("Your accept-and-land decision is the only exception (see Your decisions).",),
-        "README.zh-TW.md#未通過": ("唯一例外是你決定接受並合併（見你的決定）。",),
+        "reference.md#Not passed": ("Your accept-and-land decision is the only exception (see Your decisions).",),
+        "reference.zh-TW.md#未通過": ("唯一例外是你決定接受並合併（見你的決定）。",),
         "CONTEXT.md#Unreviewed claim": ("The only exception is the user's Accept and land decision.",),
         "CONTEXT.md#Unverified claim": ("The only exception is the user's Accept and land decision.",),
         "review-state.md#Commits before the passes": ("It pushes such commits to the remote default branch only after both passes, plus a valid HELD for a Security-critical claim, or the user's accept-and-land decision for their claim, or as a work-in-progress push the user explicitly allows,",),
@@ -192,12 +196,12 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
     # Historical ADR and spec text is not rewritten, so only these places are checked.
     ACCEPTANCE_AND_COMPLETION_REMOVED = {
         "review-state.md#Resumed sessions": ("a claim whose ticket is finished is not redone and counts as accepted for landing and release",),
-        "README.md#Resumed session": ("unless its ticket is finished",),
-        "README.zh-TW.md#恢復的 session": ("除非它的 ticket 已完成",),
+        "reference.md#Resumed session": ("unless its ticket is finished",),
+        "reference.zh-TW.md#恢復的 session": ("除非它的 ticket 已完成",),
         "review-state.md#User decisions": ("or pushed to the default branch as a work-in-progress push the user allows with its commits labelled",
                                            "re-review, deferral, cancellation, changed acceptance or waiver,"),
-        "README.md#Your decisions": ("or pushed to the default branch as a work-in-progress push you allow",),
-        "README.zh-TW.md#你的決定": ("或在你允許下把工作中途的 commit 推到預設 branch",),
+        "reference.md#Your decisions": ("or pushed to the default branch as a work-in-progress push you allow",),
+        "reference.zh-TW.md#你的決定": ("或在你允許下把工作中途的 commit 推到預設 branch",),
         "review-state.md#Commit and completion": ("sets its ticket to a completion value only with",),
         "review-state.md#Commits before the passes": ("only after both passes, or as a work-in-progress push",),
         "CONTEXT.md#Acceptance gate": ("set to a completion value only with",),
@@ -234,17 +238,17 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "code-review.md": ("When a later call passes it, replace that note with a pending-acceptance note naming what is still missing; change or remove the note only as [review state](review-state.md)'s Pending acceptance describes, so a deferral keeps it and a waiver stays visible in it.",
                            "a claim an active handoff records as unreviewed, unverified or pending acceptance, and the handoff note changes after a pass as [review state](review-state.md)'s Pending acceptance describes in either mode;"),
         "outcome-verification.md": ("When a later call passes it, replace that note with a pending-acceptance note naming what is still missing; change or remove the note only as [review state](review-state.md)'s Pending acceptance describes, so a deferral keeps it and a waiver stays visible in it.",),
-        "README.md#Not passed": (
+        "reference.md#Not passed": (
             "After a pass, the note says the claim is pending acceptance and names what is still missing; it is removed only when the claim is landed, released or reported complete, or cancelled with its commits decided, so an approval alone, as from an explicit review in `off`, never lets the claim reach the default branch.",
             "A deferral keeps the note and a waiver stays recorded in it.",
         ),
-        "README.zh-TW.md#未通過": (
+        "reference.zh-TW.md#未通過": (
             "通過其中一關後，記錄會改成這個 claim 待驗收，並寫明還缺什麼；只有在 claim 進入預設 branch、release、回報完成，或取消且其 commit 已有決定時才移除，所以單靠一次通過（例如 `off` 下明確要求的審查）絕不會讓 claim 進入預設 branch。",
         ),
-        "README.md#Resumed session": (
+        "reference.md#Resumed session": (
             "In `off`, a claim whose handoff note says it is pending acceptance stays gated and needs both passes, plus HELD for a Security-critical claim, in the new session, unless the note records your accept-and-land decision and nothing relevant changed since, or its ticket was set to a done value as above.",
         ),
-        "README.zh-TW.md#恢復的 session": (
+        "reference.zh-TW.md#恢復的 session": (
             "在 `off` 下，交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關（安全關鍵 claim 還要加上 HELD），除非記錄裡有你接受並合併的決定且之後沒有相關變更，或它的 ticket 已如上所述設成表示已完成的完成值。",
         ),
         "CONTEXT.md#Active handoff": (
@@ -261,8 +265,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
     GATE_LIFETIME_REMOVED = {
         "code-review.md": ("Once the claim is resolved, because a later call passes it or the user decides",),
         "outcome-verification.md": ("Once the claim is resolved, because a later call passes it or the user decides",),
-        "README.md#Not passed": ("An active handoff records what remains unresolved until it is resolved;",),
-        "README.zh-TW.md#未通過": ("會記下尚未解決的結論，解決後移除",),
+        "reference.md#Not passed": ("An active handoff records what remains unresolved until it is resolved;",),
+        "reference.zh-TW.md#未通過": ("會記下尚未解決的結論，解決後移除",),
     }
 
     def test_gate_lifetime_is_stated_whole(self):
@@ -334,10 +338,10 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
 
     # C8: the 0.17.0 release records its decisions and requires setup update.
     RELEASE_0_17_0 = {
-        "README.md": (
+        "reference.md": (
             "0.17.0 changes the reviewer and analyst role definitions and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports the roles from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`.",
         ),
-        "README.zh-TW.md": (
+        "reference.zh-TW.md": (
             "0.17.0 改了 reviewer 與 analyst 的角色定義和自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報來自較舊範本的角色，`model`、`review` 與 session export 也會要求先做 setup update。",
         ),
     }
@@ -414,7 +418,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          (("review-state.md#Pending acceptance", "A gated claim stays gated after either single pass, and a Security-critical claim after both until it also has a valid HELD."),
           ("code-review.md", "When a later call passes it, replace that note with a pending-acceptance note naming what is still missing;"),
           ("code-review.md", "An explicit user request for code review applies in either mode and does not start verification."),
-          ("README.md#Not passed", "so an approval alone, as from an explicit review in `off`, never lets the claim reach the default branch.")),
+          ("reference.md#Not passed", "so an approval alone, as from an explicit review in `off`, never lets the claim reach the default branch.")),
          (("code-review.md", 'Once the claim is resolved, because a later call passes it or the user decides'),)),
         ("off mode, an active handoff records the claim as unverified, an explicit verification returns CONFIRMED",
          "the note becomes pending acceptance and the claim stays gated",
@@ -434,7 +438,7 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ("off mode, a resumed session finds a pending-acceptance note",
          "the claim stays gated and needs passes from the new session unless the note records accept and land that still holds",
          (("review-state.md#Pending acceptance", "In off, a resumed session that finds a pending-acceptance note keeps the claim under the gate and obtains passes from the current session, as passing verdicts do not cross sessions, unless the note records an accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions."),
-          ("README.zh-TW.md#恢復的 session", "在 `off` 下，交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關")),
+          ("reference.zh-TW.md#恢復的 session", "在 `off` 下，交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關")),
          ()),
         ("off mode, accept and land recorded in the note, then a relevant change before landing",
          "the claim stays gated: the note keeps it and returns to pending acceptance",
@@ -450,12 +454,12 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          "main records the commit, missing passes and risk; the claim may then be landed, released or completed",
          (("review-state.md#User decisions", "Accept and land is the user's explicit acceptance of a named gated claim without one or both passes or, for a Security-critical claim, without a valid HELD."),
           ("review-state.md#Commit and completion", "or with the user's accept-and-land decision for it."),
-          ("README.zh-TW.md#你的決定", "之後驗收把關就不再擋下該 claim 的合併、release 或完成")),
+          ("reference.zh-TW.md#你的決定", "之後驗收把關就不再擋下該 claim 的合併、release 或完成")),
          (("review-state.md#User decisions", "re-review, deferral, cancellation, changed acceptance or waiver,"),)),
         ("accept and land recorded in an active handoff, resumed session, no relevant change since",
          "the decision still satisfies the gate",
          (("review-state.md#User decisions", "so one recorded in an active handoff still satisfies the gate in a resumed session while no relevant change has followed the commit it names."),
-          ("README.md#Your decisions", "and one recorded in an active handoff still holds in a resumed session until such a change.")),
+          ("reference.md#Your decisions", "and one recorded in an active handoff still holds in a resumed session until such a change.")),
          ()),
         ("accept and land, then a relevant change to the claim",
          "the decision ends; the claim needs passes or a new decision",
@@ -480,19 +484,19 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ("off mode, a claim an active handoff records as unreviewed, main wants to push or open a pull request",
          "main asks first; the local commit a gated call needs is allowed",
          (("review-state.md#Commits before the passes", "For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks."),
-          ("README.md#Commit", "and asks before pushes and pull requests, as in `off`.")),
-         (("README.md#Commit", "for any claim an active handoff records as unreviewed or unverified, main may commit a claim before its passes and push it"),)),
+          ("reference.md#Commit", "and asks before pushes and pull requests, as in `off`.")),
+         (("reference.md#Commit", "for any claim an active handoff records as unreviewed or unverified, main may commit a claim before its passes and push it"),)),
         ("auto, a push to a remote branch that existed before and that main did not create",
          "main asks first",
          (("review-state.md#Commits before the passes", "Before pushing to a remote branch that already existed and that main did not create, it asks the user;"),
-          ("README.md#Commit", "It asks before pushing to a branch that already existed and that it did not create;"),
-          ("README.zh-TW.md#Commit 條件", "要推到原本就存在、不是它建立的 branch 前，會先問你；")),
+          ("reference.md#Commit", "It asks before pushing to a branch that already existed and that it did not create;"),
+          ("reference.zh-TW.md#Commit 條件", "要推到原本就存在、不是它建立的 branch 前，會先問你；")),
          (("review-state.md#Commits before the passes", "push it to any branch other than a default branch"),)),
         ("the user says not to push or not to commit",
          "the instruction wins; a gated call left without its commit is reported blocked",
          (("review-state.md#Repository authority", "An explicit user instruction not to commit or not to push overrides this authority within its scope; when it leaves a gated call without the commit it needs, main reports the claim blocked rather than reviewing an uncommitted workspace."),
-          ("README.md#Commit", "your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked."),
-          ("README.zh-TW.md#Commit 條件", "你明確說不要 commit 或不要 push 時，以你的指示為準")),
+          ("reference.md#Commit", "your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked."),
+          ("reference.zh-TW.md#Commit 條件", "你明確說不要 commit 或不要 push 時，以你的指示為準")),
          ()),
     )
 
@@ -947,8 +951,8 @@ class StopThresholdProceduresTests(unittest.TestCase):
          "The Stop threshold is how many consecutive automatic calls without a pass stop a step of the automatic flow: one number from 2 to 10 for plan review, code review, outcome verification and Adversarial review alike, 2 by default.",
          "停止門檻是自動流程的一個步驟連續幾次自動呼叫沒通過就停下：一個 2 到 10 的數字，計畫審查、程式碼審查、結果驗證與對抗式審查都適用同一個值，預設 2。"),
         ("section", "section",
-         "Tell main a value for the current task or session, which writes nothing, or save one in project or user scope with the configuration tool's `review --stop-threshold` (see [Stop threshold](docs/setup.md#stop-threshold)), where `default` removes the saved value.",
-         "你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](docs/setup.md#stop-threshold)），`default` 會移除已儲存的值。"),
+         "Tell main a value for the current task or session, which writes nothing, or save one in project or user scope with the configuration tool's `review --stop-threshold` (see [Stop threshold](setup.md#stop-threshold)), where `default` removes the saved value.",
+         "你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](setup.md#stop-threshold)），`default` 會移除已儲存的值。"),
         ("section", "section",
          "Main uses your task or session choice, then the value the project guidance states, then the value the user guidance states, then 2, so a project's saved value overrides your user value.",
          "主 Agent 依序採用你的任務或 session 選擇、project 指引寫明的值、user 指引寫明的值，最後才是 2，所以 project 儲存的值優先於你的 user 值。"),
@@ -1012,7 +1016,8 @@ class StopThresholdProceduresTests(unittest.TestCase):
         r"|refuted twice|up to two plan reviews|count stays where it stopped|because the count stays"
         r"|count is unchanged, so a reopened|保留它的次數與停止狀態，不會多出新的自動呼叫"
         r"|連續兩次|最多六次|十四次|兩次計畫審查|因為次數沒有歸零", re.I)
-    SHIPPED_PATHSPECS = ("skills", "README.md", "README.zh-TW.md", "docs/setup.md")
+    SHIPPED_PATHSPECS = ("skills", "README.md", "README.zh-TW.md", "docs/reference.md", "docs/reference.zh-TW.md",
+                         "docs/setup.md")
     shipped_files = feather_support.shipped_files
 
     def test_review_state_resolves_the_stop_threshold_and_main_never_changes_it(self):
@@ -1040,7 +1045,7 @@ class StopThresholdProceduresTests(unittest.TestCase):
 
     def test_readmes_state_the_stop_threshold_rules_in_both_languages(self):
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
@@ -1073,7 +1078,8 @@ class StopThresholdProceduresTests(unittest.TestCase):
         files = [path for path in self.shipped_files() if path.suffix == ".md"]
         names = {path.relative_to(config.ROOT).as_posix() for path in files}
         self.assertTrue({"skills/delegation/references/review-state.md", "skills/delegation/references/preview.md",
-                         "README.md", "README.zh-TW.md", "docs/setup.md"} <= names, "Git must list the shipped files")
+                         "README.md", "README.zh-TW.md", "docs/reference.md", "docs/reference.zh-TW.md",
+                         "docs/setup.md"} <= names, "Git must list the shipped files")
         for path in files:
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
@@ -1182,7 +1188,8 @@ class ReviewerInconclusiveTests(unittest.TestCase):
 
     # A list of reviewer's verdicts that stops at two.
     TWO_VERDICTS = re.compile(r"APPROVED(?:/|／|, | or )CHANGES_REQUESTED(?!(?:/|／| or )INCONCLUSIVE)")
-    SHIPPED_PATHSPECS = ("skills", "templates", "README.md", "README.zh-TW.md", "CONTEXT.md", "docs/setup.md")
+    SHIPPED_PATHSPECS = ("skills", "templates", "README.md", "README.zh-TW.md", "docs/reference.md",
+                         "docs/reference.zh-TW.md", "CONTEXT.md", "docs/setup.md")
     shipped_files = feather_support.shipped_files
 
     def test_reviewer_answers_inconclusive_and_changes_requested_takes_precedence(self):
@@ -1205,13 +1212,14 @@ class ReviewerInconclusiveTests(unittest.TestCase):
                 with self.subTest(place=place):
                     self.assertIn(phrase, self.source(place))
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
         files = [path for path in self.shipped_files() if path.suffix == ".md"]
         names = {path.relative_to(config.ROOT).as_posix() for path in files}
         self.assertTrue({"templates/agents/reviewer.md", "skills/delegation/references/code-review.md",
-                         "README.md", "README.zh-TW.md", "CONTEXT.md"} <= names, "Git must list the shipped files")
+                         "README.md", "README.zh-TW.md", "docs/reference.md", "docs/reference.zh-TW.md",
+                         "CONTEXT.md"} <= names, "Git must list the shipped files")
         for path in files:
             with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
                 self.assertIsNone(self.TWO_VERDICTS.search(path.read_text(encoding="utf-8")))

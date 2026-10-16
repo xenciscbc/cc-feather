@@ -69,10 +69,10 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
         "CONTEXT.md#Deviation": (
             "It is material when it changes the Plan's outcome, scope or acceptance; discovering a security control or invariant the Plan lacks is also material, while touching boundary code the Plan already covers is not.",
         ),
-        "README.md#Re-review during implementation": (
+        "reference.md#Re-review during implementation": (
             "a plan is reviewed again only after a material deviation, a change to its outcome, scope or acceptance, or the discovery of a security control or invariant the plan lacks; touching boundary code the plan already covers is not one.",
         ),
-        "README.zh-TW.md#施工中的重審": (
+        "reference.zh-TW.md#施工中的重審": (
             "只有重大偏離，也就是改變計畫的結果、範圍或驗收條件，或發現計畫缺少的安全控制或不變條件，才會重審計畫；改動計畫已涵蓋的信任邊界程式碼不算。",
         ),
     }
@@ -106,17 +106,19 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
         "setup.md": (
             "Unplanned work that makes a Security-critical change, migrates data or is irreversible first needs a reviewed plan the user approves; other unplanned edits are not reviewed automatically.",
         ),
-        "README.md#Unplanned work": (
+        "reference.md#Unplanned work": (
             "gets no automatic review, except that a Security-critical change, data migration or irreversible operation first needs a written plan that is reviewed and that you approve.",
         ),
-        "README.zh-TW.md#沒有計畫的工作": (
+        "reference.zh-TW.md#沒有計畫的工作": (
             "不自動審查；但做出安全關鍵變更、遷移資料或不可逆操作，須先寫出計畫、通過審查並經你同意才施工。",
         ),
-        "README.md": (
+        "reference.md": (
             "unplanned work that makes a Security-critical change, migrates data or is irreversible and that in `auto` needs a reviewed plan first,",
         ),
         "README.zh-TW.md": (
             "安全分析由唯讀 analyst 做；安全關鍵變更（Security-critical change）的實作交給 security-executor。",
+        ),
+        "reference.zh-TW.md": (
             "在 `auto` 下需要先有審查過計畫的未計畫安全關鍵變更、資料遷移或不可逆操作，",
         ),
     }
@@ -159,8 +161,8 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
          (("plan-review.md", "in addition, discovering a security control or invariant the plan lacks is a material deviation."),
           ("plan-review.md", "a material deviation stops dependent work for another review of the revised plan,"),
           ("CONTEXT.md#Deviation", "discovering a security control or invariant the Plan lacks is also material,"),
-          ("README.md#Re-review during implementation", "or the discovery of a security control or invariant the plan lacks;"),
-          ("README.zh-TW.md#施工中的重審", "或發現計畫缺少的安全控制或不變條件")),
+          ("reference.md#Re-review during implementation", "or the discovery of a security control or invariant the plan lacks;"),
+          ("reference.zh-TW.md#施工中的重審", "或發現計畫缺少的安全控制或不變條件")),
          ()),
         ("implementation touches trust-boundary code the Plan already covers",
          "not a material deviation",
@@ -197,13 +199,13 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
          (("plan-review.md", "In off mode, main classifies a plan's claims before dispatching or starting their implementation, main's own work included,"),
           ("delegation SKILL.md", "in off mode too, before dispatching or starting their implementation, main's own work included."),
           ("CONTEXT.md#Security-critical claim", "before its implementation is dispatched or started, main's own work included."),
-          ("README.md", "and in `off` before dispatching or starting their implementation, main's own work included."),
-          ("README.zh-TW.md", "`off` 下則在派出或開始實作前分類，主 Agent 自己做的工作也一樣。")),
+          ("reference.md", "and in `off` before dispatching or starting their implementation, main's own work included."),
+          ("reference.zh-TW.md", "`off` 下則在派出或開始實作前分類，主 Agent 自己做的工作也一樣。")),
          (("plan-review.md", "In off mode, main classifies before dispatching the implementation"),
           ("delegation SKILL.md", "in off mode too, before dispatching their implementation."),
           ("CONTEXT.md#Security-critical claim", "before its implementation is dispatched."),
-          ("README.md", "and in `off` before dispatching their implementation."),
-          ("README.zh-TW.md", "`off` 下則在派出實作前分類。"))),
+          ("reference.md", "and in `off` before dispatching their implementation."),
+          ("reference.zh-TW.md", "`off` 下則在派出實作前分類。"))),
     )
 
     def test_scenarios_are_decided_by_their_sentences(self):
@@ -216,7 +218,8 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
                     self.assertNotIn(sentence, self.source(place), outcome)
 
     # 0.19.0 C1 item 5 (Q16): the paths Git lists as tracked, so an ignored local file is never read.
-    SHIPPED_PATHSPECS = ("skills", "templates", "README.md", "README.zh-TW.md", "docs/setup.md")
+    SHIPPED_PATHSPECS = ("skills", "templates", "README.md", "README.zh-TW.md", "docs/reference.md",
+                         "docs/reference.zh-TW.md", "docs/setup.md")
 
     shipped_files = feather_support.shipped_files
 
@@ -228,7 +231,8 @@ class SecurityCriticalVocabularyTests(unittest.TestCase):
         files = self.shipped_files()
         names = {path.relative_to(config.ROOT).as_posix() for path in files}
         self.assertTrue({"skills/delegation/SKILL.md", "templates/agents/executor.md", "templates/review-auto.md",
-                         "README.md", "README.zh-TW.md", "docs/setup.md"} <= names, "Git must list the shipped files")
+                         "README.md", "README.zh-TW.md", "docs/reference.md", "docs/reference.zh-TW.md",
+                         "docs/setup.md"} <= names, "Git must list the shipped files")
         for path in files:
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
@@ -260,8 +264,8 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
     def source(cls, name: str) -> str:
         """Text of one place: 'plan-review.md#security analysis' and 'delegation SKILL.md#security analysis' (the
         security analysis paragraph), 'plan-review.md#<step number>', 'review-state.md#Implemented before plan review'
-        (the whole bullet with its options and closing paragraph), '<README>#pre-approval' as
-        PreApprovalApprovalRuleTests.source, '<README>#disclosure' and 'ADR 0009#amendment' as
+        (the whole bullet with its options and closing paragraph), '<reference>#pre-approval' as
+        PreApprovalApprovalRuleTests.source, '<reference>#disclosure' and 'ADR 0009#amendment' as
         AdversarialReviewRetriesTests.source, otherwise as SecurityCriticalVocabularyTests.source."""
         path, _, part = name.partition("#")
         if name in cls.SECTION_OPENINGS:
@@ -420,24 +424,24 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
           ("plan-review.md#security analysis", "rule that a Security-critical change gets an analyst security analysis still applies."),
           ("delegation SKILL.md#security analysis", "For requested security analysis or a Security-critical change, give analyst a read-only brief"),
           # 0.19.0 C6 item 3 (sw-6): the READMEs say so too.
-          ("README.md#disclosure", "In `off` no Adversarial review starts automatically and the security analysis before approval is not forced."),
-          ("README.zh-TW.md#disclosure", "`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。")),
+          ("reference.md#disclosure", "In `off` no Adversarial review starts automatically and the security analysis before approval is not forced."),
+          ("reference.zh-TW.md#disclosure", "`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。")),
          ()),
         # 0.19.0 C6 item 6 (Q2, Q3): approval after the analysis, and the switch from off to auto.
         ("in auto, the security analysis adds a security invariant to a Security-critical claim of a Plan the user agreed to",
          "the claim's acceptance changes, so after plan review the user approves the revised Plan",
          (("plan-review.md#security analysis", "a disposition that adds a security invariant or otherwise materially changes the plan's outcome, scope or acceptance needs the user's approval of the revised plan,"),
           ("plan-review.md#5", "one that materially changes any of them needs the user's approval again."),
-          ("README.md#pre-approval", "if the analysis adds a security invariant or otherwise materially changes the plan's outcome, scope or acceptance, you approve the revised plan;"),
-          ("README.zh-TW.md#pre-approval", "安全分析若加入安全不變條件，或以其他方式重大改變計畫的結果、範圍或驗收條件，你要同意修訂後的計畫；"),
+          ("reference.md#pre-approval", "if the analysis adds a security invariant or otherwise materially changes the plan's outcome, scope or acceptance, you approve the revised plan;"),
+          ("reference.zh-TW.md#pre-approval", "安全分析若加入安全不變條件，或以其他方式重大改變計畫的結果、範圍或驗收條件，你要同意修訂後的計畫；"),
           ("ADR 0009#amendment", "a disposition that adds a security invariant or otherwise materially changes the Plan's outcome, scope or acceptance needs the user's approval of the revised Plan,")),
          (("plan-review.md", "and the user approves the plan only after both"),)),
         ("in auto, the security analysis finds nothing that changes the Plan the user agreed to",
          "the user's earlier agreement stands and no new approval is asked for",
          (("plan-review.md#security analysis", "while a plan the analysis leaves unchanged keeps the user's earlier agreement."),
           ("plan-review.md#5", "A revision that stays within the user's approved outcome, scope and acceptance needs no new approval;"),
-          ("README.md#pre-approval", "if it leaves the plan unchanged, your earlier agreement stands."),
-          ("README.zh-TW.md#pre-approval", "若計畫沒有改變，你先前的同意仍然有效。"),
+          ("reference.md#pre-approval", "if it leaves the plan unchanged, your earlier agreement stands."),
+          ("reference.zh-TW.md#pre-approval", "若計畫沒有改變，你先前的同意仍然有效。"),
           ("ADR 0009#amendment", "while a Plan the analysis leaves unchanged keeps the user's earlier agreement.")),
          (("plan-review.md", "and the user then approves it"),)),
         ("a Security-critical claim had a security analysis in off, and auto is turned on with its trust boundary, attacker capability and controls unchanged",
@@ -445,24 +449,24 @@ class PreApprovalSecurityAnalysisTests(unittest.TestCase):
          (("plan-review.md#security analysis", "When auto is turned on for a plan whose Security-critical claim had a security analysis in off, that analysis is reused while its trust boundary, attacker capability and controls still apply,"),
           ("plan-review.md#security analysis", "main dispositions its findings and records the test targets as above before the automatic plan review,"),
           ("plan-review.md#security analysis", "and an explicit READY given in off does not count as that plan review's pass."),
-          ("README.md#pre-approval", "that analysis is reused while its trust boundary, attacker capability and controls still apply,"),
-          ("README.zh-TW.md#pre-approval", "只要它的信任邊界、攻擊者能力與控制仍然適用，就沿用那份分析，")),
+          ("reference.md#pre-approval", "that analysis is reused while its trust boundary, attacker capability and controls still apply,"),
+          ("reference.zh-TW.md#pre-approval", "只要它的信任邊界、攻擊者能力與控制仍然適用，就沿用那份分析，")),
          ()),
         ("a Security-critical claim had a security analysis in off, and auto is turned on after the plan gained a new trust boundary",
          "the analysis reopens for the new boundary only, and its findings are dispositioned before the automatic plan review",
          (("plan-review.md#security analysis", "and otherwise reopens under the triggers above;"),
           ("plan-review.md#security analysis", "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially revised control, and then covers only what changed, before plan review runs again."),
           ("plan-review.md#security analysis", "main dispositions its findings and records the test targets as above before the automatic plan review,"),
-          ("README.md#pre-approval", "and otherwise runs again for the new trust boundary, attacker capability or control;"),
-          ("README.zh-TW.md#pre-approval", "否則針對新的信任邊界、攻擊者能力或控制重新分析；")),
+          ("reference.md#pre-approval", "and otherwise runs again for the new trust boundary, attacker capability or control;"),
+          ("reference.zh-TW.md#pre-approval", "否則針對新的信任邊界、攻擊者能力或控制重新分析；")),
          ()),
         ("a Security-critical claim was implemented in off, and auto is then turned on",
          "Implemented before plan review applies first: main asks whether to run plan review or waive the missing READY, and that waiver does not waive the security analysis",
          (("plan-review.md#security analysis", "Work already implemented in off first follows [review state](review-state.md)'s Implemented before plan review."),
           ("review-state.md#Implemented before plan review", "This covers work implemented in another session, outside Claude, or in this session while review was off."),
           ("review-state.md#Implemented before plan review", "A waiver of the missing READY does not waive security analysis:"),
-          ("README.md#pre-approval", "Work already implemented in `off` first goes through Implemented before plan review."),
-          ("README.zh-TW.md#pre-approval", "在 `off` 下已實作的工作，會先依「實作完才做計畫審查」處理。")),
+          ("reference.md#pre-approval", "Work already implemented in `off` first goes through Implemented before plan review."),
+          ("reference.zh-TW.md#pre-approval", "在 `off` 下已實作的工作，會先依「實作完才做計畫審查」處理。")),
          ()),
     )
 
@@ -480,6 +484,7 @@ class AdversaryRoleTests(unittest.TestCase):
         "model SKILL.md": config.ROOT / "skills" / "model" / "SKILL.md",
         "README.md": config.ROOT / "README.md",
         "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+        **feather_support.REFERENCE_FILES,
     }
 
     @classmethod
@@ -543,6 +548,8 @@ class AdversaryRoleTests(unittest.TestCase):
         "model SKILL.md": ("security-executor, verifier, reviewer and Explore",),
         "README.md": ("plus eight native agents", "security-executor, verifier, reviewer and Explore"),
         "README.zh-TW.md": ("八個原生 agent", "`reviewer`、`Explore`"),
+        "reference.md": ("plus eight native agents", "security-executor, verifier, reviewer and Explore"),
+        "reference.zh-TW.md": ("八個原生 agent", "`reviewer`、`Explore`"),
     }
 
     @staticmethod
@@ -758,10 +765,10 @@ class AdversarialReviewTests(unittest.TestCase):
             "A Security-critical claim's HELD is reopened by a change to the claim's files or dependencies, to a test target's definition, start-up, version or configuration, or by another change that shares its security assumptions.",
             "A test target's reset and test-induced changes to its synthetic data are not an environment change: the brief's reset procedure and those changes reopen neither HELD nor CONFIRMED.",
         ),
-        "README.md#Validity": (
+        "reference.md#Validity": (
             "For a Security-critical claim, HELD is reopened by a change to the claim's files or dependencies, to a test target's definition, start-up, version or configuration, or by another change sharing its security assumptions; a test target's reset and test-induced changes to its synthetic data are not an environment change and reopen neither HELD nor verification.",
         ),
-        "README.zh-TW.md#有效範圍": (
+        "reference.zh-TW.md#有效範圍": (
             "安全關鍵 claim 的 HELD，會因改動 claim 的檔案或相依項目、改動測試目標的定義、啟動方式、版本或設定，或另一項與它共用安全假設的變更而重新打開；測試目標的重設，以及測試造成的合成資料變更，不算環境變更，不會重新打開 HELD 或驗證。",
         ),
     }
@@ -895,7 +902,9 @@ class AdversarialReviewTests(unittest.TestCase):
             "| Adversarial review | For a Security-critical claim: in auto, once at the end, after the final check passes at the final commit; in `off`, after APPROVED and CONFIRMED at the same commit | adversary | HELD |",
             "- `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.",
-            "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions above).",
+            "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions in the [reference](docs/reference.md#automatic-review)).",
+        ),
+        "reference.md": (
             "The plan review, code review and outcome verification roles, and for a plan with a Security-critical claim the security analysis and Adversarial review roles, are listed once at the end, with the number of plans, claims and Security-critical claims and when each step stops (the Stop threshold in effect and its source, at most K(K+1) calls per claim, or K(K+1) + K for a Security-critical claim, in one uninterrupted attempt, each final check fix, reopened claim or approved material deviation adding calls);",
         ),
         "README.zh-TW.md": (
@@ -903,65 +912,67 @@ class AdversarialReviewTests(unittest.TestCase):
             "| 對抗式審查 | 安全關鍵 claim：在 auto 下，最終檢查在最後的 commit 上通過後，最後做一次；在 `off` 下，在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |",
             "| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；",
             "但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |",
-            "進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見上方 Commit 條件與你的決定）；",
+            "進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見[參考文件](docs/reference.zh-TW.md#自動審查)的 Commit 條件與你的決定）；",
+        ),
+        "reference.zh-TW.md": (
             "計畫審查、程式碼審查與結果驗證的角色，以及有安全關鍵 claim 的計畫的安全分析與對抗式審查角色，只在最後列一次，附上計畫數、claim 數、安全關鍵 claim 數與各步驟何時停下（目前的停止門檻與它的來源，一次不中斷的完成過程中每個 claim 最多 K(K+1) 次、安全關鍵 claim 最多 K(K+1) + K 次，最終檢查的每次修正、重新打開的 claim 與經你同意的重大偏離會再增加呼叫）；",
         ),
-        "README.md#Budget": (
+        "reference.md#Budget": (
             "each step counts consecutive automatic calls that do not pass, per plan for plan review and per claim for code review, verification and Adversarial review.",
             "An Adversarial review that returns INCONCLUSIVE counts as not passing.",
         ),
-        "README.zh-TW.md#次數上限": (
+        "reference.zh-TW.md#次數上限": (
             "每個步驟計算連續沒通過的自動呼叫次數：計畫審查以計畫計，程式碼審查、驗證與對抗式審查以 claim 計。",
             "對抗式審查回覆 INCONCLUSIVE 也算沒通過。",
         ),
-        "README.md#Not passed": (
+        "reference.md#Not passed": (
             # Retained passes ticket 04 (Acceptance items 9 and 15): a BROKEN is fixed before completion in off only.
             "A Security-critical claim without a valid HELD is not landed, released or reported complete either; in `off`, the fix for a BROKEN goes through code review, verification and Adversarial review again, while in auto a BROKEN is recorded rather than fixed, as [Security-critical work](#security-critical-work) says, and when that step stops or a BROKEN stays unresolved, an active handoff records that the claim is pending acceptance with its Adversarial review missing, even if it had no note before.",
         ),
-        "README.zh-TW.md#未通過": (
+        "reference.zh-TW.md#未通過": (
             # Retained passes ticket 04 (Acceptance items 9 and 15).
             "沒有有效 HELD 的安全關鍵 claim 同樣不進入預設 branch、不 release、不回報完成；在 `off` 下，BROKEN 的修正要重新經過程式碼審查、驗證與對抗式審查，在 auto 下 BROKEN 則只記錄、不修正，如[安全關鍵工作](#安全關鍵工作)所說，而該步驟停下或 BROKEN 仍未解決時，進行中的交接會記下這個 claim 待驗收、缺少對抗式審查，即使之前沒有記錄也一樣。",
         ),
-        "README.md#Commit": (
+        "reference.md#Commit": (
             "For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED, plus a valid HELD for a Security-critical claim, or with your accept-and-land decision.",
             "Each review, verification and Adversarial review of such a claim judges a named commit with a clean workspace.",
             "On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes, plus HELD for a Security-critical claim, or your accept-and-land decision, or with your explicit permission;",
         ),
-        "README.zh-TW.md#Commit 條件": (
+        "reference.zh-TW.md#Commit 條件": (
             "以上 claim 都只有在 APPROVED 與 CONFIRMED（安全關鍵 claim 還要加上 HELD）都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。",
             "這類 claim 的每次審查、驗證與對抗式審查，都針對指名的 commit，且工作區乾淨。",
             "在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過（安全關鍵 claim 還要加上 HELD）、你決定接受並合併，或你明確允許才會推送；",
         ),
-        "README.md#Your decisions": (
+        "reference.md#Your decisions": (
             "A waiver names the finding or missing pass it waives, stays visible with its remaining risk and never counts as READY, APPROVED, CONFIRMED or HELD,",
             "Accept and land is your explicit acceptance of a named claim without one or both passes, or of a Security-critical claim without its HELD: main records the commit it accepts, the missing passes and the remaining risk, and for a missing HELD the known vulnerabilities, keeps them visible in reports and any active handoff,",
         ),
-        "README.zh-TW.md#你的決定": (
+        "reference.zh-TW.md#你的決定": (
             "連同剩餘風險持續列出，絕不記為 READY、APPROVED、CONFIRMED 或 HELD，",
             "接受並合併是你明確接受某個 claim，即使它缺少一關或兩關，或安全關鍵 claim 缺少 HELD：主 Agent 會記下所接受的 commit、缺少的關卡與剩餘風險，缺少 HELD 時還會記下已知漏洞，在回報與進行中的交接中持續列出，",
         ),
-        "README.md#Resumed session": (
+        "reference.md#Resumed session": (
             "In `off`, before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, unless its ticket was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since.",
             "In `off`, a claim whose handoff note says it is pending acceptance stays gated and needs both passes, plus HELD for a Security-critical claim, in the new session,",
         ),
-        "README.zh-TW.md#恢復的 session": (
+        "reference.zh-TW.md#恢復的 session": (
             "在 `off` 下，進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證，安全關鍵 claim 也要重新做對抗式審查；只有 ticket 是在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值、且之後沒有相關變更的 claim 例外。",
             "交接記錄為待驗收的 claim 仍受把關，在新的 session 要重新通過兩關（安全關鍵 claim 還要加上 HELD），",
         ),
-        "README.md#Ticket status": (
+        "reference.md#Ticket status": (
             "after a claim passes (both passes, plus HELD for a Security-critical claim) and is committed,",
             "a ticket counts as accepted only when it was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since,",
         ),
-        "README.zh-TW.md#Ticket 狀態": (
+        "reference.zh-TW.md#Ticket 狀態": (
             "claim 通過（兩關，安全關鍵 claim 還要加上 HELD）且 commit，",
             "ticket 要在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值，",
         ),
-        "README.md#Cost": (
+        "reference.md#Cost": (
             # Retained passes ticket 06 (Acceptance items 8, 9, 10 and 17): the cost explanation states per-Claim timing, fixed passes, the final check's fixes and Adversarial review once at the end, with no fix after BROKEN.
             "in one uninterrupted attempt in a session, with K the Stop threshold, a plan with N claims, S of them Security-critical, makes at least 1 + 2N + S automatic calls and up to about K³ + K(K+1)N + KS, since a claim makes at most K(K+1) (up to K verification calls, between which up to K − 1 fixes each get up to K code reviews, plus up to K code reviews before the first verification), a Security-critical claim at most K(K+1) + K (also up to K Adversarial reviews, once at the end, where a BROKEN is recorded rather than fixed), and the plan reviews and the final check's fixes at most K³ together (up to K plan reviews, and up to K − 1 fixes in a row before the final check stops, each getting up to K(K+1) code review and verification calls in the claim that caused the failure or in a fix claim).",
             "A plan with a Security-critical claim also gets one security analysis by analyst per plan or shared trust boundary before plan review;",
         ),
-        "README.zh-TW.md#成本": (
+        "reference.zh-TW.md#成本": (
             "在一個 session 內一次不中斷的完成過程中，停止門檻為 K 時，一份有 N 個 claim、其中 S 個是安全關鍵 claim 的計畫，至少自動呼叫 1 + 2N + S 次，最多約 K³ + K(K+1)N + KS 次，因為每個 claim 最多 K(K+1) 次（最多 K 次驗證，其間最多 K − 1 次修正各最多 K 次程式碼審查，再加上第一次驗證前最多 K 次程式碼審查），安全關鍵 claim 最多 K(K+1) + K 次（再加上最後一次執行的最多 K 次對抗式審查，那裡的 BROKEN 只記錄、不修正），計畫審查與最終檢查的修正合計最多 K³ 次（最多 K 次計畫審查，加上最終檢查停下前連續最多 K − 1 次修正，每次修正在造成失敗的 claim 或修正用的 claim 中最多 K(K+1) 次程式碼審查與驗證）。",
             "有安全關鍵 claim 的計畫，在計畫審查前還會由 analyst 對每份計畫或共用的信任邊界做一次安全分析；",
         ),
@@ -1027,20 +1038,31 @@ class AdversarialReviewTests(unittest.TestCase):
                             "仍需兩項通過或你的接受並合併決定",
                             "仍要等兩關都通過，或你明確決定",
                             "計畫審查、程式碼審查與結果驗證的角色只在最後列一次"),
-        "README.md#Budget": ("per claim for code review and verification.",),
-        "README.zh-TW.md#次數上限": ("程式碼審查與驗證以 claim 計",),
-        "README.md#Commit": ("only with a valid APPROVED and CONFIRMED, or with your", "Each review and verification of such a claim",
-                             "pushed only after both passes or your"),
-        "README.zh-TW.md#Commit 條件": ("APPROVED 與 CONFIRMED 都仍有效", "這類 claim 的每次審查與驗證，",
+        "reference.md#Budget": ("per claim for code review and verification.",),
+        "reference.zh-TW.md#次數上限": ("程式碼審查與驗證以 claim 計",),
+        "reference.md#Commit": ("only with a valid APPROVED and CONFIRMED, or with your", "Each review and verification of such a claim",
+                                "pushed only after both passes or your"),
+        "reference.zh-TW.md#Commit 條件": ("APPROVED 與 CONFIRMED 都仍有效", "這類 claim 的每次審查與驗證，",
                                        "要等兩關都通過、你決定"),
-        "README.md#Your decisions": ("never counts as READY, APPROVED or CONFIRMED,", "without one or both passes: main records"),
-        "README.zh-TW.md#你的決定": ("絕不記為 READY、APPROVED 或 CONFIRMED", "即使它缺少一關或兩關：主 Agent"),
-        "README.md#Resumed session": ("reviewed and verified again, unless", "after both passes or your", "needs both passes in the new session"),
-        "README.zh-TW.md#恢復的 session": ("要重新審查與驗證；只有", "在兩關通過或你決定", "要重新通過兩關，除非"),
-        "README.md#Ticket status": ("after a claim passes and is committed,", "after both passes or your"),
-        "README.zh-TW.md#Ticket 狀態": ("claim 通過且 commit", "在兩關通過或你決定"),
-        "README.md#Cost": ("makes at least 1 + 2N automatic calls and up to about 2 + 6N,",),
-        "README.zh-TW.md#成本": ("至少自動呼叫 1 + 2N 次，最多約 2 + 6N 次",),
+        "reference.md#Your decisions": ("never counts as READY, APPROVED or CONFIRMED,", "without one or both passes: main records"),
+        "reference.zh-TW.md#你的決定": ("絕不記為 READY、APPROVED 或 CONFIRMED", "即使它缺少一關或兩關：主 Agent"),
+        "reference.md#Resumed session": ("reviewed and verified again, unless", "after both passes or your", "needs both passes in the new session"),
+        "reference.zh-TW.md#恢復的 session": ("要重新審查與驗證；只有", "在兩關通過或你決定", "要重新通過兩關，除非"),
+        "reference.md#Ticket status": ("after a claim passes and is committed,", "after both passes or your"),
+        "reference.zh-TW.md#Ticket 狀態": ("claim 通過且 commit", "在兩關通過或你決定"),
+        "reference.md#Cost": ("makes at least 1 + 2N automatic calls and up to about 2 + 6N,",),
+        "reference.zh-TW.md#成本": ("至少自動呼叫 1 + 2N 次，最多約 2 + 6N 次",),
+        "reference.md": ("at most six calls per claim in one uninterrupted attempt",
+                         "or twelve for a Security-critical claim", "2 + 6N + 6S",
+                         "outcome verification of plan-driven work. Main may then",
+                         "still wait for both passes or your",
+                         "The plan review, code review and outcome verification roles are listed once"),
+        "reference.zh-TW.md": ("每個 claim 最多六次，重新打開",
+                               "安全關鍵 claim 最多十二次", "2 + 6N + 6S",
+                               "開啟依計畫施工的自動計畫審查、程式碼審查與結果驗證；",
+                               "仍需兩項通過或你的接受並合併決定",
+                               "仍要等兩關都通過，或你明確決定",
+                               "計畫審查、程式碼審查與結果驗證的角色只在最後列一次"),
     }
 
     # Repo trust default ticket 01 (Acceptance 6): the trust question and the authorship condition the procedure and the
@@ -1168,13 +1190,13 @@ class AdversarialReviewTests(unittest.TestCase):
         ("the adversary resets its test target and its probes changed synthetic rows",
          "neither HELD nor CONFIRMED reopens",
          (("review-state.md#What a pass covers", "A test target's reset and test-induced changes to its synthetic data are not an environment change: the brief's reset procedure and those changes reopen neither HELD nor CONFIRMED."),
-          ("README.md#Validity", "a test target's reset and test-induced changes to its synthetic data are not an environment change"),
-          ("README.zh-TW.md#有效範圍", "測試目標的重設，以及測試造成的合成資料變更，不算環境變更")),
+          ("reference.md#Validity", "a test target's reset and test-induced changes to its synthetic data are not an environment change"),
+          ("reference.zh-TW.md#有效範圍", "測試目標的重設，以及測試造成的合成資料變更，不算環境變更")),
          ()),
         ("the test target's database version changes after HELD",
          "HELD reopens",
          (("review-state.md#What a pass covers", "to a test target's definition, start-up, version or configuration,"),
-          ("README.md#Validity", "to a test target's definition, start-up, version or configuration,")),
+          ("reference.md#Validity", "to a test target's definition, start-up, version or configuration,")),
          ()),
         ("two claims share a session-validation assumption",
          "the review covers their composed revision",
@@ -1195,8 +1217,8 @@ class AdversarialReviewTests(unittest.TestCase):
          "main records a pending-acceptance note naming the missing Adversarial review and its open findings",
          (("adversarial-review.md", "whether or not an earlier note existed;"),
           ("review-state.md#Pending acceptance", "whether or not an earlier note existed,"),
-          ("README.md#Not passed", "even if it had no note before."),
-          ("README.zh-TW.md#未通過", "即使之前沒有記錄也一樣。")),
+          ("reference.md#Not passed", "even if it had no note before."),
+          ("reference.zh-TW.md#未通過", "即使之前沒有記錄也一樣。")),
          ()),
         ("a target is named only in a repository README, not in the approved Plan",
          "it does not enter the brief without the user's confirmation",
@@ -1361,6 +1383,7 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
         "ADR 0009": ADR / "0009-security-critical-claims-get-an-adversarial-review.md",
         "README.md": config.ROOT / "README.md",
         "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+        **feather_support.REFERENCE_FILES,
         "setup.md": config.ROOT / "docs" / "setup.md",
         "delegation SKILL.md": config.ROOT / "skills" / "delegation" / "SKILL.md",
     }
@@ -1428,8 +1451,9 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
             "(Amended by ADR 0009: a Security-critical claim also needs a valid HELD from Adversarial review, or the user's accept-and-land decision, which may cover the missing HELD and then also names the known vulnerabilities; its pending-acceptance note names a missing Adversarial review.)",
     }
 
-    # C6 item 2: the classification, the pre-approval sequence, the third step and the command, paired.
-    README_FLOW = (
+    # C6 item 2: the classification, the pre-approval sequence, the third step and the command, paired; all but the
+    # command's listing are in the reference's Security-critical work section.
+    REFERENCE_FLOW = (
         ("A Security-critical claim is one whose outcome includes a Security-critical change: a change to a security guarantee at a trust boundary, or to the implementation or configuration of a security control, including where sensitive data goes and how untrusted data is interpreted downstream.",
          "安全關鍵 claim（Security-critical claim）是結果包含安全關鍵變更的 claim：改變信任邊界上的安全保證，或改變安全控制的實作或設定，包括敏感資料流向哪裡、不受信任的資料在下游如何被解讀。"),
         # Claims at implementation ticket 04 (Acceptance item 11, S7) replaced "in a plan it writes".
@@ -1458,20 +1482,26 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
         # Repo trust default ticket 02 (Acceptance 8): it runs on this machine unless the user's own statements stop it.
         ("Dynamic probing follows the rule for running repository code under [Repository safety](#repository-safety): it runs on this machine unless you have said that the change under attack or content in the workspace comes from someone else, or stated a restriction that covers it, and then only in an isolated environment you name, or on this machine only when no restriction of yours covers it, or your own message lifted it, and every part you said comes from someone else lies in a change your own message named and allowed to run on this machine; without either the attack stays static.",
          "動態探測依[儲存庫安全](#儲存庫安全)中執行儲存庫程式碼的規則：除非你說過受審的變更或工作區中的內容來自別人，或說過涵蓋它的限制，否則它在這台機器上進行；有這些情況時，只在你指定的隔離環境中進行，或只有在你的限制都不涵蓋它（或你自己的訊息已解除它），而且你說來自別人的每個部分都屬於你自己的訊息指名並允許在這台機器上執行的變更時，才在這台機器上進行；兩者都沒有的話只做靜態攻擊。"),
+    )
+    # The command's listing line, which stays in each README.
+    README_FLOW = (
         ("- `/cc-feather:adversarial-review <attack scope> [paths or commit range] [disposable targets]`: run an Adversarial review you ask for, in either mode; see [Security-critical work](#security-critical-work).",
          "| `/cc-feather:adversarial-review <攻擊範圍> [路徑或 commit 範圍] [可拋棄目標]` | 執行你要求的對抗式審查，兩種模式都可用；見[安全關鍵工作](#安全關鍵工作) |"),
     )
 
-    # C6 item 3: the enforcement statement, a paragraph of its own in each README.
-    README_ENFORCEMENT = (
+    # C6 item 3: the enforcement statement, a paragraph of its own in each language's reference.
+    REFERENCE_ENFORCEMENT = (
         "The adversary's limits are instructions to the model, and only your permission settings (permission mode and allow, ask and deny rules, including managed settings), hooks, the Claude Code sandbox (not available on native Windows) and an external isolated environment such as a container or virtual machine enforce them: in bypassPermissions mode, or with broad allow rules, its Bash commands can run without any prompt or classifier check, and in Claude Code's auto mode a classifier, not you, approves them; see the official [permission modes documentation](https://code.claude.com/docs/en/permission-modes) for how each mode treats commands.",
         "adversary 的限制是給模型的指示，只有你的權限設定（permission mode 與 allow、ask、deny 規則，包括 managed settings）、hooks、Claude Code sandbox（原生 Windows 不支援）以及外部隔離環境（例如容器或虛擬機）才會實際強制這些限制：在 bypassPermissions 模式下，或有寬鬆的 allow 規則時，它的 Bash 指令可能完全不經提示或分類器檢查就執行，而在 Claude Code 的 auto 模式下是由分類器而不是你核准；各模式如何處理指令，請見官方的 [permission modes 文件](https://code.claude.com/docs/en/permission-modes)。",
     )
 
-    # C6 item 5: the procedure links and the Explicit requests bullet, paired.
+    # C6 item 5: the procedure links, paired, in each README, and the Explicit requests bullet, paired, in each
+    # language's reference.
     README_LINKS = (
         ("The full rules are in the [plan review](skills/delegation/references/plan-review.md), [code review](skills/delegation/references/code-review.md), [outcome verification](skills/delegation/references/outcome-verification.md) and [adversarial review](skills/delegation/references/adversarial-review.md) procedures; terms are defined in [CONTEXT.md](CONTEXT.md).",
          "完整規則見[計畫審查](skills/delegation/references/plan-review.md)、[程式碼審查](skills/delegation/references/code-review.md)、[結果驗證](skills/delegation/references/outcome-verification.md)與[對抗式審查](skills/delegation/references/adversarial-review.md)程序；用語定義見 [CONTEXT.md](CONTEXT.md)。"),
+    )
+    REFERENCE_LINKS = (
         ("- **Explicit requests** for a plan review, code review, verification or Adversarial review (including `/cc-feather:adversarial-review`) work in either mode,",
          "- **明確要求**計畫審查、程式碼審查、驗證或對抗式審查（包括 `/cc-feather:adversarial-review`）時不受開關限制，"),
     )
@@ -1501,23 +1531,27 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
                 self.assertIn(note, (self.ADR / name).read_text(encoding="utf-8").splitlines())
 
     def test_readmes_describe_the_security_critical_flow_in_both_languages(self):
-        english, chinese = self.source("README.md"), self.source("README.zh-TW.md")
-        for en, zh in self.README_FLOW:
-            with self.subTest(sentence=en[:60]):
-                self.assertIn(en, english)
-                self.assertIn(zh, chinese)
+        for (english, chinese), pairs in (((self.source("README.md"), self.source("README.zh-TW.md")), self.README_FLOW),
+                                          ((self.source("reference.md"), self.source("reference.zh-TW.md")),
+                                           self.REFERENCE_FLOW)):
+            for en, zh in pairs:
+                with self.subTest(sentence=en[:60]):
+                    self.assertIn(en, english)
+                    self.assertIn(zh, chinese)
 
     def test_readmes_state_what_enforces_the_limits_as_a_paragraph_of_its_own(self):
-        for name, paragraph in zip(("README.md", "README.zh-TW.md"), self.README_ENFORCEMENT):
+        for name, paragraph in zip(("reference.md", "reference.zh-TW.md"), self.REFERENCE_ENFORCEMENT):
             with self.subTest(readme=name):
                 self.assertIn(paragraph, self.source(name).splitlines())
 
     def test_readmes_link_the_procedure_and_cover_explicit_adversarial_review(self):
-        english, chinese = self.source("README.md"), self.source("README.zh-TW.md")
-        for en, zh in self.README_LINKS:
-            with self.subTest(sentence=en[:60]):
-                self.assertIn(en, english)
-                self.assertIn(zh, chinese)
+        for (english, chinese), pairs in (((self.source("README.md"), self.source("README.zh-TW.md")), self.README_LINKS),
+                                          ((self.source("reference.md"), self.source("reference.zh-TW.md")),
+                                           self.REFERENCE_LINKS)):
+            for en, zh in pairs:
+                with self.subTest(sentence=en[:60]):
+                    self.assertIn(en, english)
+                    self.assertIn(zh, chinese)
 
     def test_delegation_skill_description_names_adversarial_review(self):
         frontmatter = self.source("delegation SKILL.md").split("---")[1]
@@ -1596,7 +1630,8 @@ class SecurityCriticalWordingTests(unittest.TestCase):
 
     # C1 item 4: the replaced wording is gone from every shipped role template and both READMEs.
     def test_security_sensitive_wording_is_gone(self):
-        places = sorted(self.AGENTS.glob("*.md")) + [config.ROOT / "README.md", config.ROOT / "README.zh-TW.md"]
+        places = sorted(self.AGENTS.glob("*.md")) + [config.ROOT / "README.md", config.ROOT / "README.zh-TW.md",
+                                                     *feather_support.REFERENCE_FILES.values()]
         self.assertIn(self.AGENTS / "security-executor.md", places)
         for path in places:
             with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
@@ -1848,6 +1883,8 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
                                   "An automatic HELD resets the count to zero"),
         "README.md": ("secrets stay in untracked", "a pull request or a public tracker, gets only a summary"),
         "README.zh-TW.md": ("pull request 或公開 tracker，都只寫摘要",),
+        "reference.md": ("secrets stay in untracked", "a pull request or a public tracker, gets only a summary"),
+        "reference.zh-TW.md": ("pull request 或公開 tracker，都只寫摘要",),
     }
 
     def test_retry_after_inconclusive_depends_on_its_cause(self):
@@ -1865,7 +1902,7 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
 
     def test_readme_validity_bullets_state_the_exception_in_both_languages(self):
         english, chinese = self.README_REOPENING
-        self.assert_pinned({"README.md#Validity": (english,), "README.zh-TW.md#有效範圍": (chinese,)})
+        self.assert_pinned({"reference.md#Validity": (english,), "reference.zh-TW.md#有效範圍": (chinese,)})
 
     def test_changed_acceptance_reopens_held(self):
         self.assert_pinned({"review-state.md#User decisions": (self.CHANGED_ACCEPTANCE,)})
@@ -1882,7 +1919,7 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
 
     def test_readme_disclosure_matches_step_10_in_both_languages(self):
         english, chinese = self.README_DISCLOSURE
-        self.assert_pinned({"README.md#disclosure": (english,), "README.zh-TW.md#disclosure": (chinese,)})
+        self.assert_pinned({"reference.md#disclosure": (english,), "reference.zh-TW.md#disclosure": (chinese,)})
 
     def test_adr_0009_gets_one_amendment_note_after_its_decision_text(self):
         text = self.source("ADR 0009")
@@ -1934,14 +1971,14 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
          "the new claim owns the composed review; the accepted claim's HELD is not reopened",
          (("review-state.md#What a pass covers", REOPENING[1]),
           ("adversarial-review.md#9", STEP_9),
-          ("README.md#Validity", README_REOPENING[0]),
-          ("README.zh-TW.md#有效範圍", README_REOPENING[1]),
+          ("reference.md#Validity", README_REOPENING[0]),
+          ("reference.zh-TW.md#有效範圍", README_REOPENING[1]),
           ("ADR 0009#amendment", AMENDMENT[2])),
          ()),
         ("the same new claim also edits a file of the accepted claim",
          "the accepted claim's HELD reopens; the exception covers only the shared-assumptions trigger",
          (("review-state.md#What a pass covers", REOPENING[2]),
-          ("README.md#Validity", README_REOPENING[0]),
+          ("reference.md#Validity", README_REOPENING[0]),
           ("ADR 0009#amendment", AMENDMENT[4])),
          ()),
         ("the user changes a Security-critical claim's acceptance after its HELD",
@@ -1981,17 +2018,17 @@ class PreApprovalApprovalRuleTests(unittest.TestCase):
     review step 5, and the switch from off to auto, in plan review, both READMEs and ADR 0009's amendment note. The
     scenarios are in PreApprovalSecurityAnalysisTests.SCENARIOS."""
 
-    README_OPENINGS = {"README.md": "In `auto`, a plan with a Security-critical claim gets two separate analyst calls",
-                       "README.zh-TW.md": "在 `auto` 下，有安全關鍵 claim 的計畫在施工前"}
+    REFERENCE_OPENINGS = {"reference.md": "In `auto`, a plan with a Security-critical claim gets two separate analyst calls",
+                          "reference.zh-TW.md": "在 `auto` 下，有安全關鍵 claim 的計畫在施工前"}
 
     @classmethod
     def source(cls, name: str) -> str:
-        """Text of one place: '<README>#pre-approval' (the pre-approval paragraph), otherwise as
+        """Text of one place: '<reference>#pre-approval' (the pre-approval paragraph), otherwise as
         PreApprovalSecurityAnalysisTests.source."""
         path, _, part = name.partition("#")
         if part == "pre-approval":
-            text = (config.ROOT / path).read_text(encoding="utf-8")
-            return next(line for line in text.splitlines() if line.startswith(cls.README_OPENINGS[path]))
+            text = feather_support.REFERENCE_FILES[path].read_text(encoding="utf-8")
+            return next(line for line in text.splitlines() if line.startswith(cls.REFERENCE_OPENINGS[path]))
         return PreApprovalSecurityAnalysisTests.source(name)
 
     assert_whole_sentence = AdversarialReviewRetriesTests.assert_whole_sentence
@@ -2045,7 +2082,7 @@ class PreApprovalApprovalRuleTests(unittest.TestCase):
     README_OFF_MODE = ("In `off` no Adversarial review starts automatically and the security analysis before approval is "
                        "not forced.",
                        "`off` 下不會自動開始對抗式審查，也不強制同意前的安全分析。")
-    README_REPLACED = {"README.md#pre-approval": ("then your approval",), "README.zh-TW.md#pre-approval": ("最後才由你同意",)}
+    README_REPLACED = {"reference.md#pre-approval": ("then your approval",), "reference.zh-TW.md#pre-approval": ("最後才由你同意",)}
     # Item 4: ADR 0009's amendment note.
     AMENDMENT = (
         "- **Approval after security analysis.** The user's approval after a security analysis follows plan review's "
@@ -2079,7 +2116,7 @@ class PreApprovalApprovalRuleTests(unittest.TestCase):
     def test_readmes_state_the_approval_rule_and_the_switch_in_both_languages(self):
         for english, chinese in self.README_RULES:
             with self.subTest(sentence=english[:60]):
-                self.assert_pinned({"README.md#pre-approval": (english,), "README.zh-TW.md#pre-approval": (chinese,)})
+                self.assert_pinned({"reference.md#pre-approval": (english,), "reference.zh-TW.md#pre-approval": (chinese,)})
         for place, phrases in self.README_REPLACED.items():
             for phrase in phrases:
                 with self.subTest(place=place, removed=phrase):
@@ -2087,7 +2124,7 @@ class PreApprovalApprovalRuleTests(unittest.TestCase):
 
     def test_readmes_keep_that_off_mode_does_not_force_the_sequence(self):
         english, chinese = self.README_OFF_MODE
-        self.assert_pinned({"README.md#disclosure": (english,), "README.zh-TW.md#disclosure": (chinese,)})
+        self.assert_pinned({"reference.md#disclosure": (english,), "reference.zh-TW.md#disclosure": (chinese,)})
 
     def test_adr_0009_amendment_records_the_approval_rule(self):
         self.assert_pinned({"ADR 0009#amendment": self.AMENDMENT})
@@ -2115,8 +2152,8 @@ class SpecChecklistInvariantTests(unittest.TestCase):
                              "line of the spec that limits what a ticket may change is part of what that ticket must "
                              "cite."),
           ("plan-review.md", "A missing coverage or citation is a blocker, an uncited security invariant included."),
-          ("README.md#The spec as a checklist", "including any Out of Scope line that limits what it may change."),
-          ("README.zh-TW.md#spec 作為檢查清單", "包括限制它能改什麼的 Out of Scope 條目。"))),
+          ("reference.md#The spec as a checklist", "including any Out of Scope line that limits what it may change."),
+          ("reference.zh-TW.md#spec 作為檢查清單", "包括限制它能改什麼的 Out of Scope 條目。"))),
         # S2: the last unfinished ticket named alone.
         ("the user names only the spec's last unfinished ticket",
          "the coverage part runs over it with the finished tickets, which plan review receives for that check only",
@@ -2124,7 +2161,7 @@ class SpecChecklistInvariantTests(unittest.TestCase):
                              "or not."),
           ("plan-review.md", "The coverage part runs whenever the named tickets together with the finished ones are all "
                              "of the spec's tickets, a single named ticket included:"),
-          ("README.md#The spec as a checklist", "so naming the last unfinished ticket alone runs this check too."))),
+          ("reference.md#The spec as a checklist", "so naming the last unfinished ticket alone runs this check too."))),
         # S2: an invariant no ticket cites, found even when coverage does not run.
         ("a security invariant of the spec is cited by none of its tickets and the named tickets are not the last ones",
          "a blocker at that plan review, since the invariant check runs at every plan review over tickets of the spec",
@@ -2138,13 +2175,13 @@ class SpecChecklistInvariantTests(unittest.TestCase):
          (("plan-review.md", "a `Spec:` line, a parent reference or a shared directory is not a citation."),
           ("plan-review.md", "so a ticket's reviews after plan review do not read the parts of the spec it does not "
                              "cite."),
-          ("README.md#Citations", "A `Spec:` line, a parent reference or a shared directory is not a citation."),
-          ("README.zh-TW.md#引用", "`Spec:` 行、parent 參照或同一個目錄都不算引用。"))),
+          ("reference.md#Citations", "A `Spec:` line, a parent reference or a shared directory is not a citation."),
+          ("reference.zh-TW.md#引用", "`Spec:` 行、parent 參照或同一個目錄都不算引用。"))),
         # S6: an unresolvable citation.
         ("a ticket cites `D3` and the spec has no D3, or two parts named D3",
          "a blocker at plan review",
          (("plan-review.md", "A citation that does not resolve to exactly one part of the spec is a blocker."),
-          ("README.md#Citations", "a citation that does not resolve to exactly one part of the spec is a blocker at plan "
+          ("reference.md#Citations", "a citation that does not resolve to exactly one part of the spec is a blocker at plan "
                                   "review."))),
         # S1: a spec's own listed Claims.
         ("a spec lists its own claims and a security invariant that applies to one of them is neither in its text, a "
@@ -2160,8 +2197,8 @@ class SpecChecklistInvariantTests(unittest.TestCase):
          (("plan-review.md", "A ticket with no link to a spec, no `Spec:` line, parent reference or shared directory, "
                              "that the user does not name as a ticket of a spec either, is its own plan and gets no "
                              "checklist; the user's naming of it is the agreement."),
-          ("README.md#A ticket that belongs to no spec", "is its own plan and gets no checklist"),
-          ("README.zh-TW.md#不屬於任何 spec 的 ticket", "自成一份計畫，不做檢查清單"))),
+          ("reference.md#A ticket that belongs to no spec", "is its own plan and gets no checklist"),
+          ("reference.zh-TW.md#不屬於任何 spec 的 ticket", "自成一份計畫，不做檢查清單"))),
         # Residual R1 (amended 2026-10-13, T02 Adversarial F1): a ticket the user names as a spec's ticket gets the
         # checklist even with no link in the ticket.
         ("the user names a ticket with no `Spec:` line, parent reference or shared directory as a ticket of a spec",
@@ -2169,9 +2206,9 @@ class SpecChecklistInvariantTests(unittest.TestCase):
          (("plan-review.md", "or the user naming them;"),
           ("plan-review.md", "A ticket the user names as a ticket of a spec is a ticket of that spec, as the "
                              "recognition of a spec's tickets above says."),
-          ("README.md#A ticket that belongs to no spec", "A ticket you name as a ticket of a spec is a ticket of that "
+          ("reference.md#A ticket that belongs to no spec", "A ticket you name as a ticket of a spec is a ticket of that "
                                                           "spec, as Finding the tickets says."),
-          ("README.zh-TW.md#不屬於任何 spec 的 ticket", "你指名為某份 spec 的 ticket，就是那份 spec 的 ticket，如「辨識 ticket」所述。"))),
+          ("reference.zh-TW.md#不屬於任何 spec 的 ticket", "你指名為某份 spec 的 ticket，就是那份 spec 的 ticket，如「辨識 ticket」所述。"))),
     )
 
     def test_each_lost_invariant_is_a_blocker_by_its_sentence(self):

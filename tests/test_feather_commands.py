@@ -22,8 +22,8 @@ class CommandScopeTests(unittest.TestCase):
     invariants of item 9, across the command, the procedure, review state, both READMEs and ADR 0009."""
 
     COMMAND = config.ROOT / "skills" / "adversarial-review" / "SKILL.md"
-    README_OPENINGS = {"README.md": "`/cc-feather:adversarial-review` runs an Adversarial review when you ask",
-                       "README.zh-TW.md": "`/cc-feather:adversarial-review` 在你要求時執行對抗式審查"}
+    REFERENCE_OPENINGS = {"reference.md": "`/cc-feather:adversarial-review` runs an Adversarial review when you ask",
+                          "reference.zh-TW.md": "`/cc-feather:adversarial-review` 在你要求時執行對抗式審查"}
 
     @staticmethod
     def section(text, heading):
@@ -33,7 +33,7 @@ class CommandScopeTests(unittest.TestCase):
     def source(cls, name: str) -> str:
         """Text of one place: 'command', 'command#<bullet label>', 'command#classifying' (the paragraph before the
         classification bullets), 'command#gated' (the paragraph after them), 'command#ungated' (What a call outside
-        the gate reviews), 'command#results'; '<README>#command' (the command paragraph); 'plan-review.md#5';
+        the gate reviews), 'command#results'; '<reference>#command' (the command paragraph); 'plan-review.md#5';
         otherwise as AdversarialReviewRetriesTests.source."""
         path, _, part = name.partition("#")
         if path == "command":
@@ -51,8 +51,8 @@ class CommandScopeTests(unittest.TestCase):
                 return cls.section(text, "Results")
             return next(line for line in text.splitlines() if line.startswith(f"- **{part}.**"))
         if part == "command":
-            text = (config.ROOT / path).read_text(encoding="utf-8")
-            return next(line for line in text.splitlines() if line.startswith(cls.README_OPENINGS[path]))
+            text = feather_support.REFERENCE_FILES[path].read_text(encoding="utf-8")
+            return next(line for line in text.splitlines() if line.startswith(cls.REFERENCE_OPENINGS[path]))
         if path == "plan-review.md":
             return feather_support.post_fix_source(name)
         return feather_support.adversarial_retries_source(name)
@@ -297,8 +297,8 @@ class CommandScopeTests(unittest.TestCase):
     README_TARGETS = ("Targets come only from a plan you approved or from your own arguments; without one, the role "
                       "analyses statically and reports INCONCLUSIVE for what needs execution.",
                       "目標只來自你同意的計畫或你自己的參數；沒有目標時，角色只做靜態分析，需要實際執行的部分回報 INCONCLUSIVE。")
-    README_REMOVED = {"README.md#command": ("reviews the workspace change",),
-                      "README.zh-TW.md#command": ("審查工作區變更",)}
+    README_REMOVED = {"reference.md#command": ("reviews the workspace change",),
+                      "reference.zh-TW.md#command": ("審查工作區變更",)}
     # Item 6: ADR 0009's amendment note gains the separation.
     AMENDMENT = (
         "- **A gated claim's clean commit.** The adversarial-review command separates whether the acceptance gate covers a "
@@ -369,13 +369,13 @@ class CommandScopeTests(unittest.TestCase):
         # Abuse check (items 9.3 and 9.5): every mention of checking out, stashing, switching branches, adding a
         # worktree or materialising a revision is a prohibition.
         moves = re.compile(r"check(?:s|ing)? (?:it )?out|checkout|stash|switch(?:es)? branch|worktree|materialis", re.I)
-        texts = (self.source("command"), self.source("README.md#command"))
+        texts = (self.source("command"), self.source("reference.md#command"))
         for text in texts:
             for sentence in self.sentences(text):
                 if moves.search(sentence):
                     with self.subTest(sentence=sentence[:60]):
                         self.assertRegex(sentence, r"\b(?:does not|never|instead of)\b")
-        chinese = self.source("README.zh-TW.md#command")
+        chinese = self.source("reference.zh-TW.md#command")
         for sentence in re.split(r"(?<=。)", chinese):
             if "checkout" in sentence:
                 with self.subTest(sentence=sentence[:30]):
@@ -593,14 +593,14 @@ class CommandScopeTests(unittest.TestCase):
     def test_readme_command_paragraph_summarises_the_scope_in_both_languages(self):
         for english, chinese in (*self.README, self.README_TARGETS):
             with self.subTest(sentence=english[:60]):
-                self.assert_pinned({"README.md#command": (english,), "README.zh-TW.md#command": (chinese,)})
+                self.assert_pinned({"reference.md#command": (english,), "reference.zh-TW.md#command": (chinese,)})
         for place, phrases in self.README_REMOVED.items():
             for phrase in phrases:
                 with self.subTest(place=place, phrase=phrase):
                     self.assertNotIn(phrase, self.source(place))
         # Item 9.7: the paragraph claims no enforcement; the separate "instructions to the model" paragraph does that.
-        self.assertNotIn("enforce", self.source("README.md#command"))
-        self.assertNotIn("強制", self.source("README.zh-TW.md#command"))
+        self.assertNotIn("enforce", self.source("reference.md#command"))
+        self.assertNotIn("強制", self.source("reference.zh-TW.md#command"))
 
     def test_argument_hint_summarises_the_range_and_the_clean_commit(self):
         self.assertIn(self.HINT, self.source("command").split("---")[1])
@@ -642,8 +642,8 @@ class CommandScopeTests(unittest.TestCase):
         ("paths that have no change in the reviewed range",
          "main asks instead of reviewing whole files",
          (("command#Paths", PATHS[1]),
-          ("README.md#command", README[1][0]),
-          ("README.zh-TW.md#command", README[1][1])),
+          ("reference.md#command", README[1][0]),
+          ("reference.zh-TW.md#command", README[1][1])),
          ()),
         ("an early explicit call that names no commit",
          "it reviews HEAD with the workspace equal to it and does not count as the step's pass",
@@ -655,8 +655,8 @@ class CommandScopeTests(unittest.TestCase):
         ("the user names a commit that is not the workspace's content",
          "main does not check out, stash, reset or switch branches; it reports the mismatch and asks",
          (("command#gated", PREPARATION[3]),
-          ("README.md#command", README[2][0]),
-          ("README.zh-TW.md#command", README[2][1])),
+          ("reference.md#command", README[2][0]),
+          ("reference.zh-TW.md#command", README[2][1])),
          ()),
         ("an early call whose reviewed commit does not change the claim's files",
          "main asks the user instead of dispatching",
@@ -668,7 +668,7 @@ class CommandScopeTests(unittest.TestCase):
           ("command#results", BROKEN[1]),
           ("plan-review.md#5", "in addition, discovering a security control or invariant the plan lacks is a material deviation."),
           ("plan-review.md#5", "a material deviation stops dependent work for another review of the revised plan,"),
-          ("README.md#command", README[3][0])),
+          ("reference.md#command", README[3][0])),
          ()),
         ("main rejects that BROKEN with evidence",
          "the stop holds until the user waives the finding or approves the unrevised plan; neither is recorded as a pass",
@@ -704,7 +704,7 @@ class StopThresholdCommandTests(unittest.TestCase):
     @classmethod
     def source(cls, name: str) -> str:
         """'<file>' or 'stop-threshold.md#<heading>': a '## <heading>' section of the shared procedure, or the
-        README and setup sections named '#section'."""
+        README, reference and setup sections named '#section'."""
         path, _, label = name.partition("#")
         files = {
             "stop-threshold SKILL.md": cls.COMMAND,
@@ -846,7 +846,7 @@ class StopThresholdCommandTests(unittest.TestCase):
                 self.assertIn(listing, self.source(name))
                 self.assertIn(self.README_EXAMPLES, self.source(f"{name}#section"))
         for english, chinese in self.README_PAIRS:
-            for place, sentence in (("README.md#section", english), ("README.zh-TW.md#section", chinese)):
+            for place, sentence in (("reference.md#section", english), ("reference.zh-TW.md#section", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 

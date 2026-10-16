@@ -27,6 +27,9 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+reference_and_readme = feather_support.reference_and_readme
+
+
 class RepositorySafetyTests(unittest.TestCase):
     """C1: one shared reference states the rules of items 2 to 6 once, and every procedure, the command, the delegation
     skill, review state, the automatic-review guidance, the glossary, ADR 0009 and both READMEs point to it."""
@@ -46,8 +49,11 @@ class RepositorySafetyTests(unittest.TestCase):
         "ADR 0011": config.ROOT / "docs" / "adr" / ADR_0011,
         "README.md": config.ROOT / "README.md",
         "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+        # The READMEs' detailed rules, split out into docs/reference*.md (not the repository safety "reference" above).
+        **feather_support.REFERENCE_FILES,
     }
-    README_SECTIONS = {"README.md": "### Repository safety", "README.zh-TW.md": "### 儲存庫安全"}
+    README_SECTIONS = {"README.md": "### Repository safety", "README.zh-TW.md": "### 儲存庫安全",
+                       "reference.md": "### Repository safety", "reference.zh-TW.md": "### 儲存庫安全"}
 
     @classmethod
     def source(cls, name: str) -> str:
@@ -55,7 +61,8 @@ class RepositorySafetyTests(unittest.TestCase):
         '<procedure>#<step number>'; '<procedure>#after' (the paragraph that compares the workspace after a call);
         'plan-review.md#after' likewise; 'delegation SKILL.md#security analysis' (that paragraph);
         'delegation SKILL.md#<heading>'; 'command#intro', 'command#gated' and 'command#<bullet label>';
-        'review-state.md#<bullet label>'; '<README>#section' (the Repository safety section) or '<README>#<rule label>'."""
+        'review-state.md#<bullet label>'; '<README or reference>#section' (the Repository safety section) or
+        '<README or reference>#<rule label>'."""
         path, _, part = name.partition("#")
         text = read(cls.FILES[path])
         if not part:
@@ -2041,8 +2048,9 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("這項檢查失敗時，該次呼叫會被擋下，呼叫之後則是結果無法確認。", chinese[1])):
             with self.subTest(phrase=phrase[:40]):
                 self.assertIn(phrase, sentence)
-        for index, (name, label) in enumerate((("README.md", "- **Before a review:** "),
-                                               ("README.zh-TW.md", "- **審查之前：**"))):
+        # The section's bullets are in each language's reference; the scans and absence pins cover the README too.
+        for index, (name, readme, label) in enumerate((("reference.md", "README.md", "- **Before a review:** "),
+                                                       ("reference.zh-TW.md", "README.zh-TW.md", "- **審查之前：**"))):
             before = next(line for line in self.source(f"{name}#section").splitlines() if line.startswith(label))
             after_call = self.README_FILTER[4][index]
             pair = [sentence[index] for sentence in self.README_FILTER_INDEX_FREE]
@@ -2052,11 +2060,11 @@ class RepositorySafetyTests(unittest.TestCase):
             # The summary follows the sentence on the comparison after a call, in order.
             self.assertLess(before.index(after_call), before.index(pair[0]))
             self.assertLess(before.index(pair[0]), before.index(pair[1]))
-            # The variable is named only in that sentence of the README.
-            text = read(config.ROOT / name)
+            # The variable is named only in that sentence of the reference and README.
+            text = read(RepositorySafetyTests.FILES[name]) + "\n" + read(RepositorySafetyTests.FILES[readme])
             self.assertEqual(text.count("GIT_INDEX_FILE"), 1)
             # Absence pins: the earlier summary of the dropped precondition, in both languages.
-            for phrase in self.README_FILTER_INDEX_REMOVED[name]:
+            for phrase in self.README_FILTER_INDEX_REMOVED[readme]:
                 with self.subTest(readme=name, removed=phrase[:40]):
                     self.assertNotIn(phrase, text)
 
@@ -2099,8 +2107,10 @@ class RepositorySafetyTests(unittest.TestCase):
         exception on this machine, and its Before a review bullet summarises the outcomes and the comparison after a
         call in place of the stop before every such call, paired in both languages; the replaced wording is gone and no
         other sentence says that a review runs no program the repository chose."""
-        for index, (name, labels) in enumerate((("README.md", ("- **Git commands:** ", "- **Before a review:** ")),
-                                                ("README.zh-TW.md", ("- **Git 指令：**", "- **審查之前：**")))):
+        # The section's bullets are in each language's reference; the scans and absence pins cover the README too.
+        for index, (name, readme, labels) in enumerate((
+                ("reference.md", "README.md", ("- **Git commands:** ", "- **Before a review:** ")),
+                ("reference.zh-TW.md", "README.zh-TW.md", ("- **Git 指令：**", "- **審查之前：**")))):
             section = self.source(f"{name}#section")
             git, before = (next(line for line in section.splitlines() if line.startswith(label)) for label in labels)
             with self.subTest(readme=name, bullet="Git commands"):
@@ -2114,8 +2124,8 @@ class RepositorySafetyTests(unittest.TestCase):
                 self.assertEqual(positions, sorted(positions))
                 follows = ("Where it must follow includes", "必須跟隨 include 時")[index]
                 self.assertLess(positions[-1], before.index(follows))
-            text = read(config.ROOT / name)
-            for phrase in self.README_FILTER_REMOVED[name]:
+            text = read(RepositorySafetyTests.FILES[name]) + "\n" + read(RepositorySafetyTests.FILES[readme])
+            for phrase in self.README_FILTER_REMOVED[readme]:
                 with self.subTest(readme=name, removed=phrase[:40]):
                     self.assertNotIn(phrase, text)
             # Every sentence that says a review runs no program the repository chose names the exception.
@@ -2155,9 +2165,9 @@ class RepositorySafetyTests(unittest.TestCase):
             with self.subTest(phrase=phrase[:40]):
                 self.assertIn(phrase, sentence)
         # Finding N6: the residual risk "stated below" is the residual paragraph's sentence on settings a working-tree
-        # include sets, which follows the Before a review bullet in both languages.
-        for index, name in enumerate(("README.md", "README.zh-TW.md")):
-            text = read(config.ROOT / name)
+        # include sets, which follows the Before a review bullet in both languages' reference.
+        for index, name in enumerate(("reference.md", "reference.zh-TW.md")):
+            text = read(RepositorySafetyTests.FILES[name])
             with self.subTest(readme=name, residual="below"):
                 self.assertLess(text.index(self.README_FILTER[1][index]),
                                 text.index(self.README_REVIEW_READ_RESIDUAL[0][index]))
@@ -3429,11 +3439,11 @@ class RepositorySafetyTests(unittest.TestCase):
     # Item 7: both READMEs summarise items 1 to 6 and D1 to D6, paired, keeping the "instructions to the model" words.
     README = (
         ("Every review reads your repository under one set of rules, the [repository safety "
-         "reference](skills/delegation/references/repository-safety.md): main and every role follow it for every "
+         "reference](../skills/delegation/references/repository-safety.md): main and every role follow it for every "
          "repository read a plan review, code review, outcome verification, Adversarial review or security analysis "
          "makes, for main's preparation of each call and its comparison of the workspace afterwards, whatever the "
          "claim's classification and including unchanged dependencies.",
-         "每次審查都依同一套規則讀取你的儲存庫，也就是[儲存庫安全參考](skills/delegation/references/repository-safety.md)："
+         "每次審查都依同一套規則讀取你的儲存庫，也就是[儲存庫安全參考](../skills/delegation/references/repository-safety.md)："
          "計畫審查、程式碼審查、結果驗證、對抗式審查或安全分析對儲存庫的每一次讀取、主 Agent 為每次呼叫所做的準備，以及呼叫後"
          "對工作區的比對，主 Agent 與每個角色都遵守它，不論 claim 如何分類，也包括沒有變更的相依項目。"),
         # Deviation D-6: the threat model as D1 states it.
@@ -3529,6 +3539,9 @@ class RepositorySafetyTests(unittest.TestCase):
         # Repo trust default ticket 02 (Acceptance 8): dynamic probing follows the new default in Security-critical work.
         README_PROBING,
     )
+    # Where each pointer is: the Commit rule and the probing sentence moved to the reference, the table row stayed.
+    README_POINTER_PLACES = (("reference.md", "reference.zh-TW.md"), ("README.md", "README.zh-TW.md"),
+                             ("reference.md", "reference.zh-TW.md"))
 
     # Repository safety follow-ups C1 item 4: the residual risks of review reads, summarised in the paragraph that states
     # D6, after the statement that D5 is not a sandbox, paired in both languages.
@@ -3561,7 +3574,8 @@ class RepositorySafetyTests(unittest.TestCase):
         statement that D5 is not a sandbox and before the pointer to ADR 0011, the settings a working-tree include sets,
         the linked leading directories and replacement refs as newly accepted residual risk, paired in both languages;
         no other sentence of either README speaks of replacement refs or `--no-replace-objects`."""
-        for index, name in enumerate(("README.md", "README.zh-TW.md")):
+        # The paragraph moved with the section's rules to each language's reference; the README keeps a summary.
+        for index, (name, readme) in enumerate((("reference.md", "README.md"), ("reference.zh-TW.md", "README.zh-TW.md"))):
             section = self.source(f"{name}#section")
             paragraph = next(p for p in section.split("\n\n") if p.startswith(("These rules are instructions to the "
                                                                                "model", "這些規則是給模型的指示")))
@@ -3573,8 +3587,8 @@ class RepositorySafetyTests(unittest.TestCase):
                 self.assertEqual(positions, sorted(positions))
                 self.assertLess(paragraph.index(self.README_RESIDUAL[1][index]), positions[0])
                 self.assertLess(positions[-1], paragraph.index("[ADR 0011]"))
-            # Item 6: the only sentences that speak of replacement refs are the pinned ones.
-            text = read(config.ROOT / name)
+            # Item 6: the only sentences that speak of replacement refs are the pinned ones, in the reference and README.
+            text = read(RepositorySafetyTests.FILES[name]) + "\n" + read(RepositorySafetyTests.FILES[readme])
             split = [s.strip() for line in text.splitlines()
                      for s in (self.sentences(line) if index == 0 else re.split(r"(?<=。)", line)) if s.strip()]
             pinned = {pair[index] for pair in self.README_REVIEW_READ_RESIDUAL}
@@ -3590,14 +3604,15 @@ class RepositorySafetyTests(unittest.TestCase):
     def test_readmes_summarise_the_rules_in_both_languages(self):
         for english, chinese in self.README:
             with self.subTest(sentence=english[:60]):
-                self.assert_pinned({"README.md#section": (english,), "README.zh-TW.md#section": (chinese,)})
+                self.assert_pinned({"reference.md#section": (english,), "reference.zh-TW.md#section": (chinese,)})
         # Finding F1: the summary that named only `git status` and working-tree diffs is replaced in both languages.
-        self.assertNotIn("never runs `git status` or a working-tree diff,", self.source("README.md"))
-        self.assertNotIn("絕不執行 `git status` 或工作樹 diff，", self.source("README.zh-TW.md"))
+        for english_place, chinese_place in (("README.md", "README.zh-TW.md"), ("reference.md", "reference.zh-TW.md")):
+            self.assertNotIn("never runs `git status` or a working-tree diff,", self.source(english_place))
+            self.assertNotIn("絕不執行 `git status` 或工作樹 diff，", self.source(chinese_place))
         for english, chinese in self.README_LABELS:
             with self.subTest(label=english):
-                self.assertIn(f"\n- **{english}:** ", self.source("README.md#section"))
-                self.assertIn(f"\n- **{chinese}：**", self.source("README.zh-TW.md#section"))
+                self.assertIn(f"\n- **{english}:** ", self.source("reference.md#section"))
+                self.assertIn(f"\n- **{chinese}：**", self.source("reference.zh-TW.md#section"))
         # The section sits after Security-critical work and before the automatic review switch in each README.
         for name, (before, section, after) in {
                 "README.md": ("### Security-critical work", "### Repository safety", "### Automatic review switch"),
@@ -3613,8 +3628,8 @@ class RepositorySafetyTests(unittest.TestCase):
         when asked; the opening paragraph states the threat model as D1 does; and the paragraph that states D6 names
         item 7's residual risks and says that D5 is not a sandbox, keeping the "instructions to the model" words. Both
         languages say the same, and the summaries of the removed operation profile and its checks are gone."""
-        for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
-                                               ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
+        for index, (name, label) in enumerate((("reference.md", "- **Before add, commit, tag or push:** "),
+                                               ("reference.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
             section = self.source(f"{name}#section")
             bullet = next(line for line in section.splitlines() if line.startswith(label))
             # Repo trust default ticket 02: the bold first point precedes the opening paragraph.
@@ -3640,8 +3655,8 @@ class RepositorySafetyTests(unittest.TestCase):
                 self.assertLess(paragraph.index(d6), paragraph.index(self.README_RESIDUAL[0][index]))
                 self.assertLess(paragraph.index(self.README_RESIDUAL[0][index]),
                                 paragraph.index(self.README_RESIDUAL[1][index]))
-            text = read(config.ROOT / name)
-            for phrase in self.README_WRITING_REMOVED[name]:
+            text = reference_and_readme(name)
+            for phrase in self.README_WRITING_REMOVED[name.replace("reference", "README")]:
                 with self.subTest(readme=name, removed=phrase):
                     self.assertNotIn(phrase, text)
         # Each residual risk item 7 lists is named in the English summary, and the isolated environments it names.
@@ -3670,8 +3685,8 @@ class RepositorySafetyTests(unittest.TestCase):
         goes through a checked file main writes with its file tool outside the project, and that every tag, branch,
         remote and refspec passes the name rule, a failing one leaving the operation to the user, paired in both
         languages; neither README shows a message by `-m`."""
-        for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
-                                               ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
+        for index, (name, label) in enumerate((("reference.md", "- **Before add, commit, tag or push:** "),
+                                               ("reference.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
             section = self.source(f"{name}#section")
             bullet = next(line for line in section.splitlines() if line.startswith(label))
             for pair in self.README_TEXT_OFF:
@@ -3684,7 +3699,7 @@ class RepositorySafetyTests(unittest.TestCase):
                                  - (1 if index == 0 else 0))
                 self.assertLess(bullet.index(self.README_TEXT_OFF[0][index]), bullet.index(self.README_TEXT_OFF[1][index]))
                 self.assertLess(bullet.index(self.README_TEXT_OFF[1][index]), bullet.index(hooks))
-            self.assertNotRegex(read(config.ROOT / name), self.MESSAGE_OPTION)
+            self.assertNotRegex(reference_and_readme(name), self.MESSAGE_OPTION)
         english = [pair[0] for pair in self.README_TEXT_OFF]
         chinese = [pair[1] for pair in self.README_TEXT_OFF]
         for phrase in ("whatever its source and including attribution lines", "main writes with its file tool, never "
@@ -3736,16 +3751,16 @@ class RepositorySafetyTests(unittest.TestCase):
                 ("否則它會把 push 留給你自己執行。", chinese[2])):
             with self.subTest(phrase=phrase[:40]):
                 self.assertIn(phrase, sentence)
-        for index, (name, label) in enumerate((("README.md", "- **Before add, commit, tag or push:** "),
-                                               ("README.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
+        for index, (name, label) in enumerate((("reference.md", "- **Before add, commit, tag or push:** "),
+                                               ("reference.zh-TW.md", "- **add、commit、tag 或 push 之前：**"))):
             bullet = next(line for line in self.source(f"{name}#section").splitlines() if line.startswith(label))
             with self.subTest(readme=name):
                 self.assert_whole_sentence(self.README_TEXT_OFF[2][index], bullet)
                 hooks = next(pair[index] for pair in self.README_WRITING if pair[0].startswith("Main skips hooks"))
                 self.assertLess(bullet.index(self.README_TEXT_OFF[1][index]), bullet.index(self.README_TEXT_OFF[2][index]))
                 self.assertLess(bullet.index(self.README_TEXT_OFF[2][index]), bullet.index(hooks))
-            text = read(config.ROOT / name)
-            for phrase in self.README_TEXT_OFF_REPLACED[name]:
+            text = reference_and_readme(name)
+            for phrase in self.README_TEXT_OFF_REPLACED[name.replace("reference", "README")]:
                 with self.subTest(readme=name, removed=phrase[:40]):
                     self.assertNotIn(phrase, text)
 
@@ -3768,24 +3783,24 @@ class RepositorySafetyTests(unittest.TestCase):
                 with self.subTest(role=path.name):
                     self.assertIn(self.PATHS_CLOSING_REPLACED, text)
                     self.assertNotIn("Before add, commit, tag or push states", text)
-        for index, name in enumerate(("README.md", "README.zh-TW.md")):
+        for index, name in enumerate(("reference.md", "reference.zh-TW.md")):
             bullet = self.source(f"{name}#section").split("\n- **" + ("File reads:** " if index == 0 else "讀取檔案："),
                                                           1)[1].split("\n", 1)[0]
             with self.subTest(readme=name):
                 self.assertTrue(bullet.endswith(self.README_FILE_NAMES[index]), bullet[-120:])
-                self.assertNotIn(self.README_FILE_NAMES_REPLACED[index], read(config.ROOT / name))
+                self.assertNotIn(self.README_FILE_NAMES_REPLACED[index], reference_and_readme(name))
         self.assertIn("never does, except a name that passed the same rule under Before add, commit, tag or push, "
                       "entering only as a quoted literal as that bullet says.", self.README_FILE_NAMES[0])
         self.assertIn("只有在「add、commit、tag 或 push 之前」通過同一規則的名稱例外，而且只照那一項所說，以加上引號的字面值放進"
                       "指令。", self.README_FILE_NAMES[1])
 
     def test_readmes_point_to_the_section_from_the_commit_rule_table_and_probing(self):
-        for english, chinese in self.README_POINTERS:
+        for (english, chinese), (en_place, zh_place) in zip(self.README_POINTERS, self.README_POINTER_PLACES, strict=True):
             with self.subTest(sentence=english[:60]):
-                self.assertIn(english, self.source("README.md"))
-                self.assertIn(chinese, self.source("README.zh-TW.md"))
-        self.assertIn(self.README_POINTERS[0][0], self.source("README.md#Commit"))
-        self.assertIn(self.README_POINTERS[0][1], self.source("README.zh-TW.md#Commit 條件"))
+                self.assertIn(english, self.source(en_place))
+                self.assertIn(chinese, self.source(zh_place))
+        self.assertIn(self.README_POINTERS[0][0], self.source("reference.md#Commit"))
+        self.assertIn(self.README_POINTERS[0][1], self.source("reference.zh-TW.md#Commit 條件"))
 
     def test_no_sentence_lets_a_role_read_through_a_link_or_an_unchecked_directory(self):
         # Item 8, abuse check: every sentence of the reference's Paths and names that mentions following links,
@@ -4065,7 +4080,7 @@ class RoleRepositorySafetyTests(unittest.TestCase):
 
     @classmethod
     def readme_row(cls, name: str, role: str) -> str:
-        text = read(config.ROOT / name)
+        text = read(RepositorySafetyTests.FILES[name])
         lines = text.splitlines()
         start = next(i for i, line in enumerate(lines) if line.startswith(cls.README_TABLES[name]))
         for line in lines[start + 2:]:
@@ -4245,12 +4260,13 @@ class RoleRepositorySafetyTests(unittest.TestCase):
                     self.assertIn(self.README_ROWS["no shell"][index], self.readme_row(name, role))
             with self.subTest(readme=name, role="reviewer"):
                 self.assertIn(self.README_ROWS["reviewer"][index], self.readme_row(name, "reviewer"))
-            section = RepositorySafetyTests.source(f"{name}#section")
+            # The role rows stay in each README's tables; the section's Roles bullet is in each language's reference.
+            section = RepositorySafetyTests.source(f"{name.replace('README', 'reference')}#section")
             for pair in self.README_ROLES:
                 with self.subTest(readme=name, sentence=pair[index][:40]):
                     self.assert_whole_sentence(pair[index], section)
-        self.assertIn("\n- **Roles:** ", RepositorySafetyTests.source("README.md#section"))
-        self.assertIn("\n- **角色：**", RepositorySafetyTests.source("README.zh-TW.md#section"))
+        self.assertIn("\n- **Roles:** ", RepositorySafetyTests.source("reference.md#section"))
+        self.assertIn("\n- **角色：**", RepositorySafetyTests.source("reference.zh-TW.md#section"))
         # The earlier reviewer row that read the diff from the workspace is replaced in both languages.
         self.assertNotIn("Reads the diff itself from a base revision, runs non-modifying static checks",
                          read(config.ROOT / "README.md"))
@@ -4258,7 +4274,7 @@ class RoleRepositorySafetyTests(unittest.TestCase):
         for name, phrases in self.README_REMOVED.items():
             for phrase in phrases:
                 with self.subTest(readme=name, removed=phrase):
-                    self.assertNotIn(phrase, read(config.ROOT / name))
+                    self.assertNotIn(phrase, reference_and_readme(name.replace("README", "reference")))
 
     def test_the_paragraph_confines_a_role_to_the_role_forms(self):
         """Adversarial review of C2 (BROKEN), finding F1, regression and abuse check: the shell roles' paragraph names
@@ -5469,6 +5485,8 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
     assert_whole_sentence = feather_support.adversarial_retries_assert_whole_sentence
     sentences = staticmethod(feather_support.sentences)
     READMES = ("README.md", "README.zh-TW.md")
+    # The section's rules moved to each language's reference; the README keeps the bold first point and a summary.
+    REFERENCES = ("reference.md", "reference.zh-TW.md")
 
     # The bold first point of each Repository safety section, paired.
     BOLD = (
@@ -5512,7 +5530,7 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
             with self.subTest(readme=name):
                 self.assertEqual(section.split("\n\n")[0], self.BOLD[index])
                 # No other bold paragraph precedes it in the section, and it is stated once in the README.
-                self.assertEqual(read(config.ROOT / name).count(self.BOLD[index]), 1)
+                self.assertEqual(read(RepositorySafetyTests.FILES[name]).count(self.BOLD[index]), 1)
         english, chinese = self.BOLD
         for phrase in ("someone else's change", "say in your own message that it comes from someone else",
                        "a review runs your repository's code by default",
@@ -5527,7 +5545,7 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
     def test_readmes_say_the_threat_model_governs_reads(self):
         """Acceptance 8 (the introduction): the opening paragraph keeps the threat model for reads and ends by saying
         that Running repository code, not that threat model, decides what runs."""
-        for index, name in enumerate(self.READMES):
+        for index, name in enumerate(self.REFERENCES):
             opening = self.source(f"{name}#section").strip().split("\n\n")[1]
             with self.subTest(readme=name):
                 self.assertTrue(opening.endswith(self.THREAT_READS[index]))
@@ -5539,7 +5557,7 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
         at the reviewed commit, the user's own statements as the only stop, restriction or allowance, their session
         lifetime and what a compaction keeps, what a stop does not cover, and the isolated environment for someone
         else's code."""
-        for index, name in enumerate(self.READMES):
+        for index, name in enumerate(self.REFERENCES):
             bullet = next(line for line in self.source(f"{name}#section").splitlines()
                           if line.startswith(self.RUNNING_LABELS[index]))
             expected = (self.RUNNING_LABELS[0] + " ".join(pair[0] for pair in self.R.README_RUNNING) if index == 0
@@ -5594,13 +5612,13 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
         """Acceptance 8: the Before a review bullet runs a filter driver when main hashes content under the review's own
         stops and allowance, review Git commands still running no program the repository chose apart from it; and
         Security-critical work's dynamic probing follows the same default, paired in both languages."""
-        for index, name in enumerate(self.READMES):
+        for index, name in enumerate(self.REFERENCES):
             before = next(line for line in self.source(f"{name}#section").splitlines()
                           if line.startswith(("- **Before a review:** ", "- **審查之前：**")[index]))
             with self.subTest(readme=name, bullet="Before a review"):
                 self.assert_whole_sentence(self.R.README_FILTER[0][index], before)
                 self.assert_whole_sentence(self.R.README_FILTER[2][index], before)
-            security = read(config.ROOT / name).split(("\n### Security-critical work\n", "\n### 安全關鍵工作\n")[index],
+            security = read(RepositorySafetyTests.FILES[name]).split(("\n### Security-critical work\n", "\n### 安全關鍵工作\n")[index],
                                                       1)[1].split("\n### ", 1)[0]
             with self.subTest(readme=name, section="Security-critical work"):
                 self.assert_whole_sentence(self.R.README_PROBING[index], security)
@@ -5613,17 +5631,17 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
         execution depend on the change being written by the user or in this session, or keeps outcome 1's trust and
         attribution conditions or its stop after hashing, in any wording these patterns catch; and no bullet that
         decides what runs, nor Security-critical work's probing, speaks of a change neither the user nor main wrote."""
-        english = read(config.ROOT / "README.md")
+        english = reference_and_readme("reference.md")
         for pattern in (self.TRUST_QUESTION, self.AUTHORSHIP, self.OUTCOME_1_REMOVED):
             for match in pattern.finditer(english):
                 with self.subTest(pattern=pattern.pattern[:30], found=english[max(0, match.start() - 40):match.end() + 20]):
                     self.fail("README.md keeps a replaced statement")
         self.assertNotIn("Main asks you about trust", english)
-        chinese = read(config.ROOT / "README.zh-TW.md")
+        chinese = reference_and_readme("reference.zh-TW.md")
         for phrase in self.ZH_REMOVED:
             with self.subTest(removed=phrase):
                 self.assertNotIn(phrase, chinese)
-        for index, name in enumerate(self.READMES):
+        for index, name in enumerate(self.REFERENCES):
             section = self.source(f"{name}#section")
             labels = (("- **Git commands:** ", "- **Running repository code:** ", "- **Before a review:** "),
                       ("- **Git 指令：**", "- **執行儲存庫程式碼：**", "- **審查之前：**"))[index]
@@ -5764,17 +5782,18 @@ class RepoTrustDefaultDocsTests(unittest.TestCase):
                 for sentence in kept:
                     self.assertIn(sentence, before)
 
+    # The links as the reference writes them, relative to docs/.
     README_ADR_LINKS = (
-        "See [ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) and [ADR 0014]"
-        "(docs/adr/0014-reviews-execute-repository-code-by-default.md).",
-        "詳見 [ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) 與 [ADR 0014]"
-        "(docs/adr/0014-reviews-execute-repository-code-by-default.md)。",
+        "See [ADR 0011](adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) and [ADR 0014]"
+        "(adr/0014-reviews-execute-repository-code-by-default.md).",
+        "詳見 [ADR 0011](adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) 與 [ADR 0014]"
+        "(adr/0014-reviews-execute-repository-code-by-default.md)。",
     )
 
     def test_readmes_point_to_adr_0014_after_the_residual_risks(self):
         """Acceptance 7 and 8: the paragraph that states the residual risks ends by pointing to ADR 0014 beside ADR
         0011, in both languages."""
-        for index, name in enumerate(self.READMES):
+        for index, name in enumerate(self.REFERENCES):
             paragraph = next(p for p in self.source(f"{name}#section").split("\n\n")
                              if p.startswith(("These rules are instructions to the model", "這些規則是給模型的指示")[index]))
             with self.subTest(readme=name):

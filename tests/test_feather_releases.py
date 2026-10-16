@@ -13,8 +13,8 @@ class SecurityRoutingReleaseTests(unittest.TestCase):
     """0.18.0 C7 (docs/specs/security-critical-routing.md): the release requires setup update and records its validation."""
 
     README = {
-        "README.md": "0.18.0 adds the `adversary` role and changes the executor role definition, the delegation guidance and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` (adversary is missing, and the executor role and the delegation guidance are from an older template), `model`, `review` and session export ask for setup update first, in `auto` and in `off`, and a required Adversarial review is blocked because adversary is missing.",
-        "README.zh-TW.md": "0.18.0 新增 `adversary` 角色，並改了 executor 的角色定義、分派指引與自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`（缺少 adversary，executor 角色與分派指引來自較舊的範本），`model`、`review` 與 session export 也會要求先做 setup update，需要的對抗式審查也會因缺少 adversary 而受阻。",
+        "docs/reference.md": "0.18.0 adds the `adversary` role and changes the executor role definition, the delegation guidance and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` (adversary is missing, and the executor role and the delegation guidance are from an older template), `model`, `review` and session export ask for setup update first, in `auto` and in `off`, and a required Adversarial review is blocked because adversary is missing.",
+        "docs/reference.zh-TW.md": "0.18.0 新增 `adversary` 角色，並改了 executor 的角色定義、分派指引與自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`（缺少 adversary，executor 角色與分派指引來自較舊的範本），`model`、`review` 與 session export 也會要求先做 setup update，需要的對抗式審查也會因缺少 adversary 而受阻。",
     }
 
     ENTRY = (
@@ -49,9 +49,9 @@ class ReviewFollowUpsReleaseTests(unittest.TestCase):
 
     # C8 item 3: the Updates sections, paired in both languages.
     UPDATES = (
-        ("## Updates and validation\n",
+        ("## Version history\n",
          "0.19.0 changes the executor, security-executor, adversary and reviewer role definitions, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` with those four roles from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`."),
-        ("## 更新、移除與驗證\n",
+        ("## 版本紀錄\n",
          "0.19.0 改了 executor、security-executor、adversary 與 reviewer 的角色定義，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出這四個角色來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。"),
     )
 
@@ -87,7 +87,7 @@ class ReviewFollowUpsReleaseTests(unittest.TestCase):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
     def test_updates_sections_require_setup_update_in_both_languages(self):
-        for name, (heading, sentence) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+        for name, (heading, sentence) in zip(("docs/reference.md", "docs/reference.zh-TW.md"), self.UPDATES):
             with self.subTest(readme=name):
                 self.assertIn(sentence, self.section(self.text(name), heading))
 
@@ -115,10 +115,10 @@ class StopThresholdReleaseTests(unittest.TestCase):
 
     # C4 item 3: the Updates sections, paired in both languages.
     UPDATES = (
-        ("## Updates and validation\n",
+        ("## Version history\n",
          "0.20.0 adds the Stop threshold and the `/cc-feather:stop-threshold` command and changes no role definition or guidance template, so existing installations need only the plugin update and a fresh session, and their guidance and state stay unchanged until a Stop threshold is saved.",
          "A 0.19.x or older configuration tool rejects a scope with a saved Stop threshold, so before going back to one, set it to `default` in that scope; a task or session choice needs nothing."),
-        ("## 更新、移除與驗證\n",
+        ("## 版本紀錄\n",
          "0.20.0 新增停止門檻與 `/cc-feather:stop-threshold` 指令，沒有改任何角色定義或指引範本，所以既有安裝只要更新 plugin 再開新 session，在儲存停止門檻之前，指引與 state 都不會改變。",
          "0.19.x 或更舊的設定工具不接受已儲存停止門檻的範圍，所以要回到這些版本前，先在該範圍把它設回 `default`；task 或 session 的指定不需要處理。"),
     )
@@ -151,7 +151,7 @@ class StopThresholdReleaseTests(unittest.TestCase):
     # The manifest version is pinned by the current release's tests (0.21.0 C5 item 1).
 
     def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
-        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+        for name, (heading, *sentences) in zip(("docs/reference.md", "docs/reference.zh-TW.md"), self.UPDATES):
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertIn(sentence, self.section(self.text(name), heading))
@@ -176,11 +176,11 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
 
     # C5 item 3: the Updates sections, paired in both languages.
     UPDATES = (
-        ("## Updates and validation\n",
+        ("## Version history\n",
          "0.21.0 changes the reviewer, verifier, adversary, analyst, scout and Explore role definitions and the automatic review guidance, so run setup update in every scope where delegation is installed, then start a fresh session; until then `check` reports `role_update_required: true` with those six roles from an older template, and in `auto` also the delegation guidance, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`.",
          "Reviewer can now answer INCONCLUSIVE when it could not obtain the evidence a code review needs, and code review counts it like an INCONCLUSIVE outcome verification.",
          "To go back to 0.20.0, no remove is needed: 0.20.0 reads the state 0.21.0 writes, and its own setup update re-renders its role templates and guidance."),
-        ("## 更新、移除與驗證\n",
+        ("## 版本紀錄\n",
          "0.21.0 改了 reviewer、verifier、adversary、analyst、scout 與 Explore 的角色定義和自動審查指引，所以每個裝有分派元件的範圍都要跑 setup update，再開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出這六個角色來自較舊的範本，`auto` 下還會指出分派指引來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。",
          "reviewer 現在可以在拿不到程式碼審查需要的證據時回答 INCONCLUSIVE，程式碼審查計算它的方式與結果驗證的 INCONCLUSIVE 相同。",
          "要回到 0.20.0 不需要先移除：0.20.0 讀得懂 0.21.0 寫入的 state，它自己的 setup update 會重新寫入它的角色範本與指引。"),
@@ -223,7 +223,7 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     # The manifest version is pinned by the current release's tests (0.22.0 C5 item 1).
 
     def test_updates_sections_require_setup_update_and_name_inconclusive_in_both_languages(self):
-        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+        for name, (heading, *sentences) in zip(("docs/reference.md", "docs/reference.zh-TW.md"), self.UPDATES):
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertIn(sentence, self.section(self.text(name), heading))
@@ -272,10 +272,10 @@ class RepositorySafetyFollowUpsReleaseTests(unittest.TestCase):
 
     # C5 item 3: the Updates sections, paired in both languages.
     UPDATES = (
-        ("## Updates and validation\n",
+        ("## Version history\n",
          "0.22.0 changes no role definition, guidance template or configuration tool, so existing installations need only the plugin update and a fresh session; no setup update is needed.",
          "To go back to 0.21.0, reinstall the 0.21.0 plugin; no setup change is needed, since 0.22.0 changes no installed file or state."),
-        ("## 更新、移除與驗證\n",
+        ("## 版本紀錄\n",
          "0.22.0 沒有改任何角色定義、指引範本或設定工具，所以既有安裝只要更新 plugin 再開新 session，不需要做 setup update。",
          "要回到 0.21.0，重新安裝 0.21.0 的 plugin 即可；不需要變更 setup，因為 0.22.0 沒有改任何已安裝的檔案或 state。"),
     )
@@ -305,7 +305,7 @@ class RepositorySafetyFollowUpsReleaseTests(unittest.TestCase):
     # The manifest version is pinned by the current release's tests (0.23.0 ticket 06).
 
     def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
-        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+        for name, (heading, *sentences) in zip(("docs/reference.md", "docs/reference.zh-TW.md"), self.UPDATES):
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertIn(sentence, self.section(self.text(name), heading))
@@ -328,10 +328,10 @@ class ClaimsAtImplementationReleaseTests(unittest.TestCase):
 
     # The Updates sections, paired in both languages, at the start of the release notes.
     UPDATES = (
-        ("## Updates and validation\n",
+        ("## Version history\n",
          "0.23.0 changes no role definition, guidance template or configuration tool, so existing installations need only the plugin update and a fresh session; no setup update is needed.",
          "To go back to 0.22.0, reinstall the 0.22.0 plugin; no setup change is needed, since 0.23.0 changes no installed file or state."),
-        ("## 更新、移除與驗證\n",
+        ("## 版本紀錄\n",
          "0.23.0 沒有改任何角色定義、指引範本或設定工具，所以既有安裝只要更新 plugin 再開新 session，不需要做 setup update。",
          "要回到 0.22.0，重新安裝 0.22.0 的 plugin 即可；不需要變更 setup，因為 0.23.0 沒有改任何已安裝的檔案或 state。"),
     )
@@ -363,7 +363,7 @@ class ClaimsAtImplementationReleaseTests(unittest.TestCase):
     # The manifest version is pinned by the current release's tests (0.24.0 ticket 04).
 
     def test_updates_sections_need_only_the_plugin_update_in_both_languages(self):
-        for name, (heading, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+        for name, (heading, *sentences) in zip(("docs/reference.md", "docs/reference.zh-TW.md"), self.UPDATES):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
@@ -392,10 +392,10 @@ class CompletionCriteriaReleaseTests(unittest.TestCase):
 
     # The Updates sections, paired in both languages, at the start of the release notes.
     UPDATES = (
-        ("## Updates and validation\n",
+        ("## Version history\n",
          "0.24.0 changes the reviewer role definition, so existing installations need the plugin update and then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` reports `role_update_required: true` with reviewer from an older template, and `model`, `review` and session export ask for setup update first, in `auto` and in `off`.",
          "To go back to 0.23.0, reinstall the 0.23.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.23.0 reviewer role definition; no remove is needed, since 0.24.0 changes no configuration tool or state."),
-        ("## 更新、移除與驗證\n",
+        ("## 版本紀錄\n",
          "0.24.0 改了 reviewer 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，`auto` 與 `off` 下 check 都會回報 `role_update_required: true`，並指出 reviewer 來自較舊的範本，`model`、`review` 與 session export 也會要求先做 setup update。",
          "要回到 0.23.0，重新安裝 0.23.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.23.0 的 reviewer 角色定義；不需要先移除，因為 0.24.0 沒有改設定工具或 state。"),
     )
@@ -443,7 +443,7 @@ class CompletionCriteriaReleaseTests(unittest.TestCase):
 
     def test_updates_sections_require_setup_update_in_both_languages(self):
         previous = ClaimsAtImplementationReleaseTests.UPDATES
-        for name, (heading, *sentences), (_, previous_first, _) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        for name, (heading, *sentences), (_, previous_first, _) in zip(("docs/reference.md", "docs/reference.zh-TW.md"), self.UPDATES, previous):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
@@ -485,23 +485,36 @@ class RepoTrustDefaultReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
+    # How many of the note's sentences stay in the README's Updates section, and the reference's version history
+    # heading that holds the rest, with every earlier release's notes.
+    KEPT_IN_README = 2
+    HISTORY_HEADINGS = ("## Version history\n", "## 版本紀錄\n")
+
     # The manifest version is pinned by the current release's tests (0.26.0 ticket 07).
 
     def test_updates_sections_start_with_the_execution_default_in_both_languages(self):
         previous = CompletionCriteriaReleaseTests.UPDATES
         newer = RetainedPassesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, previous_first, _), (_, _, *newer_sentences) in zip(
-                ("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
+        for (name, reference), (heading, opening, *sentences), (_, previous_first, _), (_, _, *newer_sentences), history \
+                in zip((("README.md", "docs/reference.md"), ("README.zh-TW.md", "docs/reference.zh-TW.md")), self.UPDATES,
+                       previous, newer, self.HISTORY_HEADINGS):
+            # The README keeps the note's first two sentences; the rest is in the reference's version history.
+            kept, moved = sentences[:self.KEPT_IN_README], sentences[self.KEPT_IN_README:]
             section = self.section(self.text(name), heading)
-            for sentence in sentences:
-                with self.subTest(readme=name, sentence=sentence[:30]):
-                    self.assertEqual(section.count(sentence), 1)
+            history_section = self.section(self.text(reference), history)
+            for place, part, text in ((name, kept, section), (reference, moved, history_section)):
+                for sentence in part:
+                    with self.subTest(readme=place, sentence=sentence[:30]):
+                        self.assertEqual(text.count(sentence), 1)
             # The 0.25.0 note starts right after the 0.26.0 note, its sentences in order, before 0.24.0's.
             with self.subTest(readme=name, order=True):
                 after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
-                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
-                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                self.assertTrue(after_newer.lstrip(" ").startswith(kept[0]))
+                for earlier, later in zip(kept, kept[1:]):
                     self.assertLess(section.index(earlier), section.index(later))
+            with self.subTest(readme=reference, order=True):
+                for earlier, later in zip(moved, moved[1:] + [previous_first]):
+                    self.assertLess(history_section.index(earlier), history_section.index(later))
 
     # The validation entry: the setup update and the changed role templates, the rehearsal's single session, the
     # candidate loaded alone, its four results with each brief's reason, the S7 baseline and the tag.

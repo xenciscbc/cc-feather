@@ -40,12 +40,17 @@ class CompletionCriteriaTests(unittest.TestCase):
         "CONTEXT.md": "CONTEXT.md",
         "README.md": "README.md",
         "README.zh-TW.md": "README.zh-TW.md",
+        "reference.md": "docs/reference.md",
+        "reference.zh-TW.md": "docs/reference.zh-TW.md",
         "ADR 0013": f"docs/adr/{ADR_0013}",
         "ADR 0006": f"docs/adr/{ADR_0006}",
         "ADR 0008": f"docs/adr/{ADR_0008}",
         "adversarial-review.md": "skills/delegation/references/adversarial-review.md",
         "SKILL.md": "skills/delegation/SKILL.md",
     }
+    # The reference was split out of the README after the revisions these tests read, so at them the text behind a
+    # reference place is the README's.
+    SPLIT_FROM = {"reference.md": "README.md", "reference.zh-TW.md": "README.zh-TW.md"}
     ADR_0013_SERIAL = "\n## Serial reviews and the final check\n"
     ADR_0013_ACCEPT = "\n## A single Accept and land decision\n"
     TAG = "v0.23.0"
@@ -57,7 +62,7 @@ class CompletionCriteriaTests(unittest.TestCase):
     @classmethod
     def source(cls, name: str) -> str:
         """'<file>', '<procedure>#<step number>', 'review-state.md#<bullet label>', 'CONTEXT.md#<term>',
-            '<README>#<rule label>', 'ADR 0013', 'ADR 0013#options', 'ADR 0013#serial' (the part on the serial rule
+            '<reference>#<rule label>', 'ADR 0013', 'ADR 0013#options', 'ADR 0013#serial' (the part on the serial rule
             and the final check), 'ADR 0013#accept' (the part on the single Accept and land decision), 'ADR 0006',
             'ADR 0008', 'adversarial-review.md' or 'SKILL.md#Dispatch' (the delegation skill's Dispatch section)."""
         path, _, part = name.partition("#")
@@ -477,11 +482,11 @@ class CompletionCriteriaTests(unittest.TestCase):
             "It is recorded as follow-up work.",
         ),
         "code-review.md#5": ("List them in the final report.",),
-        "README.md#Findings": (
+        "reference.md#Findings": (
             "blocking ones (correctness, security, data loss, regression, deviation from the plan)",
             "Non-blocking ones are listed in the final report, or become separate follow-up work when a handoff is active.",
         ),
-        "README.zh-TW.md#問題分級": (
+        "reference.zh-TW.md#問題分級": (
             "阻擋性問題（正確性、安全、資料遺失、regression、偏離計畫）",
             "非阻擋問題列在最終回報，有進行中的交接時另建獨立的後續工作。",
         ),
@@ -1068,20 +1073,20 @@ class CompletionCriteriaTests(unittest.TestCase):
             "and that the final check has not run when it is recorded as not run",
         ),
         "ADR 0006": ("the state model, validity rules and Acceptance gate are unchanged.)",),
-        "README.md#Final check": (
+        "reference.md#Final check": (
             "once at the final commit",
             "After any fix, the check runs again at the new final commit.",
         ),
-        "README.md#Accept and land at the end": (
+        "reference.md#Accept and land at the end": (
             "has passed or is recorded as not run",
             "states that the final check has not run",
             "You may confirm part of the list, and the rest stays pending;",
         ),
-        "README.zh-TW.md#最終檢查": (
+        "reference.zh-TW.md#最終檢查": (
             "在最終 commit 上執行一次",
             "任何修正之後，都會在新的最終 commit 上再執行一次。",
         ),
-        "README.zh-TW.md#最後一次決定接受並合併": (
+        "reference.zh-TW.md#最後一次決定接受並合併": (
             "最終檢查已通過或記為未執行",
             "並寫明最終檢查尚未執行",
             "你可以只確認清單的一部分",
@@ -1098,8 +1103,8 @@ class CompletionCriteriaTests(unittest.TestCase):
                 pins.setdefault(place, []).extend(sentences)
         for en_label, zh_label, english, chinese in (self.README_PAIRS + self.SERIAL_README_PAIRS
                                                      + self.ACCEPT_README_PAIRS):
-            pins.setdefault(f"README.md#{en_label}", []).append(english)
-            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+            pins.setdefault(f"reference.md#{en_label}", []).append(english)
+            pins.setdefault(f"reference.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
 
     def test_review_state_states_the_completion_conditions(self):
@@ -1157,7 +1162,7 @@ class CompletionCriteriaTests(unittest.TestCase):
 
     def test_both_readmes_explain_what_holds_completion_and_what_is_recorded(self):
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
@@ -1227,7 +1232,7 @@ class CompletionCriteriaTests(unittest.TestCase):
 
     def test_both_readmes_explain_serial_reviews_and_the_final_check(self):
         for en_label, zh_label, english, chinese in self.SERIAL_README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
@@ -1266,7 +1271,7 @@ class CompletionCriteriaTests(unittest.TestCase):
 
     def test_both_readmes_explain_the_single_accept_and_land_decision(self):
         for en_label, zh_label, english, chinese in self.ACCEPT_README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
@@ -1295,7 +1300,8 @@ class CompletionCriteriaTests(unittest.TestCase):
         """The whole file behind a place at the revision (the tag by default), '' when it did not exist there; skips
             without that revision."""
         revision = revision or self.TAG
-        path = self.PATHS[place.partition("#")[0]]
+        name = place.partition("#")[0]
+        path = self.PATHS[self.SPLIT_FROM.get(name, name)]
         try:
             shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{revision}:{path}"], cwd=config.ROOT,
                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=60)

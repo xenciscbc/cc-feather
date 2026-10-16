@@ -71,6 +71,9 @@ class PerClaimTimingTests(unittest.TestCase):
         "CONTEXT.md": "CONTEXT.md",
         "README.md": "README.md",
         "README.zh-TW.md": "README.zh-TW.md",
+        # The reference was split out of the README after the tag, so at the tag its text is the README's.
+        "reference.md": "README.md",
+        "reference.zh-TW.md": "README.zh-TW.md",
         "ADR 0015": f"docs/adr/{ADR_0015}",
         "ADR 0013": f"docs/adr/{ADR_0013}",
     }
@@ -82,7 +85,7 @@ class PerClaimTimingTests(unittest.TestCase):
 
     @classmethod
     def source(cls, name: str) -> str:
-        """'<file>', 'review-state.md#<bullet label>', 'CONTEXT.md#<term>', '<README>#<rule label>', 'SKILL.md#<heading>'
+        """'<file>', 'review-state.md#<bullet label>', 'CONTEXT.md#<term>', '<reference>#<rule label>', 'SKILL.md#<heading>'
             (a section of the delegation skill), 'ADR 0015', 'ADR 0015#options' (its Considered Options) or
             'ADR 0013'."""
         path, _, part = name.partition("#")
@@ -306,8 +309,8 @@ class PerClaimTimingTests(unittest.TestCase):
                 pins.setdefault(place, []).extend(sentences)
         pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            pins.setdefault(f"README.md#{en_label}", []).append(english)
-            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+            pins.setdefault(f"reference.md#{en_label}", []).append(english)
+            pins.setdefault(f"reference.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
 
     def test_per_claim_timing_is_the_only_timing_in_auto(self):
@@ -339,7 +342,7 @@ class PerClaimTimingTests(unittest.TestCase):
 
     def test_both_readmes_explain_per_claim_timing_and_dependent_claims(self):
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
@@ -610,6 +613,8 @@ class FixedPassesTests(unittest.TestCase):
         ),
         "README.md": ("Changing a claim's files or what they depend on reopens its code review and verification;",),
         "README.zh-TW.md": ("改動 claim 的檔案或其相依項目，會重新打開程式碼審查與驗證；",),
+        "reference.md": ("Changing a claim's files or what they depend on reopens its code review and verification;",),
+        "reference.zh-TW.md": ("改動 claim 的檔案或其相依項目，會重新打開程式碼審查與驗證；",),
     }
 
     # Acceptance item 5 and the Implementation Decisions "Unchanged": the reviewer template is unchanged, as at v0.25.0
@@ -624,8 +629,8 @@ class FixedPassesTests(unittest.TestCase):
         pins["review-state.md#What a pass covers"].extend((self.S5, self.OFF, self.S7, self.LIMITS))
         pins.setdefault("ADR 0006", []).append(self.ADR_0006_NOTE)
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            pins.setdefault(f"README.md#{en_label}", []).append(english)
-            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+            pins.setdefault(f"reference.md#{en_label}", []).append(english)
+            pins.setdefault(f"reference.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
 
     def test_passes_stay_fixed_in_auto_and_every_other_change_keeps_file_level_reopening(self):
@@ -670,13 +675,13 @@ class FixedPassesTests(unittest.TestCase):
 
     def test_both_readmes_explain_fixed_passes(self):
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
     def test_the_fixed_passes_bullet_follows_ticket_01s_bullets(self):
-        for path, label, previous in (("README.md", "Fixed passes", "Dependent claims"),
-                                      ("README.zh-TW.md", "固定的通過", "相依的 claim")):
+        for path, label, previous in (("reference.md", "Fixed passes", "Dependent claims"),
+                                      ("reference.zh-TW.md", "固定的通過", "相依的 claim")):
             labels = [line[4:].split("**", 1)[0].rstrip(":：") for line in self.source(path).splitlines()
                       if line.startswith("- **")]
             with self.subTest(path=path):
@@ -1048,8 +1053,8 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
             " A failure reopens the claims it affects under the existing rules,",
             " A failure that cannot be attributed with evidence reopens every claim the check covers.",
         ),
-        "README.md#Final check": (" A failure reopens the claims it affects,",),
-        "README.zh-TW.md#最終檢查": ("。檢查失敗會重新打開受影響的 claim",),
+        "reference.md#Final check": (" A failure reopens the claims it affects,",),
+        "reference.zh-TW.md#最終檢查": ("。檢查失敗會重新打開受影響的 claim",),
     }
 
     # The Implementation Decisions "Unchanged": the adversary template is unchanged, as at v0.25.0 (line endings
@@ -1064,8 +1069,8 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
                 pins.setdefault(place, []).extend(sentences)
         pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            pins.setdefault(f"README.md#{en_label}", []).append(english)
-            pins.setdefault(f"README.zh-TW.md#{zh_label}", []).append(chinese)
+            pins.setdefault(f"reference.md#{en_label}", []).append(english)
+            pins.setdefault(f"reference.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
 
     def test_s3_reading_sets_are_confirmed_before_the_final_check_which_reruns_every_primary_acceptance(self):
@@ -1139,7 +1144,7 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
 
     def test_both_readmes_explain_the_final_checks_reruns_fix_claims_and_stop(self):
         for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"README.md#{en_label}", english), (f"README.zh-TW.md#{zh_label}", chinese)):
+            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
                 with self.subTest(place=place, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.source(place))
 
@@ -1202,7 +1207,7 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         """As ticket 01's reader, plus 'adversarial-review.md' (whole), 'adversarial-review.md#<step number>',
             'adversarial-review.md#final' (its At the final commit paragraph), 'outcome-verification.md#<step number>',
             'command' (the adversarial-review command),
-            'command#<bullet label>', 'command#classifying', 'command#results', '<README>#disclosure' (the third-step
+            'command#<bullet label>', 'command#classifying', 'command#results', '<reference>#disclosure' (the third-step
             paragraph), 'ADR 0015#part' (this ticket's part), 'ADR 0009' and 'ADR 0013'."""
         path, _, part = name.partition("#")
         if name == "ADR 0015#part":
@@ -1547,13 +1552,13 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
 
     # Acceptance item 17, for these rules: (README place, Chinese place, English sentence, Chinese sentence).
     README_PAIRS = (
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "Adversarial review is the third step: adversary tries to break the claim and answers HELD, BROKEN or "
          "INCONCLUSIVE; in `off`, a call counts only after a valid APPROVED and CONFIRMED at the same commit, and in auto "
          "it runs at the end, as below.",
          "對抗式審查是第三步：adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE；在 `off` 下，要在同一個 commit "
          "拿到有效的 APPROVED 與 CONFIRMED 之後才算數，在 auto 下則在最後執行，如下所述。"),
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "In auto, Adversarial review runs once, at the end: when the final check has passed at the final commit with the "
          "workspace equal to it, each Security-critical claim of the plan except a fix claim gets one Adversarial review "
          "there, whose brief carries only that claim's own security invariants and test targets and the plan's base "
@@ -1561,7 +1566,7 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
          "在 auto 下，對抗式審查只在最後執行一次：最終檢查在最後的 commit 上通過、且工作區與它相同時，計畫中除了修正用的 "
          "claim 以外，每個安全關鍵 claim 都在那裡做一次對抗式審查，brief 只帶該 claim 自己的安全不變條件與測試目標，以及計畫"
          "的基準版本。"),
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "The claim's APPROVED and CONFIRMED are then a record of the commits they judged, and only a call made after the "
          "final check passed at the commit to be landed gives the claim's result: a result from an earlier or another "
          "commit, or an explicit call made before then, counts as not run, so the claim needs a new call or your "
@@ -1569,29 +1574,29 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
          "這時 claim 的 APPROVED 與 CONFIRMED 是它們所審 commit 的紀錄，只有在最終檢查於要進入預設 branch 的 commit 上通過之後"
          "才做的呼叫，才給出該 claim 的結果：來自較早或其他 commit 的結果，或在那之前明確要求的呼叫，都視為沒有執行，所以這個 "
          "claim 需要重新呼叫，或你決定接受並合併。"),
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "A break of the claim's security invariant at that commit is reported whichever claim's change caused it, and one "
          "introduced after the plan's base revision is not pre-existing; an INCONCLUSIVE is handled as in any Adversarial "
          "review, within the Stop threshold.",
          "在那個 commit 上破壞 claim 的安全不變條件，不論是哪個 claim 的改動造成的都會回報，在計畫的基準版本之後才引入的也不算"
          "先前就存在；INCONCLUSIVE 和任何對抗式審查一樣處理，在停止門檻之內。"),
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "A BROKEN there is recorded, not fixed in the plan: it counts as a call without a pass, main does not repeat the "
          "call on unchanged code, and its findings go to the work's Follow-up record, with only a summary in any tracked "
          "record unless you agree.",
          "在那裡得到的 BROKEN 只記錄、不在這份計畫中修正：它算一次沒通過的呼叫，程式碼沒變時主 Agent 不會重複呼叫，它的發現"
          "寫進這項工作的後續紀錄，任何有追蹤的紀錄只寫摘要，除非你同意。"),
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "The claim stays pending acceptance with its result, which main lists when it asks you at the end of the plan, "
          "and the findings stay listed, and go with every later attack on the claim, until a HELD at the commit to be "
          "landed that covered them replaces them.",
          "這個 claim 帶著它的結果維持待驗收，主 Agent 在計畫最後問你時會列出這個結果，而這些發現會一直列著，也會隨之後每次"
          "對它的攻擊提供，直到要進入預設 branch 的 commit 上涵蓋了它們的 HELD 取代它們。"),
-        ("README.md#disclosure", "README.zh-TW.md#disclosure",
+        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "This has limits: the commit an Adversarial review attacks was not judged as a whole by the claim's own code "
          "review and verification, and its findings are not fixed in the plan.",
          "這有其限制：對抗式審查攻擊的 commit，沒有整體經過該 claim 自己的程式碼審查與驗證，它的發現也不在這份計畫中修正。"),
-        ("README.md#Not passed", "README.zh-TW.md#未通過",
+        ("reference.md#Not passed", "reference.zh-TW.md#未通過",
          "A Security-critical claim without a valid HELD is not landed, released or reported complete either; in `off`, "
          "the fix for a BROKEN goes through code review, verification and Adversarial review again, while in auto a "
          "BROKEN is recorded rather than fixed, as [Security-critical work](#security-critical-work) says, and when that "
@@ -1600,7 +1605,7 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
          "沒有有效 HELD 的安全關鍵 claim 同樣不進入預設 branch、不 release、不回報完成；在 `off` 下，BROKEN 的修正要重新經過"
          "程式碼審查、驗證與對抗式審查，在 auto 下 BROKEN 則只記錄、不修正，如[安全關鍵工作](#安全關鍵工作)所說，而該步驟停下"
          "或 BROKEN 仍未解決時，進行中的交接會記下這個 claim 待驗收、缺少對抗式審查，即使之前沒有記錄也一樣。"),
-        ("README.md#Findings", "README.zh-TW.md#問題分級",
+        ("reference.md#Findings", "reference.zh-TW.md#問題分級",
          "Security findings still block as before: a security problem the change introduced or made exploitable, even "
          "through code outside the diff, and data loss it introduced block whatever the acceptance says and need no "
          "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review follow the "
@@ -1643,6 +1648,14 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
                             "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，",
                             "| 對抗式審查 | 安全關鍵 claim 在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 |",
                             "不回報完成；BROKEN 的修正要重新經過"),
+        "reference.md": ("BROKEN and Adversarial review are unchanged", "is BROKEN and goes back to a fix;",
+                         "Adversarial review is the third step: after a valid APPROVED and CONFIRMED at the same commit,",
+                         "| Adversarial review | After APPROVED and CONFIRMED at the same commit,",
+                         "either; the fix for a BROKEN goes through"),
+        "reference.zh-TW.md": ("BROKEN 與對抗式審查不變", "都是 BROKEN，要回頭修正；",
+                               "對抗式審查是第三步：在同一個 commit 拿到有效的 APPROVED 與 CONFIRMED 之後，",
+                               "| 對抗式審查 | 安全關鍵 claim 在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 |",
+                               "不回報完成；BROKEN 的修正要重新經過"),
     }
 
     def new_pins(self):
@@ -2020,9 +2033,9 @@ class DispatchRecordTests(unittest.TestCase):
             "Off mode writes no dispatch record and keeps the cross-session rules of [review "
             "state](references/review-state.md)'s Resumed sessions for off.",
         ),
-        "README.md#Dispatch record": ("In `off`, main writes none and the rules under Resumed session hold as before.",),
-        "README.zh-TW.md#派工紀錄": ("在 `off` 下，主 Agent 不寫派工紀錄，「恢復的 session」的規則照舊。",),
-        "README.md#Resumed session": (
+        "reference.md#Dispatch record": ("In `off`, main writes none and the rules under Resumed session hold as before.",),
+        "reference.zh-TW.md#派工紀錄": ("在 `off` 下，主 Agent 不寫派工紀錄，「恢復的 session」的規則照舊。",),
+        "reference.md#Resumed session": (
             "In `off`, passing verdicts do not carry over either, and without an active handoff record no restriction "
             "carries over.",
             "In `off`, before landing, release or completion, a claim that passed in an earlier session is reviewed and "
@@ -2030,7 +2043,7 @@ class DispatchRecordTests(unittest.TestCase):
             "done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and "
             "nothing relevant changed since.",
         ),
-        "README.zh-TW.md#恢復的 session": (
+        "reference.zh-TW.md#恢復的 session": (
             "在 `off` 下，通過的結論也不會帶到新的 session，沒有進行中的交接記錄時，不會有任何限制帶過去。",
         ),
         "CONTEXT.md#Active handoff": ("In off, it is how unresolved verdicts and gate notes reach a resumed session.",),
@@ -2106,14 +2119,14 @@ class DispatchRecordTests(unittest.TestCase):
 
     # Acceptance item 17, for these rules: (English place, Chinese place, English sentence, Chinese sentence).
     README_PAIRS = (
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "in auto, main keeps one dispatch record for each plan at `.feather/dispatch/<name>.md`, named after the plan: "
          "the spec's slug for a spec or its tickets, the ticket's slug for a single ticket, the plan file's name, or a "
          "short name main tells you for a plan-mode or conversation plan.",
          "在 auto 下，主 Agent 為每份計畫保留一份派工紀錄，放在 `.feather/dispatch/<name>.md`，以計畫命名：spec 或它的 "
          "ticket 用 spec 的 slug，單一 ticket 用該 ticket 的 slug，計畫檔用檔名，plan mode 或對話中的計畫則用主 Agent "
          "告訴你的簡短名稱。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "It holds what a later session needs: the plan, its base revision and its plan-review READY; for each claim, "
          "its classification, its reading set's hash, its base revision, and each review call's judged commit and "
          "verdict with a one-line summary; each fix claim with its problem and a summary of the fix; the branches main "
@@ -2121,20 +2134,20 @@ class DispatchRecordTests(unittest.TestCase):
          "它保存之後的 session 需要的內容：計畫、計畫的基準版本與計畫審查的 READY；每個 claim 的分類、閱讀範圍的雜湊、"
          "基準版本，以及每次審查呼叫所審的 commit 與結論，附一行摘要；每個修正用的 claim 及其問題與修正摘要；主 Agent "
          "為這項工作建立的 branch；以及你的決定和範圍。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "It holds no counts, exploit details or secrets, and until your decision at the end of the plan it holds each "
          "claim's pass state.",
          "它不保存次數、攻擊細節或機密，而在你對計畫做出最後決定之前，它保存每個 claim 的通過狀態。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "Main writes it only between review calls and keeps it out of Git: when no rule already ignores it, main adds "
          "`/.feather/dispatch/` to `.gitignore`, and it never stages or commits the record.",
          "主 Agent 只在審查呼叫之間寫入它，並讓它不進 Git：沒有規則已經忽略它時，主 Agent 會把 `/.feather/dispatch/` "
          "加進 `.gitignore`，且從不 stage 或 commit 這份紀錄。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "In auto it, not an active handoff's notes, is where review state crosses sessions; an active handoff records "
          "progress and names the dispatch record.",
          "在 auto 下，審查狀態是靠它、而不是進行中交接的記錄帶到新的 session；進行中的交接記錄進度，並寫明派工紀錄。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "A new session, and main after context compaction, take the plan's READY, reading sets, passes, Adversarial "
          "review results and your decisions from it as if received in that session, so a claim that passed earlier is "
          "not reviewed again and implemented work whose READY it holds is not asked about again, and the unresolved "
@@ -2142,33 +2155,33 @@ class DispatchRecordTests(unittest.TestCase):
          "新的 session，以及 context 壓縮後的主 Agent，會從它取得計畫的 READY、閱讀範圍、通過、對抗式審查結果與你的決定，"
          "視同在該 session 中收到，所以之前通過的 claim 不會重新審查，它記有 READY 的已實作工作也不會再問一次，而它記錄的"
          "未解決結論與 BROKEN 列出的發現仍跟著各自的 claim。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "Counts still restart in each session, and the Stop threshold and the final check's state come only from the "
          "current session, so main runs the final check again before landing; where the record lacks what main needs, "
          "main treats the step as stopped and asks you.",
          "次數仍在每個 session 重新計算，停止門檻與最終檢查的狀態只來自目前的 session，所以主 Agent 會在進入預設 branch "
          "前重新執行最終檢查；紀錄缺少主 Agent 需要的內容時，主 Agent 會視為已停下並問你。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "Main takes the dispatch record as written, so an edit to it, by repository code a review or the final check "
          "runs or by a person, changes which passes and results main believes; cc-feather does not defend against that.",
          "主 Agent 照紀錄所寫的內容採信，所以有人或審查、最終檢查執行的儲存庫程式碼修改它，就會改變主 Agent 相信哪些通過"
          "與結果；cc-feather 不防範這一點。"),
-        ("README.md#Resumed session", "README.zh-TW.md#恢復的 session",
+        ("reference.md#Resumed session", "reference.zh-TW.md#恢復的 session",
          "In auto, an unfinished plan is reviewed again unless its dispatch record holds its READY, and the plan's "
          "passes, Adversarial review results, unresolved verdicts and your decisions carry over through the dispatch "
          "record, as Dispatch record says.",
          "在 auto 下，未完成的計畫會重新審查，除非它的派工紀錄記有 READY，而計畫的通過、對抗式審查結果、未解決的結論與你的"
          "決定都透過派工紀錄帶過去，如「派工紀錄」所說。"),
-        ("README.md#Resumed session", "README.zh-TW.md#恢復的 session",
+        ("reference.md#Resumed session", "reference.zh-TW.md#恢復的 session",
          "Counts do not carry over, and in either mode finished tickets are not redone.",
          "次數不會帶到新的 session，而且不論哪種模式，已完成的 ticket 都不會重做。"),
-        ("README.md#Commit", "README.zh-TW.md#Commit 條件",
+        ("reference.md#Commit", "reference.zh-TW.md#Commit 條件",
          "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a "
          "branch counts as its own only when a record shows that it created it for this work: in auto the dispatch "
          "record, in place of an active handoff, and in `off` an active handoff.",
          "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有紀錄顯示它為這項工作建立了該 branch，"
          "才算它自己的 branch：在 auto 下看派工紀錄，取代進行中的交接，在 `off` 下看進行中的交接。"),
-        ("README.md#Implemented before plan review", "README.zh-TW.md#實作完才做計畫審查",
+        ("reference.md#Implemented before plan review", "reference.zh-TW.md#實作完才做計畫審查",
          "In auto, a plan whose dispatch record holds its READY counts as reviewed in a new session or after context "
          "compaction too, so main does not ask.",
          "在 auto 下，派工紀錄記有 READY 的計畫，在新的 session 或 context 壓縮後也算已審查，主 Agent 不會再問。"),
@@ -2208,6 +2221,15 @@ class DispatchRecordTests(unittest.TestCase):
             "this work.",
         ),
         "README.zh-TW.md": (
+            "次數與通過的結論不會帶到新的 session",
+            "恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。",
+        ),
+        "reference.md": (
+            "Counts and passing verdicts do not carry over",
+            "in a resumed session a branch counts as its own only when an active handoff records that it created it for "
+            "this work.",
+        ),
+        "reference.zh-TW.md": (
             "次數與通過的結論不會帶到新的 session",
             "恢復的 session 裡，只有進行中的交接記錄了它為這項工作建立該 branch，才算它自己的 branch。",
         ),
@@ -2268,8 +2290,8 @@ class DispatchRecordTests(unittest.TestCase):
         self.assert_pinned(self.OFF)
         self.assertTrue(self.source("review-state.md#Dispatch record").startswith(
             "- **Dispatch record.** In auto, main keeps one dispatch record"))
-        self.assertTrue(self.source("README.md#Dispatch record").startswith(" in auto, main keeps one dispatch record"))
-        self.assertTrue(self.source("README.zh-TW.md#派工紀錄").startswith("在 auto 下，主 Agent 為每份計畫保留一份派工紀錄"))
+        self.assertTrue(self.source("reference.md#Dispatch record").startswith(" in auto, main keeps one dispatch record"))
+        self.assertTrue(self.source("reference.zh-TW.md#派工紀錄").startswith("在 auto 下，主 Agent 為每份計畫保留一份派工紀錄"))
         self.assertTrue(self.source("CONTEXT.md#Dispatch record").startswith(
             "Main's record of one Plan's review state in the Automatic flow"))
         # The toggle procedure and the installed policy name no dispatch record, so turning auto off writes none.
@@ -2620,7 +2642,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
                       "review, security analysis or Adversarial review;")
 
     # Acceptance item 17, for these rules: (English place, Chinese place, English sentence, Chinese sentence).
-    ACCEPT = ("README.md#Accept and land at the end", "README.zh-TW.md#最後一次決定接受並合併")
+    ACCEPT = ("reference.md#Accept and land at the end", "reference.zh-TW.md#最後一次決定接受並合併")
     README_PAIRS = (
         (*ACCEPT,
          "In auto, this becomes one decision at the end of the plan: after every claim's code review and verification, "
@@ -2688,16 +2710,16 @@ class DecisionAtTheEndTests(unittest.TestCase):
         (*ACCEPT,
          "Confirming part of the list, what is not a confirmation and what the decision covers stay as above.",
          "只確認清單的一部分、什麼不算確認，以及決定涵蓋什麼，都照上面所說。"),
-        ("README.md#Ticket status", "README.zh-TW.md#Ticket 狀態",
+        ("reference.md#Ticket status", "reference.zh-TW.md#Ticket 狀態",
          "In auto, main sets a claim's ticket to a done value only after your decision at the end of the plan, even when "
          "the claim has passed; until then the dispatch record holds the claim's pass state.",
          "在 auto 下，即使 claim 已經通過，主 Agent 也要等你對計畫做出最後決定之後，才把它的 ticket 設成表示已完成的完成值；"
          "在那之前，派工紀錄保存該 claim 的通過狀態。"),
-        ("README.md#Dispatch record", "README.zh-TW.md#派工紀錄",
+        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "A note an active handoff still holds that a claim is unreviewed, unverified or pending acceptance still "
          "restricts that claim.",
          "進行中的交接仍記著某個 claim 未審查、未驗證或待驗收時，這筆記錄仍會限制該 claim。"),
-        ("README.md#Your decisions", "README.zh-TW.md#你的決定",
+        ("reference.md#Your decisions", "reference.zh-TW.md#你的決定",
          "In auto, the dispatch record holds your decisions with their scope and carries them into a resumed session in "
          "the same way, and main tells you where an active handoff's record of a decision differs from it.",
          "在 auto 下，派工紀錄保存你的決定和範圍，並以同樣方式把它們帶到恢復的 session；進行中交接對某個決定的記錄與它不同時，"
@@ -2718,7 +2740,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
     # The cost explanation, rewritten for per-Claim timing, fixed passes, the final check's reruns and fix Claims, and
     # Adversarial review at the end; the per-claim bound stays one uninterrupted attempt.
     COST_PAIRS = (
-        ("README.md#Cost", "README.zh-TW.md#成本",
+        ("reference.md#Cost", "reference.zh-TW.md#成本",
          "in one uninterrupted attempt in a session, with K the Stop threshold, a plan with N claims, S of them "
          "Security-critical, makes at least 1 + 2N + S automatic calls and up to about K³ + K(K+1)N + KS, since a claim "
          "makes at most K(K+1) (up to K verification calls, between which up to K − 1 fixes each get up to K code "
@@ -2733,12 +2755,12 @@ class DecisionAtTheEndTests(unittest.TestCase):
          "（再加上最後一次執行的最多 K 次對抗式審查，那裡的 BROKEN 只記錄、不修正），計畫審查與最終檢查的修正合計最多 K³ 次"
          "（最多 K 次計畫審查，加上最終檢查停下前連續最多 K − 1 次修正，每次修正在造成失敗的 claim 或修正用的 claim 中最多 "
          "K(K+1) 次程式碼審查與驗證）。"),
-        ("README.md#Cost", "README.zh-TW.md#成本",
+        ("reference.md#Cost", "reference.zh-TW.md#成本",
          "At the default K = 2 that is, in one uninterrupted attempt, at most 6 calls per claim, 8 per Security-critical "
          "claim and about 8 + 6N + 2S per plan; at K = 10 it is 110, 120 and about 1000 + 110N + 10S.",
          "預設 K = 2 時，一次不中斷的完成過程中每個 claim 最多 6 次、安全關鍵 claim 最多 8 次，整份計畫約 8 + 6N + 2S 次；"
          "K = 10 時則是 110 次、120 次與約 1000 + 110N + 10S 次。"),
-        ("README.md#Cost", "README.zh-TW.md#成本",
+        ("reference.md#Cost", "reference.zh-TW.md#成本",
          "Per-claim timing changes when a claim is reviewed, not how many calls it makes; fixed passes remove the "
          "reviews that another claim's reviewed change used to reopen; the final check and its reruns of every claim's "
          "primary acceptance are main's own runs and make no calls, while each fix after a failure adds calls as above; "
@@ -2747,7 +2769,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
          "依 claim 審查的時機只改變 claim 何時審查，不改變它的呼叫次數；固定的通過省去了以往另一個 claim 已審查的變更所重新打開的審查；"
          "最終檢查與它對每個 claim 主要驗收的重新執行是主 Agent 自己的執行，不算呼叫，但失敗後的每次修正會如上增加呼叫；"
          "對抗式審查只在最後執行一次，BROKEN 之後不修正，省去以往 BROKEN 引發的程式碼審查、驗證與攻擊的循環。"),
-        ("README.md#Cost", "README.zh-TW.md#成本",
+        ("reference.md#Cost", "reference.zh-TW.md#成本",
          "A re-review you choose in the decision at the end adds the calls of the reviews you choose, and when it changes "
          "the code, the final check runs again.",
          "你在最後的決定中選擇重審時，選擇的審查會再增加呼叫，若重審改動了程式碼，最終檢查也會再執行。"),
@@ -2766,16 +2788,16 @@ class DecisionAtTheEndTests(unittest.TestCase):
     }
     # The three residual risks in both READMEs, as earlier tickets stated them.
     README_RISKS = {
-        "README.md#Dispatch record": (
+        "reference.md#Dispatch record": (
             "Main takes the dispatch record as written, so an edit to it, by repository code a review or the final check "
             "runs or by a person, changes which passes and results main believes; cc-feather does not defend against "
             "that.",
         ),
-        "README.zh-TW.md#派工紀錄": (
+        "reference.zh-TW.md#派工紀錄": (
             "主 Agent 照紀錄所寫的內容採信，所以有人或審查、最終檢查執行的儲存庫程式碼修改它，就會改變主 Agent 相信哪些通過"
             "與結果；cc-feather 不防範這一點。",
         ),
-        "README.md#Final check": (
+        "reference.md#Final check": (
             "Repository code a check runs controls its own output, so it can make a check pass that should fail, hide "
             "that a check ran fewer tests, or make a failure point at the wrong claim; the last only misdirects a fix, "
             "after which the check runs again.",
@@ -2783,7 +2805,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "gets no plan review, security analysis or Adversarial review, and main discloses it at the end with its "
             "problem and a summary of the fix, so you decide whether to land with it.",
         ),
-        "README.zh-TW.md#最終檢查": (
+        "reference.zh-TW.md#最終檢查": (
             "檢查所執行的儲存庫程式碼掌控自己的輸出，所以它可以讓該失敗的檢查通過、隱藏檢查少跑了測試，或讓失敗指向錯誤的 claim；"
             "最後這種只會讓修正找錯對象，修正之後檢查會再執行一次。",
             "修正用的 claim 若改動安全控制，就屬於安全關鍵，但主 Agent 仍不先問你就加入：它沒有計畫審查、安全分析或對抗式審查，"
@@ -2796,14 +2818,16 @@ class DecisionAtTheEndTests(unittest.TestCase):
     REPLACED = {
         LABEL: ("Main builds the list from the review results it received in this session",),
         "CONTEXT.md#Accept and land": ("Main builds the list from the review results it received in this session",),
-        "README.md#Accept and land at the end": ("Main builds the list from the review results it received in this session",),
-        "README.zh-TW.md#最後一次決定接受並合併": ("。主 Agent 依它在這個 session 收到的審查結果建立清單",),
-        "README.md#Cost": ("K³ + K² + K", "fixes after a BROKEN each get", "14 per Security-critical claim",
-                           "K + K(K+1)N + K³S"),
-        "README.zh-TW.md#成本": ("K³ + K² + K", "BROKEN 後的修正各最多", "安全關鍵 claim 最多 14 次", "K + K(K+1)N + K³S"),
+        "reference.md#Accept and land at the end": ("Main builds the list from the review results it received in this session",),
+        "reference.zh-TW.md#最後一次決定接受並合併": ("。主 Agent 依它在這個 session 收到的審查結果建立清單",),
+        "reference.md#Cost": ("K³ + K² + K", "fixes after a BROKEN each get", "14 per Security-critical claim",
+                              "K + K(K+1)N + K³S"),
+        "reference.zh-TW.md#成本": ("K³ + K² + K", "BROKEN 後的修正各最多", "安全關鍵 claim 最多 14 次", "K + K(K+1)N + K³S"),
         "preview.md": ("K³ + K² + K", "fixes after BROKEN each get", "K + K(K+1)N + K³S"),
         "README.md": ("or K³ + K² + K for a Security-critical claim",),
         "README.zh-TW.md": ("安全關鍵 claim 最多 K³ + K² + K 次",),
+        "reference.md": ("or K³ + K² + K for a Security-critical claim",),
+        "reference.zh-TW.md": ("安全關鍵 claim 最多 K³ + K² + K 次",),
     }
 
     def new_pins(self):
@@ -2844,7 +2868,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
         for place in self.ACCEPT:
             with self.subTest(place=place):
                 text = self.source(place)
-                self.assertEqual(text.count("What this flow does not check is:" if place.startswith("README.md")
+                self.assertEqual(text.count("What this flow does not check is:" if place.startswith("reference.md")
                                             else "這個流程不檢查的事項是："), 1)
 
     def test_tickets_are_set_to_done_only_after_the_decision_in_auto(self):

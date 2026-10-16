@@ -3358,9 +3358,14 @@ class FeatherConfigTests(unittest.TestCase):
             config.ROOT / "CONTEXT.md": ("clears the stop without resetting the count",
                                          "the Automatic flow resumes from there",
                                          "is an automatic call, not an Explicit request"),
-            config.ROOT / "README.md": ("the automatic flow resumes from there",
-                                        "in auto the automatic flow continues to the next step"),
-            config.ROOT / "README.zh-TW.md": ("自動流程會從那裡接續", "在 auto 下自動流程接著進入下一步"),
+            config.ROOT / "docs" / "reference.md": (
+                "the automatic flow resumes from there",
+                "in auto the automatic flow continues to the next step",
+            ),
+            config.ROOT / "docs" / "reference.zh-TW.md": (
+                "自動流程會從那裡接續",
+                "在 auto 下自動流程接著進入下一步",
+            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3401,9 +3406,16 @@ class FeatherConfigTests(unittest.TestCase):
                                                      "checks and reports it after the operation"),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("Reuse a verdict only while it is valid",
                                                                  "classify it as [review state]"),
-            config.ROOT / "README.md": ("needs your request again", "does not count as that step's pass",
-                                        "a pass resets the count and a non-pass stops the step again"),
-            config.ROOT / "README.zh-TW.md": ("都需要你要求", "不算該步驟的通過", "仍需要你再要求"),
+            config.ROOT / "docs" / "reference.md": (
+                "needs your request again",
+                "does not count as that step's pass",
+                "a pass resets the count and a non-pass stops the step again",
+            ),
+            config.ROOT / "docs" / "reference.zh-TW.md": (
+                "都需要你要求",
+                "不算該步驟的通過",
+                "仍需要你再要求",
+            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3445,11 +3457,20 @@ class FeatherConfigTests(unittest.TestCase):
             references / "outcome-verification.md": ("only as [review state](review-state.md)'s Pending acceptance describes",
                                                      "a waiver stays visible in it"),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("update its ticket as [review state]",),
-            config.ROOT / "README.md": ("never counts as READY, APPROVED, CONFIRMED or HELD", "does not accept a known defect",
-                                        "or you say it is done", "one of the convention's completion values",
-                                        "a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass"),
-            config.ROOT / "README.zh-TW.md": ("絕不記為 READY、APPROVED、CONFIRMED 或 HELD", "不代表接受已知的缺陷", "或你說它已完成",
-                                              "慣例定義的任一完成值", "受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過"),
+            config.ROOT / "docs" / "reference.md": (
+                "never counts as READY, APPROVED, CONFIRMED or HELD",
+                "does not accept a known defect",
+                "or you say it is done",
+                "one of the convention's completion values",
+                "a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass",
+            ),
+            config.ROOT / "docs" / "reference.zh-TW.md": (
+                "絕不記為 READY、APPROVED、CONFIRMED 或 HELD",
+                "不代表接受已知的缺陷",
+                "或你說它已完成",
+                "慣例定義的任一完成值",
+                "受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過",
+            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3496,7 +3517,7 @@ class FeatherConfigTests(unittest.TestCase):
             ),
             references / "code-review.md": ("so a deferral keeps it and a waiver stays visible in it",),
             references / "outcome-verification.md": ("so a deferral keeps it and a waiver stays visible in it",),
-            config.ROOT / "README.md": (
+            config.ROOT / "docs" / "reference.md": (
                 "Counts do not carry over",
                 "In `off`, passing verdicts do not carry over either, and without an active handoff record no restriction carries over",
                 "unless you authorise it",
@@ -3510,7 +3531,7 @@ class FeatherConfigTests(unittest.TestCase):
                 "or you cancel the work, change its acceptance or waive it",
                 "A deferral keeps the note and a waiver stays recorded in it",
             ),
-            config.ROOT / "README.zh-TW.md": (
+            config.ROOT / "docs" / "reference.zh-TW.md": (
                 "在 `off` 下，通過的結論也不會帶到新的 session，沒有進行中的交接記錄時，不會有任何限制帶過去",
                 "沒有進行中的交接記錄時，不會有任何限制帶過去",
                 "除非你授權",
@@ -3629,10 +3650,10 @@ class FeatherConfigTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(path=name, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
-        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                                "## Roles and routing", "### Automatic review switch"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 分派與預設模型", "### 自動審查開關"))
+        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                                "## Automatic review", "### Stop threshold"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 自動審查", "### 停止門檻"))
         self.assertIn('Plan review first is an automatic call that covers the whole plan; going straight to code review records the missing READY as a waiver for the implemented claims.',
                       english["Implemented before plan review"])
         self.assertIn('先補計畫審查算一次自動呼叫，審查整份計畫；直接做程式碼審查則把缺少的 READY 記為已實作 claim 的豁免。',
@@ -3687,10 +3708,10 @@ class FeatherConfigTests(unittest.TestCase):
                 with self.subTest(path=name, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
         bullets = {
-            "en": dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                              "## Roles and routing", "### Automatic review switch")),
-            "zh": dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                              "## 分派與預設模型", "### 自動審查開關")),
+            "en": dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                              "## Automatic review", "### Stop threshold")),
+            "zh": dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                              "## 自動審查", "### 停止門檻")),
         }
         for language, label, sentence in self.ACCEPTANCE_GATE_README:
             with self.subTest(language=language, bullet=label, sentence=sentence[:60]):
@@ -3751,10 +3772,10 @@ class FeatherConfigTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertIn(phrase, text)
-        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                                "## Roles and routing", "### Automatic review switch"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 分派與預設模型", "### 自動審查開關"))
+        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                                "## Automatic review", "### Stop threshold"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 自動審查", "### 停止門檻"))
         for bullets, label, phrase in (
                 (english, "Commit", "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work"),
                 (english, "Commit", "open a pull request that lists the claims still unaccepted, without asking"),
@@ -3836,22 +3857,26 @@ class FeatherConfigTests(unittest.TestCase):
             references / "preview.md": ("a Plan with implemented Claims and no plan-review state in this session",),
             config.ROOT / "skills" / "delegation" / "SKILL.md": (
                 "when implemented work's plan has no plan-review state in this session, first ask",),
-            config.ROOT / "README.md": ("main first asks as under Implemented before plan review",
-                                        "Claims not yet implemented still get plan review first",
-                                        "names any record of an earlier plan review it found but does not treat it as a pass",
-                                        "a plan with implemented claims and no plan review in this session",
-                                        "records the missing READY as a waiver for the implemented claims",
-                                        "follows the usual rules, without asking again",
-                                        "For a plan with an implemented claim, main first asks as under Implemented before plan review",
-                                        "already reviewed by the automatic flow"),
-            config.ROOT / "README.zh-TW.md": ("主 Agent 會先照「實作完才做計畫審查」問你",
-                                              "尚未實作的 claim 仍會先做計畫審查",
-                                              "它會列出找到的先前計畫審查紀錄，但不把它當成通過",
-                                              "已有 claim 實作但這個 session 沒有計畫審查紀錄的計畫",
-                                              "把缺少的 READY 記為已實作 claim 的豁免",
-                                              "照一般規則處理，不會再問",
-                                              "已有 claim 實作的計畫，主 Agent 會先照「實作完才做計畫審查」問你",
-                                              "自動流程已經審查過"),
+            config.ROOT / "docs" / "reference.md": (
+                "main first asks as under Implemented before plan review",
+                "Claims not yet implemented still get plan review first",
+                "names any record of an earlier plan review it found but does not treat it as a pass",
+                "a plan with implemented claims and no plan review in this session",
+                "records the missing READY as a waiver for the implemented claims",
+                "follows the usual rules, without asking again",
+                "For a plan with an implemented claim, main first asks as under Implemented before plan review",
+                "already reviewed by the automatic flow",
+            ),
+            config.ROOT / "docs" / "reference.zh-TW.md": (
+                "主 Agent 會先照「實作完才做計畫審查」問你",
+                "尚未實作的 claim 仍會先做計畫審查",
+                "它會列出找到的先前計畫審查紀錄，但不把它當成通過",
+                "已有 claim 實作但這個 session 沒有計畫審查紀錄的計畫",
+                "把缺少的 READY 記為已實作 claim 的豁免",
+                "照一般規則處理，不會再問",
+                "已有 claim 實作的計畫，主 Agent 會先照「實作完才做計畫審查」問你",
+                "自動流程已經審查過",
+            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3859,10 +3884,10 @@ class FeatherConfigTests(unittest.TestCase):
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertIn(phrase, text)
         # The same deferral appears in two README bullets, so each is checked within its own bullet.
-        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                                "## Roles and routing", "### Automatic review switch"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 分派與預設模型", "### 自動審查開關"))
+        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                                "## Automatic review", "### Stop threshold"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 自動審查", "### 停止門檻"))
         for bullets, label, phrase in (
                 (english, "Asking for a review", "main first asks as under Implemented before plan review"),
                 (english, "Resumed session", "main first asks as under Implemented before plan review"),
@@ -3874,10 +3899,10 @@ class FeatherConfigTests(unittest.TestCase):
     def test_rules_whose_pairings_moved_to_newer_phrases_stay_stated(self):
         # README_RULES and GLOSSARY_RULES now pair these entries with their 0.14.0 rules; the earlier rules still hold.
         references = config.ROOT / "skills" / "delegation" / "references"
-        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                                "## Roles and routing", "### Automatic review switch"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 分派與預設模型", "### 自動審查開關"))
+        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                                "## Automatic review", "### Stop threshold"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 自動審查", "### 停止門檻"))
         entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
         for place, text, phrase in (
                 ("code-review.md", (references / "code-review.md").read_text(encoding="utf-8"),
@@ -3898,10 +3923,10 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertIn(phrase, text)
 
     def test_readme_commit_and_not_passed_bullets_state_their_scope(self):
-        english = dict(self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                                "## Roles and routing", "### Automatic review switch"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 分派與預設模型", "### 自動審查開關"))
+        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                                "## Automatic review", "### Stop threshold"))
+        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                                "## 自動審查", "### 停止門檻"))
         for bullets, label, phrase in (
                 (english, "Commit", "For a claim gated only because an active handoff records it as unreviewed, unverified or pending acceptance"),
                 (chinese, "Commit 條件", "只因進行中的交接記錄為未審查、未驗證或待驗收而受把關的 claim"),
@@ -3915,15 +3940,22 @@ class FeatherConfigTests(unittest.TestCase):
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
         readme = (config.ROOT / "README.md").read_text(encoding="utf-8")
         readme_zh = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
+        # The README keeps a Cost summary; the full Cost bullet and the Delegation preview's bound are in the reference.
+        reference = (config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8")
+        reference_zh = (config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8")
         sources = {
             "preview.md": ((config.ROOT / "skills" / "delegation" / "references" / "preview.md")
                            .read_text(encoding="utf-8"), "K(K+1)", "uninterrupted", r"[.;:] "),
             "README cost": (readme.split("- **Cost:**", 1)[1].split("\n", 1)[0], "K(K+1)", "uninterrupted", r"[.;:] "),
-            "README preview": (readme.split("### Delegation preview", 1)[1].split("\n### ", 1)[0],
-                               "K(K+1)", "uninterrupted", r"[.;:] "),
+            "reference cost": (reference.split("- **Cost:**", 1)[1].split("\n", 1)[0], "K(K+1)", "uninterrupted",
+                               r"[.;:] "),
+            "reference preview": (reference.split("### Delegation preview", 1)[1].split("\n### ", 1)[0],
+                                  "K(K+1)", "uninterrupted", r"[.;:] "),
             "README.zh-TW cost": (readme_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "K(K+1)", "不中斷", "[。；：]"),
-            "README.zh-TW preview": (readme_zh.split("### 分派預覽", 1)[1].split("\n### ", 1)[0],
-                                     "K(K+1)", "不中斷", "[。；：]"),
+            "reference.zh-TW cost": (reference_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "K(K+1)", "不中斷",
+                                     "[。；：]"),
+            "reference.zh-TW preview": (reference_zh.split("### 分派預覽", 1)[1].split("\n### ", 1)[0],
+                                        "K(K+1)", "不中斷", "[。；：]"),
         }
         # The bound may also be written as the numeral 6 ("6 calls", 「6 次」), but not as part of "6N".
         numeral = re.compile(r"(?<![0-9A-Za-z])[6６]\s*(?:calls?|automatic|次)")
@@ -3934,11 +3966,10 @@ class FeatherConfigTests(unittest.TestCase):
                 for sentence in sentences:
                     self.assertIn(qualifier, sentence)
         # Every place that states the bound also says what adds to it.
-        for name, text in (("preview.md", sources["preview.md"][0]), ("README cost", sources["README cost"][0]),
-                           ("README preview", sources["README preview"][0])):
+        for name in ("preview.md", "README cost", "reference cost", "reference preview"):
             with self.subTest(adds=name):
-                self.assertIn("reopened", text)
-        for name in ("README.zh-TW cost", "README.zh-TW preview"):
+                self.assertIn("reopened", sources[name][0])
+        for name in ("README.zh-TW cost", "reference.zh-TW cost", "reference.zh-TW preview"):
             with self.subTest(adds=name):
                 self.assertIn("重新打開", sources[name][0])
 
@@ -4128,10 +4159,10 @@ class FeatherConfigTests(unittest.TestCase):
 
     def test_readme_review_rules_match_the_procedures_in_both_languages(self):
         references = config.ROOT / "skills" / "delegation" / "references"
-        english_bullets = self.readme_rule_bullets((config.ROOT / "README.md").read_text(encoding="utf-8"),
-                                                   "## Roles and routing", "### Automatic review switch")
-        chinese_bullets = self.readme_rule_bullets((config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8"),
-                                                   "## 分派與預設模型", "### 自動審查開關")
+        english_bullets = self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
+                                                   "## Automatic review", "### Stop threshold")
+        chinese_bullets = self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
+                                                   "## 自動審查", "### 停止門檻")
         english, chinese = dict(english_bullets), dict(chinese_bullets)
         self.assertEqual(len(english), len(english_bullets), "English rule bullet labels must be unique")
         self.assertEqual(len(chinese), len(chinese_bullets), "Traditional Chinese rule bullet labels must be unique")
@@ -4565,17 +4596,16 @@ class ClaimsAtImplementationTests(unittest.TestCase):
         return next(block for block in text.split("\n\n") if "A plan lists its claims" in block)
 
     @classmethod
-    def readme_section(cls, name):
+    def reference_section(cls, name):
         # The "Which document is the plan" part of each README, intro and rule bullets.
-        text = cls.text(config.ROOT / name)
-        start = {"README.md": "**Which document is the plan.**", "README.zh-TW.md": "**哪份文件是計畫。**"}[name]
+        text = cls.text(feather_support.REFERENCE_FILES[name])
+        start = {"reference.md": "**Which document is the plan.**", "reference.zh-TW.md": "**哪份文件是計畫。**"}[name]
         return start + "\n\n".join(text.split(start, 1)[1].split("\n\n", 2)[:2])
 
     @classmethod
-    def readme_bullets(cls, name):
-        text = cls.text(config.ROOT / name)
-        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
-                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+    def reference_bullets(cls, name):
+        text = cls.text(feather_support.REFERENCE_FILES[name])
+        start, end = feather_support.REFERENCE_RULE_BOUNDS[name]
         return dict(feather_support.readme_rule_bullets(text, start, end))
 
     # Acceptance item 1: the three named-Plan cases, the spec-or-tickets question and a spec's own Claims list.
@@ -4734,32 +4764,32 @@ class ClaimsAtImplementationTests(unittest.TestCase):
 
     # Replaced README wording: the spec with its tickets as one plan.
     README_REPLACED = (
-        ("README.md", "the spec with those tickets is one plan"),
-        ("README.md", "- **A spec, or some of its tickets:**"),
-        ("README.zh-TW.md", "該 spec 連同這些 ticket 是一份計畫"),
-        ("README.zh-TW.md", "- **一份 spec，或其中幾張 ticket：**"),
+        ("reference.md", "the spec with those tickets is one plan"),
+        ("reference.md", "- **A spec, or some of its tickets:**"),
+        ("reference.zh-TW.md", "該 spec 連同這些 ticket 是一份計畫"),
+        ("reference.zh-TW.md", "- **一份 spec，或其中幾張 ticket：**"),
     )
 
     def test_readmes_explain_the_three_cases_with_an_example_in_both_languages(self):
-        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        english, chinese = self.reference_bullets("reference.md"), self.reference_bullets("reference.zh-TW.md")
         for label, zh_label, en, zh in self.README_BULLETS:
             with self.subTest(label=label, sentence=en[:50]):
                 self.assertIn(en, english[label])
                 self.assertIn(zh, chinese[zh_label])
-        for name, sentence in zip(("README.md", "README.zh-TW.md"), self.README_INTRO):
+        for name, sentence in zip(("reference.md", "reference.zh-TW.md"), self.README_INTRO):
             with self.subTest(readme=name, intro=sentence[:40]):
-                self.assertIn(sentence, self.readme_section(name))
+                self.assertIn(sentence, self.reference_section(name))
         for name, sentence in self.README_REPLACED:
             with self.subTest(readme=name, removed=sentence[:40]):
-                self.assertNotIn(sentence, self.text(config.ROOT / name))
+                self.assertNotIn(sentence, feather_support.reference_and_readme(name))
 
     def test_readmes_state_the_limits_and_the_open_question_in_the_preview(self):
         for name, limits, preview, heading in (
-                ("README.md", self.README_LIMITS[0], self.README_PREVIEW[0], "### Delegation preview"),
-                ("README.zh-TW.md", self.README_LIMITS[1], self.README_PREVIEW[1], "### 分派預覽")):
-            text = self.text(config.ROOT / name)
+                ("reference.md", self.README_LIMITS[0], self.README_PREVIEW[0], "### Delegation preview"),
+                ("reference.zh-TW.md", self.README_LIMITS[1], self.README_PREVIEW[1], "### 分派預覽")):
+            text = self.text(feather_support.REFERENCE_FILES[name])
             with self.subTest(readme=name, part="limits"):
-                self.assertIn(limits, self.readme_section(name))
+                self.assertIn(limits, self.reference_section(name))
             with self.subTest(readme=name, part="preview"):
                 self.assertIn(preview, text.split(heading, 1)[1].split("\n### ", 1)[0])
 
@@ -4881,10 +4911,9 @@ class SpecChecklistTests(unittest.TestCase):
                     if block.startswith("When the plan is one or more tickets of a spec,"))
 
     @classmethod
-    def readme_bullets(cls, name):
-        text = cls.text(config.ROOT / name)
-        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
-                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+    def reference_bullets(cls, name):
+        text = cls.text(feather_support.REFERENCE_FILES[name])
+        start, end = feather_support.REFERENCE_RULE_BOUNDS[name]
         return dict(feather_support.readme_rule_bullets(text, start, end))
 
     # Acceptance item 3 and S2: what plan review over tickets receives, and what it judges per ticket and across them.
@@ -5075,23 +5104,23 @@ class SpecChecklistTests(unittest.TestCase):
     # The 0.22.0 bullet opening that Residual R1's statement replaces, the unconditional R1 bullet and the
     # exception-free checklist limit that the 2026-10-13 amendments replaced (HEAD c40d7b6).
     README_REPLACED = (
-        ("README.md", "- **A ticket that belongs to no spec** is its own plan."),
-        ("README.zh-TW.md", "- **不屬於任何 spec 的 ticket** 自成一份計畫。"),
-        ("README.md", "parent reference or shared directory linking it to one, is its own plan and gets no checklist"),
-        ("README.zh-TW.md", "同一個目錄把它連到某份 spec）自成一份計畫"),
-        ("README.md", "read only the ticket and the spec parts it cites; and these rules"),
-        ("README.zh-TW.md", "只讀該 ticket 與它引用的 spec 部分；這些規則"),
+        ("reference.md", "- **A ticket that belongs to no spec** is its own plan."),
+        ("reference.zh-TW.md", "- **不屬於任何 spec 的 ticket** 自成一份計畫。"),
+        ("reference.md", "parent reference or shared directory linking it to one, is its own plan and gets no checklist"),
+        ("reference.zh-TW.md", "同一個目錄把它連到某份 spec）自成一份計畫"),
+        ("reference.md", "read only the ticket and the spec parts it cites; and these rules"),
+        ("reference.zh-TW.md", "只讀該 ticket 與它引用的 spec 部分；這些規則"),
     )
 
     def test_readmes_describe_the_checklist_its_limits_and_residual_r1_in_both_languages(self):
-        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        english, chinese = self.reference_bullets("reference.md"), self.reference_bullets("reference.zh-TW.md")
         for label, zh_label, en, zh in self.README_BULLETS:
             with self.subTest(label=label, sentence=en[:50]):
                 self.assertIn(en, english[label])
                 self.assertIn(zh, chinese[zh_label])
         for name, sentence in self.README_REPLACED:
             with self.subTest(readme=name, removed=sentence[:40]):
-                self.assertNotIn(sentence, self.text(config.ROOT / name))
+                self.assertNotIn(sentence, feather_support.reference_and_readme(name))
 
 
 class ReadingSetTests(unittest.TestCase):
@@ -5111,10 +5140,9 @@ class ReadingSetTests(unittest.TestCase):
         return next(line for line in cls.text(cls.REFERENCES / name).splitlines() if line.startswith(f"{number}. "))
 
     @classmethod
-    def readme_bullets(cls, name):
-        text = cls.text(config.ROOT / name)
-        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
-                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+    def reference_bullets(cls, name):
+        text = cls.text(feather_support.REFERENCE_FILES[name])
+        start, end = feather_support.REFERENCE_RULE_BOUNDS[name]
         return dict(feather_support.readme_rule_bullets(text, start, end))
 
     # Acceptance item 4, S1 and S3: the material, stated in the same words wherever a brief is built from it.
@@ -5543,31 +5571,31 @@ class ReadingSetTests(unittest.TestCase):
 
     # Replaced 0.22.0 README wording: the single ticket's spec as context, and the example's `login.md` as context.
     README_REPLACED = (
-        ("README.md", "with its spec given as context to plan review, code review and outcome verification"),
-        ("README.md", "with `login.md` as context"),
-        ("README.zh-TW.md", "其 spec 作為背景提供給計畫審查、程式碼審查與結果驗證"),
-        ("README.zh-TW.md", "`login.md` 作為背景"),
+        ("reference.md", "with its spec given as context to plan review, code review and outcome verification"),
+        ("reference.md", "with `login.md` as context"),
+        ("reference.zh-TW.md", "其 spec 作為背景提供給計畫審查、程式碼審查與結果驗證"),
+        ("reference.zh-TW.md", "`login.md` 作為背景"),
         # Replaced pre-fix wording (HEAD e26c9d0): the invariants and targets as everything the reading set holds.
-        ("README.md", "exactly those written there"),
-        ("README.zh-TW.md", "恰好就是寫在這組範圍裡的那些"),
+        ("reference.md", "exactly those written there"),
+        ("reference.zh-TW.md", "恰好就是寫在這組範圍裡的那些"),
         # The unconditional whole-spec sentence S13's exception replaced (HEAD c40d7b6).
-        ("README.md", "The whole spec is read only when the spec itself is the claim;"),
-        ("README.zh-TW.md", "只有 spec 本身就是 claim 時才讀整份 spec；"),
+        ("reference.md", "The whole spec is read only when the spec itself is the claim;"),
+        ("reference.zh-TW.md", "只有 spec 本身就是 claim 時才讀整份 spec；"),
     )
 
     def test_readmes_state_what_a_review_reads_in_both_languages(self):
-        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        english, chinese = self.reference_bullets("reference.md"), self.reference_bullets("reference.zh-TW.md")
         for label, zh_label, en, zh in self.README_BULLETS:
             with self.subTest(label=label, sentence=en[:50]):
                 self.assertIn(en, english[label])
                 self.assertIn(zh, chinese[zh_label])
         for name, sentence in self.README_REPLACED:
             with self.subTest(readme=name, removed=sentence[:40]):
-                self.assertNotIn(sentence, self.text(config.ROOT / name))
+                self.assertNotIn(sentence, feather_support.reference_and_readme(name))
         # The new bullet follows the citation definition it relies on.
-        for name, citations, reads in (("README.md", "- **Citations:**", "- **What a review reads:**"),
-                                       ("README.zh-TW.md", "- **引用：**", "- **審查讀什麼：**")):
-            text = self.text(config.ROOT / name)
+        for name, citations, reads in (("reference.md", "- **Citations:**", "- **What a review reads:**"),
+                                       ("reference.zh-TW.md", "- **引用：**", "- **審查讀什麼：**")):
+            text = self.text(feather_support.REFERENCE_FILES[name])
             with self.subTest(readme=name, part="order"):
                 self.assertLess(text.index(citations), text.index(reads))
 
@@ -5597,16 +5625,15 @@ class DraftingSpecTests(unittest.TestCase):
         return cls.plan_review_paragraph("In auto, a plan with a Security-critical claim gets a security analysis")
 
     @classmethod
-    def readme_bullets(cls, name):
-        text = cls.text(config.ROOT / name)
-        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
-                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+    def reference_bullets(cls, name):
+        text = cls.text(feather_support.REFERENCE_FILES[name])
+        start, end = feather_support.REFERENCE_RULE_BOUNDS[name]
         return dict(feather_support.readme_rule_bullets(text, start, end))
 
     @classmethod
-    def readme_security_section(cls, name):
-        heading = {"README.md": "### Security-critical work", "README.zh-TW.md": "### 安全關鍵工作"}[name]
-        return cls.text(config.ROOT / name).split(heading, 1)[1].split("\n### ", 1)[0]
+    def reference_security_section(cls, name):
+        heading = {"reference.md": "### Security-critical work", "reference.zh-TW.md": "### 安全關鍵工作"}[name]
+        return cls.text(feather_support.REFERENCE_FILES[name]).split(heading, 1)[1].split("\n### ", 1)[0]
 
     # Acceptance item 5: the drafting rule, stated in plan review.
     DRAFTING = "When main drafts a spec for the user, it lists no claims and cuts none unless the user asks."
@@ -5760,34 +5787,34 @@ class DraftingSpecTests(unittest.TestCase):
 
     # Replaced README wording: marking in any plan main writes.
     README_REPLACED = (
-        ("README.md", "Main marks each Security-critical claim in a plan it writes"),
-        ("README.zh-TW.md", "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim"),
+        ("reference.md", "Main marks each Security-critical claim in a plan it writes"),
+        ("reference.zh-TW.md", "主 Agent 會在自己寫的計畫中標出每個安全關鍵 claim"),
         # S7 as amended: the dispatch-only off-mode timing (HEAD c40d7b6).
-        ("README.md", "in `off` before dispatching their implementation."),
-        ("README.zh-TW.md", "`off` 下則在派出實作前分類。"),
+        ("reference.md", "in `off` before dispatching their implementation."),
+        ("reference.zh-TW.md", "`off` 下則在派出實作前分類。"),
     )
 
     def test_readmes_state_the_drafting_rule_and_when_claims_are_classified_in_both_languages(self):
-        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        english, chinese = self.reference_bullets("reference.md"), self.reference_bullets("reference.zh-TW.md")
         for en, zh in self.README_DRAFTING:
             with self.subTest(sentence=en[:50]):
                 self.assertIn(en, english["Drafting a spec"])
                 self.assertIn(zh, chinese["草擬 spec"])
-        sections = {name: self.readme_security_section(name) for name in ("README.md", "README.zh-TW.md")}
+        sections = {name: self.reference_security_section(name) for name in ("reference.md", "reference.zh-TW.md")}
         for en, zh in self.README_SECURITY:
             with self.subTest(sentence=en[:50]):
-                self.assertIn(en, sections["README.md"])
-                self.assertIn(zh, sections["README.zh-TW.md"])
+                self.assertIn(en, sections["reference.md"])
+                self.assertIn(zh, sections["reference.zh-TW.md"])
         for name, sentence in self.README_REPLACED:
             with self.subTest(readme=name, removed=sentence[:40]):
-                self.assertNotIn(sentence, self.text(config.ROOT / name))
+                self.assertNotIn(sentence, feather_support.reference_and_readme(name))
 
     # S12: the drafting bullet sits under the section intro that states these rules are instructions to main.
     def test_the_drafting_bullet_sits_under_the_stated_limits(self):
         for name, intro, bullet in (
-                ("README.md", "These rules are instructions to main, not enforced by any tool;", "- **Drafting a spec:**"),
-                ("README.zh-TW.md", "這些規則是給主 Agent 的指示，沒有任何工具強制執行；", "- **草擬 spec：**")):
-            section = ClaimsAtImplementationTests.readme_section(name)
+                ("reference.md", "These rules are instructions to main, not enforced by any tool;", "- **Drafting a spec:**"),
+                ("reference.zh-TW.md", "這些規則是給主 Agent 的指示，沒有任何工具強制執行；", "- **草擬 spec：**")):
+            section = ClaimsAtImplementationTests.reference_section(name)
             with self.subTest(readme=name):
                 self.assertIn(intro, section)
                 self.assertIn(bullet, section)
@@ -5832,10 +5859,9 @@ class DeviationScopeTests(unittest.TestCase):
         return next(line for line in cls.text(cls.REFERENCES / name).splitlines() if line.startswith(f"{number}. "))
 
     @classmethod
-    def readme_bullets(cls, name):
-        text = cls.text(config.ROOT / name)
-        start, end = {"README.md": ("## Roles and routing", "### Automatic review switch"),
-                      "README.zh-TW.md": ("## 分派與預設模型", "### 自動審查開關")}[name]
+    def reference_bullets(cls, name):
+        text = cls.text(feather_support.REFERENCE_FILES[name])
+        start, end = feather_support.REFERENCE_RULE_BOUNDS[name]
         return dict(feather_support.readme_rule_bullets(text, start, end))
 
     # Acceptance item 7, S9, S10 and S5, and Implementation Decisions "Deviation scope": review state, beside its
@@ -6045,7 +6071,7 @@ class DeviationScopeTests(unittest.TestCase):
     )
 
     def test_readmes_state_the_deviation_and_spec_update_rules_in_both_languages(self):
-        english, chinese = self.readme_bullets("README.md"), self.readme_bullets("README.zh-TW.md")
+        english, chinese = self.reference_bullets("reference.md"), self.reference_bullets("reference.zh-TW.md")
         for label, zh_label, en, zh in self.README_BULLETS:
             with self.subTest(label=label, sentence=en[:50]):
                 self.assertIn(en, english[label])
@@ -6058,11 +6084,11 @@ class DeviationScopeTests(unittest.TestCase):
                 self.assertNotIn(removed, bullets[label])
         # The new bullets follow the claim-change bullet, under the section intro that states its limits (S12).
         for name, intro, bullets in (
-                ("README.md", "These rules are instructions to main, not enforced by any tool;",
+                ("reference.md", "These rules are instructions to main, not enforced by any tool;",
                  ("- **Claim changes:**", "- **Deviations in tickets:**", "- **Spec updates:**")),
-                ("README.zh-TW.md", "這些規則是給主 Agent 的指示，沒有任何工具強制執行；",
+                ("reference.zh-TW.md", "這些規則是給主 Agent 的指示，沒有任何工具強制執行；",
                  ("- **修改 claim：**", "- **ticket 的偏離：**", "- **更新 spec：**"))):
-            section = ClaimsAtImplementationTests.readme_section(name)
+            section = ClaimsAtImplementationTests.reference_section(name)
             with self.subTest(readme=name):
                 self.assertIn(intro, section)
                 positions = [section.index(bullet) for bullet in bullets]

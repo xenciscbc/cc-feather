@@ -111,7 +111,21 @@ POST_FIX_REFERENCES = config.ROOT / "skills" / "delegation" / "references"
 POST_FIX_AGENTS = config.ROOT / "templates" / "agents"
 ADVERSARIAL_RETRIES_ADR = config.ROOT / "docs" / "adr" / "0009-security-critical-claims-get-an-adversarial-review.md"
 ADVERSARIAL_RETRIES_AMENDMENT_HEADING = "## Amendment note for 0.19.0"
-ADVERSARIAL_RETRIES_DISCLOSURE_OPENINGS = {"README.md": "Adversarial review is the third step:", "README.zh-TW.md": "對抗式審查是第三步："}
+ADVERSARIAL_RETRIES_DISCLOSURE_OPENINGS = {"reference.md": "Adversarial review is the third step:",
+                                          "reference.zh-TW.md": "對抗式審查是第三步："}
+# The README's detailed rules live in docs/reference*.md; its rule bullets sit between these headings.
+REFERENCE_FILES = {"reference.md": config.ROOT / "docs" / "reference.md",
+                   "reference.zh-TW.md": config.ROOT / "docs" / "reference.zh-TW.md"}
+REFERENCE_RULE_BOUNDS = {"reference.md": ("## Automatic review", "### Stop threshold"),
+                         "reference.zh-TW.md": ("## 自動審查", "### 停止門檻")}
+
+
+def reference_and_readme(name: str) -> str:
+    """A reference file's text followed by its README's ('reference.md' or 'reference.zh-TW.md'), for absence pins and
+        scans of the rules that moved out of the README, which must hold in both files."""
+    readme = config.ROOT / name.replace("reference", "README")
+    return REFERENCE_FILES[name].read_text(encoding="utf-8") + "\n" + readme.read_text(encoding="utf-8")
+
 ADVERSARIAL_RETRIES_EARLY_EITHER_MODE = ("This rule on early explicit calls holds in off as well as in auto: in either mode, an explicit "
                      "Adversarial review made before the claim's valid APPROVED and CONFIRMED does not count as the "
                      "step's pass.")
@@ -132,7 +146,8 @@ def glossary_entries(text: str) -> dict[str, str]:
 
 
 def review_rules_source(name: str) -> str:
-    """Text of one named place: '<file>' or '<file>#<label>' for a bold-labelled bullet or README rule bullet."""
+    """Text of one named place: '<file>' or '<file>#<label>' for a bold-labelled bullet or a README or reference rule
+        bullet."""
     path, _, label = name.partition("#")
     files = {
         "review-state.md": REVIEW_RULES_REFERENCES / "review-state.md",
@@ -144,6 +159,7 @@ def review_rules_source(name: str) -> str:
         "auto-on": config.ROOT / "skills" / "auto-on" / "SKILL.md",
         "README.md": config.ROOT / "README.md",
         "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+        **REFERENCE_FILES,
         "CONTEXT.md": config.ROOT / "CONTEXT.md",
         "issue-tracker.md": config.ROOT / "docs" / "agents" / "issue-tracker.md",
         "handoff SKILL.md": config.ROOT / "skills" / "handoff" / "SKILL.md",
@@ -157,6 +173,8 @@ def review_rules_source(name: str) -> str:
         return dict(readme_rule_bullets(text, "## Roles and routing", "### Automatic review switch"))[label]
     if path == "README.zh-TW.md":
         return dict(readme_rule_bullets(text, "## 分派與預設模型", "### 自動審查開關"))[label]
+    if path in REFERENCE_RULE_BOUNDS:
+        return dict(readme_rule_bullets(text, *REFERENCE_RULE_BOUNDS[path]))[label]
     if path == "CONTEXT.md":
         return glossary_entries(text)[label]
     if path == "auto-review.md":
@@ -207,7 +225,8 @@ def sentences(text):
 
 def adversarial_retries_source(name: str) -> str:
     """Text of one place: 'adversarial-review.md' or '#<step number>'; 'review-state.md' or '#<bullet label>';
-        'README.md#<rule label>' and 'README.zh-TW.md#<rule label>'; '<README>#disclosure' (the third-step paragraph);
+        'reference.md#<rule label>' and 'reference.zh-TW.md#<rule label>'; '<reference>#disclosure' (the third-step
+        paragraph);
         'ADR 0009', 'ADR 0009#options' (Considered Options) or 'ADR 0009#amendment' (the 0.19.0 amendment note)."""
     path, _, part = name.partition("#")
     if path == "ADR 0009":
@@ -220,7 +239,7 @@ def adversarial_retries_source(name: str) -> str:
     if path == "adversarial-review.md":
         return post_fix_source(name)
     if part == "disclosure":
-        text = (config.ROOT / path).read_text(encoding="utf-8")
+        text = REFERENCE_FILES[path].read_text(encoding="utf-8")
         return next(line for line in text.splitlines() if line.startswith(ADVERSARIAL_RETRIES_DISCLOSURE_OPENINGS[path]))
     return review_rules_source(name)
 
@@ -240,8 +259,8 @@ def adversarial_retries_assert_pinned(self, pins):
 
 
 def stop_threshold_source(name: str) -> str:
-    """'<file>' or '<file>#<label>': a '- **<label>.**' bullet of a procedure, a README rule bullet, or the
-        README and setup sections named '#section'."""
+    """'<file>' or '<file>#<label>': a '- **<label>.**' bullet of a procedure, a README or reference rule bullet, or
+        the README, reference and setup sections named '#section'."""
     path, _, label = name.partition("#")
     files = {
         "review-state.md": STOP_THRESHOLD_REFERENCES / "review-state.md",
@@ -254,6 +273,7 @@ def stop_threshold_source(name: str) -> str:
         "setup.md": config.ROOT / "docs" / "setup.md",
         "README.md": config.ROOT / "README.md",
         "README.zh-TW.md": config.ROOT / "README.zh-TW.md",
+        **REFERENCE_FILES,
         "ADR 0010": STOP_THRESHOLD_ADR / "0010-the-stop-threshold-is-one-configurable-number.md",
     }
     text = files[path].read_text(encoding="utf-8")
@@ -261,12 +281,15 @@ def stop_threshold_source(name: str) -> str:
         return text
     if label == "section":
         heading = {"README.md": "\n### Stop threshold\n", "README.zh-TW.md": "\n### 停止門檻\n",
+                   "reference.md": "\n### Stop threshold\n", "reference.zh-TW.md": "\n### 停止門檻\n",
                    "setup.md": "\n## Stop threshold\n", "review-state.md": "\n## Stop threshold\n"}[path]
         return text.split(heading, 1)[1].split("\n#", 1)[0]
     if path == "README.md":
         return dict(readme_rule_bullets(text, "## Roles and routing", "### Automatic review switch"))[label]
     if path == "README.zh-TW.md":
         return dict(readme_rule_bullets(text, "## 分派與預設模型", "### 自動審查開關"))[label]
+    if path in REFERENCE_RULE_BOUNDS:
+        return dict(readme_rule_bullets(text, *REFERENCE_RULE_BOUNDS[path]))[label]
     if label.isdigit():
         return next(line for line in text.splitlines() if line.startswith(f"{label}. "))
     return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
