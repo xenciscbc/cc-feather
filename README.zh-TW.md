@@ -29,7 +29,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:handoff-list` | 列出交接工作摘要（唯讀，不接續） |
 | `/cc-feather:handoff-save [工作]` | 保存指定工作；省略時保存目前工作 |
 | `/cc-feather:handoff-resume [工作]` | 接續指定工作或唯一未完成的工作；有多項時詢問 |
-| `/cc-feather:handoff-tidy [工作名稱或 all]` | 整理既有的交接紀錄，只能由你執行。不帶參數時詢問模式：Proposal（只讀紀錄，建議下一項工作，並指出可合併、過時或不完整的紀錄）、Full check（先說明成本並等你確認，再拿每筆紀錄對照目前專案）或 Selected check（核對你指定的工作）；帶工作名稱直接做 Selected check，帶 `all` 做 Full check。檢查唯讀，不執行專案程式碼。它只提出建議：合併、搬移項目與更新進度都在你確認後才寫入，也不會授權它建議的工作或開始交接維護 |
+| `/cc-feather:handoff-tidy [工作名稱或 all]` | 整理既有的交接紀錄，只能由你執行。不帶參數時詢問模式：Proposal（只讀紀錄，建議下一項工作，並指出可合併、過時或不完整的紀錄）、Full check（先說明成本並等你確認，再拿每筆紀錄對照目前專案）或 Selected check（核對你指定的工作），你也可以用自己的話描述想做什麼；帶工作名稱直接做 Selected check，帶 `all` 做 Full check。檢查唯讀，不執行專案程式碼。它只提出建議：合併、搬移項目與更新進度都在你確認後才寫入，也不會授權它建議的工作或開始交接維護 |
 | `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:delegation-preview [計畫、ticket 或工作]` | 預覽工作會如何分派，不實際派工；見[分派預覽](#分派預覽) |
