@@ -1630,7 +1630,7 @@ class FeatherConfigTests(unittest.TestCase):
             path.write_bytes(text.encode("utf-8"))
         return fixture
 
-    def test_0_20_0_fixture_is_the_tagged_content_of_every_changed_role_template(self):
+    def test_0_20_0_fixture_is_the_tagged_content_of_each_recorded_role_template(self):
         def git(*args):
             return subprocess.run([*self.GIT_READ, *args], cwd=config.ROOT, stdin=subprocess.DEVNULL,
                                   capture_output=True, timeout=60)
@@ -1648,15 +1648,12 @@ class FeatherConfigTests(unittest.TestCase):
             if not current.is_file() or current.read_bytes() != shown.stdout:
                 changed[name] = shown.stdout
         recorded = self.recorded_0_20_0()
-        # Repository safety C1 changes the automatic-review guidance template, which is not a role template; the fixture
-        # records role templates only, and changed guidance is reported by check's older-template warning instead. 0.28.0
-        # (docs/specs/weigh-findings-before-rules.md, Acceptance item 4) changes the delegation policy template too.
-        guidance = {name for name in changed if not name.startswith("templates/agents/")}
-        self.assertEqual(guidance, {"templates/review-auto.md", "templates/CLAUDE.md"})
-        changed = {name: text for name, text in changed.items() if name not in guidance}
-        self.assertEqual(sorted(changed), sorted(f"templates/agents/{role}.md" for role in self.CHANGED_SINCE_0_20_0))
+        # Only the recorded role templates are pinned to the tag. A later release may change any other template, role
+        # or guidance, without touching this fixture; a recorded one must still differ from its current template, or
+        # the fixture would no longer make it stale.
         for role, text in recorded.items():
             with self.subTest(role=role):
+                self.assertIn(f"templates/agents/{role}.md", changed)
                 self.assertEqual(text.encode("utf-8"), changed[f"templates/agents/{role}.md"])
 
     def test_0_20_0_role_templates_are_stale_until_setup_update(self):
