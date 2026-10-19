@@ -4,6 +4,7 @@ follow to install, update and recover."""
 from __future__ import annotations
 
 import json
+import re
 import unittest
 
 from tests.feather_support import config
@@ -891,19 +892,21 @@ class WeighFindingsBeforeRulesReleaseTests(unittest.TestCase):
     def section(text, heading):
         return text.split(heading, 1)[1].split("\n## ", 1)[0]
 
-    def test_manifest_is_0_28_0(self):
-        self.assertEqual("0.28.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.29.0, delegation trusts the repository).
 
     def test_updates_sections_start_with_the_weigh_findings_note_in_both_languages(self):
         previous = HandoffTidyWriteEdgesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = RepoTrustSplitReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.28.0 note starts right after the section's opening sentence, its sentences in order, before 0.27.1's.
+            # The 0.28.0 note starts right after the 0.29.0 note, its sentences in order, before 0.27.1's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -953,6 +956,142 @@ class WeighFindingsBeforeRulesReleaseTests(unittest.TestCase):
         positions = [entry.index(f"\n- {step}") for step in ("`check --project", "`python -I -B <tool> update", "`check` with")]
         self.assertEqual(positions, sorted(positions))
         self.assertEqual(entry.count("\n- The claim: "), 1)
+
+
+class RepoTrustSplitReleaseTests(unittest.TestCase):
+    """0.29.0 (docs/specs/repo-trust-split.md, Acceptance items 18 and 19, S1 and S8): the manifest version is 0.29.0;
+    the Updates note states what 0.29.0 changes, that saying a change comes from someone else no longer stops a review
+    from running it, that the role definitions and the installed delegation policy changed so existing installations run
+    `/cc-feather:setup update` and start a fresh session, and how to go back to 0.28.0, in both languages, without
+    implying that reviews contain or detect hostile repository content; the validation entry records the test counts, a
+    setup update bringing a 0.28.0 installation's role definitions and policy to the new templates in a scratch project
+    scope, the T2 skips, the abandoned repo-check, that no live review rehearsal was run, the review round and the tag."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.29.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.29.0 makes delegation trust the repository: main and the roles read it with ordinary file tools and ordinary Git commands, a review keeps only the checks its result needs, that `HEAD` is the commit the call judges, that what the claim depends on has no uncommitted or untracked change before or after the call and that a commit holds only the claim's files, and reviews run the repository's code unless you restrict it in this session; deciding whether to trust a repository is yours, and the risks that remain are listed under [Repository safety](#repository-safety).",
+         "Saying that a change comes from someone else no longer stops a review from running it, so to stop it, say in your own message that the code must not run.",
+         "It changes the reviewer, verifier, adversary, analyst, scout and Explore role definitions and the installed delegation policy, so existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` warns that those roles, and in `auto` the delegation guidance, are from an older template.",
+         "To go back to 0.28.0, reinstall the 0.28.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.28.0 role definitions and policy; no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.29.0 讓分派信任儲存庫：主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取它，審查只保留讓結果正確的檢查（`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案），而且除非你在這個 session 中限制，審查會執行儲存庫的程式碼；要不要信任一個儲存庫由你決定，剩下的風險列在[儲存庫安全](#儲存庫安全)。",
+         "說明變更來自別人已經不會阻止審查執行它，所以要阻止，請在你自己的訊息中說程式碼不得執行。",
+         "它改了 reviewer、verifier、adversary、analyst、scout 與 Explore 的角色定義以及已安裝的分派政策，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒這些角色（以及 `auto` 下的分派指引）來自較舊的範本。",
+         "要回到 0.28.0，重新安裝 0.28.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.28.0 的角色定義與政策；不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # S1: wording that would say a review contains, isolates or detects hostile content, and the guarded wording of
+    # tests/test_feather_security_review.py and tests/test_feather_review_rules.py.
+    CONTAINMENT = ("contain", "detect", "isolat", "sandbox", "隔離", "偵測", "防護")
+    GUARDED = re.compile(r"security[\s-]*boundar|安全邊界|security-sensitive|安全敏感|two-call|six calls|fourteen", re.I)
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def test_manifest_is_0_29_0(self):
+        self.assertEqual("0.29.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_trusted_repository_note_in_both_languages(self):
+        previous = WeighFindingsBeforeRulesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.29.0 note starts right after the section's opening sentence, its sentences in order, before 0.28.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # The note asks for setup update after the plugin update and for going back, and never says it is not needed.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                self.assertNotIn(no_update, note)
+                self.assertNotIn("need only the plugin update", note)
+                self.assertNotIn("只要更新 plugin", note)
+
+    def test_the_note_names_every_role_definition_the_release_changes(self):
+        from tests import test_feather_repo_trust as repo_trust
+        changed = repo_trust.SetupUpdateReplacesTheTwentyEightInstallationTests.CHANGED
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            for role in changed:
+                with self.subTest(readme=name, role=role):
+                    self.assertIn(f"{role}", note)
+            for role in repo_trust.DelegationTrustsTheRepositoryTests.UNCHANGED_ROLES:
+                with self.subTest(readme=name, unchanged=role):
+                    self.assertNotIn(role, note)
+
+    def test_s1_the_note_implies_no_containment_and_keeps_out_guarded_wording(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                for phrase in self.CONTAINMENT:
+                    self.assertNotIn(phrase, note.lower())
+                self.assertIsNone(self.GUARDED.search(note))
+
+    # The validation entry: what it implements, the setup update and the changed templates, the validation and the T2
+    # skips, the setup-update check from a 0.28.0 installation in a scratch project scope, repo-check, no rehearsal, the
+    # tag and the review round.
+    ENTRY_HEADING = "\n## 0.29.0 delegation trusts the repository\n"
+    ENTRY = (
+        "Implements [the delegation trusts the repository spec](specs/repo-trust-split.md), committed in 919af63;",
+        "**Setup update is required.**",
+        "as `git diff-tree -r --name-only v0.28.0 HEAD -- templates skills/setup scripts` shows.",
+        "To go back to 0.28.0, reinstall the 0.28.0 plugin and run `/cc-feather:setup update` the same way.",
+        "(the 0.28.0 release ran 884, and 98042a0 ran 837).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "No T2 case was skipped on this platform:",
+        "`icacls <dir> /deny <user>:(RD)`",
+        "in a scratch directory `<scratch>` outside the repository",
+        "v0.28.0 was exported read-only with `git archive --format=tar v0.28.0 | tar -x -C <scratch>/v0.28.0`,",
+        "`role_update_required: true`",
+        "previewed changes to the six role definitions, `project/CLAUDE.md` and `project/.claude/cc-feather/state.json` only;",
+        "The user's own scopes were not touched;",
+        "abandoned on 2026-10-19",
+        "kept on the local branch `repo-check-wip`",
+        "No live review rehearsal was run for this release;",
+        "`v0.29.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "All reviews used the installed 0.28.0 roles and procedures from the plugin cache,",
+        "found 6 Blocking and 10 Non-blocking items, all adopted.",
+        "follow the commit carrying this entry and are recorded after it.",
+    )
+
+    def test_validation_entry_records_the_checks_setup_update_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
+        self.assertIsNone(self.GUARDED.search(entry))
+        # The setup-update check has its steps, in order, and each ticket its line in the review round, in order.
+        steps = ("`check --project", "`python -I -B <tool> update", "`check` with `<tool>` then", "Going back:")
+        positions = [entry.index(f"\n- {step}") for step in steps]
+        self.assertEqual(positions, sorted(positions))
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
+                                                            "Ticket 04:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry is the file's last, so it is appended rather than rewriting an earlier one.
+        self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
 
 
 class InstallDocumentTests(unittest.TestCase):
