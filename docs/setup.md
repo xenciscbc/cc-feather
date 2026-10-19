@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages fourteen skills. Handoff commands work immediately after plugin installation, and so does `/cc-feather:repo-check`, which reports what in a repository could run code or redirect reads, without running any of it, when you decide whether to trust the repository; it needs no setup. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages thirteen skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy and delegation policy plus agents, or both. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 

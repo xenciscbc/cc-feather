@@ -1012,7 +1012,7 @@ class StopThresholdProceduresTests(unittest.TestCase):
     # Item 10: wording that states the fixed number as a rule, retired from shipped skill files, READMEs and the
     # setup document. The README's K = 2 example writes its bounds as numerals, so only "2 + 6N + 8S" needs an exception.
     RETIRED = re.compile(
-        r"two consecutive automatic calls|two in a row|two-call|six automatic calls|at most six|six calls|fourteen(?! skills)"
+        r"two consecutive automatic calls|two in a row|two-call|six automatic calls|at most six|six calls|fourteen"
         r"|refuted twice|up to two plan reviews|count stays where it stopped|because the count stays"
         r"|count is unchanged, so a reopened|保留它的次數與停止狀態，不會多出新的自動呼叫"
         r"|連續兩次|最多六次|十四次|兩次計畫審查|因為次數沒有歸零", re.I)

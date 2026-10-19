@@ -23,8 +23,7 @@
     "./skills/auto-on",
     "./skills/auto-off",
     "./skills/stop-threshold",
-    "./skills/adversarial-review",
-    "./skills/repo-check"
+    "./skills/adversarial-review"
   ],
   "repository": "https://github.com/xenciscbc/cc-feather.git"
 }
