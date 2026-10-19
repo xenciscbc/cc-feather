@@ -39,14 +39,16 @@ The report has `complete`, `git` (the Git path and version the tool used), `find
 | Category | What it could do |
 | --- | --- |
 | `environment` | `PATH` entries the tool skipped, a dropped `GIT_EXEC_PATH`, links in the checked directory's own path. A skipped entry inside the checked directory could otherwise have supplied a planted `git`. |
-| `git-layout` | Point Git at another Git directory, working tree, object store or configuration (gitfile, `commondir`, alternates, `core.worktree`, a bare layout, an outer repository, links inside `.git`), or show that Git is old or refused the directory for its ownership. |
+| `git-layout` | Point Git at another Git directory, working tree, object store or configuration (gitfile, `commondir`, alternates, `core.worktree`, a bare layout, an outer repository, links inside `.git`), list each Git directory the tool read and what it lacks, or show that Git is old. |
 | `configuration` | Run a program, select hooks or files Git reads, rewrite URLs, or include another configuration file, whenever an ordinary Git command reads that configuration. `origin` names the file. |
 | `hooks` | Run as a program when Git performs the hook's operation, such as a commit, checkout or merge. |
 | `attributes` | Select filter, diff or merge drivers, whose configured programs Git runs on add, checkout, status, diff or merge. |
 | `refs-and-submodules` | Replacement refs make Git show other objects; submodules bring in another repository, with its own configuration and hooks. |
-| `index` | An entry with mode 120000 becomes a symbolic link on a checkout that supports them. |
 | `working-tree` | Symbolic links, junctions and other reparse points can make reads land outside the directory; hard links share content with another name; special entries, unusual names and nested repositories can confuse tools or Git. |
 | `claude-code` | `CLAUDE.md`, its `@` imports, `CLAUDE.local.md`, `AGENTS.md`, `.claude/` and `.mcp.json` steer Claude Code or start programs; Claude Code may already have loaded some of them, and run the hooks in `.claude/settings.json`, when a session started in the directory. |
 
+A Git directory not named `.git`, such as a bare repository layout at the top, can bring with it `git-layout` findings for its own `logs` and `refs` subdirectories, listed as Git directories whose `config` and `hooks` are absent: Git keeps `HEAD` files there, and the tool counts every directory holding a `HEAD` that is not a directory, so these findings are expected and do not make the report incomplete.
+
 - State that the report covers the checked directory as it is now and only the items on the tool's fixed checklist: content that arrives later, by a pull, fetch, merge or checkout, is not checked unless the user runs this command again, and an item the checklist does not cover is not reported. The tool does not examine the code the repository would run by other means, such as its tests, package scripts or build files.
+- State the report's note that the index, objects and commits were not read, so attribute and module files, gitlinks and symbolic-link entries that exist only there are not reported.
 - A report with no findings, or only some, does not mean that the directory can be trusted, and never say that it can. Make no trust decision and recommend none unless the user asks for your view; the decision is the user's.

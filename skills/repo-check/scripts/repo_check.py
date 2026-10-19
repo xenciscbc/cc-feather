@@ -4,29 +4,32 @@ Usage: python -I -B repo_check.py <absolute directory>
 
 Prints one UTF-8 JSON report on standard output and writes nothing anywhere. The report has `complete`, the Git
 version and path used, and a list of findings, each with a category, a path or configuration key, its origin where
-known and a one-line description. Every entry the tool could not examine, every Git command that failed and every
-output it could not parse is a finding of the category `not-examined`, and `complete` is true only when there is
-none. The report lists only the items on the fixed checklist below, for the directory as it is now; it never states
-that the directory can be trusted.
+known and a one-line description. Every entry the tool could not examine, every Git directory, common directory or
+worktree it could not read, every ref storage it does not read, every configuration read that failed and every output
+it could not parse is a finding of the category `not-examined`, and `complete` is true only when there is none. The
+report lists only the items on the fixed checklist below, for the directory as it is now; it never states that the
+directory can be trusted.
 
 How it reads the directory:
 
-- Git is found by walking PATH in order, considering only fully qualified entries and skipping every entry inside the
-  checked directory, which is reported. It is started by that absolute path, from its own directory, with a PATH of
-  only the considered entries, and never from the current or the checked directory.
-- Git is pointed at the repository only by `-C <absolute path>`, and only when the layout is the plain one (see
-  `analyse_layout`). Configuration files are read as data only by `config --file <absolute path> --no-includes`, from
-  Git's own directory, outside every repository. Every Git command other than `git --version` carries the flags in
-  `COMMON_FLAGS`, plus `--no-lazy-fetch` on Git 2.45.0 or later. The subcommands are the closed list in
-  `REPOSITORY_COMMANDS` and the data read; the tool never runs `git status`, a working-tree diff, textconv, an
-  external diff, a filter, or a command that refreshes or writes the index, objects, refs or configuration, or that
-  contacts a remote. On older Git it reads neither the index nor any object when a promisor remote is declared.
+- Git runs on nothing in the checked directory. It runs only as `git --version` and as
+  `git --no-pager config --file - --no-includes --list -z`, which reads configuration bytes the tool hands it on
+  standard input, so Git opens no path the directory names and discovers no repository. Git is found by walking PATH
+  in order, considering only fully qualified entries and skipping every entry inside the checked directory, which is
+  reported; it is started by that absolute path, from its own directory, with a PATH of only the considered entries,
+  the variables that select a repository removed and GIT_CEILING_DIRECTORIES set to its directory's parent. When the
+  Git executable's own directory is itself a repository, no configuration read runs.
+- The tool reads everything else itself, as data: the layout of every Git directory Git may select inside the checked
+  directory (see `git_directories`), their configuration, hooks, `info/attributes`, the refs under `refs/replace/`
+  and `packed-refs`, and the working tree's `.gitattributes` and `.gitmodules`. It reads no object, no index and no
+  reftable.
 - The tool walks the working tree itself with metadata that does not follow links, taking each entry's attributes
   from its parent directory's listing, and never descends into a link, junction, other reparse point or cloud
   placeholder. Every metadata read and file open goes through the single function `fs`, which tests observe.
-- A path that repository content names (an include target, a `CLAUDE.md` import) is opened only when its text,
-  normalised without resolving links, lies inside the checked directory and the walk found every component of it
-  to be a plain directory and the file a regular file with one link. Any other target is reported by its text only.
+- A path that repository content names (a gitfile, `commondir` or include target, a `CLAUDE.md` import) is opened
+  only when its text, followed component by component without resolving links, lies inside the checked directory,
+  crosses no link and the walk found every component of it to be a plain directory and the file a regular file with
+  one link. Any other target is reported by its text only.
 - It imports nothing from the checked directory and runs no file from it.
 """
 
@@ -41,27 +44,18 @@ import sys
 
 WINDOWS = os.name == "nt"
 CASE_INSENSITIVE = WINDOWS or sys.platform == "darwin"
-REPORT_FORMAT = 1
+REPORT_FORMAT = 2
 MIN_PYTHON = (3, 11)
 OLD_GIT = (2, 32, 0)
-NO_LAZY_FETCH_FROM = (2, 45, 0)
 READ_LIMIT = 4 * 1024 * 1024
+PIECE = 64 * 1024
+LINE_LIMIT = 64 * 1024
 IMPORT_DEPTH = 5
 GIT_TIMEOUT = 300
 
-# Every Git command other than `git --version` starts with these: no pager, no optional index refresh, no replacement
-# objects, and no fsmonitor, attributes file or excludes file from any configuration.
-COMMON_FLAGS = ("--no-pager", "--no-optional-locks", "--no-replace-objects", "-c", "core.fsmonitor=",
-                "-c", "core.attributesFile=", "-c", "core.excludesFile=")
-# The closed list of subcommands run with `-C <checked directory>`, each with the options it must carry.
-REPOSITORY_COMMANDS = {
-    "rev-parse": (),
-    "ls-files": ("--stage",),
-    "check-attr": ("--cached",),
-    "cat-file": (),
-    "for-each-ref": (),
-}
-# Removed from Git's environment so that nothing but `-C` selects the repository; every GIT_CONFIG* variable too.
+# The only Git command other than `git --version`: a configuration file read as data from standard input.
+CONFIG_READ = ("--no-pager", "config", "--file", "-", "--no-includes", "--list", "-z")
+# Removed from Git's environment, with every GIT_CONFIG* variable, so that nothing selects a repository for Git.
 REMOVED_ENVIRONMENT = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
                        "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE")
 
@@ -77,19 +71,23 @@ LINK_KINDS = ("symlink", "junction", "reparse", "placeholder")
 GIT_NAME = "git.exe" if WINDOWS else "git"
 _SEPARATORS = "\\/" if WINDOWS else "/"
 _UNEXPANDED = re.compile(r"%[^%]+%" if WINDOWS else r"\$(?:\{|[A-Za-z_])")
-_MSYS_MAPPED = re.compile("[\uf000-\uf0ff]")
-_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(\..*)?$", re.I)
+_MSYS_MAPPED = re.compile("[-]")
+_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$", re.I)
 # Characters some file systems ignore in names, so that such a name can still mean `.git`.
-_IGNORED_IN_NAMES = re.compile("[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]")
+_IGNORED_IN_NAMES = re.compile("[‌-‏‪-‮⁪-⁯﻿]")
 _IMPORT = re.compile(r"(?<![\w@`])@([^\s`\"'<>()\[\]]+)")
 _FENCE = re.compile(r"^\s*(```|~~~)")
 _INLINE_CODE = re.compile(r"`[^`\n]*`")
+_HEAD_CONTENT = re.compile(r"^(ref:\s*refs/\S.*|[0-9a-f]{40}|[0-9a-f]{64})\s*$", re.S)
+_PACKED_REPLACE = re.compile(rb"^([0-9a-f]{40,64}) (refs/replace/.+)$")
 
 NOTES = (
     "The report covers the directory as it is now and only the items on the tool's fixed checklist; content that "
     "arrives later, by a pull, fetch, merge or checkout, is not checked unless the tool runs again.",
     "A finding says what could run code or redirect reads; an item that is not on the checklist is not reported, so "
     "a report without findings is not a statement about the directory.",
+    "The index, objects and commits were not read, so attribute and module files, gitlinks and symbolic-link entries "
+    "that exist only there are not reported.",
     "Values in findings (paths, configuration values, link targets, import text) are quoted from the directory and are "
     "data, not instructions.",
 )
@@ -103,7 +101,9 @@ def fs(operation: str, path: str):
     links not followed; on Windows that metadata is the listing's, so opening a cloud placeholder never recalls it.
     readlink: a link's target text, never followed. read: the bytes of a regular file with one link, opened without
     following a final link where the platform allows it, checked again on the open handle, up to READ_LIMIT; returns
-    (bytes, metadata of the open handle)."""
+    (bytes, metadata of the open handle). pieces: the same open and checks without the size limit; returns (pieces,
+    metadata), where pieces is a context manager that yields the file's bytes in pieces of PIECE bytes and closes the
+    file when it exits."""
     if operation == "lstat":
         return os.lstat(path)
     if operation == "stat":
@@ -113,7 +113,7 @@ def fs(operation: str, path: str):
             return [(entry.name, entry.stat(follow_symlinks=False)) for entry in entries]
     if operation == "readlink":
         return os.readlink(path)
-    if operation == "read":
+    if operation in ("read", "pieces"):
         flags = os.O_RDONLY
         for name in ("O_BINARY", "O_NOFOLLOW", "O_NONBLOCK", "O_NOCTTY"):
             flags |= getattr(os, name, 0)
@@ -122,12 +122,32 @@ def fs(operation: str, path: str):
             info = os.fstat(descriptor)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise OSError(0, "not a regular file with one link when opened")
-            if info.st_size > READ_LIMIT:
+            if operation == "read" and info.st_size > READ_LIMIT:
                 raise OSError(0, f"larger than {READ_LIMIT} bytes")
+        except BaseException:
+            os.close(descriptor)
+            raise
+        if operation == "pieces":
+            class Pieces:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_details):
+                    os.close(descriptor)
+
+                def __iter__(self):
+                    while True:
+                        piece = os.read(descriptor, PIECE)
+                        if not piece:
+                            return
+                        yield piece
+
+            return Pieces(), info
+        try:
             chunks = []
             remaining = READ_LIMIT + 1
             while remaining > 0:
-                chunk = os.read(descriptor, min(65536, remaining))
+                chunk = os.read(descriptor, min(PIECE, remaining))
                 if not chunk:
                     break
                 chunks.append(chunk)
@@ -191,6 +211,11 @@ def native(path: str) -> str:
     return "\\\\?\\" + path
 
 
+def components(text: str):
+    """The components of a path's text, split at the platform's separators, with empty ones dropped."""
+    return [part for part in re.split(r"[\\/]" if WINDOWS else "/", text) if part]
+
+
 def unusual_name(name: str) -> str | None:
     if any(ord(character) < 32 or ord(character) == 127 for character in name):
         return "holds a control character"
@@ -231,18 +256,10 @@ def classify(info) -> str:
     return "special"
 
 
-def bare_layout(head, objects, refs) -> bool:
-    """Whether entries of these kinds (None for a missing entry) named `HEAD`, `objects` and `refs` in one directory
-    may make it a bare repository layout to Git. `HEAD` counts unless it is a directory: Git accepts a regular file
-    and also a symbolic link whose target starts with `refs/`, and an entry the tool cannot classify is counted too,
-    so that the result errs towards a repository."""
-    return head is not None and head != "dir" and objects is not None and objects != "file" \
-        and refs is not None and refs != "file"
-
-
 KIND_TEXT = {"symlink": "a symbolic link", "junction": "a junction", "reparse": "a reparse point",
              "placeholder": "a cloud placeholder", "special": "not a regular file or directory", "dir": "a directory",
-             "file": "a file", "ambiguous": "one of several entries whose names the tool reads as the same"}
+             "file": "a file", "unknown": "an entry that could not be examined",
+             "ambiguous": "one of several entries whose names the tool reads as the same"}
 
 
 class Entry:
@@ -311,6 +328,8 @@ def listed_key(key: str, value):
         ("submodule", "recurse"): ("setting", "makes commands act on submodules too"),
         ("include", "path"): ("include", "includes another configuration file"),
         ("extensions", "partialclone"): ("promisor", "declares a promisor remote that Git fetches missing objects from"),
+        ("extensions", "refstorage"): ("setting", "selects how Git stores refs"),
+        ("attr", "tree"): ("setting", "makes Git read attributes from a tree it names"),
     }
     if not sub and (section, name) in plain:
         return plain[(section, name)]
@@ -358,7 +377,7 @@ def listed_key(key: str, value):
 
 
 def parse_listing(text: str):
-    """Entries of `git config --null --list` output: (key, value), value None for a key without '='."""
+    """Entries of `git config --list -z` output: (key, value), value None for a key without '='."""
     entries = []
     for item in text.split("\0"):
         if not item:
@@ -370,54 +389,18 @@ def parse_listing(text: str):
     return entries
 
 
-def parse_config_text(text: str):
-    """A small reader for configuration text held in a blob (`.gitmodules`): (key, value) pairs. Raises ValueError on
-    a line it cannot read."""
-    entries = []
-    section = None
-    for number, raw in enumerate(text.splitlines(), 1):
-        line = raw.strip()
-        if not line or line[0] in "#;":
-            continue
-        header = re.match(r'^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\](.*)$', line)
-        if header:
-            name, subsection, rest = header.groups()
-            if subsection is None:
-                section = name.lower()
-            else:
-                section = name.lower() + "." + re.sub(r"\\(.)", r"\1", subsection)
-            line = rest.strip()
-            if not line or line[0] in "#;":
-                continue
-        if section is None:
-            raise ValueError(f"line {number} lies outside a section")
-        pair = re.match(r"^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$", line)
-        if not pair:
-            raise ValueError(f"line {number} cannot be read")
-        key, value = pair.groups()
-        if value is not None:
-            value = _config_value(value)
-        entries.append((f"{section}.{key.lower()}", value))
-    return entries
+class GitDirectory:
+    """A Git directory the tool reads: its components below the checked directory, the label the report gives it,
+    the directory relative paths in its configuration start from (its working tree, when known), and whether a
+    missing `config` or `hooks` is reported."""
+    __slots__ = ("parts", "label", "base", "report_absent", "fields")
 
-
-def _config_value(text: str) -> str:
-    out = []
-    quoted = False
-    index = 0
-    while index < len(text):
-        character = text[index]
-        if character == '"':
-            quoted = not quoted
-        elif character == "\\" and index + 1 < len(text):
-            index += 1
-            out.append({"n": "\n", "t": "\t", "b": "\b"}.get(text[index], text[index]))
-        elif character in "#;" and not quoted:
-            break
-        else:
-            out.append(character)
-        index += 1
-    return "".join(out).strip()
+    def __init__(self, parts, label, base, report_absent, fields=None):
+        self.parts = parts
+        self.label = label
+        self.base = base
+        self.report_absent = report_absent
+        self.fields = fields or {}
 
 
 # ----- The check -----
@@ -431,11 +414,13 @@ class Check:
         self.listed = {}
         self.git_path = None
         self.git_directory = None
-        self.git_version = None
         self.git_version_text = None
         self.environment = None
-        self.no_lazy_fetch = False
-        self.read_configs = {}
+        self.config_blocked = None
+        self.queue = []
+        self.queued = set()
+        self.object_links = 0
+        self.rejected_git = False
 
     # Findings
 
@@ -452,7 +437,17 @@ class Check:
     # Paths below the checked directory
 
     def key(self, parts):
-        return tuple(part.casefold() for part in parts) if CASE_INSENSITIVE else tuple(parts)
+        """The lookup key of a path below the checked directory: on a file system that ignores letter case, every
+        component as `str.upper().casefold()`, a superset of the folding such file systems apply."""
+        return tuple(part.upper().casefold() for part in parts) if CASE_INSENSITIVE else tuple(parts)
+
+    def is_git_name(self, name: str) -> bool:
+        return self.key((name,)) == self.key((".git",))
+
+    def inside_git_name(self, parts) -> bool:
+        """Whether a path lies inside a directory named `.git`, judged only from its components below the checked
+        directory."""
+        return any(self.is_git_name(part) for part in parts[:-1])
 
     def absolute(self, parts) -> str:
         return os.path.join(self.root, *parts) if parts else self.root
@@ -480,56 +475,133 @@ class Check:
     def children(self, parts):
         return list(self.listed.get(self.key(parts), ()))
 
-    def descendants(self, parts):
-        prefix = self.key(parts)
-        return [entry for key, entry in self.entries.items() if len(key) > len(prefix) and key[:len(prefix)] == prefix]
+    def subtree(self, parts):
+        """Every entry below parts that the walk listed, without passing through anything but directories."""
+        found = []
+        stack = [parts]
+        while stack:
+            for child in self.children(stack.pop()):
+                found.append(child)
+                if child.kind == "dir":
+                    stack.append(child.parts)
+        return sorted(found, key=lambda entry: entry.parts)
 
-    def path_problem(self, parts, final: str = "file"):
-        """Why the path below the checked directory may not be read or handed to Git, from the walk's results, or
-        None: every component must be a plain directory, the last one a regular file with one link (or a directory
-        when final is 'dir'), and on Windows no component may have a name Windows reads differently."""
+    def status(self, parts, final: str = "file"):
+        """('ok', None), ('absent', why) or ('fail', why) for a path below the checked directory, from the walk's
+        results. ok: every component is a plain directory and the last one a regular file with one link (or a
+        directory when final is 'dir'), and on Windows no component has a name Windows reads differently. absent: a
+        component does not exist, or one above the last is a regular file, so the path cannot exist. fail: anything
+        else, such as a component that is a link, a special file, a name that collides with another or a directory
+        the walk could not list; such a path is never read or handed to Git."""
+        if self.key(()) in self.unlisted:
+            return "fail", "the checked directory could not be listed"
         for index in range(1, len(parts) + 1):
             prefix = parts[:index]
-            if self.key(prefix[:-1]) in self.unlisted or any(self.key(prefix[:cut]) in self.unlisted
-                                                              for cut in range(index)):
-                return f"{self.rel(prefix[:-1])} could not be listed"
+            if self.key(prefix[:-1]) in self.unlisted:
+                return "fail", f"{self.rel(prefix[:-1])} could not be listed"
             entry = self.lookup(prefix)
             if entry is None:
-                return f"{self.rel(prefix)} does not exist"
+                return "absent", f"{self.rel(prefix)} does not exist"
+            shown = self.rel(entry.parts)
             if WINDOWS and unusual_name(entry.parts[-1]):
-                return f"{self.rel(entry.parts)} {unusual_name(entry.parts[-1])}"
-            last = index == len(parts)
-            wanted = final if last else "dir"
-            if entry.kind != wanted:
-                return f"{self.rel(entry.parts)} is {KIND_TEXT.get(entry.kind, entry.kind)}"
-            if last and final == "file":
+                return "fail", f"{shown} {unusual_name(entry.parts[-1])}"
+            if index < len(parts):
+                if entry.kind == "file":
+                    return "absent", f"{shown} is a file"
+                if entry.kind != "dir":
+                    return "fail", f"{shown} is {KIND_TEXT.get(entry.kind, entry.kind)}"
+                continue
+            if entry.kind != final:
+                return "fail", f"{shown} is {KIND_TEXT.get(entry.kind, entry.kind)}"
+            if final == "file":
                 if entry.nlink is None:
-                    return f"{self.rel(entry.parts)} could not be examined"
+                    return "fail", f"{shown} could not be examined"
                 if entry.nlink != 1:
-                    return f"{self.rel(entry.parts)} has {entry.nlink} links"
-        return None
+                    return "fail", f"{shown} has {entry.nlink} links"
+        return "ok", None
 
     def real_parts(self, parts):
         entry = self.lookup(parts)
         return entry.parts if entry else tuple(parts)
 
-    def read_file(self, parts, purpose: str):
-        """The bytes of a file below the checked directory that passes path_problem, or None after a not-examined
-        finding."""
-        problem = self.path_problem(parts)
-        if problem:
-            self.missing(f"{purpose} was not read: {problem}", path=self.rel(parts))
-            return None
+    def read_bytes(self, parts, purpose: str):
+        """('ok', bytes), ('absent', None) or ('fail', None) for a file below the checked directory; a failure is
+        listed as not examined."""
+        state, why = self.status(parts)
+        if state == "absent":
+            return "absent", None
+        if state == "fail":
+            self.missing(f"{purpose} was not read: {why}", path=self.rel(self.real_parts(parts)))
+            return "fail", None
         entry = self.lookup(parts)
         try:
             data, info = fs("read", native(self.absolute(entry.parts)))
         except OSError as error:
             self.missing(f"{purpose} could not be read: {error.strerror or error}", path=self.rel(entry.parts))
-            return None
-        if entry.identity and (info.st_ino, info.st_dev) != entry.identity and entry.identity[0]:
+            return "fail", None
+        if entry.identity and entry.identity[0] and (info.st_ino, info.st_dev) != entry.identity:
             self.missing(f"{purpose} changed while it was read", path=self.rel(entry.parts))
-            return None
-        return data
+            return "fail", None
+        return "ok", data
+
+    def locate(self, value: str, base_parts, home: bool = False) -> dict:
+        """Where a path value points, judged from its text without resolving links: inside the checked directory
+        (with the components it names), outside it, a UNC path, or a form that cannot be placed. The text is followed
+        component by component from the checked directory or from base_parts, so that a component that is a link is
+        found on the text as written; a `..` after such a component cannot be placed from the text and leaves the
+        location unresolved. home: a value starting with `~` or `%(prefix)`, which Git expands, lies outside."""
+        text = value
+        if home and (text.startswith("~") or text.startswith("%(prefix)")):
+            return {"location": "outside"}
+        if not text or "\0" in text or "\n" in text:
+            return {"location": "unresolved"}
+        if WINDOWS:
+            text = text.replace("/", "\\")
+        if is_unc(text):
+            return {"location": "unc"}
+        if fully_qualified(text):
+            written = components(text)
+            root = components(self.root)
+            anchor = (lambda part: part.upper().casefold()) if CASE_INSENSITIVE or WINDOWS else (lambda part: part)
+            written = [part for part in written if part != "."]
+            if len(written) < len(root) or any(anchor(a) != anchor(b) for a, b in zip(written, root)):
+                return {"location": "outside"}
+            start, rest = [], written[len(root):]
+        elif WINDOWS and (re.match(r"^[A-Za-z]:", text) or text.startswith("\\")):
+            return {"location": "unresolved"}
+        else:
+            start, rest = list(base_parts), components(text)
+        current = start
+        crossed = None
+        for part in rest:
+            if part == ".":
+                continue
+            if part == "..":
+                if crossed is not None:
+                    return {"location": "unresolved", "crosses_link": crossed}
+                if not current:
+                    return {"location": "outside"}
+                current.pop()
+                continue
+            if WINDOWS and unusual_name(part):
+                return {"location": "unresolved"}
+            current.append(part)
+            if crossed is None:
+                entry = self.lookup(tuple(current))
+                if entry is not None and entry.kind in LINK_KINDS:
+                    crossed = self.rel(entry.parts)
+        result = {"location": "inside", "inside_path": self.rel(tuple(current))}
+        if crossed is not None:
+            result["crosses_link"] = crossed
+        return result
+
+    @staticmethod
+    def location_problem(location: dict):
+        """Why a located target may not be opened, or None."""
+        if location.get("crosses_link") is not None:
+            return f"it crosses the link {location['crosses_link']}"
+        return {"inside": None, "outside": "it lies outside the checked directory", "unc": "it is a UNC path",
+                "unresolved": "its text cannot be placed without resolving it"}[location["location"]]
 
     # The walk
 
@@ -623,16 +695,16 @@ class Check:
                 continue
             environment[name] = setting
         environment["PATH"] = os.pathsep.join(kept)
-        environment["GIT_CEILING_DIRECTORIES"] = os.path.dirname(self.root) or self.root
         environment["LC_ALL"] = "C"
         environment["LANGUAGE"] = "C"
         self.environment = environment
         if executable is None:
-            self.missing("no Git was found in the fully qualified PATH entries outside the checked directory, so "
-                         "nothing that needs Git was examined")
+            self.missing("no Git was found in the fully qualified PATH entries outside the checked directory, so no "
+                         "configuration file was read")
             return
         self.git_path = executable
         self.git_directory = os.path.dirname(executable)
+        environment["GIT_CEILING_DIRECTORIES"] = os.path.dirname(self.git_directory) or self.git_directory
         try:
             result = subprocess.run([executable, "--version"], executable=executable, cwd=self.git_directory,
                                     env=environment, input=b"", capture_output=True, timeout=GIT_TIMEOUT)
@@ -644,504 +716,478 @@ class Check:
         self.git_version_text = text
         match = re.match(r"git version (\d+)\.(\d+)(?:\.(\d+))?", text)
         if result.returncode or not match:
-            self.missing("the Git version could not be read, so Git was treated as older than 2.45.0",
+            self.missing("the Git version could not be read, so whether it is older than 2.32 is not known",
                          value=text[:200])
-            self.git_version = (0, 0, 0)
-        else:
-            self.git_version = tuple(int(part or 0) for part in match.groups())
-        self.no_lazy_fetch = self.git_version >= NO_LAZY_FETCH_FROM
-        if self.git_version < OLD_GIT and match:
+        elif tuple(int(part or 0) for part in match.groups()) < OLD_GIT:
             self.add("git-layout", "Git is older than 2.32, which lacks protections later versions apply to "
                      "repositories", value=text)
-        inside = self.repository_above(self.git_directory, include_self=True)
-        if inside:
-            self.missing("the Git executable's directory, where configuration files are read as data, lies inside a "
-                         "repository, whose configuration those reads could apply", path=inside)
+        if self.git_directory_is_repository(self.git_directory):
+            self.config_blocked = "the Git executable's directory is itself a repository, whose configuration Git " \
+                                  "would apply to a configuration read"
+            self.missing("no configuration file was read: the Git executable's directory is itself a repository, the "
+                         "one Git would find under the ceiling the tool sets", path=self.git_directory)
+            return
+        above = self.repository_above(self.git_directory)
+        if above:
+            self.add("environment", "a repository lies above the Git executable's directory; the ceiling the tool sets "
+                     "keeps Git from finding it, so this is information only", path=above)
 
-    def repository_above(self, directory: str, include_self: bool):
-        """The first directory, from directory (or its parent) upwards, that holds a `.git` entry or is a bare
-        repository layout, found with the tool's own metadata reads; None when there is none."""
+    def git_directory_is_repository(self, directory: str) -> bool:
+        """Whether the Git executable's directory is a repository Git could find there: it holds a `.git` entry, or,
+        looked up by exact name, a `HEAD` that is not a directory together with `objects` and `refs` entries of any
+        kind or a `commondir`. An unrelated `HEAD` alone (such as a program of that name) does not count."""
+        def exists(name):
+            try:
+                return fs("lstat", native(os.path.join(directory, name)))
+            except OSError:
+                return None
+
+        if exists(".git") is not None:
+            return True
+        head = exists("HEAD")
+        if head is None or classify(head) == "dir":
+            return False
+        return (exists("objects") is not None and exists("refs") is not None) or exists("commondir") is not None
+
+    def repository_above(self, directory: str):
+        """The first directory above directory that holds a `.git` entry or a `HEAD` entry that is not a directory,
+        found with the tool's own metadata reads; None when there is none."""
         current = os.path.normpath(directory)
-        if not include_self:
+        while True:
             parent = os.path.dirname(current)
             if parent == current:
                 return None
             current = parent
-        while True:
             try:
                 fs("lstat", native(os.path.join(current, ".git")))
                 return current
             except OSError:
                 pass
             try:
-                head = fs("lstat", native(os.path.join(current, "HEAD")))
-                objects = fs("lstat", native(os.path.join(current, "objects")))
-                refs = fs("lstat", native(os.path.join(current, "refs")))
-                if bare_layout(classify(head), classify(objects), classify(refs)):
+                if classify(fs("lstat", native(os.path.join(current, "HEAD")))) != "dir":
                     return current
             except OSError:
                 pass
-            parent = os.path.dirname(current)
-            if parent == current:
-                return None
-            current = parent
 
-    def run_git(self, arguments, data: bytes = b""):
-        """Run one Git command from the closed list; returns stdout bytes, or None after a not-examined finding."""
-        if arguments[:2] == ["config", "--file"]:
-            if len(arguments) != 6 or arguments[3:] != ["--no-includes", "--null", "--list"]:
-                raise ValueError("not the data read")
-        elif arguments[:1] == ["-C"]:
-            if arguments[1] != self.root or arguments[2] not in REPOSITORY_COMMANDS:
-                raise ValueError("not on the closed list")
-            for option in REPOSITORY_COMMANDS[arguments[2]]:
-                if option not in arguments[3:]:
-                    raise ValueError(f"{arguments[2]} without {option}")
-        else:
-            raise ValueError("not on the closed list")
-        flags = (*COMMON_FLAGS, "--no-lazy-fetch") if self.no_lazy_fetch else COMMON_FLAGS
-        command = [self.git_path, *flags, *arguments]
-        label = " ".join(arguments[2:4] if arguments[0] == "-C" else arguments[:2])
+    def config_entries(self, data: bytes, purpose: str, path: str):
+        """The (key, value) entries of configuration bytes, read by Git from standard input without following
+        includes; None after a not-examined finding."""
+        if self.git_path is None:
+            self.missing(f"{purpose} was not read: no Git to read it with", path=path)
+            return None
+        if self.config_blocked:
+            self.missing(f"{purpose} was not read: {self.config_blocked}", path=path)
+            return None
         try:
-            result = subprocess.run(command, executable=self.git_path, cwd=self.git_directory, env=self.environment,
-                                    input=data, capture_output=True, timeout=GIT_TIMEOUT)
+            result = subprocess.run([self.git_path, *CONFIG_READ], executable=self.git_path, cwd=self.git_directory,
+                                    env=self.environment, input=data, capture_output=True, timeout=GIT_TIMEOUT)
         except (OSError, subprocess.SubprocessError) as error:
-            self.missing(f"git {label} could not run: {error}")
+            self.missing(f"{purpose} was not read: Git could not run: {error}", path=path)
             return None
         stderr = result.stderr.decode("utf-8", "replace").strip()
         if result.returncode or stderr:
-            if arguments[0] == "-C" and ("dubious ownership" in stderr or "safe.directory" in stderr):
-                raise OwnershipRefused(stderr)
-            self.missing(f"git {label} failed (exit {result.returncode})", value=stderr[:500] or None)
-            return None
-        return result.stdout
-
-    def read_config(self, parts, origin_label: str):
-        """The (key, value) entries of a configuration file below the checked directory, read as data without
-        following includes; None after a not-examined finding."""
-        if self.git_path is None:
-            self.missing(f"{origin_label} was not read: no Git to read it with", path=self.rel(parts))
-            return None
-        problem = self.path_problem(parts)
-        if problem:
-            self.missing(f"{origin_label} was not read: {problem}", path=self.rel(parts))
-            return None
-        real = self.real_parts(parts)
-        output = self.run_git(["config", "--file", self.absolute(real), "--no-includes", "--null", "--list"])
-        if output is None:
+            self.missing(f"{purpose} could not be read by Git (exit {result.returncode})", path=path,
+                         value=stderr[:500] or None)
             return None
         try:
-            entries = parse_listing(output.decode("utf-8", "surrogateescape"))
+            return parse_listing(result.stdout.decode("utf-8", "surrogateescape"))
         except ValueError as error:
-            self.missing(f"{origin_label} could not be parsed: {error}", path=self.rel(real))
+            self.missing(f"{purpose} could not be parsed: {error}", path=path)
             return None
-        # Keyed by the same normalised key as every lookup, so that `.git/Config` on a file system that folds case is
-        # found as `.git/config`, the file Git reads.
-        self.read_configs[self.key(real)] = (self.rel(real), entries)
-        return entries
 
-    def report_config(self, parts, entries, base_parts, seen=None):
-        """Findings for the listed keys of one configuration file, and its includes read as data when they lie inside
-        the checked directory and pass the walk's checks."""
+    def read_config(self, parts, purpose: str):
+        """'absent', None after a not-examined finding, or the entries of a configuration file below the checked
+        directory. The file is found by its normalised name, so that `.git/Config` on a file system that folds case
+        is read as `.git/config`, the file Git reads."""
+        state, data = self.read_bytes(parts, purpose)
+        if state != "ok":
+            return "absent" if state == "absent" else None
+        return self.config_entries(data, purpose, self.rel(self.real_parts(parts)))
+
+    def report_config(self, parts, entries, directory: GitDirectory, seen=None):
+        """Findings for the listed keys of one configuration file of a Git directory, and its includes read as data
+        when they lie inside the checked directory and pass the walk's checks."""
         seen = set() if seen is None else seen
         seen.add(self.key(parts))
-        origin = self.rel(self.real_parts(parts))
-        config_directory = self.absolute(self.real_parts(parts[:-1]))
+        real = self.real_parts(parts)
+        origin = self.rel(real)
         for key, value in entries:
             listed = listed_key(key, value)
             if not listed:
                 continue
             kind, description = listed
+            section, subsection, name = split_key(key)
             fields = {"key": key, "value": value, "origin": origin}
+            location = None
             if kind in ("path", "include") and value:
-                base = config_directory if kind == "include" or split_key(key)[2] == "worktree" else \
-                    self.absolute(base_parts)
-                fields.update(self.locate(value, base))
-            category = "configuration"
-            self.add(category, description, **fields)
-            if kind == "include" and value:
-                self.follow_include(value, config_directory, origin, seen)
+                if kind == "include":
+                    base = real[:-1]
+                elif name == "worktree":
+                    base = directory.parts
+                else:
+                    base = directory.base if directory.base is not None else directory.parts
+                location = self.locate(value, base, home=True)
+                fields.update(location)
+            self.add("configuration", description, **fields)
+            if kind == "include":
+                if value:
+                    self.follow_include(value, location, origin, directory, seen)
+            elif subsection is not None or not value:
+                continue
+            elif (section, name) == ("core", "worktree") and self.location_problem(location):
+                self.missing(f"the working tree this configuration names was not examined: "
+                             f"{self.location_problem(location)}", value=value, origin=origin)
+            elif (section, name) == ("core", "hookspath") and not self.location_problem(location):
+                self.hooks_path(location["inside_path"], origin)
+            elif (section, name) == ("extensions", "refstorage") and value.strip().lower() != "files":
+                self.missing(f"the refs of {self.rel(directory.parts)} were not examined: its ref storage is not "
+                             "files", value=value, origin=origin)
 
-    def follow_include(self, value, base, origin, seen):
-        location = self.locate(value, base)
-        target = location.get("inside_path")
-        if location.get("location") != "inside" or target is None:
-            self.missing("include target not read: it lies outside the checked directory or is not a plain path; "
-                         "its text is listed only", value=value, origin=origin)
+    def follow_include(self, value, location, origin, directory, seen):
+        problem = self.location_problem(location)
+        if problem:
+            self.missing(f"include target not read: {problem}; its text is listed only", value=value, origin=origin)
             return
+        target = location["inside_path"]
         parts = tuple(target.split("/")) if target != "." else ()
         if self.key(parts) in seen:
             return
-        entries = self.read_config(parts, "include target")
-        if entries is not None:
-            self.report_config(parts, entries, (), seen)
+        entries = self.read_config(parts, "an include target")
+        if entries == "absent":
+            self.missing("include target not read: it does not exist", value=value, origin=origin)
+        elif entries is not None:
+            self.report_config(parts, entries, directory, seen)
 
-    def locate(self, value: str, base: str) -> dict:
-        """Where a path value points, judged from its text: inside the checked directory (and whether it crosses a
-        link there), outside it, a UNC path, or a form that cannot be placed."""
-        text = value.strip()
-        if text.startswith("~") or text.startswith("%(prefix)"):
-            return {"location": "outside"}
-        if WINDOWS:
-            text = text.replace("/", "\\")
-        if is_unc(text):
-            return {"location": "unc"}
-        if fully_qualified(text):
-            candidate = text
-        elif WINDOWS and (re.match(r"^[A-Za-z]:", text) or text.startswith("\\")):
-            return {"location": "unresolved"}
-        else:
-            candidate = os.path.join(base, text)
-        parts = self.inside(candidate)
-        if parts is None:
-            return {"location": "outside"}
-        result = {"location": "inside", "inside_path": self.rel(parts)}
-        for index in range(1, len(parts) + 1):
-            entry = self.lookup(parts[:index])
-            if entry is None:
-                break
-            if entry.kind in LINK_KINDS:
-                result["crosses_link"] = self.rel(entry.parts)
-                break
-        return result
+    def hooks_path(self, target: str, origin: str):
+        parts = tuple(target.split("/")) if target != "." else ()
+        self.add("hooks", "core.hooksPath names a directory inside the checked directory, so its content chooses the "
+                 "hooks Git runs", path=target, origin=origin)
+        state, why = self.status(parts, "dir")
+        if state == "fail":
+            self.missing(f"the hooks directory core.hooksPath names was not listed: {why}", path=target,
+                         origin=origin)
+        elif state == "ok":
+            self.list_hooks(parts, origin)
 
-    def analyse_layout(self):
-        """Decide whether the layout is the plain one, the only one on which `-C` commands run: `.git` is a directory,
-        not a link and not a gitfile; it holds a `HEAD` file and `objects` and `refs` directories, so that Git accepts
-        it and does not go on to the top; it has no `commondir` and no `objects/info/alternates`; no entry of it is a
-        link, junction or other reparse point; the top is not itself a bare repository layout (see `bare_top`); and
-        `.git/config` and `.git/config.worktree`, read as data, hold no include, no `core.worktree`, no true
-        `core.bare` and no `core.attributesFile` or `core.excludesFile`."""
-        plain = True
-        top = [entry for entry in self.children(()) if entry.parts[-1] == ".git"
-               or (CASE_INSENSITIVE and entry.parts[-1].casefold() == ".git")]
-        git = top[0] if top else None
-        bare = self.bare_top()
-        if bare:
-            plain = False
-            head = self.lookup(("HEAD",))
-            self.add("git-layout", "the checked directory is itself a bare repository layout (HEAD, objects and refs "
-                     "at its top), which Git can use as a repository", path=".",
-                     kind=None if head.kind == "file" else head.kind, target=head.target)
-            if self.lookup(("config",)):
-                entries = self.read_config(("config",), "the bare layout's configuration")
-                if entries is not None:
-                    self.report_config(("config",), entries, ())
-            self.hooks(("hooks",))
-        if git is None:
-            if bare:
-                return self.not_plain()
-            self.add("git-layout", "the checked directory has no .git entry of its own", path=".")
-            return False
-        name = git.parts
-        if git.kind in LINK_KINDS:
-            self.add("git-layout", f".git is {KIND_TEXT[git.kind]}; it was not followed", path=self.rel(name),
-                     target=git.target)
-            return self.not_plain()
-        if git.kind == "file":
-            self.gitfile(name)
-            return self.not_plain()
-        if git.kind != "dir":
-            self.add("git-layout", f".git is {KIND_TEXT.get(git.kind, git.kind)}", path=self.rel(name))
-            return self.not_plain()
-        if self.key(name) in self.unlisted:
-            return self.not_plain()
-        # Git uses `.git` only when it accepts it as a Git directory; otherwise it goes on to try the top itself as a
-        # bare repository, whose configuration it then applies. So `.git` must hold a `HEAD` file and `objects` and
-        # `refs` directories.
-        for required, wanted in (("HEAD", "file"), ("objects", "dir"), ("refs", "dir")):
-            entry = self.lookup(name + (required,))
-            if entry is None or entry.kind != wanted:
-                plain = False
-                found = "is missing" if entry is None else f"is {KIND_TEXT.get(entry.kind, entry.kind)}"
-                self.add("git-layout", f"the Git directory's {required} {found}, so Git may not accept .git as a Git "
-                         f"directory and may look for another; it needs {KIND_TEXT[wanted]}",
-                         path=self.rel(name + (required,)))
-        for descendant in self.descendants(name):
-            if self.key(descendant.parts) in self.unlisted:
-                plain = False
-            if descendant.kind in LINK_KINDS:
-                plain = False
-                self.add("git-layout", f"an entry of the Git directory is {KIND_TEXT[descendant.kind]}; it was not "
-                         "followed", path=self.rel(descendant.parts), target=descendant.target)
-            elif descendant.kind == "special":
-                plain = False
-                self.add("git-layout", "an entry of the Git directory is not a regular file or directory",
-                         path=self.rel(descendant.parts))
-            elif descendant.kind in ("unknown", "ambiguous"):
-                plain = False
-        linked = [descendant for descendant in self.descendants(name)
-                  if descendant.kind == "file" and descendant.nlink and descendant.nlink > 1]
-        if linked:
-            self.add("git-layout", f"{len(linked)} files in the Git directory have more than one link, as a clone "
-                     "from a local path creates; they were only examined, never opened", path=self.rel(name))
-        common = self.lookup(name + ("commondir",))
-        if common is not None:
-            plain = False
-            text = self.read_file(name + ("commondir",), "commondir")
-            value = text.decode("utf-8", "surrogateescape").strip() if text is not None else None
-            fields = self.locate(value, self.absolute(name)) if value else {}
-            self.add("git-layout", "commondir makes Git use another directory's objects, refs and configuration",
-                     path=self.rel(common.parts), value=value, **fields)
-        alternates = self.lookup(name + ("objects", "info", "alternates"))
-        if alternates is not None:
-            plain = False
-            text = self.read_file(alternates.parts, "alternates")
-            if text is not None:
-                base = self.absolute(name + ("objects",))
-                for line in text.decode("utf-8", "surrogateescape").splitlines():
-                    if line.strip() and not line.startswith("#"):
-                        self.add("git-layout", "alternates make Git read objects from another directory",
-                                 path=self.rel(alternates.parts), value=line, **self.locate(line, base))
-        for file_name, required in (("config", True), ("config.worktree", False)):
-            parts = name + (file_name,)
-            if self.lookup(parts) is None and not required:
-                continue
-            entries = self.read_config(parts, f".git/{file_name}")
-            if entries is None:
-                plain = False
-                continue
-            self.report_config(parts, entries, ())
-            for key, value in entries:
-                section, subsection, option = split_key(key)
-                if subsection is None and section == "core" and option in ("worktree", "attributesfile",
-                                                                              "excludesfile"):
-                    plain = False
-                elif subsection is None and section == "core" and option == "bare" and truthy(value):
-                    plain = False
-                elif section in ("include", "includeif") and option == "path":
-                    plain = False
-        if not plain or bare:
-            return self.not_plain()
-        return True
-
-    def bare_top(self) -> bool:
-        """Whether the checked directory's top may be a bare repository layout: an entry named `HEAD` of any kind but
-        a directory (a regular file, a symbolic link, which Git accepts when its target starts with `refs/`, a
-        junction or other reparse point, an ambiguous name, a special file or anything the walk could not classify)
-        together with `objects` and `refs` entries that are not regular files (a directory, or a link Git would
-        follow to one). Erring towards a bare layout only stops the `-C` commands."""
-        head, objects, refs = (self.lookup((name,)) for name in ("HEAD", "objects", "refs"))
-        return bare_layout(head and head.kind, objects and objects.kind, refs and refs.kind)
-
-    def not_plain(self):
-        self.missing("Git was not run on the repository because its layout is not the plain one: the index, "
-                     "attributes, refs and submodule entries were not examined")
-        return False
-
-    def gitfile(self, parts):
-        data = self.read_file(parts, "the gitfile")
-        if data is None:
-            return
-        text = data.decode("utf-8", "surrogateescape").strip()
-        match = re.match(r"gitdir:\s*(.*)$", text)
-        if not match:
-            self.add("git-layout", ".git is a file that does not name a Git directory", path=self.rel(parts),
-                     value=text[:500])
-            return
-        value = match.group(1).strip()
-        location = self.locate(value, self.root)
-        self.add("git-layout", ".git is a gitfile that points Git at another Git directory", path=self.rel(parts),
-                 value=value, **location)
-        target = location.get("inside_path")
-        if location.get("location") == "inside" and target and "crosses_link" not in location:
-            directory = tuple(target.split("/"))
-            problem = self.path_problem(directory, final="dir")
-            if problem:
-                self.missing(f"the gitfile's target was not read: {problem}", path=target)
-                return
-            for file_name in ("config", "config.worktree"):
-                if self.lookup(directory + (file_name,)) is None:
-                    continue
-                entries = self.read_config(directory + (file_name,), "the gitfile target's configuration")
-                if entries is not None:
-                    self.report_config(directory + (file_name,), entries, ())
-            self.hooks(directory + ("hooks",))
-        elif "crosses_link" in location:
-            self.missing("the gitfile's target was not read: it crosses a link", value=value)
-
-    def other_git_directories(self):
-        """Configuration and hooks of submodules and linked worktrees, read as data and reported."""
-        git = self.lookup((".git",))
-        if git is None or git.kind != "dir":
-            return
-        name = git.parts
-        modules = self.lookup(name + ("modules",))
-        if modules is not None and modules.kind != "dir":
-            self.missing(f"the submodule Git directories were not examined: .git/modules is "
-                         f"{KIND_TEXT.get(modules.kind, modules.kind)}", path=self.rel(modules.parts))
-        elif modules is not None:
-            for directory in self.module_directories(modules.parts):
-                for file_name in ("config", "config.worktree"):
-                    if self.lookup(directory + (file_name,)) is None:
-                        continue
-                    entries = self.read_config(directory + (file_name,), "a submodule's configuration")
-                    if entries is not None:
-                        self.report_config(directory + (file_name,), entries, (), set())
-                self.hooks(directory + ("hooks",))
-        worktrees = self.lookup(name + ("worktrees",))
-        if worktrees is not None and worktrees.kind == "dir":
-            for worktree in self.children(worktrees.parts):
-                if worktree.kind != "dir":
-                    continue
-                gitdir = self.lookup(worktree.parts + ("gitdir",))
-                value = None
-                if gitdir is not None:
-                    data = self.read_file(gitdir.parts, "a linked worktree's gitdir")
-                    value = data.decode("utf-8", "surrogateescape").strip() if data is not None else None
-                self.add("git-layout", "a linked worktree", path=self.rel(worktree.parts), value=value)
-                if self.lookup(worktree.parts + ("config.worktree",)) is not None:
-                    parts = worktree.parts + ("config.worktree",)
-                    entries = self.read_config(parts, "a linked worktree's configuration")
-                    if entries is not None:
-                        self.report_config(parts, entries, (), set())
-                self.hooks(worktree.parts + ("hooks",))
-
-    def module_directories(self, parts):
-        """The submodule Git directories below parts, recognised by their layout: a `HEAD` file with `objects` and
-        `refs` directories, `config` not required. A directory holding none of those names is one level of a
-        submodule name with slashes and is searched further; one holding some but not that layout cannot be
-        classified and is listed as not examined."""
-        found = []
-        for child in sorted(self.children(parts), key=lambda entry: entry.parts):
-            if child.kind != "dir":
-                continue
-            head, objects, refs = (self.lookup(child.parts + (name,)) for name in ("HEAD", "objects", "refs"))
-            if head is not None and head.kind == "file" and objects is not None and objects.kind == "dir" \
-                    and refs is not None and refs.kind == "dir":
-                found.append(child.parts)
-                nested = self.lookup(child.parts + ("modules",))
-                if nested is not None and nested.kind == "dir":
-                    found.extend(self.module_directories(nested.parts))
-            elif any(self.lookup(child.parts + (name,)) is not None
-                     for name in ("HEAD", "objects", "refs", "config", "commondir")):
-                self.missing("a directory under .git/modules that is not a complete Git directory (a HEAD file with "
-                             "objects and refs directories), so its configuration and hooks were not examined",
-                             path=self.rel(child.parts))
-            else:
-                found.extend(self.module_directories(child.parts))
-        return found
-
-    def hooks(self, parts, origin=None):
-        directory = self.lookup(parts)
-        if directory is None:
-            return
-        if directory.kind != "dir":
-            self.add("hooks", f"the hooks directory is {KIND_TEXT.get(directory.kind, directory.kind)}; it was not "
-                     "followed", path=self.rel(directory.parts), target=directory.target, origin=origin)
-            return
+    def list_hooks(self, parts, origin=None):
         for entry in sorted(self.children(parts), key=lambda entry: entry.parts):
             if entry.parts[-1].endswith(".sample"):
                 continue
             self.add("hooks", "a hook Git can run", path=self.rel(entry.parts), origin=origin,
                      kind=None if entry.kind == "file" else entry.kind)
 
-    def top_configs(self):
-        """(origin, entries) of `.git/config` and `.git/config.worktree` as read, the origin spelled as on disk."""
-        git = self.lookup((".git",))
-        if git is None:
-            return []
-        keys = [self.key(git.parts + (name,)) for name in ("config", "config.worktree")]
-        return [self.read_configs[key] for key in keys if key in self.read_configs]
+    # Git directories
 
-    def hooks_path(self):
-        for origin, entries in self.top_configs():
-            for key, value in entries:
-                if key.lower() != "core.hookspath" or not value:
-                    continue
-                location = self.locate(value, self.root)
-                if location.get("location") == "inside" and "crosses_link" not in location:
-                    target = location["inside_path"]
-                    self.add("hooks", "core.hooksPath names a directory inside the working tree, so its content "
-                             "chooses the hooks Git runs", path=target, origin=origin)
-                    self.hooks(tuple(target.split("/")) if target != "." else (), origin=origin)
+    def enqueue(self, directory: GitDirectory):
+        key = self.key(directory.parts)
+        if key in self.queued:
+            return
+        self.queued.add(key)
+        self.queue.append(directory)
 
-    def repository(self):
-        """The `-C` commands, run only for the plain layout."""
+    def target(self, location: dict, value: str, what: str, origin: str, label: str, base):
+        """Queue the Git directory a gitfile or `commondir` names when it may be read, or list it as not
+        examined."""
+        problem = self.location_problem(location)
+        if problem:
+            self.missing(f"{what} was not examined: {problem}", value=value, origin=origin)
+            return
+        target = location["inside_path"]
+        self.enqueue(GitDirectory(tuple(target.split("/")) if target != "." else (), label, base, True))
+
+    def gitfile(self, parts):
+        """A `.git` file: Git reads the Git directory's path from it."""
+        state, data = self.read_bytes(parts, "a gitfile")
+        if state != "ok":
+            return
+        text = data.decode("utf-8", "surrogateescape")
+        if not text.startswith("gitdir: "):
+            self.add("git-layout", "a .git file that does not name a Git directory, which Git refuses",
+                     path=self.rel(parts), value=text[:500])
+            return
+        value = text[len("gitdir: "):].rstrip("\r\n")
+        location = self.locate(value, parts[:-1])
+        self.add("git-layout", "a gitfile, which points Git at another Git directory", path=self.rel(parts),
+                 value=value, **location)
+        self.target(location, value, "the Git directory the gitfile names", self.rel(parts),
+                    "the Git directory a gitfile names", parts[:-1])
+
+    def git_directories(self):
+        """Queue every Git directory Git may select inside the checked directory: a top `.git` directory, a gitfile's
+        target, and any directory, the top or one the walk found, that holds a `HEAD` entry of any kind other than a
+        directory, whatever kind its `objects` and `refs` entries are. Directories inside a directory named `.git`
+        are not counted this way (they are its own `logs`, `refs`, `modules` and `worktrees`); submodule and linked
+        worktree Git directories are found from the Git directory that holds them, and common directories from
+        `commondir`. Then read each one."""
+        head = self.lookup(("HEAD",))
+        for key in sorted(self.entries):
+            entry = self.entries[key]
+            parts = entry.parts
+            if self.inside_git_name(parts):
+                continue
+            if self.is_git_name(parts[-1]):
+                base = parts[:-1]
+                if entry.kind == "dir":
+                    label = "the checked directory's .git" if len(parts) == 1 else "a nested repository's .git"
+                    self.enqueue(GitDirectory(parts, label, base, True))
+                elif entry.kind == "file":
+                    self.gitfile(parts)
+                else:
+                    self.add("git-layout", f".git is {KIND_TEXT.get(entry.kind, entry.kind)}; it was not followed",
+                             path=self.rel(parts), target=entry.target)
+                    self.missing(f"the Git directory .git names was not examined: it is "
+                                 f"{KIND_TEXT.get(entry.kind, entry.kind)}", path=self.rel(parts))
+                continue
+            if entry.kind == "dir":
+                nested_head = self.lookup(parts + ("HEAD",))
+                if nested_head is not None and nested_head.kind != "dir":
+                    self.enqueue(GitDirectory(parts, "a nested directory holding a HEAD entry that is not a directory, "
+                                              "which Git can use as a Git directory", parts, True))
+        if self.lookup((".git",)) is None and (head is None or head.kind == "dir"):
+            self.add("git-layout", "the checked directory has no Git directory of its own: no .git entry and no HEAD "
+                     "entry at its top", path=".")
+        if head is not None and head.kind != "dir":
+            self.enqueue(GitDirectory((),"the checked directory itself is a bare repository layout: it holds a HEAD "
+                                      "entry that is not a directory, so Git can use it as a Git directory", (), True,
+                                      {"kind": None if head.kind == "file" else head.kind, "target": head.target}))
+        while self.queue:
+            self.read_git_directory(self.queue.pop(0))
+
+    def read_git_directory(self, directory: GitDirectory):
+        parts = directory.parts
+        shown = self.rel(parts)
+        state, why = self.status(parts, "dir")
+        if state != "ok":
+            self.missing(f"{directory.label} was not read: {why}", path=shown)
+            return
+        finding = self.add("git-layout", f"a Git directory Git may use: {directory.label}", path=shown,
+                           **directory.fields)
+        absent = []
+        for name in ("config", "config.worktree"):
+            entries = self.read_config(parts + (name,), f"the configuration {self.rel(parts + (name,))}")
+            if entries == "absent":
+                if name == "config":
+                    absent.append("config")
+            elif entries is not None:
+                self.report_config(parts + (name,), entries, directory)
+        hooks = parts + ("hooks",)
+        state, why = self.status(hooks, "dir")
+        if state == "absent":
+            absent.append("hooks")
+        elif state == "fail":
+            self.missing(f"the hooks directory was not listed: {why}", path=self.rel(self.real_parts(hooks)))
+        else:
+            self.list_hooks(self.real_parts(hooks))
+        if absent and directory.report_absent:
+            finding["absent"] = absent
+        self.head(directory)
+        state, data = self.read_bytes(parts + ("info", "attributes"), "info/attributes")
+        if state == "ok":
+            self.report_attributes(data.decode("utf-8", "surrogateescape"),
+                                   self.rel(self.real_parts(parts + ("info", "attributes"))))
+        self.replace_refs(directory)
+        self.packed_refs(directory)
+        reftable = self.lookup(parts + ("reftable",))
+        if reftable is not None:
+            self.missing("the refs in reftable were not examined: the tool does not read reftable",
+                         path=self.rel(reftable.parts))
+        self.commondir(directory)
+        self.alternates(directory)
+        self.modules(directory)
+        self.worktrees(directory)
+        if self.is_git_name(parts[-1] if parts else ""):
+            self.git_directory_entries(directory)
+
+    def head(self, directory: GitDirectory):
+        """The checked directory's own `.git/HEAD`: Git uses `.git` only when it accepts this HEAD, and otherwise
+        looks for another Git directory, the top or one above."""
+        if len(directory.parts) != 1 or not self.is_git_name(directory.parts[0]):
+            return
+        entry = self.lookup(directory.parts + ("HEAD",))
+        problem = None
+        if entry is None:
+            problem = "is missing"
+        elif entry.kind == "symlink":
+            if not (entry.target or "").startswith("refs/"):
+                problem = "is a symbolic link whose target does not start with refs/"
+        elif entry.kind != "file":
+            problem = f"is {KIND_TEXT.get(entry.kind, entry.kind)}"
+        else:
+            state, data = self.read_bytes(entry.parts, ".git/HEAD")
+            if state == "ok" and not _HEAD_CONTENT.match(data.decode("utf-8", "replace")):
+                problem = "holds content Git rejects"
+        if problem:
+            self.rejected_git = True
+            self.add("git-layout", f"the Git directory's HEAD {problem}, so Git may not accept .git and may use "
+                     "another Git directory, the top or one above", path=self.rel(directory.parts + ("HEAD",)))
+
+    def replace_refs(self, directory: GitDirectory):
+        replace = directory.parts + ("refs", "replace")
+        state, why = self.status(replace, "dir")
+        if state == "fail":
+            self.missing(f"the replacement refs were not listed: {why}", path=self.rel(self.real_parts(replace)))
+            return
+        if state == "absent":
+            return
+        real = self.real_parts(replace)
+        for entry in self.subtree(real):
+            if entry.kind == "dir":
+                continue
+            name = "refs/replace/" + "/".join(entry.parts[len(real):])
+            state, data = self.read_bytes(entry.parts, "a replacement ref")
+            value = data.decode("utf-8", "surrogateescape").strip()[:200] if state == "ok" else None
+            self.add("refs-and-submodules", "a replacement ref, which makes Git show another object in place of the "
+                     "one named", key=name, value=value, origin=self.rel(entry.parts))
+
+    def packed_refs(self, directory: GitDirectory):
+        """The replacement refs in `packed-refs`, read in pieces so that a large file is read whole."""
+        parts = directory.parts + ("packed-refs",)
+        state, why = self.status(parts)
+        if state == "absent":
+            return
+        origin = self.rel(self.real_parts(parts))
+        if state == "fail":
+            self.missing(f"packed-refs was not read: {why}", path=origin)
+            return
+        entry = self.lookup(parts)
         try:
-            self._repository()
-        except OwnershipRefused as refused:
-            self.add("git-layout", "Git refused the directory for its ownership (safe.directory); the tool does not "
-                     "override that", value=str(refused)[:500])
-            self.missing("Git was not run on the repository because Git refused it for its ownership")
-
-    def _repository(self):
-        # Confirmed without comparing paths: Git resolves links in the paths it prints on POSIX, so a checked
-        # directory reached through a link would not match its own text. An empty prefix says that `-C` landed on the
-        # top of the working tree, and a Git directory printed as the relative `.git` says that Git selected the
-        # `.git` in that directory, not one it found elsewhere.
-        output = self.run_git(["-C", self.root, "rev-parse", "--is-bare-repository", "--show-prefix", "--git-dir"])
-        if output is None:
-            self.missing("the repository's layout could not be confirmed, so no further Git command ran")
+            pieces, info = fs("pieces", native(self.absolute(entry.parts)))
+        except OSError as error:
+            self.missing(f"packed-refs could not be read: {error.strerror or error}", path=origin)
             return
-        lines = output.decode("utf-8", "surrogateescape").split("\n")
-        if lines != ["false", "", ".git", ""]:
-            self.missing("Git did not report the checked directory as the working tree of its .git, so no further "
-                         "Git command ran", value="\n".join(lines)[:500])
+        if entry.identity and entry.identity[0] and (info.st_ino, info.st_dev) != entry.identity:
+            with pieces:
+                pass
+            self.missing("packed-refs changed while it was read", path=origin)
             return
-        # Decided before any command that reads the index or objects: reading a sparse index expands it, which reads
-        # trees, and on Git older than 2.45.0 a missing one is fetched from the promisor remote.
-        promisor = self.promisor_declared()
-        if promisor and not self.no_lazy_fetch:
-            self.missing("a promisor remote is declared and this Git is older than 2.45.0, which cannot stop reads of "
-                         "missing objects from fetching them, so Git read neither the index nor any object: the index "
-                         "entries (mode 120000 entries, gitlinks, .gitattributes and .gitmodules), their content, the "
-                         "attribute drivers and the refs under refs/replace/ were not examined",
-                         value=", ".join(promisor))
-            return
-        listing = self.run_git(["-C", self.root, "ls-files", "--stage", "-z"])
-        if listing is None:
-            return
-        index = []
-        for item in listing.decode("utf-8", "surrogateescape").split("\0"):
-            if not item:
-                continue
-            match = re.fullmatch(r"(\d{6}) ([0-9a-f]{40,64}) (\d)\t(.+)", item, re.S)
-            if not match:
-                self.missing("git ls-files output could not be parsed", value=item[:200])
-                return
-            index.append(match.groups())
-        attributes, gitmodules = [], None
-        for mode, object_id, _stage, path in index:
-            if mode == "120000":
-                self.add("index", "an index entry with mode 120000, which a checkout that supports symbolic links "
-                         "creates as a link", path=path)
-            elif mode == "160000":
-                self.add("refs-and-submodules", "a gitlink (submodule commit) in the index", path=path,
-                         value=object_id)
-            if path == ".gitattributes" or path.endswith("/.gitattributes"):
-                attributes.append((path, object_id))
-            if path == ".gitmodules":
-                gitmodules = object_id
-        for path, object_id in attributes:
-            blob = self.run_git(["-C", self.root, "cat-file", "blob", object_id])
-            if blob is None:
-                continue
-            self.report_attributes(blob.decode("utf-8", "surrogateescape"), path)
-        if index:
-            self.attribute_drivers([path for mode, _object_id, _stage, path in index if mode != "160000"])
-        if gitmodules:
-            blob = self.run_git(["-C", self.root, "cat-file", "blob", gitmodules])
-            if blob is not None:
-                self.report_gitmodules(blob.decode("utf-8", "surrogateescape"))
-        refs = self.run_git(["-C", self.root, "for-each-ref", "--format=%(refname)%00%(objectname)", "refs/replace/"])
-        if refs is not None:
-            for line in refs.decode("utf-8", "surrogateescape").splitlines():
-                name, separator, target = line.partition("\0")
-                if not separator:
-                    self.missing("git for-each-ref output could not be parsed", value=line[:200])
-                    continue
-                self.add("refs-and-submodules", "a replacement ref, which makes Git show another object in place of "
-                         "the one named", key=name, value=target)
-
-    def promisor_declared(self):
+        pending = b""
+        overlong = False
         found = []
-        for _origin, entries in self.top_configs():
-            for key, value in entries:
-                listed = listed_key(key, value)
-                if listed and listed[0] == "promisor":
-                    found.append(key)
+        try:
+            with pieces:
+                for piece in pieces:
+                    lines = (pending + piece).split(b"\n")
+                    pending = lines.pop()
+                    if len(pending) > LINE_LIMIT:
+                        overlong, pending = True, b""
+                    found.extend(match for match in map(_PACKED_REPLACE.match, lines) if match)
+        except OSError as error:
+            self.missing(f"packed-refs could not be read: {error.strerror or error}", path=origin)
+            return
+        if pending:
+            match = _PACKED_REPLACE.match(pending.rstrip(b"\r"))
+            if match:
+                found.append(match)
+        for match in found:
+            self.add("refs-and-submodules", "a replacement ref, which makes Git show another object in place of the "
+                     "one named", key=match.group(2).decode("utf-8", "surrogateescape").rstrip("\r"),
+                     value=match.group(1).decode("ascii"), origin=origin)
+        if overlong:
+            self.missing(f"packed-refs holds a line longer than {LINE_LIMIT} bytes, which was not examined",
+                         path=origin)
+
+    def commondir(self, directory: GitDirectory):
+        parts = directory.parts + ("commondir",)
+        state, data = self.read_bytes(parts, "commondir")
+        if state != "ok":
+            return
+        value = data.decode("utf-8", "surrogateescape").rstrip("\r\n")
+        location = self.locate(value, directory.parts)
+        origin = self.rel(self.real_parts(parts))
+        self.add("git-layout", "commondir makes Git use another directory's objects, refs, configuration and hooks",
+                 path=origin, value=value, **location)
+        self.target(location, value, "the common directory commondir names", origin,
+                    "the common directory a commondir file names", directory.base)
+
+    def alternates(self, directory: GitDirectory):
+        parts = directory.parts + ("objects", "info", "alternates")
+        state, data = self.read_bytes(parts, "alternates")
+        if state != "ok":
+            return
+        origin = self.rel(self.real_parts(parts))
+        for line in data.decode("utf-8", "surrogateescape").splitlines():
+            if line.strip() and not line.startswith("#"):
+                self.add("git-layout", "alternates make Git read objects from another directory", path=origin,
+                         value=line, **self.locate(line, directory.parts + ("objects",)))
+
+    def modules(self, directory: GitDirectory):
+        modules = directory.parts + ("modules",)
+        state, why = self.status(modules, "dir")
+        if state == "fail":
+            self.missing(f"the submodule Git directories were not examined: {why}",
+                         path=self.rel(self.real_parts(modules)))
+        elif state == "ok":
+            for parts in self.module_directories(self.real_parts(modules)):
+                self.enqueue(GitDirectory(parts, "a submodule Git directory", parts, True))
+
+    def module_directories(self, parts):
+        """The submodule Git directories below parts, at any depth, since a submodule's name can hold `/`: a
+        directory holding a `HEAD` entry that is not a directory. A directory holding none of `HEAD`, `objects`,
+        `refs`, `config` or `commondir` is one level of such a name and is searched further; one holding some of them
+        but no such `HEAD`, and any entry that is not a directory, cannot be classified and is listed as not
+        examined. A submodule's own `modules` is searched when its Git directory is read."""
+        found = []
+        for child in sorted(self.children(parts), key=lambda entry: entry.parts):
+            if child.kind != "dir":
+                self.missing(f"an entry under modules that is {KIND_TEXT.get(child.kind, child.kind)}, which the tool "
+                             "does not follow, so the submodule Git directory it may stand for was not examined",
+                             path=self.rel(child.parts), target=child.target)
+                continue
+            head = self.lookup(child.parts + ("HEAD",))
+            if head is not None and head.kind != "dir":
+                found.append(child.parts)
+            elif any(self.lookup(child.parts + (name,)) is not None
+                     for name in ("HEAD", "objects", "refs", "config", "commondir")):
+                self.missing("a directory under modules that is not a Git directory (no HEAD entry that is not a "
+                             "directory), so its configuration and hooks were not examined", path=self.rel(child.parts))
+            else:
+                found.extend(self.module_directories(child.parts))
         return found
+
+    def worktrees(self, directory: GitDirectory):
+        worktrees = directory.parts + ("worktrees",)
+        state, why = self.status(worktrees, "dir")
+        if state == "fail":
+            self.missing(f"the linked worktrees were not examined: {why}", path=self.rel(self.real_parts(worktrees)))
+            return
+        if state == "absent":
+            return
+        for worktree in self.children(self.real_parts(worktrees)):
+            shown = self.rel(worktree.parts)
+            if worktree.kind != "dir":
+                self.missing(f"an entry under worktrees that is {KIND_TEXT.get(worktree.kind, worktree.kind)} was not "
+                             "examined", path=shown, target=worktree.target)
+                continue
+            gitdir_state, data = self.read_bytes(worktree.parts + ("gitdir",), "a linked worktree's gitdir")
+            value = data.decode("utf-8", "surrogateescape").rstrip("\r\n") if gitdir_state == "ok" else None
+            location = self.locate(value, worktree.parts) if value else {}
+            self.add("git-layout", "a linked worktree", path=shown, value=value, **location)
+            if value and self.location_problem(location):
+                self.missing(f"the linked worktree's working tree was not examined: {self.location_problem(location)}",
+                             path=shown, value=value)
+            self.enqueue(GitDirectory(worktree.parts, "a linked worktree's Git directory", None, False))
+
+    def git_directory_entries(self, directory: GitDirectory):
+        """Links and special entries inside a directory named `.git`, and one summary of its files with more than one
+        link, as a clone from a local path creates in `objects`."""
+        for entry in self.subtree(directory.parts):
+            if entry.kind in LINK_KINDS:
+                self.add("git-layout", f"an entry of the Git directory is {KIND_TEXT[entry.kind]}; it was not "
+                         "followed", path=self.rel(entry.parts), target=entry.target)
+            elif entry.kind == "special":
+                self.add("git-layout", "an entry of the Git directory is not a regular file or directory",
+                         path=self.rel(entry.parts))
+
+    # The working tree's attribute and module files
+
+    def gitattributes(self):
+        for key in sorted(self.entries):
+            entry = self.entries[key]
+            if self.key((entry.parts[-1],)) != self.key((".gitattributes",)) or self.inside_git_name(entry.parts):
+                continue
+            state, data = self.read_bytes(entry.parts, ".gitattributes")
+            if state == "ok":
+                self.report_attributes(data.decode("utf-8", "surrogateescape"), self.rel(entry.parts))
 
     def report_attributes(self, text: str, origin: str):
         for line in text.splitlines():
@@ -1155,32 +1201,13 @@ class Check:
                          else "defines an attribute macro", origin=origin, value=stripped,
                          drivers=[f"{name}={value}" for name, value in drivers] or None)
 
-    def attribute_drivers(self, paths):
-        output = self.run_git(["-C", self.root, "check-attr", "--cached", "-z", "--stdin", "filter", "diff", "merge"],
-                              data="\0".join(paths).encode("utf-8", "surrogateescape") + b"\0")
-        if output is None:
+    def gitmodules(self):
+        state, data = self.read_bytes((".gitmodules",), ".gitmodules")
+        if state != "ok":
             return
-        fields = output.decode("utf-8", "surrogateescape").split("\0")
-        if fields and fields[-1] == "":
-            fields.pop()
-        if len(fields) % 3:
-            self.missing("git check-attr output could not be parsed")
-            return
-        selected = {}
-        for index in range(0, len(fields), 3):
-            path, attribute, value = fields[index:index + 3]
-            if value in ("unspecified", "unset", "set"):
-                continue
-            selected.setdefault(f"{attribute}={value}", []).append(path)
-        for driver, paths in sorted(selected.items()):
-            self.add("attributes", "tracked files that select this driver", key=driver, value=paths[:20],
-                     count=len(paths))
-
-    def report_gitmodules(self, text: str):
-        try:
-            entries = parse_config_text(text)
-        except ValueError as error:
-            self.missing(f".gitmodules could not be parsed: {error}", path=".gitmodules")
+        origin = self.rel(self.real_parts((".gitmodules",)))
+        entries = self.config_entries(data, ".gitmodules", origin)
+        if entries is None:
             return
         for key, value in entries:
             section, subsection, name = split_key(key)
@@ -1188,30 +1215,21 @@ class Check:
                 continue
             if name in ("path", "url"):
                 self.add("refs-and-submodules", f"a submodule's {name} in .gitmodules", key=key, value=value,
-                         origin=".gitmodules")
+                         origin=origin)
             elif name == "update" and (value or "").lstrip().startswith("!"):
                 self.add("refs-and-submodules", "a submodule update setting that runs a shell command", key=key,
-                         value=value, origin=".gitmodules")
-
-    def info_attributes(self):
-        git = self.lookup((".git",))
-        if git is None or git.kind != "dir":
-            return
-        parts = git.parts + ("info", "attributes")
-        if self.lookup(parts) is None:
-            return
-        data = self.read_file(parts, ".git/info/attributes")
-        if data is not None:
-            self.report_attributes(data.decode("utf-8", "surrogateescape"), self.rel(parts))
+                         value=value, origin=origin)
 
     # The working tree
 
     def working_tree(self):
-        git = self.lookup((".git",))
-        git_key = self.key(git.parts) if git is not None else None
+        """Entries outside every directory named `.git`, whose own entries are reported when it is read as a Git
+        directory (see `git_directory_entries`)."""
         for key in sorted(self.entries):
             entry = self.entries[key]
-            if git_key is not None and key[:len(git_key)] == git_key:
+            if self.inside_git_name(entry.parts) or entry.parts == self.real_parts((".git",)):
+                if entry.kind == "file" and entry.nlink and entry.nlink > 1:
+                    self.object_links += 1
                 continue
             path = self.rel(entry.parts)
             name = entry.parts[-1]
@@ -1228,16 +1246,17 @@ class Check:
             problem = unusual_name(name)
             if problem:
                 self.add("working-tree", f"a name that {problem}", path=path)
-            if git_variant(name) and entry is not git:
+            if git_variant(name):
                 self.add("working-tree", "a nested repository or a name Git can read as .git", path=path,
                          kind=entry.kind)
             elif entry.kind == "dir":
                 head = self.lookup(entry.parts + ("HEAD",))
-                objects = self.lookup(entry.parts + ("objects",))
-                refs = self.lookup(entry.parts + ("refs",))
-                if head is not None and head.kind == "file" and objects is not None and objects.kind == "dir" \
-                        and refs is not None and refs.kind == "dir" and not git_variant(name):
-                    self.add("working-tree", "a nested bare repository layout (HEAD, objects and refs)", path=path)
+                if head is not None and head.kind != "dir":
+                    self.add("working-tree", "a nested directory Git can use as a Git directory (it holds a HEAD "
+                             "entry that is not a directory)", path=path)
+        if self.object_links:
+            self.add("git-layout", f"{self.object_links} files in Git directories have more than one link, as a clone "
+                     "from a local path creates; they were only examined, never opened", path=".git")
 
     # Claude Code and agent files
 
@@ -1276,8 +1295,8 @@ class Check:
             self.imports(parts, 0, set())
 
     def load_json(self, parts, purpose):
-        data = self.read_file(parts, purpose)
-        if data is None:
+        state, data = self.read_bytes(parts, purpose)
+        if state != "ok":
             return None
         try:
             return json.loads(data.decode("utf-8-sig"))
@@ -1318,11 +1337,10 @@ class Check:
         if self.key(parts) in seen:
             return
         seen.add(self.key(parts))
-        data = self.read_file(parts, "an instruction file")
-        if data is None:
+        state, data = self.read_bytes(parts, "an instruction file")
+        if state != "ok":
             return
         origin = self.rel(parts)
-        base = self.absolute(parts[:-1])
         fenced = False
         for line in data.decode("utf-8", "replace").splitlines():
             if _FENCE.match(line):
@@ -1334,16 +1352,14 @@ class Check:
                 value = value.rstrip(".,;:!?")
                 if not value:
                     continue
-                location = self.locate(value, base)
+                location = self.locate(value, parts[:-1], home=True)
                 self.add("claude-code", "an @ import, which Claude Code loads into the instructions; listed by its "
                          "text", value=value, origin=origin,
                          location=location.get("location"), inside_path=location.get("inside_path"),
                          crosses_link=location.get("crosses_link"))
-                target = location.get("inside_path")
-                if location.get("location") != "inside" or "crosses_link" in location or target in (None, "."):
+                if self.location_problem(location) or location["inside_path"] == ".":
                     continue
-                target_parts = tuple(target.split("/"))
-                entry = self.lookup(target_parts)
+                entry = self.lookup(tuple(location["inside_path"].split("/")))
                 if entry is None or entry.kind != "file":
                     continue
                 if depth + 1 < IMPORT_DEPTH:
@@ -1354,26 +1370,33 @@ class Check:
     def run(self):
         self.ancestors()
         self.find_git()
-        outer = self.repository_above(self.root, include_self=False)
+        outer = self.repository_above(self.root)
         self.walk()
-        own = self.lookup((".git",)) is not None or self.bare_top()
-        if outer:
-            self.add("git-layout", "an outer repository lies above the checked directory", path=outer)
-            if not own:
-                self.missing("the checked directory has no Git directory of its own, so Git commands run in it use the "
-                             "outer repository's configuration, hooks and attributes, which this report does not "
-                             "cover", path=outer)
-        plain = self.analyse_layout()
-        self.other_git_directories()
-        git = self.lookup((".git",))
-        if git is not None and git.kind == "dir":
-            self.hooks(git.parts + ("hooks",))
-        self.hooks_path()
-        self.info_attributes()
-        if plain and self.git_path:
-            self.repository()
+        self.git_directories()
+        self.outer(outer)
+        self.gitattributes()
+        self.gitmodules()
         self.working_tree()
         self.claude_files()
+
+    def outer(self, outer):
+        """An outer repository above the checked directory. Git uses it for commands run in the checked directory when
+        the directory has no Git directory of its own that Git accepts: no `.git` entry, or a `.git` directory whose
+        HEAD Git rejects, and a top that is not a repository by the narrow test (a `HEAD` that is not a directory
+        with `objects` and `refs`, or with a `commondir`)."""
+        if not outer:
+            return
+        self.add("git-layout", "an outer repository lies above the checked directory", path=outer)
+        git = self.lookup((".git",))
+        head = self.lookup(("HEAD",))
+        top = head is not None and head.kind != "dir" and (
+            (self.lookup(("objects",)) is not None and self.lookup(("refs",)) is not None)
+            or self.lookup(("commondir",)) is not None)
+        own = top or (git is not None and not (git.kind == "dir" and self.rejected_git))
+        if not own:
+            self.missing("the checked directory has no Git directory of its own that Git surely accepts, so Git "
+                         "commands run in it can use the outer repository's configuration, hooks and attributes, which "
+                         "this report does not cover", path=outer)
 
     def ancestors(self):
         """Report a link in the checked directory's own path; such a link does not fail any check."""
@@ -1407,10 +1430,6 @@ class Check:
             "findings": self.findings,
             "notes": list(NOTES),
         }
-
-
-class OwnershipRefused(Exception):
-    pass
 
 
 def emit(report) -> None:
