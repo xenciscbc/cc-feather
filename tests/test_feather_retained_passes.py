@@ -353,11 +353,9 @@ class PerClaimTimingTests(unittest.TestCase):
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
 
-    def test_the_verifier_template_and_the_installed_policy_are_unchanged(self):
-        for path, digest in self.UNCHANGED.items():
-            text = (config.ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n")
-            with self.subTest(path=path):
-                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+    # Repo trust split ticket 01 (0.29.0) changes the verifier template and the installed policy, so their digests are
+    # no longer compared with the current files; the comparison with the tagged text below keeps the record of what
+    # this release left unchanged.
 
     def tagged(self, place, path=None):
         """The whole file behind a place (or a repository path) at the tag, '' when it did not exist there; skips
@@ -694,11 +692,8 @@ class FixedPassesTests(unittest.TestCase):
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
 
-    def test_the_reviewer_template_is_unchanged(self):
-        for path, digest in self.UNCHANGED.items():
-            text = (config.ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n")
-            with self.subTest(path=path):
-                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+    # Repo trust split ticket 01 (0.29.0) changes the reviewer template, so its digest is no longer compared with the
+    # current file; the comparison with the tagged text below keeps the record of what this release left unchanged.
 
     def tagged_place(self, place):
         """The whole file behind a place at the tag; this ticket's ADR part and ADR 0006 included."""
@@ -1097,8 +1092,9 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
         # every claim must all stand beside the off sentences.
         self.assert_pinned({self.FINAL: (
             *self.OFF,
+            # Repo trust split ticket 01 (Acceptance 3 and 5): the Execution rules are review state's own bullet.
             "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at "
-            "the commit to be landed or tagged, within [repository safety](repository-safety.md)'s Execution rules.",
+            "the commit to be landed or tagged, within the Execution rules above.",
             "Once it has failed at a commit, that commit's state is failed, and a later pass at the same commit lets "
             "landing proceed only through an accept-and-land decision that names the failure.",
         )})
@@ -1155,11 +1151,8 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
 
-    def test_the_adversary_template_is_unchanged(self):
-        for path, digest in self.UNCHANGED.items():
-            text = (config.ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n")
-            with self.subTest(path=path):
-                self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
+    # Repo trust split ticket 01 (0.29.0) changes the adversary template, so its digest is no longer compared with the
+    # current file; the comparison with the tagged text below keeps the record of what this release left unchanged.
 
     def tagged_place(self, place):
         """The whole file behind a place at the tag; this ticket's ADR part included."""

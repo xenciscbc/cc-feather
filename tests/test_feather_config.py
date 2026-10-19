@@ -315,14 +315,12 @@ class FeatherConfigTests(unittest.TestCase):
         self.apply("install")
         agents = self.project / ".claude" / "agents"
         analyst = (agents / "analyst.md").read_text(encoding="utf-8")
-        # Repository safety (Adversarial review of C2, finding F2): the paragraph for roles without a shell defines a
-        # review assignment by every kind of review D4 lists, code review included, so that sentence is set aside;
-        # nothing else in analyst's template mentions code review.
+        # Repo trust split ticket 01 (Acceptance 6): the allowlist paragraph, whose definition of a review assignment named
+        # code review, is gone, so nothing in analyst's template mentions code review.
         definition = ("Every assignment that reads a repository for a plan review, code review, outcome verification, "
                       "Adversarial review or security analysis is a review assignment, whatever mode or name your brief "
                       "gives it.")
-        self.assertEqual(analyst.count(definition), 1)
-        analyst = analyst.replace(definition, "")
+        self.assertEqual(analyst.count(definition), 0)
         self.assertNotIn("Code review", analyst)
         self.assertNotIn("code review", analyst)
         self.assertIn("code review to reviewer", (agents / "verifier.md").read_text(encoding="utf-8"))
@@ -1604,8 +1602,12 @@ class FeatherConfigTests(unittest.TestCase):
     # `git show v0.20.0:templates/agents/<role>.md`, never rebuilt from the current templates. It replaces the v0.18.0
     # fixture and its two tests, retired in the same change: the stale check that matters is against the previous
     # release, and their assertion that exactly four role templates differ from v0.18.0 no longer holds.
+    # Repo trust split ticket 01 (0.29.0) removed the allowlist paragraph that analyst, scout and Explore gained after
+    # v0.20.0, so their templates are again the ones v0.20.0 shipped: they left the fixture and a test pins them equal
+    # to the tag. Reviewer, verifier and adversary still differ from v0.20.0 and show stale detection.
     TEMPLATES_0_20_0 = Path(__file__).resolve().parent / "role_templates_0_20_0.json"
-    CHANGED_SINCE_0_20_0 = ("reviewer", "verifier", "adversary", "analyst", "scout", "Explore")
+    CHANGED_SINCE_0_20_0 = ("reviewer", "verifier", "adversary")
+    SAME_AS_0_20_0 = ("analyst", "scout", "Explore")
     # The reference's read-only Git prefix for reading the tag (repository safety's Safe Git invocation).
     GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
                 "-c", "log.showSignature=false", "-c", "mailmap.file=", "-c", "mailmap.blob=",
@@ -1619,7 +1621,7 @@ class FeatherConfigTests(unittest.TestCase):
         return recorded["templates"]
 
     def templates_0_20_0(self):
-        """The packaged templates with the six role templates exactly as v0.20.0 shipped them."""
+        """The packaged templates with the recorded role templates exactly as v0.20.0 shipped them."""
         fixture = self.root / "package-0.20.0"
         if fixture.exists():
             return fixture
@@ -1655,6 +1657,13 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(role=role):
                 self.assertIn(f"templates/agents/{role}.md", changed)
                 self.assertEqual(text.encode("utf-8"), changed[f"templates/agents/{role}.md"])
+        # The roles that left the fixture are the tagged text again, line endings normalised.
+        for role in self.SAME_AS_0_20_0:
+            with self.subTest(role=role):
+                shown = git("cat-file", "blob", f"v0.20.0:templates/agents/{role}.md")
+                self.assertEqual(shown.returncode, 0, shown.stderr)
+                current = (config.ROOT / "templates" / "agents" / f"{role}.md").read_bytes()
+                self.assertEqual(current.replace(b"\r\n", b"\n"), shown.stdout.replace(b"\r\n", b"\n"))
 
     def test_0_20_0_role_templates_are_stale_until_setup_update(self):
         stale = [role for role in config.ROLES if role in self.CHANGED_SINCE_0_20_0]
@@ -1721,13 +1730,14 @@ class FeatherConfigTests(unittest.TestCase):
                         self.apply("model", scope, "--set", "scout.effort=low")
                         code, exported = self.call("session", scope)
                         self.assertEqual(code, 0, exported)
+                        # Repo trust split ticket 01 (Acceptance 6): the shell roles carry the shared Execution
+                        # paragraph, and no role carries the allowlist sentence.
                         for role in ("reviewer", "verifier", "adversary"):
-                            self.assertIn("**Repository safety.** These rules govern every repository read",
-                                          exported[names[role]]["prompt"])
+                            self.assertIn("**Execution.** Executing repository code means running any command whose "
+                                          "program", exported[names[role]]["prompt"])
                         for role in ("analyst", "scout", "Explore"):
-                            self.assertIn("When a review assignment's brief gives no allowlist, report it as a missing "
-                                          "requirement instead of reading the repository.",
-                                          exported[names[role]]["prompt"])
+                            self.assertNotIn("When a review assignment's brief gives no allowlist",
+                                             exported[names[role]]["prompt"])
 
     def test_edited_0_16_0_role_is_a_conflict_not_stale(self):
         agents, prefix = self.install_0_16_0()
@@ -3665,7 +3675,8 @@ class FeatherConfigTests(unittest.TestCase):
             "- **Commits before the passes.** Before its passes, main may commit a claim of plan-driven work in the automatic flow on any branch, push it to a branch main created for the current work and open a pull request whose description lists the claims still unaccepted, without the user's permission, and keeps that list current as claims pass or are accepted. Before pushing to a remote branch that already existed and that main did not create, it asks the user; in a resumed session main treats a branch as its own only when a record shows that main created it for this work, and otherwise asks: in auto the plan's dispatch record, in place of an active handoff, as Dispatch record describes, and in off an active handoff. For a claim the gate covers only because an active handoff records it, main may make the local commit a gated call needs without asking, while pushes and pull requests follow off-mode behaviour, so main asks. Before dispatching a gated code review, outcome verification or Adversarial review, main ensures the claim's content is committed and the precondition of What a gated pass judged holds; when a commit is needed, the authority above permits it without asking, and an already suitable commit needs no new one. It never rewrites pushed history, so a fix is a new commit. On a default branch, main labels each commit made before its claim's passes (both passes, plus HELD for a Security-critical claim) unaccepted in its message when it creates it; the label records the commit's state then and stays in history. Commits on other branches carry no label. It pushes such commits to the remote default branch only after both passes, plus a valid HELD for a Security-critical claim, or the user's accept-and-land decision for their claim, or as a work-in-progress push the user explicitly allows, and while they stay unpushed it says a reclaimed environment would lose them. Off mode otherwise keeps its behaviour.",
             # Retained passes ticket 04 (Acceptance items 8 and 15, S2): the same-commit premise holds in off; auto gives the result only
             # at the commit to be landed.
-            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count. In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an explicit call made before then, counts as not run, as [adversarial review](adversarial-review.md)'s At the final commit describes. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.",
+            # Repo trust split ticket 01 (Acceptance 3, S4): the bullet states the two workspace reads.
+            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. Main establishes this with two reads, `git rev-parse HEAD` and `git -c core.safecrlf=false status --porcelain --untracked-files=all --ignore-submodules=none`: before dispatch, the first names the commit in the brief and the second lists no path the claim's files or acceptance checks depend on, and after the call the same reads show the same commit and no such path changed. A read that exits non-zero, writes anything to standard error, or prints output that is not porcelain v1 lines counts as a change: the call is not dispatched, or its pass is not used and the step is not cleared, the same as a change found. The command line overrides the user's `status.showUntrackedFiles` and submodule-ignore settings, and `core.safecrlf=false` keeps line-ending conversion warnings off standard error. Ignored files and files marked assume-unchanged or skip-worktree are outside this check, which is residual risk. The final check uses the same reads before and after it, as Final check describes. Plan review and security analysis do not need a clean workspace, since they often read an uncommitted plan: main runs the same reads before and after the call and reports any difference. In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count. In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an explicit call made before then, counts as not run, as [adversarial review](adversarial-review.md)'s At the final commit describes. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.",
             '- **Existing handoff notes.** An active handoff\'s record that a claim is unreviewed, unverified or pending acceptance restricts it under the acceptance gate whatever its wording, such as "must not be committed"; main updates the wording at the next handoff maintenance.',
             'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision.',
             'For a claim an active handoff recorded as unreviewed, unverified or pending acceptance, a waiver kept in that handoff counts as that record for the gate.',
@@ -4106,30 +4117,6 @@ class FeatherConfigTests(unittest.TestCase):
                                              "is identified only from its original text, an available record or a version the user confirms"),
         "Where files live": ("檔案位置", "cc-feather does not decide where specs live", "不由 cc-feather 決定",
                              "plan-review.md", "Where specs live and whether tickets are committed are the project's choice"),
-        # Repository safety C1 item 7: the Repository safety section's bullets summarise the shared reference.
-        # Repository safety follow-ups C2 item 3: the statement names outcome 1's exception on this machine.
-        "Git commands": ("Git 指令",
-                         "runs no program the repository chose, such as an fsmonitor, a textconv or external diff, a "
-                         "filter, a signing program or a hook, with one exception on this machine:",
-                         "也不執行儲存庫選定的程式，例如 fsmonitor、textconv 或外部 diff、filter、簽章程式或 hook；只有一個例外，"
-                         "發生在這台機器上：",
-                         "repository-safety.md",
-                         "runs no Repository-chosen program, with one exception on this machine: main's content hashing "
-                         "under outcome 1 of Main's preparation"),
-        "File reads": ("讀取檔案", "has a single hard link", "只有一個硬連結",
-                       "repository-safety.md", "that its link count is 1."),
-        # Repo trust default ticket 01: the reference states the new default; ticket 02: so do the READMEs.
-        "Running repository code": ("執行儲存庫程式碼", "on this machine by default",
-                                    "預設會在這台機器上為審查執行儲存庫程式碼", "repository-safety.md",
-                                    "execute repository code on this machine unless, for that call,"),
-        "Before a review": ("審查之前", "Git is 2.32 or later", "2.32 或更新版本",
-                            "repository-safety.md", "Git is 2.32 or later"),
-        # Repository safety deviation D-6: the bullet summarises the fixed forms instead of the named programs.
-        "Before add, commit, tag or push": ("add、commit、tag 或 push 之前", "runs in a fixed form", "以固定形式執行",
-                                            "repository-safety.md", "Each operation runs only in its fixed form"),
-        # Repository safety C2 item 6: the roles bullet summarises the paragraph for roles without a shell.
-        "Roles": ("角色", "report a missing list instead of reading", "沒有清單時回報缺少需求而不讀取",
-                  "repository-safety.md", "report it as a missing requirement instead of reading the repository"),
     }
 
     # Glossary term -> (phrase in its CONTEXT.md entry, procedure file, procedure phrase).
@@ -4155,12 +4142,23 @@ class FeatherConfigTests(unittest.TestCase):
 
     glossary_entries = staticmethod(feather_support.glossary_entries)
 
+    # Repo trust split ticket 01 (Acceptance 8): the reference's Repository safety bullets summarised the deleted
+    # reference, so their six mappings are gone and the subsection is not parsed as rule bullets; ticket 03 rewrites it.
+    REPOSITORY_SAFETY_HEADINGS = {"reference.md": "\n### Repository safety\n", "reference.zh-TW.md": "\n### 儲存庫安全\n"}
+
+    def rule_bullets_outside_repository_safety(self, name, start, end):
+        text = (config.ROOT / "docs" / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+        heading = self.REPOSITORY_SAFETY_HEADINGS[name]
+        if heading in text:
+            before, after = text.split(heading, 1)
+            text = before + ("\n### " + after.split("\n### ", 1)[1] if "\n### " in after else "\n")
+        return self.readme_rule_bullets(text, start, end)
+
     def test_readme_review_rules_match_the_procedures_in_both_languages(self):
         references = config.ROOT / "skills" / "delegation" / "references"
-        english_bullets = self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
-                                                   "## Automatic review", "### Stop threshold")
-        chinese_bullets = self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
-                                                   "## 自動審查", "### 停止門檻")
+        english_bullets = self.rule_bullets_outside_repository_safety("reference.md", "## Automatic review",
+                                                                      "### Stop threshold")
+        chinese_bullets = self.rule_bullets_outside_repository_safety("reference.zh-TW.md", "## 自動審查", "### 停止門檻")
         english, chinese = dict(english_bullets), dict(chinese_bullets)
         self.assertEqual(len(english), len(english_bullets), "English rule bullet labels must be unique")
         self.assertEqual(len(chinese), len(chinese_bullets), "Traditional Chinese rule bullet labels must be unique")

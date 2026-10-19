@@ -193,7 +193,8 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     )
 
     # C5 item 3: the setup document's summary of the automatic review guidance follows templates/review-auto.md (C1 item 1).
-    AUTO_SWITCH = "Before any `git add`, commit, tag or push, main runs it only in the fixed form and after the checks that the delegation skill's repository safety reference describes, with the programs the user's Git configuration sets, and skips hooks only when the user asks."
+    # Repo trust split ticket 01 (0.29.0, Acceptance 7) replaced the fixed-form sentence in both with the commit rule.
+    AUTO_SWITCH = "Main commits only the claim's files and skips hooks only when the user asks."
 
     # C5 item 2.
     ENTRY = (
@@ -237,14 +238,13 @@ class RepositorySafetyReleaseTests(unittest.TestCase):
     def test_setup_document_summarises_the_current_automatic_review_guidance(self):
         section = self.section(self.text("docs/setup.md"), "\n## Automatic review switch\n")
         self.assertIn(self.AUTO_SWITCH, section)
-        # Repository safety deviation D-6 replaced the guidance's operation profile and question with the fixed form,
-        # the checks, the programs the user's configuration sets and skipping hooks only when asked.
-        self.assertIn("Before any `git add`, commit, tag or push, main runs it only in the fixed form and after the checks "
-                      "that cc-feather:delegation's repository safety describes, with the programs the user's Git "
-                      "configuration sets, and skips hooks only when the user asks.",
-                      self.text("templates/review-auto.md"))
+        # Repository safety deviation D-6 replaced the guidance's operation profile and question with the fixed form;
+        # repo trust split ticket 01 replaced the fixed form with committing only the claim's files and skipping hooks
+        # only when asked.
+        self.assertIn(self.AUTO_SWITCH, self.text("templates/review-auto.md"))
         for text in (section, self.text("templates/review-auto.md")):
             self.assertNotIn("operation profile", text)
+            self.assertNotIn("fixed form", text)
 
     def test_validation_entry_records_the_update_checks_live_scope_tag_and_review_round(self):
         entry = self.section(self.text("docs/setup-validation.md"), "\n## 0.21.0 repository safety\n")

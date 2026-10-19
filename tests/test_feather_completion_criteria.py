@@ -268,9 +268,11 @@ class CompletionCriteriaTests(unittest.TestCase):
             "Evidence for a regression describes.",
         ),
         "reviewer.md": (
+            # Repo trust split ticket 01 (Acceptance 6): the path checks of the removed Repository safety paragraph are
+            # gone from the sentence.
             "Obtain the change yourself: compare the claim's base revision your brief names with the commit under review, "
-            "or with HEAD when the brief names none, and read the uncommitted and untracked files your brief lists under "
-            "the path checks of Repository safety below, instead of diffing the working tree.",
+            "or with HEAD when the brief names none, and read the uncommitted and untracked files your brief lists, "
+            "instead of diffing the working tree.",
         ),
         "ADR 0013": (
             "Every brief of the Claim's code review, outcome verification and Adversarial review, a narrowed follow-up's "
@@ -346,9 +348,8 @@ class CompletionCriteriaTests(unittest.TestCase):
             "failing test or a reproduction: name the test that fails, or give the exact steps or input with the "
             "behaviour at the base revision and at the commit under review, so that the main Agent can run it.",
             "Judge the existing behaviour a regression breaks, and any written rule or shipped spec acceptance you judge "
-            "it against, as they stand at the claim's base revision your brief names, reading them there with the object "
-            "reads Repository safety gives, never as the commit under review states them, so a change cannot redefine "
-            "what it must not break.",
+            "it against, as they stand at the claim's base revision your brief names, reading them there, never as the "
+            "commit under review states them, so a change cannot redefine what it must not break.",
         ),
     }
 
@@ -493,15 +494,15 @@ class CompletionCriteriaTests(unittest.TestCase):
     }
 
     # Acceptance item 2: 0.24.0's completion criteria changed neither the installed verifier nor the adversary
-    # definition. The 0.25.0 spec (docs/specs/repo-trust-default.md) Acceptance 4 changes the shared Repository safety
-    # paragraph of both, which the repository safety tests pin byte for byte, so each digest is the SHA-256 of the LF
-    # text with that one paragraph line removed, equal to the same for `git show v0.23.0:templates/agents/<role>.md`;
-    # any other change to either template still changes it.
+    # definition. Each digest is the SHA-256 of the LF text with the shared Repository safety paragraph line removed, at
+    # v0.23.0 and at v0.24.0 alike. Repo trust split ticket 01 (0.29.0) replaces that paragraph and changes both
+    # templates, so the digests are compared at the two tags this record was written for, not at the current templates.
     UNCHANGED_ROLES = {
         "adversary": "ef555aa958fa8074d66eff4b821b92171b313bd53d5b3c8b1fd7bc2db3c0a12d",
         "verifier": "54b5f52cca68043c6829053859fd5aa376ee7ea050912334d2b2947260a93e10",
     }
     REPOSITORY_SAFETY_LINE = "**Repository safety.** "
+    UNCHANGED_BETWEEN = ("v0.23.0", "v0.24.0")
 
     # Ticket 02, Acceptance item 4: the serial rule, the handoff records it includes, no review worktrees, the worktree
     # exception and shared test resources, in review state and in the delegation skill's rule on parallel work.
@@ -524,8 +525,9 @@ class CompletionCriteriaTests(unittest.TestCase):
             "tree it judges, its own handoff records inside the project included, which it updates only between calls, "
             "and implementation in that working tree waits until the call ends.",
             "Main does not create a worktree for a review on its own.",
+            # Repo trust split ticket 01 (Acceptance 1 and 3): each worktree gets the workspace reads.
             "Work the user runs in separate worktrees may proceed in parallel, each worktree serial in itself and still "
-            "prepared and checked under [repository safety](references/repository-safety.md).",
+            "checked as [review state](references/review-state.md)'s What a gated pass judged describes.",
             "Shared test resources stay governed by each brief's target start and reset.",
         ),
     }
@@ -537,11 +539,12 @@ class CompletionCriteriaTests(unittest.TestCase):
             "Before dispatching a code review, outcome verification or Adversarial review call, main confirms that no "
             "Assignment or background process it started that may write the working tree is still running.",
             "At most one gated call that executes code runs in a working tree at a time.",
-            "When main's comparison of the workspace after a call, under [repository safety](repository-safety.md)'s "
-            "Main's preparation, finds a change to a file the claim depends on, its own files and what its acceptance "
-            "checks depend on included, that call's pass is not used.",
-            "The worktree exception extends no trust: each worktree still gets [repository safety](repository-safety.md)'s "
-            "preparation and checks.",
+            # Repo trust split ticket 01 (Acceptance 1 and 3): the comparison uses the workspace reads, which each
+            # worktree gets.
+            "When main's comparison of the workspace after a call, with the reads What a gated pass judged states, finds "
+            "a change to a file the claim depends on, its own files and what its acceptance checks depend on included, "
+            "that call's pass is not used.",
+            "Each worktree still gets the reads and comparisons What a gated pass judged states.",
             # After the first Adversarial round: a call whose pass is not used.
             "Such a call counts as a call without a pass, establishes no coverage and resets no count, and the next call "
             "for the claim reviews its full scope from its base revision, as Completed calls and coverage describes.",
@@ -622,8 +625,9 @@ class CompletionCriteriaTests(unittest.TestCase):
     # Ticket 02, Acceptance item 5: the final check, not counted and adding no verdict, a failure reopening Claims.
     FINAL_CHECK = {
         "review-state.md#Final check": (
+            # Repo trust split ticket 01 (Acceptance 3 and 5): the Execution rules are review state's own bullet.
             "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at "
-            "the commit to be landed or tagged, within [repository safety](repository-safety.md)'s Execution rules.",
+            "the commit to be landed or tagged, within the Execution rules above.",
             "It is main's own run, not a review step: it is not a counted step and adds no verdict.",
         ),
         "review-state.md#Not counted": (
@@ -636,12 +640,15 @@ class CompletionCriteriaTests(unittest.TestCase):
     # the landings and releases the Acceptance gate covers, and fails closed.
     S8 = {
         "review-state.md#Final check": (
-            "It runs only when the workspace equals the commit to be landed or tagged, established as for a gated pass "
-            "under What a gated pass judged, so an untracked or changed file cannot take part in it.",
+            # Repo trust split ticket 01 (Acceptance 3): the workspace reads before and after the check, ignored files
+            # outside them.
+            "It runs only when the workspace equals the commit to be landed or tagged, established with the reads What a "
+            "gated pass judged states; ignored files and files marked assume-unchanged or skip-worktree are outside "
+            "those reads, so they can take part in it.",
             "It runs again whenever the commit to be landed changes, after a fix or any other commit.",
-            "After it runs, main compares the workspace as after a review call, under [repository "
-            "safety](repository-safety.md)'s Main's preparation; a change to a tracked file or a file the check depends "
-            "on makes that run a failed run, with the change as its output.",
+            "After it runs, main runs the same reads again and compares them with those before it: a change to a "
+            "tracked file or a file the check depends on, or a read that counts as a change, makes that run a failed "
+            "run, with the change as its output, while files the check writes elsewhere, such as its artefacts, do not.",
             "Landing and release that the acceptance gate covers wait until the final check passes at the commit to be "
             "landed; otherwise only an accept-and-land decision that states its actual state lets them proceed, as Accept "
             "and land at the end of the plan describes.",
@@ -770,18 +777,21 @@ class CompletionCriteriaTests(unittest.TestCase):
         ("Serial reviews", "審查依序進行",
          "Shared test resources stay governed by each brief's target start and reset.",
          "共用的測試資源仍由每份 brief 中測試目標的啟動與重設方式管理。"),
+        # Repo trust split ticket 01 (Acceptance 3): the check runs under review state's Execution rule.
         ("Final check", "最終檢查",
          "before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at the "
-         "commit to be landed, as its own run within [Repository safety](#repository-safety)'s rules on running code.",
+         "commit to be landed, as its own run under the Execution rule of [review "
+         "state](../skills/delegation/references/review-state.md).",
          "進入預設 branch 或 release 之前，主 Agent 會在要進入預設 branch 的 commit 上執行計畫的整體驗收檢查（例如完整測試），這是它自己的執行，"
-         "遵守[儲存庫安全](#儲存庫安全)中執行程式碼的規則。"),
+         "遵守[審查狀態規則](../skills/delegation/references/review-state.md)中的 Execution 規則。"),
         ("Final check", "最終檢查",
          "It is not a review step: it does not count toward the Stop threshold and adds no verdict.",
          "它不是審查步驟：不計入停止門檻，也不產生新的結論。"),
+        # Repo trust split ticket 01 (Acceptance 3): ignored files are outside the workspace reads.
         ("Final check", "最終檢查",
-         "It runs only when the workspace equals the commit to be landed or tagged, so an untracked or changed file "
-         "cannot take part in it.",
-         "只有在工作區與要進入預設 branch 或要加 tag 的 commit 相同時才會執行，所以未追蹤或有變動的檔案不會參與其中。"),
+         "It runs only when the workspace equals the commit to be landed or tagged, as main's workspace reads show; "
+         "ignored files are outside those reads.",
+         "只有在主 Agent 的工作區讀取顯示工作區與要進入預設 branch 或要加 tag 的 commit 相同時才會執行；被忽略的檔案不在這些讀取的範圍內。"),
         ("Final check", "最終檢查",
          "When running the repository's code is not allowed, the check is recorded as not run, and main tells you so "
          "before landing and in any accept-and-land decision.",
@@ -1145,9 +1155,9 @@ class CompletionCriteriaTests(unittest.TestCase):
                     self.assertIn(sentence, rendered)
 
     def test_the_verifier_and_adversary_templates_are_unchanged(self):
-        for role, digest in self.UNCHANGED_ROLES.items():
-            text = (config.ROOT / "templates" / "agents" / f"{role}.md").read_text(encoding="utf-8")
-            with self.subTest(role=role):
+        for (role, digest), tag in ((item, tag) for item in self.UNCHANGED_ROLES.items() for tag in self.UNCHANGED_BETWEEN):
+            text = self.tagged_path(f"templates/agents/{role}.md", tag)
+            with self.subTest(role=role, tag=tag):
                 lines = text.replace("\r\n", "\n").split("\n")
                 # Exactly one line is the shared paragraph, so removing it hides nothing else.
                 paragraph = [line for line in lines if line.startswith(self.REPOSITORY_SAFETY_LINE)]
@@ -1295,6 +1305,17 @@ class CompletionCriteriaTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(place=place, phrase=phrase[:60]):
                     self.assertNotIn(phrase, text)
+
+    def tagged_path(self, path, revision):
+        """A file's text at a revision; skips when Git cannot be run or the revision or the file cannot be read."""
+        try:
+            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{revision}:{path}"], cwd=config.ROOT,
+                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self.skipTest(f"Git cannot be run, so the {revision} text cannot be read: {error}")
+        if shown.returncode != 0:
+            self.skipTest(f"{path} cannot be read at {revision} in this checkout")
+        return shown.stdout.decode("utf-8")
 
     def tagged(self, place, revision=None):
         """The whole file behind a place at the revision (the tag by default), '' when it did not exist there; skips
