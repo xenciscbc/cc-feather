@@ -823,6 +823,91 @@ class LayoutFixtureTests(RepoCheckCase):
             ("configuration", {"key": "include.path", "origin": "config"}),
         ])
 
+    # Outcome verification of ticket 02: when Git does not accept `.git` as a Git directory it goes on to try the top
+    # as a bare repository, and it accepts there a HEAD that is a symbolic link whose target starts with refs/. Such a
+    # top is not plain whatever HEAD's kind other than a directory, and a `.git` Git would not accept is not plain.
+
+    def top_head_fixture(self, name, make_head):
+        """A `.git` directory without HEAD, which Git does not accept, and at the top a HEAD made by make_head (which
+        may skip), `objects`, `refs/heads` and a `config` that moves the working tree outside and includes a file
+        outside. Returns the fixture, the outside working tree and the expected listing."""
+        fixture = self.fixture(name)
+        make_head(fixture / "HEAD")
+        init(fixture)
+        os.unlink(fixture / ".git" / "HEAD")
+        (fixture / "objects").mkdir()
+        (fixture / "refs" / "heads").mkdir(parents=True)
+        worktree = self.outside / f"{name}-worktree"
+        worktree.mkdir()
+        git("config", "--file", str(fixture / "config"), "core.worktree", str(worktree))
+        git("config", "--file", str(fixture / "config"), "include.path", str(self.outside / "inc.cfg"))
+        expect = [
+            ("git-layout", {"path": ".", "description": ("in", "bare repository layout")}),
+            ("configuration", {"key": "core.worktree", "origin": "config", "location": "outside"}),
+            ("configuration", {"key": "include.path", "origin": "config", "location": "outside"}),
+            ("not-examined", {"value": str(self.outside / "inc.cfg"), "origin": "config"}),
+        ]
+        return fixture, worktree, expect
+
+    def check_top_head(self, fixture, worktree, expect):
+        run = self.check(fixture, worktree, self.outside / "inc.cfg", expect=expect, links=[fixture / "HEAD"])
+        for process in run.processes():
+            for defined in process["worktrees"]:
+                with self.subTest(argv=process["argv"], worktree=defined):
+                    self.assertTrue(under(defined or "", fixture), f"def_repo outside the fixture: {defined}")
+        return run
+
+    def test_a_top_with_a_symbolic_link_head_beside_a_git_directory_git_does_not_accept(self):
+        def symbolic_link(path):
+            try:
+                os.symlink("refs/heads/main", path)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"this platform cannot create a symbolic link: {error}; the junction or special-file "
+                              "case runs instead")
+
+        fixture, worktree, expect = self.top_head_fixture("top-head-symlink", symbolic_link)
+        expect.append(("git-layout", {"path": ".", "kind": "symlink", "target": "refs/heads/main"}))
+        expect.append(("git-layout", {"path": ".git/HEAD", "description": ("in", "is missing")}))
+        self.check_top_head(fixture, worktree, expect)
+
+    def test_a_top_whose_head_is_neither_a_file_nor_a_directory(self):
+        if WINDOWS:
+            kind = "junction"
+
+            def make_head(path):
+                make_junction(path, self.outside / "top-head-junction-target")
+        else:
+            kind = "special"
+
+            def make_head(path):
+                # A socket, not a FIFO: Git opens HEAD to validate it, and opening a FIFO would block.
+                import socket
+                if not hasattr(socket, "AF_UNIX"):
+                    self.skipTest("this platform cannot create a socket file")
+                with socket.socket(socket.AF_UNIX) as server:
+                    try:
+                        server.bind(str(path))
+                    except OSError as error:
+                        self.skipTest(f"this platform cannot create a socket file here: {error}")
+
+        fixture, worktree, expect = self.top_head_fixture(f"top-head-{kind}", make_head)
+        expect.append(("git-layout", {"path": ".", "kind": kind}))
+        expect.append(("git-layout", {"path": ".git/HEAD", "description": ("in", "is missing")}))
+        self.check_top_head(fixture, worktree, expect)
+
+    def test_a_top_with_a_head_file_beside_a_git_directory_git_does_not_accept_is_listed_as_before(self):
+        def head_file(path):
+            path.write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+        fixture, worktree, expect = self.top_head_fixture("top-head-file", head_file)
+        run = self.check_top_head(fixture, worktree, expect)
+        self.assertFalse(matching(run.findings, "git-layout", path=".", kind=("in", "")))
+
+    def test_a_git_directory_without_head_is_not_plain(self):
+        fixture = self.plain_repository("git-without-head")
+        os.unlink(fixture / ".git" / "HEAD")
+        self.check(fixture, expect=[("git-layout", {"path": ".git/HEAD", "description": ("in", "is missing")})])
+
     def test_core_bare_true(self):
         fixture = self.plain_repository("core-bare")
         git("config", "--file", str(fixture / ".git" / "config"), "core.bare", "true")
@@ -1213,6 +1298,51 @@ class FakeListingTests(unittest.TestCase):
         # A collision outside the Git directory does not stop the repository commands.
         self.assertTrue(self.repository_commands(commands))
 
+    # Outcome verification of ticket 02: a `.git` Git would not accept, and a top HEAD of any kind but a directory.
+
+    def test_a_git_directory_git_would_not_accept_is_not_plain(self):
+        variants = {
+            "HEAD missing": ({"HEAD": None}, ".git/HEAD"),
+            "HEAD a directory": ({"HEAD": {}}, ".git/HEAD"),
+            "objects missing": ({"objects": None}, ".git/objects"),
+            "objects a file": ({"objects": b""}, ".git/objects"),
+            "refs missing": ({"refs": None}, ".git/refs"),
+            "refs a file": ({"refs": b""}, ".git/refs"),
+        }
+        for variant, (change, path) in variants.items():
+            with self.subTest(variant=variant):
+                directory = git_directory(**change)
+                directory = {name: node for name, node in directory.items() if node is not None}
+                report, commands, _root = self.check({".git": directory, "a.txt": b"a\n"})
+                self.assertFalse(report["complete"])
+                self.assertTrue(matching(report["findings"], "git-layout", path=path), report["findings"])
+                self.assertEqual(self.repository_commands(commands), [])
+
+    def test_a_top_head_of_any_kind_but_a_directory_makes_a_bare_layout(self):
+        variants = {
+            "a file": {"HEAD": b"ref: refs/heads/main\n"},
+            "a symbolic link": {"HEAD": ("link", "refs/heads/main")},
+            "a symbolic link not into refs": {"HEAD": ("link", "elsewhere")},
+            "names that differ only in case": {"HEAD": b"ref: refs/heads/main\n", "head": b"x\n"},
+        }
+        for variant, head in variants.items():
+            with self.subTest(variant=variant):
+                tree = {".git": git_directory(), "objects": {}, "refs": {"heads": {}},
+                        "config": b"[core]\n\tworktree = /elsewhere\n", **head}
+                report, commands, root = self.check(tree)
+                self.assertFalse(report["complete"])
+                self.assertTrue(matching(report["findings"], "git-layout", path=".",
+                                         description=("in", "bare repository layout")))
+                self.assertEqual(self.repository_commands(commands), [])
+                self.assertIn(["config", "--file", os.path.join(root, "config"), "--no-includes", "--null", "--list"],
+                              commands)
+        # Control: a directory named HEAD at the top is not a bare layout, and the repository commands run.
+        tree = {".git": git_directory(), "HEAD": {}, "objects": {}, "refs": {}, "a.txt": b"a\n"}
+        report, commands, _root = self.check(tree)
+        self.assertFalse(matching(report["findings"], "git-layout", path=".",
+                                  description=("in", "bare repository layout")))
+        self.assertTrue(self.repository_commands(commands))
+
     def test_a_link_whose_target_cannot_be_read_is_not_examined(self):
         tree = {".git": git_directory(), "ln": ("link", "elsewhere")}
         report, _commands, _root = self.check(tree)
@@ -1353,6 +1483,24 @@ class EdgeCaseTests(RepoCheckCase):
         self.assert_report_shape(run)
         self.assertTrue(matching(run.findings, "git-layout", path=str(outer)))
         self.assertFalse(matching(run.findings, "not-examined", description=("in", "no Git directory of its own")))
+
+    def test_a_bare_layout_with_a_head_that_is_not_a_file_inside_another_repository_is_a_git_directory_of_its_own(self):
+        outer = init(self.base / "outer-linked-head")
+        fixture = outer / "inner"
+        fixture.mkdir()
+        try:
+            os.symlink("refs/heads/main", fixture / "HEAD")
+        except (OSError, NotImplementedError) as error:
+            if not WINDOWS:
+                self.skipTest(f"this platform cannot create a symbolic link: {error}")
+            make_junction(fixture / "HEAD", self.base / "outer-linked-head-target")
+        (fixture / "objects").mkdir()
+        (fixture / "refs").mkdir()
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertTrue(matching(run.findings, "git-layout", path=".", description=("in", "bare repository layout")))
+        self.assertFalse(matching(run.findings, "not-examined", description=("in", "no Git directory of its own")))
+        self.assertEqual(run.repository_commands(), [])
 
     def test_a_relative_directory_is_refused(self):
         result = subprocess.run([sys.executable, "-I", "-B", str(TOOL), "relative"], cwd=self.base,

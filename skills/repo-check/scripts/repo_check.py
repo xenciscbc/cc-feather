@@ -231,6 +231,15 @@ def classify(info) -> str:
     return "special"
 
 
+def bare_layout(head, objects, refs) -> bool:
+    """Whether entries of these kinds (None for a missing entry) named `HEAD`, `objects` and `refs` in one directory
+    may make it a bare repository layout to Git. `HEAD` counts unless it is a directory: Git accepts a regular file
+    and also a symbolic link whose target starts with `refs/`, and an entry the tool cannot classify is counted too,
+    so that the result errs towards a repository."""
+    return head is not None and head != "dir" and objects is not None and objects != "file" \
+        and refs is not None and refs != "file"
+
+
 KIND_TEXT = {"symlink": "a symbolic link", "junction": "a junction", "reparse": "a reparse point",
              "placeholder": "a cloud placeholder", "special": "not a regular file or directory", "dir": "a directory",
              "file": "a file", "ambiguous": "one of several entries whose names the tool reads as the same"}
@@ -668,7 +677,7 @@ class Check:
                 head = fs("lstat", native(os.path.join(current, "HEAD")))
                 objects = fs("lstat", native(os.path.join(current, "objects")))
                 refs = fs("lstat", native(os.path.join(current, "refs")))
-                if stat.S_ISREG(head.st_mode) and stat.S_ISDIR(objects.st_mode) and stat.S_ISDIR(refs.st_mode):
+                if bare_layout(classify(head), classify(objects), classify(refs)):
                     return current
             except OSError:
                 pass
@@ -798,10 +807,11 @@ class Check:
 
     def analyse_layout(self):
         """Decide whether the layout is the plain one, the only one on which `-C` commands run: `.git` is a directory,
-        not a link and not a gitfile; it has no `commondir` and no `objects/info/alternates`; no entry of it is a
-        link, junction or other reparse point; the top is not itself a bare repository layout; and `.git/config` and
-        `.git/config.worktree`, read as data, hold no include, no `core.worktree`, no true `core.bare` and no
-        `core.attributesFile` or `core.excludesFile`."""
+        not a link and not a gitfile; it holds a `HEAD` file and `objects` and `refs` directories, so that Git accepts
+        it and does not go on to the top; it has no `commondir` and no `objects/info/alternates`; no entry of it is a
+        link, junction or other reparse point; the top is not itself a bare repository layout (see `bare_top`); and
+        `.git/config` and `.git/config.worktree`, read as data, hold no include, no `core.worktree`, no true
+        `core.bare` and no `core.attributesFile` or `core.excludesFile`."""
         plain = True
         top = [entry for entry in self.children(()) if entry.parts[-1] == ".git"
                or (CASE_INSENSITIVE and entry.parts[-1].casefold() == ".git")]
@@ -809,8 +819,10 @@ class Check:
         bare = self.bare_top()
         if bare:
             plain = False
+            head = self.lookup(("HEAD",))
             self.add("git-layout", "the checked directory is itself a bare repository layout (HEAD, objects and refs "
-                     "at its top), which Git can use as a repository", path=".")
+                     "at its top), which Git can use as a repository", path=".",
+                     kind=None if head.kind == "file" else head.kind, target=head.target)
             if self.lookup(("config",)):
                 entries = self.read_config(("config",), "the bare layout's configuration")
                 if entries is not None:
@@ -834,6 +846,17 @@ class Check:
             return self.not_plain()
         if self.key(name) in self.unlisted:
             return self.not_plain()
+        # Git uses `.git` only when it accepts it as a Git directory; otherwise it goes on to try the top itself as a
+        # bare repository, whose configuration it then applies. So `.git` must hold a `HEAD` file and `objects` and
+        # `refs` directories.
+        for required, wanted in (("HEAD", "file"), ("objects", "dir"), ("refs", "dir")):
+            entry = self.lookup(name + (required,))
+            if entry is None or entry.kind != wanted:
+                plain = False
+                found = "is missing" if entry is None else f"is {KIND_TEXT.get(entry.kind, entry.kind)}"
+                self.add("git-layout", f"the Git directory's {required} {found}, so Git may not accept .git as a Git "
+                         f"directory and may look for another; it needs {KIND_TEXT[wanted]}",
+                         path=self.rel(name + (required,)))
         for descendant in self.descendants(name):
             if self.key(descendant.parts) in self.unlisted:
                 plain = False
@@ -893,11 +916,13 @@ class Check:
         return True
 
     def bare_top(self) -> bool:
-        """Whether the checked directory's top is a bare repository layout: a `HEAD` file together with `objects` and
-        `refs` entries that are not files (a directory, or a link Git would follow to one)."""
+        """Whether the checked directory's top may be a bare repository layout: an entry named `HEAD` of any kind but
+        a directory (a regular file, a symbolic link, which Git accepts when its target starts with `refs/`, a
+        junction or other reparse point, an ambiguous name, a special file or anything the walk could not classify)
+        together with `objects` and `refs` entries that are not regular files (a directory, or a link Git would
+        follow to one). Erring towards a bare layout only stops the `-C` commands."""
         head, objects, refs = (self.lookup((name,)) for name in ("HEAD", "objects", "refs"))
-        return head is not None and head.kind == "file" and objects is not None and refs is not None \
-            and objects.kind != "file" and refs.kind != "file"
+        return bare_layout(head and head.kind, objects and objects.kind, refs and refs.kind)
 
     def not_plain(self):
         self.missing("Git was not run on the repository because its layout is not the plain one: the index, "
