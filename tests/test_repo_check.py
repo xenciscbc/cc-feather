@@ -256,8 +256,11 @@ class RepoCheckCase(unittest.TestCase):
                     if rest[2] == "check-attr":
                         self.assertIn("--cached", rest)
                     self.assertTrue(process["worktrees"], "no def_repo event for a -C command")
+                    # Git reports the worktree by its resolved path where the platform resolves the current
+                    # directory (POSIX), so a fixture reached through a link is also matched by its resolved path.
                     for worktree in process["worktrees"]:
-                        self.assertTrue(under(worktree or "", fixture), worktree)
+                        self.assertTrue(under(worktree or "", fixture)
+                                        or under(worktree or "", os.path.realpath(fixture)), worktree)
                 else:
                     self.assertEqual(rest[:2], ["config", "--file"])
                     self.assertEqual(rest[3:], ["--no-includes", "--null", "--list"])
@@ -574,6 +577,51 @@ def build_promisor(base: Path, name: str):
     return clone, marker, missing
 
 
+def build_promisor_with_other_case(base: Path, name: str):
+    """build_promisor, with an index entry for d/.gitattributes naming the missing blob, a core.hooksPath inside the
+    working tree, and .git/config renamed to .git/Config; returns (clone, marker, missing object id), or None when
+    the file system tells the two spellings apart, so that Git would not read the renamed file."""
+    clone, marker, missing = build_promisor(base, name)
+    git("-C", str(clone), "config", "core.hooksPath", "tree-hooks")
+    (clone / "tree-hooks").mkdir()
+    (clone / "tree-hooks" / "pre-commit").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8", newline="\n")
+    git("-C", str(clone), "update-index", "--add", "--info-only", "--cacheinfo", f"100644,{missing},d/.gitattributes")
+    os.rename(clone / ".git" / "config", clone / ".git" / "Config")
+    if not (clone / ".git" / "config").exists():
+        return None
+    return clone, marker, missing
+
+
+def build_sparse_promisor(base: Path, name: str):
+    """A partial clone with a sparse index whose sparse-directory entry `d/` names a tree that is missing locally,
+    and whose promisor remote's upload-pack command writes a marker; returns (clone, marker)."""
+    source = init(base / f"sparse-source-{name}")
+    (source / "d").mkdir()
+    (source / "top.txt").write_text("top\n", encoding="utf-8")
+    (source / "d" / "inner.txt").write_text("inner\n", encoding="utf-8")
+    commit(source, "one")
+    git("-C", str(source), "config", "uploadpack.allowFilter", "true")
+    tree = git("-C", str(source), "rev-parse", "HEAD:d").stdout.decode().strip()
+    clone = base / f"sparse-clone-{name}"
+    git("clone", "-q", "--filter=tree:0", "--sparse", "-c", "index.sparse=true", "file://" + source.as_posix(),
+        str(clone))
+    listing = git("-C", str(clone), "ls-files", "--stage", "--sparse").stdout.decode()
+    if f"040000 {tree} 0\td/" not in listing:
+        raise AssertionError(f"the clone's index holds no sparse-directory entry for d/: {listing}")
+    # The lazy fetch of the root tree brought d's tree with it; remove the promisor pack that holds it, so that the
+    # sparse-directory entry names a tree the promisor remote has to provide.
+    pack = clone / ".git" / "objects" / "pack"
+    for index in pack.glob("*.idx"):
+        if tree in git("verify-pack", "-v", str(index), cwd=clone).stdout.decode():
+            for part in pack.glob(index.stem + ".*"):
+                os.chmod(part, stat.S_IWRITE | stat.S_IREAD)
+                part.unlink()
+    marker = base / f"sparse-marker-{name}"
+    git("-C", str(clone), "config", "remote.origin.uploadpack",
+        f"echo fetched >> {shell_path(marker)}; git-upload-pack")
+    return clone, marker
+
+
 class PromisorFixtureTests(RepoCheckCase):
     """T1a: object-dependent items on a partial clone, per Git version."""
 
@@ -609,6 +657,58 @@ class PromisorFixtureTests(RepoCheckCase):
         self.assertFalse(self.marker.exists())
         self.assertTrue(matching(run.findings, "refs-and-submodules", key="refs/replace/" + "1" * 40))
         self.assert_trace(run, self.clone, plain=True)
+
+    # Code review call 1, B1: .git/config spelled with other case on a file system that folds case.
+
+    def test_the_positive_control_for_other_case_fetches_through_cat_file(self):
+        built = build_promisor_with_other_case(self.base, "case-control")
+        if built is None:
+            self.skipTest("this file system tells .git/config and .git/Config apart, so Git would not read the latter")
+        clone, marker, missing = built
+        git("-C", str(clone), "cat-file", "blob", missing, check=False)
+        self.assertTrue(marker.exists())
+
+    def test_a_promisor_in_a_configuration_file_spelled_with_other_case_is_still_found(self):
+        built = build_promisor_with_other_case(self.base, "case-checked")
+        if built is None:
+            self.skipTest("this file system tells .git/config and .git/Config apart, so Git would not read the latter")
+        clone, marker, _missing = built
+        run = Run(clone, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertFalse(marker.exists())
+        self.assertTrue(matching(run.findings, "configuration", key="remote.origin.promisor", origin=".git/Config"))
+        self.assertTrue(matching(run.findings, "hooks", path="tree-hooks", origin=".git/Config"))
+        self.assertTrue(matching(run.findings, "hooks", path="tree-hooks/pre-commit", origin=".git/Config"))
+        self.assert_trace(run, clone, plain=True)
+        if run.git_version() >= (2, 45, 0):
+            return
+        self.assertFalse(run.report["complete"])
+        self.assertTrue(matching(run.findings, "not-examined", description=("in", "promisor remote is declared")))
+        for subcommand in run.subcommands():
+            self.assertNotIn(subcommand, ("cat-file", "check-attr", "for-each-ref"))
+
+    # Code review call 1, B2: a sparse index whose expansion reads a missing tree.
+
+    def test_the_positive_control_for_the_sparse_index_fetches_through_ls_files(self):
+        clone, marker = build_sparse_promisor(self.base, "control")
+        git("-C", str(clone), "ls-files", "--stage", check=False)
+        if not marker.exists():
+            version = git("--version").stdout.decode().strip()
+            self.skipTest(f"ls-files on this Git ({version}) did not fetch the missing tree")
+        self.assertTrue(marker.exists())
+
+    def test_older_git_reads_no_index_on_a_sparse_partial_clone(self):
+        clone, marker = build_sparse_promisor(self.base, "checked")
+        run = Run(clone, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertFalse(marker.exists())
+        self.assert_trace(run, clone, plain=True)
+        if run.git_version() >= (2, 45, 0):
+            return
+        self.assertFalse(run.report["complete"])
+        self.assertTrue(matching(run.findings, "not-examined", description=("in", "promisor remote is declared")))
+        self.assertTrue(matching(run.findings, "not-examined", description=("in", "index entries")))
+        self.assertEqual([subcommand for subcommand in run.subcommands() if subcommand != "rev-parse"], [])
 
 
 # ----- T3: layouts, includes and links -----
@@ -901,6 +1001,229 @@ class ChecklistTests(RepoCheckCase):
         self.assertIn("ls-files", run.subcommands())
 
 
+# ----- Submodule and linked worktree Git directories -----
+
+class OtherGitDirectoryTests(RepoCheckCase):
+    """Code review call 1, B6: submodule Git directories are recognised by their layout, one that cannot be
+    classified is listed as not examined, and a `.git/modules` that is not a directory does not hide the worktrees."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = cls.new_base()
+
+    def plain_repository(self, name) -> Path:
+        fixture = init(self.base / name)
+        (fixture / "a.txt").write_text("a\n", encoding="utf-8")
+        commit(fixture)
+        return fixture
+
+    @staticmethod
+    def module(directory: Path, *, head=True, objects=True, refs=True) -> None:
+        directory.mkdir(parents=True)
+        if head:
+            (directory / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        if objects:
+            (directory / "objects").mkdir()
+        if refs:
+            (directory / "refs").mkdir()
+        (directory / "hooks").mkdir()
+        (directory / "hooks" / "pre-commit").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8", newline="\n")
+
+    def test_a_git_modules_file_is_reported_and_the_worktrees_are_still_listed(self):
+        fixture = self.plain_repository("modules-file")
+        worktree = self.base / "modules-file-worktree"
+        git("-C", str(fixture), *IDENTITY, "worktree", "add", "-q", "-b", "side", str(worktree))
+        (fixture / ".git" / "modules").write_text("not a directory\n", encoding="utf-8")
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertFalse(run.report["complete"])
+        self.assertTrue(matching(run.findings, "not-examined", path=".git/modules"))
+        self.assertTrue(matching(run.findings, "git-layout", path=f".git/worktrees/{worktree.name}",
+                                 description=("in", "linked worktree")))
+        self.assert_trace(run, fixture, plain=True)
+        self.assert_untouched(run, worktree)
+
+    def test_a_submodule_git_directory_without_config_has_its_hooks_reported(self):
+        fixture = self.plain_repository("module-without-config")
+        self.module(fixture / ".git" / "modules" / "sub")
+        self.module(fixture / ".git" / "modules" / "group" / "inner")
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        for path in (".git/modules/sub/hooks/pre-commit", ".git/modules/group/inner/hooks/pre-commit"):
+            with self.subTest(path=path):
+                self.assertTrue(matching(run.findings, "hooks", path=path))
+        self.assertTrue(run.report["complete"], matching(run.findings, "not-examined"))
+        self.assert_trace(run, fixture, plain=True)
+        self.assertIn("ls-files", run.subcommands())
+
+    def test_a_directory_under_git_modules_that_cannot_be_classified_is_not_examined(self):
+        fixture = self.plain_repository("module-unclassified")
+        self.module(fixture / ".git" / "modules" / "partial", head=False, refs=False)
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertFalse(run.report["complete"])
+        self.assertTrue(matching(run.findings, "not-examined", path=".git/modules/partial"))
+        self.assert_trace(run, fixture, plain=True)
+
+
+# ----- Listings served through a replaced `fs` -----
+
+class FakeDirectory:
+    """A directory tree served through the tool's `fs` in place of the file system. A node is a dict (a directory),
+    bytes (a regular file with one link) or ("link", target text) (a symbolic link). Paths are matched by their exact
+    text, so names that differ only in case stay two entries, as on a case-sensitive directory."""
+
+    def __init__(self, root: str, tree: dict, unreadable_links=()):
+        self.root = root
+        self.nodes = {}
+        self.children = {}
+        self.unreadable = {os.path.join(root, *name.split("/")) for name in unreadable_links}
+        self.add(root, tree)
+
+    def add(self, path, node):
+        number = len(self.nodes) + 1
+        if isinstance(node, dict):
+            info = self.info(stat.S_IFDIR | 0o755, number, 0)
+            self.children[path] = list(node)
+            for name, child in node.items():
+                self.add(os.path.join(path, name), child)
+        elif isinstance(node, bytes):
+            info = self.info(stat.S_IFREG | 0o644, number, len(node))
+        else:
+            info = self.info(stat.S_IFLNK | 0o777, number, len(node[1]))
+        self.nodes[path] = (node, info)
+
+    @staticmethod
+    def info(mode, number, size):
+        return type("Metadata", (), {"st_mode": mode, "st_ino": number, "st_dev": 1, "st_nlink": 1, "st_size": size,
+                                     "st_file_attributes": 0, "st_reparse_tag": 0})()
+
+    def fs(self, operation, path):
+        if path.startswith("\\\\?\\"):
+            path = path[4:]
+        if path not in self.nodes:
+            raise FileNotFoundError(2, "not in the fake listing", path)
+        node, info = self.nodes[path]
+        if operation == "lstat":
+            return info
+        if operation == "scandir":
+            if path not in self.children:
+                raise NotADirectoryError(20, "not a directory", path)
+            return [(name, self.nodes[os.path.join(path, name)][1]) for name in self.children[path]]
+        if operation == "readlink":
+            if path in self.unreadable or not isinstance(node, tuple):
+                raise OSError(22, "the link target could not be read", path)
+            return node[1]
+        if operation == "read":
+            if not isinstance(node, bytes):
+                raise OSError(21, "not a regular file", path)
+            return node, info
+        raise FileNotFoundError(2, f"{operation} is not served by the fake listing", path)
+
+
+def git_directory(**extra) -> dict:
+    tree = {"HEAD": b"ref: refs/heads/main\n", "config": b"", "objects": {}, "refs": {"heads": {}}}
+    tree.update(extra)
+    return tree
+
+
+class FakeListingTests(unittest.TestCase):
+    """Code review call 1, B3 and N2, on the tool's own `Check` with `fs` replaced by a fake listing, the case folding
+    of a case-insensitive file system switched on, and Git replaced by a recorder: names that differ only in case,
+    and a link whose target cannot be read."""
+
+    @classmethod
+    def setUpClass(cls):
+        import runpy
+        cls.namespace = runpy.run_path(str(TOOL), run_name="repo_check_fake")["main"].__globals__
+
+    def check(self, tree, unreadable_links=()):
+        root = "C:\\repo-check-fake\\checked" if WINDOWS else "/repo-check-fake/checked"
+        fake = FakeDirectory(root, tree, unreadable_links)
+        namespace = self.namespace
+        saved = {"fs": namespace["fs"], "CASE_INSENSITIVE": namespace["CASE_INSENSITIVE"]}
+        namespace.update({"fs": fake.fs, "CASE_INSENSITIVE": True})
+        commands = []
+        try:
+            check = namespace["Check"](root)
+
+            def find_git():
+                check.git_path = "fake-git"
+                check.git_directory = "fake-git-directory"
+                check.git_version = (2, 43, 0)
+                check.git_version_text = "git version 2.43.0"
+                check.environment = {}
+
+            def run_git(arguments, data=b""):
+                commands.append(list(arguments))
+                return b"" if arguments[:2] == ["config", "--file"] else None
+
+            check.find_git = find_git
+            check.run_git = run_git
+            check.run()
+            report = check.report()
+        finally:
+            namespace.update(saved)
+        return report, commands, root
+
+    @staticmethod
+    def repository_commands(commands):
+        return [command for command in commands if command[:1] == ["-C"]]
+
+    def test_the_control_listing_runs_the_repository_commands(self):
+        report, commands, _root = self.check({".git": git_directory(), "a.txt": b"a\n"})
+        self.assertTrue(self.repository_commands(commands))
+        self.assertFalse(matching(report["findings"], "not-examined", description=("in", "differs only in case")))
+
+    def test_configuration_files_whose_names_differ_only_in_case_are_both_not_examined(self):
+        report, commands, root = self.check({".git": git_directory(CONFIG=b"[core]\n\tfsmonitor = x\n"),
+                                             "a.txt": b"a\n"})
+        self.assertFalse(report["complete"])
+        for path in (".git/config", ".git/CONFIG"):
+            with self.subTest(path=path):
+                self.assertTrue(matching(report["findings"], "not-examined", path=path,
+                                         description=("in", "differs only in case")))
+        self.assertEqual(self.repository_commands(commands), [])
+        for command in commands:
+            self.assertFalse(any("config" in part.casefold() and part.startswith(root) for part in command), command)
+
+    def test_a_link_beside_a_directory_of_the_same_name_in_the_git_directory_is_not_lost(self):
+        report, commands, _root = self.check({".git": git_directory(info={"exclude": b""}, INFO=("link", "/elsewhere")),
+                                              "a.txt": b"a\n"})
+        self.assertFalse(report["complete"])
+        for path in (".git/info", ".git/INFO"):
+            with self.subTest(path=path):
+                self.assertTrue(matching(report["findings"], "not-examined", path=path))
+        self.assertEqual(self.repository_commands(commands), [])
+
+    def test_two_git_directories_whose_names_differ_only_in_case_are_not_examined(self):
+        report, commands, _root = self.check({".git": git_directory(), ".GIT": git_directory(), "a.txt": b"a\n"})
+        self.assertFalse(report["complete"])
+        for path in (".git", ".GIT"):
+            with self.subTest(path=path):
+                self.assertTrue(matching(report["findings"], "not-examined", path=path))
+        self.assertEqual(self.repository_commands(commands), [])
+
+    def test_working_tree_names_that_differ_only_in_case_are_both_not_examined(self):
+        report, commands, _root = self.check({".git": git_directory(), "Readme.md": b"a\n", "README.md": b"b\n"})
+        self.assertFalse(report["complete"])
+        for path in ("Readme.md", "README.md"):
+            with self.subTest(path=path):
+                self.assertTrue(matching(report["findings"], "not-examined", path=path))
+        # A collision outside the Git directory does not stop the repository commands.
+        self.assertTrue(self.repository_commands(commands))
+
+    def test_a_link_whose_target_cannot_be_read_is_not_examined(self):
+        tree = {".git": git_directory(), "ln": ("link", "elsewhere")}
+        report, _commands, _root = self.check(tree)
+        self.assertFalse(matching(report["findings"], "not-examined", path="ln"))
+        self.assertTrue(matching(report["findings"], "working-tree", path="ln", target="elsewhere"))
+        report, _commands, _root = self.check(tree, unreadable_links=("ln",))
+        self.assertFalse(report["complete"])
+        self.assertTrue(matching(report["findings"], "not-examined", path="ln",
+                                 description=("in", "target could not be read")))
+
+
 # ----- Acceptance 12's further cases -----
 
 class EdgeCaseTests(RepoCheckCase):
@@ -981,6 +1304,55 @@ class EdgeCaseTests(RepoCheckCase):
         self.assertIn("ls-files", run.subcommands())
         self.assert_untouched(run, elsewhere)
         self.assertFalse(marker.exists())
+
+    # Code review call 1, B5: GIT_EXEC_PATH is kept only when it is one of the PATH entries Git is given.
+
+    def test_a_git_exec_path_that_is_not_on_path_is_dropped_and_reported(self):
+        fixture = init(self.base / "exec-path-dropped")
+        (fixture / "a.txt").write_text("a\n", encoding="utf-8")
+        commit(fixture)
+        elsewhere = self.base / "exec-path-elsewhere"
+        elsewhere.mkdir()
+        run = Run(fixture, self.base / "logs", self.base, extra_environment={"GIT_EXEC_PATH": str(elsewhere)})
+        self.assert_report_shape(run)
+        self.assertTrue(matching(run.findings, "environment", path=str(elsewhere),
+                                 description=("in", "GIT_EXEC_PATH dropped")))
+        self.assert_trace(run, fixture, plain=True)
+
+    def test_a_git_exec_path_that_is_on_path_is_kept(self):
+        fixture = init(self.base / "exec-path-kept")
+        (fixture / "a.txt").write_text("a\n", encoding="utf-8")
+        commit(fixture)
+        exec_path = os.path.normpath(git("--exec-path").stdout.decode().strip())
+        run = Run(fixture, self.base / "logs", self.base, path_prefix=(exec_path,),
+                  extra_environment={"GIT_EXEC_PATH": exec_path})
+        self.assert_report_shape(run)
+        self.assertFalse(matching(run.findings, "environment", description=("in", "GIT_EXEC_PATH")))
+        self.assertTrue(run.report["complete"], matching(run.findings, "not-examined"))
+        self.assert_trace(run, fixture, plain=True)
+
+    # Code review call 1, N1: a top-level file named HEAD is not a Git directory of the checked directory's own.
+
+    def test_a_head_file_alone_inside_another_repository_is_not_a_git_directory_of_its_own(self):
+        outer = init(self.base / "outer-head")
+        fixture = outer / "inner"
+        fixture.mkdir()
+        (fixture / "HEAD").write_text("not a ref\n", encoding="utf-8")
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertFalse(run.report["complete"])
+        self.assertTrue(matching(run.findings, "not-examined", path=str(outer),
+                                 description=("in", "no Git directory of its own")))
+        self.assertEqual(run.repository_commands(), [])
+
+    def test_a_bare_layout_inside_another_repository_is_a_git_directory_of_its_own(self):
+        outer = init(self.base / "outer-bare")
+        fixture = outer / "inner"
+        git("init", "-q", "--bare", str(fixture))
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assertTrue(matching(run.findings, "git-layout", path=str(outer)))
+        self.assertFalse(matching(run.findings, "not-examined", description=("in", "no Git directory of its own")))
 
     def test_a_relative_directory_is_refused(self):
         result = subprocess.run([sys.executable, "-I", "-B", str(TOOL), "relative"], cwd=self.base,
