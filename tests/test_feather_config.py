@@ -4143,7 +4143,9 @@ class FeatherConfigTests(unittest.TestCase):
     glossary_entries = staticmethod(feather_support.glossary_entries)
 
     # Repo trust split ticket 01 (Acceptance 8): the reference's Repository safety bullets summarised the deleted
-    # reference, so their six mappings are gone and the subsection is not parsed as rule bullets; ticket 03 rewrites it.
+    # reference, so their six mappings are gone and the subsection is not parsed as rule bullets. Ticket 03 (Acceptance
+    # 16) rewrote it as paragraphs and an unlabelled list of residual risks, with no labelled rule bullet to map, so it
+    # stays excluded; tests/test_feather_repo_trust_docs.py pins it.
     REPOSITORY_SAFETY_HEADINGS = {"reference.md": "\n### Repository safety\n", "reference.zh-TW.md": "\n### 儲存庫安全\n"}
 
     def rule_bullets_outside_repository_safety(self, name, start, end):

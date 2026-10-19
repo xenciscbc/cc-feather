@@ -770,10 +770,11 @@ class CompletionCriteriaTests(unittest.TestCase):
          "Main never creates a worktree for a review on its own, since setting one up can mean reinstalling dependencies "
          "or rebuilding the project.",
          "主 Agent 不會自行為審查建立 worktree，因為建立 worktree 可能要重新安裝相依套件或重新建置專案。"),
+        # Repo trust split ticket 03 (Acceptance 16): each worktree is checked with main's workspace reads.
         ("Serial reviews", "審查依序進行",
          "Work you run in separate worktrees may proceed in parallel, each worktree serial in itself and each still "
-         "prepared and checked as [Repository safety](#repository-safety) describes.",
-         "你分開在不同 worktree 進行的工作可以平行，每個 worktree 內部仍依序進行，也仍各自依[儲存庫安全](#儲存庫安全)所說的方式準備與檢查。"),
+         "checked with main's workspace reads before and after every call.",
+         "你分開在不同 worktree 進行的工作可以平行，每個 worktree 內部仍依序進行，也仍各自在每次呼叫前後以主 Agent 的工作區讀取檢查。"),
         ("Serial reviews", "審查依序進行",
          "Shared test resources stay governed by each brief's target start and reset.",
          "共用的測試資源仍由每份 brief 中測試目標的啟動與重設方式管理。"),

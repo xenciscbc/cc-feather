@@ -33,3 +33,5 @@ This amends [ADR 0011](0011-reviews-treat-the-repository-as-hostile-by-instructi
 - **Someone else's code.** Running someone else's code safely needs an isolated environment the user names, such as CI, a container or a virtual machine.
 
 The READMEs state these risks. The reviewer, verifier and adversary definitions changed, so existing installations need `/cc-feather:setup update` after the plugin update. These rules are instructions to the model, kept consistent by tests rather than enforced by a tool; only a live rehearsal shows whether a role follows them.
+
+(Superseded by ADR 0016: reviews and the final check still execute repository code on this machine by default, but only a restriction the user states in this session stops them; saying that a change under review or content in the workspace is someone else's is no longer a restriction, and the allowance of someone else's change, the filter-driver rules and the unchanged hostile read model above are gone. Main and the roles read the repository with ordinary file tools and ordinary Git commands, and the residual risks are those ADR 0016 lists.)

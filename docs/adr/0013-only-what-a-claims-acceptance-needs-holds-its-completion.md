@@ -54,6 +54,12 @@ Considered options for this part:
 
 (Further amended by ADR 0015: in auto, a final check failure that cannot be attributed with evidence no longer reopens every Claim the check covers: it is fixed as a fix Claim, an attributed failure is fixed by its Claim without reopening any other, and the final check also reruns every Claim's primary acceptance.)
 
+(Amended by ADR 0016: in the worktree exception, "each worktree still gets repository safety's preparation and checks" now means that each worktree gets the workspace reads before and after each call that review state's What a gated pass judged states, since repository safety's preparation no longer exists.)
+
+(Amended by ADR 0016: the final check runs within review state's Execution rule instead of repository safety's Execution rules, and the workspace's equality with the commit to be landed or tagged is established with the same workspace reads; ignored files and files marked assume-unchanged or skip-worktree are outside those reads, so they can take part in it.)
+
+(Amended by ADR 0016: in the considered option of a worktree for each review, a new worktree would need only the workspace reads, not repository safety's preparation and checks; the option stays rejected for the cost of setting a worktree up.)
+
 Consequences of this part: a review call holds implementation in the working tree it judges until it ends, so work in one working tree takes longer than it would with a separate worktree per review, which the user can still set up. The final check adds one run of the Plan's acceptance checks before landing or release; it is the only safeguard this record adds for work merged from separate worktrees, and how passes carry over across such a merge is left to separate work. Because the final check's state never crosses a context compaction or a session, a final commit whose check ran before one can no longer pass cleanly without a rerun: main runs the check again, and if that commit had failed, or main cannot establish that it had not, landing needs a decision that names the failure or a new commit.
 
 ## A single Accept and land decision

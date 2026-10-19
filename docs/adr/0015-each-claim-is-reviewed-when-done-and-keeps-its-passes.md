@@ -13,6 +13,8 @@ The user decided (2026-10-14 and 2026-10-15; the [spec](../specs/retained-passes
 
 This amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md): per-Claim review timing, which it deferred to separate work on retained passes, is now the only review timing in auto. Off mode, the completion criteria, the serial rule, repository safety and the Execution rule are unchanged, and so are the installed policy and the reviewer, verifier, adversary, analyst and executor definitions.
 
+(Amended by ADR 0016: repository safety, which this part leaves unchanged, is deleted: delegation trusts the repository, and the Execution rule lives in review state.)
+
 ## Considered Options
 
 - **Review after the whole Plan is implemented**: a problem in an early Claim is found only after later Claims were built on it.
@@ -70,6 +72,8 @@ The reruns are what let passes stay fixed: every change that keeps a pass fixed 
 
 This amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md) (the unattributed final check failure): in auto, a final check failure that cannot be attributed with evidence no longer reopens every Claim the check covers but is fixed as a fix Claim, and an attributed failure is fixed by its Claim without reopening any other. ADR 0013's final check, its preconditions and its fail-closed state are otherwise unchanged, and so are the completion criteria and repository safety.
 
+(Amended by ADR 0016: the final check and its reruns of every Claim's primary acceptance run within review state's Execution rule instead of repository safety's Execution rules, and repository safety, which this part leaves unchanged, is deleted.)
+
 Considered options for this part:
 
 - **Reopen an earlier Claim for a defect it introduced**: it restores the chain fixed passes remove.
@@ -97,6 +101,8 @@ Adversarial review runs once at the end because its findings are recorded, not f
 
 This amends [ADR 0009](0009-security-critical-claims-get-an-adversarial-review.md) (BROKEN holds the Claim): in auto, a BROKEN at the final commit no longer starts a fix within the Plan but is recorded in the Follow-up record, and the Claim stays pending acceptance with it until the user decides at the end of the Plan. It also amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md) (Adversarial review timing): in auto, Adversarial review no longer keeps its timing after a Claim's APPROVED and CONFIRMED at the same commit, but runs once at the final commit. BROKEN keeps its meaning, a pre-existing vulnerability still becomes separate work in the project's tracker, and off mode, the completion criteria and repository safety are unchanged.
 
+(Amended by ADR 0016: repository safety, which this part leaves unchanged, is deleted, and dynamic probing at the final commit follows review state's Execution rule.)
+
 Considered options for this part:
 
 - **Adversarial review after each Claim**: it attacks a commit that will not land, and its HELD would need its own reopening rules.
@@ -119,6 +125,8 @@ The user decided (2026-10-15, after a security analysis; the [spec](../specs/ret
 The dispatch record is trusted because the user decided on 2026-10-15 that records cc-feather keeps under `.feather/` are taken as written and that guarding them against forgery or hand edits is not cc-feather's job; earlier designs that distrusted records made every new session review everything again. It is kept apart from handoff records because review state is main's own bookkeeping, written in auto whether or not handoff maintenance runs. Counts are left out because ADR 0002 restarts them when the user resumes; the final check's state is left out because rerunning it is cheap and catches a workspace that no longer matches the record.
 
 This amends [ADR 0002](0002-session-scoped-review-counts.md) (what crosses sessions): in auto, a Plan's READY, reading sets, passes, Adversarial review results and the user's decisions cross sessions through its dispatch record, not only an unresolved verdict an active handoff records. Counts per session, the Stop threshold, off mode, the completion criteria, repository safety, the Execution rule's session-scoped statements and the handoff skill are unchanged.
+
+(Amended by ADR 0016: repository safety, which this part leaves unchanged, is deleted, and the Execution rule's session-scoped statements are only the restrictions the user states; saying where a change comes from is no longer one.)
 
 Considered options for this part:
 
@@ -147,6 +155,8 @@ The user decided (2026-10-14 and 2026-10-15, the second day after a security ana
 The decision lists the three residual risks the user accepted with these rules, stated in the parts above: the dispatch record is trusted as written, repository code a check runs controls its own output, and a Security-critical fix Claim gets no plan review, security analysis or Adversarial review. The list comes from the dispatch record because the user decided on 2026-10-15 that records cc-feather keeps under `.feather/` are taken as written, while a handoff, a ticket or the Follow-up record is not the place review state is kept. A clean Plan's question is only the authority to land, so that Accept and land keeps meaning the user accepted something missing.
 
 This amends [ADR 0008](0008-repository-authority-acceptance-and-gate-lifetime.md) (Accept and land): in auto, landing as it stands at the decision at the end records Accept and land only for the Claims that need it, and a clean Plan's question is only the user's authority to land. It also amends [ADR 0013](0013-only-what-a-claims-acceptance-needs-holds-its-completion.md) (the single decision and its list): in auto, main asks once after the Adversarial reviews as well, even when no Claim needs Accept and land, and builds the list from the dispatch record and its own observations in this session, stating what this part lists. Off mode, the completion criteria, repository safety and the Execution rule are unchanged.
+
+(Amended by ADR 0016: repository safety, which this part leaves unchanged, is deleted, and the Execution rule lives in review state.)
 
 Considered options for this part:
 

@@ -124,15 +124,15 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 | 角色 | 何時使用 | 產出與權限 |
 | --- | --- | --- |
-| scout | 範圍明確的事實查找，例如定位定義、設定或引用 | 唯讀；回報檔案位置與證據，不做複雜因果分析。審查或安全分析時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。 |
-| Explore | 尚不清楚程式結構，需要較廣的模組、入口、呼叫關係探索 | 唯讀；建立理解程式的地圖，深入診斷交給 analyst。審查或安全分析時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。 |
-| analyst | 根因／影響分析、安全問題查找、實作前計畫審查 | 唯讀；回報證據、推論與建議；計畫審查回覆 READY／REVISE。審查或安全分析時只讀取與搜尋主 Agent 列出的檔案與目錄，沒有清單時回報缺少需求而不讀取。 |
+| scout | 範圍明確的事實查找，例如定位定義、設定或引用 | 唯讀；回報檔案位置與證據，不做複雜因果分析。 |
+| Explore | 尚不清楚程式結構，需要較廣的模組、入口、呼叫關係探索 | 唯讀；建立理解程式的地圖，深入診斷交給 analyst。 |
+| analyst | 根因／影響分析、安全問題查找、實作前計畫審查 | 唯讀；回報證據、推論與建議；計畫審查回覆 READY／REVISE。 |
 | mech-executor | 規則、範圍與結果已明確的重複修改 | 可修改指定檔案；按完整規格執行，例如批次改名 |
 | executor | 需要局部設計與工程判斷的功能或修正 | 可修改指定檔案並驗證，遇到架構或需求缺口交回主 Agent |
 | security-executor | 影響授權、秘密資料、密碼學或信任邊界的實作 | 可修改指定檔案；驗證正常行為及濫用／拒絕案例 |
-| verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE。它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。 |
-| reviewer | 獨立審查實作某個 claim 的程式碼 | 自行比對 base revision 與受審 commit，並讀取主 Agent 列出的未提交檔案，只跑 brief 指定的 lint 與型別檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED／INCONCLUSIVE。它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。 |
-| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，絕不修復程式碼；回覆 HELD／BROKEN／INCONCLUSIVE。只有 brief 把某個專案檔列為 fixture 並附上重設方式時才會改動它，且絕不在受把關的呼叫中改動。這些安全限制（這條 fixture 規則、只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。它只依[儲存庫安全](#儲存庫安全)讀取儲存庫與執行其程式碼。 |
+| verifier | 獨立確認完成的實作是否符合明確的 claim | 執行檢查與反例，不修改檔案；回覆 CONFIRMED／REFUTED／INCONCLUSIVE。它只在主 Agent 的 brief 說它可以時才執行儲存庫的程式碼。 |
+| reviewer | 獨立審查實作某個 claim 的程式碼 | 自行比對 base revision 與受審 commit，並讀取主 Agent 列出的未提交檔案，只跑 brief 指定的 lint 與型別檢查，不修改檔案也不跑測試；回覆 APPROVED／CHANGES_REQUESTED／INCONCLUSIVE。它只在主 Agent 的 brief 說它可以時才執行儲存庫的程式碼。 |
+| adversary | 嘗試攻破一個安全關鍵 claim，只針對 brief 指定的可拋棄目標 | 只有 Read、Glob、Grep、Bash，絕不修復程式碼；回覆 HELD／BROKEN／INCONCLUSIVE。只有 brief 把某個專案檔列為 fixture 並附上重設方式時才會改動它，且絕不在受把關的呼叫中改動。這些安全限制（這條 fixture 規則、只用 brief 指定、使用合成資料的可拋棄目標，不連外部主機）是給模型的指示，不是沙箱：Bash 仍可連網與寫檔，主 Agent 會在每次呼叫前後比對工作區。它只在主 Agent 的 brief 說它可以時才執行儲存庫的程式碼。 |
 
 主 Agent 保留需求理解、決策、整合與最後驗收。小型或脈絡高度耦合的工作直接處理；獨立子任務才分派，明確指定範圍、檔案 ownership 與完成條件。子 Agent 都是 leaf，不再往下分派，也不維護交接或進度紀錄，改由主 Agent 依其回報記錄。
 
@@ -145,7 +145,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 步驟 | 時機 | 角色 | 通過條件 |
 | --- | --- | --- | --- |
 | 計畫審查 | 施工前 | analyst | READY |
-| 程式碼審查 | 主 Agent 的主要驗收通過後，或依[儲存庫安全](#儲存庫安全)記為未執行時 | reviewer，自行取得 diff | APPROVED |
+| 程式碼審查 | 主 Agent 的主要驗收通過後，或因你說明的限制涵蓋它而記為未執行時 | reviewer，自行取得 diff | APPROVED |
 | 結果驗證 | APPROVED 之後 | verifier | CONFIRMED |
 | 對抗式審查 | 安全關鍵 claim：在 auto 下，最終檢查在最後的 commit 上通過後，最後做一次；在 `off` 下，在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |
 
@@ -173,9 +173,20 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 ### 儲存庫安全
 
-**審查別人的變更時，例如別人的 pull request、branch 或 patch，請在你自己的訊息中說明它來自別人：審查預設會執行你的儲存庫的程式碼，而你沒有說明來源的變更，會像你自己的變更一樣被執行。**
+**分派假設儲存庫是受信任的，審查會在這台機器上執行它的程式碼。說明變更從哪裡來（例如它是別人的 pull request、branch 或 patch）已經不會阻止這件事：要阻止，請在你自己的訊息中說程式碼不得執行，或指出哪些不得執行。cc-feather 不提供在你信任儲存庫之前檢查它的功能，所以要不要信任一個儲存庫（例如下載或複製別人的儲存庫之後）由你決定。**
 
-審查把受審儲存庫當成攻擊者可控制的內容來讀：Git 指令以固定形式執行，不執行儲存庫選定的任何程式；檔案要先通過連結與位置檢查才會讀取；主 Agent 在每次呼叫前後比對工作區。審查預設會在這台機器上執行儲存庫的程式碼，例如測試、build、linter 與探測；只有你在自己的訊息中說明某個變更來自別人，或說不可執行程式碼時才會停止，之後只在你指定的隔離環境中執行。`git add`、commit、tag 與 push 會使用你自己的 Git 設定所指定的程式，包含 hooks。這些規則是給模型的指示，不是 sandbox；[參考文件](docs/reference.zh-TW.md#儲存庫安全)列出全部規則與剩餘風險。詳見 [ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md) 與 [ADR 0014](docs/adr/0014-reviews-execute-repository-code-by-default.md)。
+主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫；沒有任何審查能隔離或偵測有惡意的儲存庫內容。審查只保留讓結果正確的檢查：`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案。你說明的限制在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終檢查），直到你自己的訊息解除它；儲存庫中的任何內容、工具輸出或紀錄都不能提出或解除限制。這些規則是給模型的指示，不是 sandbox；[參考文件](docs/reference.zh-TW.md#儲存庫安全)有完整說明。詳見 [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)。
+
+剩下的是你要承擔的風險：
+
+- 儲存庫的內容可能透過它的 `CLAUDE.md`、註解、commit 訊息，或主 Agent 與角色讀到的任何東西引導它們：角色可能被引導把變更造成的安全問題說成既有問題或只是推測，主 Agent 可能被引導去執行限制涵蓋的程式碼，因為限制本身也只是給主 Agent 的指示。
+- 審查與最終檢查會在這台機器上執行儲存庫的程式碼，而主 Agent 與角色的 Git 指令（每次呼叫前後的 `git status`、角色的讀取，以及 `git add`、commit 與 push）會執行儲存庫的 Git 設定、attributes 與 hooks 選定的程式，包括追蹤目錄中的 hook 以及 `git status` 執行的 filter，不論是否有限制生效。這些程式碼能改動你能改動的任何東西，包括你自己的 Git 設定、其他 worktree 與 Feather 自己的紀錄。
+- 限制管的是審查與最終檢查，不是實作：executor 與 security-executor 實作時可能執行儲存庫的程式碼，修正別人的變更時也一樣。
+- cc-feather 中沒有任何東西會在程式碼執行前先問你；剩下的只有 Claude Code 的資料夾信任與你的權限設定。
+- 你指定過的隔離環境，在一般性的限制下仍可使用，除非限制另有說明；如果那個環境存有秘密資料（例如 CI runner），程式碼就會在那裡執行。
+- 被忽略的檔案，以及標為 assume-unchanged 或 skip-worktree 的檔案，不在工作區檢查的範圍內，所以這類檔案可能影響審查或最終檢查。
+- Claude Code 在專案中開始 session 時會載入專案的 `CLAUDE.md` 與 `.claude` 設定，並執行那些設定中的 hook，所以儲存庫在任何審查開始前就可能有所動作。
+- 停止執行的陳述只在這個 session 有效，被 context compaction 遺失時也就跟著遺失；新的 session（包括接續 handoff 的 session）不帶有它們。
 
 ### 自動審查開關
 
@@ -235,7 +246,7 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 
 cc-feather 寧可讓審查有界、可預期，也不追求什麼都檢查。下面每個選擇都刻意放棄了某些東西；連結的 ADR 記錄了原因。在 auto 下，主 Agent 在計畫結束時問你的那一次，也會列出這套流程沒有檢查的事。
 
-- **規則是指示，不是強制。**審查流程、儲存庫安全與角色限制都是給模型的指示。測試讓出貨的文字保持一致，但沒有任何 hook 或工具強制執行；真正的限制只來自你的權限設定、hooks、sandbox 或隔離環境。（[ADR 0011](docs/adr/0011-reviews-treat-the-repository-as-hostile-by-instruction.md)）
+- **規則是指示，不是強制。**審查流程、執行儲存庫程式碼的規則與角色限制都是給模型的指示。測試讓出貨的文字保持一致，但沒有任何 hook 或工具強制執行；真正的限制只來自你的權限設定、hooks、sandbox 或隔離環境。（[ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)）
 - **審查只讀窄範圍的內容。**每次審查只判斷一個 claim，只讀 claim 本身和它引用的 spec 段落，所以不會拿 claim 沒採用的段落來判斷，也不會被無關的問題淹沒。代價是後面 claim 的審查者可能不知道前面 claim 的設計意圖；跨 ticket 的設計意圖應該寫進 spec，由計畫審查檢查每張 ticket 都引用了適用於它的部分。（[ADR 0012](docs/adr/0012-claims-are-decided-by-what-the-user-names.md)）
 - **每個 claim 完成時就審查，並保留它的通過結果。**前面 claim 的問題會在後面的 claim 疊上去之前被發現，後面 claim 經過審查的改動碰到共用檔案時，也不會讓前面每個 claim 都重審。代價是前面 claim 的某個性質，如果沒有任何會重跑的驗收檢查涵蓋，就可能被改壞而最終檢查沒發現。（[ADR 0015](docs/adr/0015-each-claim-is-reviewed-when-done-and-keeps-its-passes.md#fixed-passes)）
 - **最終檢查重跑主要驗收，不是每一項。**主 Agent 在要合併的 commit 上重跑計畫的整體檢查與每個 claim 的主要驗收，失敗只修一次，由造成失敗的 claim 或一個修正用的 claim 修，而不是重開每個 claim。其他驗收項目，以及無法重跑的檢查（例如人工檢查），不會在那裡重做。（[ADR 0015](docs/adr/0015-each-claim-is-reviewed-when-done-and-keeps-its-passes.md#the-final-check-and-fix-claims)）
@@ -244,7 +255,7 @@ cc-feather 寧可讓審查有界、可預期，也不追求什麼都檢查。下
 - **有上限的次數，而不是重試到通過為止。**每個步驟到停止門檻就停下等你，所以主 Agent 和審查者意見不合時，會交給你決定，而不是繼續消耗呼叫。（[ADR 0004](docs/adr/0004-consecutive-failure-review-budget.md)、[ADR 0010](docs/adr/0010-the-stop-threshold-is-one-configurable-number.md)）
 - **次數只屬於自己的 session；審查狀態透過照寫採信的紀錄跨 session。**接續的 session 重新計數，並重跑最終檢查。在 auto 下，通過結果、對抗式審查結果與你的決定透過計畫的派工紀錄延續，主 Agent 照紀錄所寫的內容採信，所以改動紀錄就會改變主 Agent 的認知；在 `off` 下，先前 session 通過的 claim 在合併前會再審一次。（[ADR 0002](docs/adr/0002-session-scoped-review-counts.md)、[ADR 0015](docs/adr/0015-each-claim-is-reviewed-when-done-and-keeps-its-passes.md#the-dispatch-record)）
 - **早點 commit，合併時只決定一次。**主 Agent 可以在通過前 commit 並開 pull request，讓環境被回收時不會遺失工作，每次審查也都判斷固定的 commit；合併、release 與完成仍要等通過或你的接受並合併決定，而在 auto 下這個決定只在計畫結束時做一次。（[ADR 0007](docs/adr/0007-commit-before-acceptance.md)、[ADR 0008](docs/adr/0008-repository-authority-acceptance-and-gate-lifetime.md)、[ADR 0015](docs/adr/0015-each-claim-is-reviewed-when-done-and-keeps-its-passes.md#the-decision-at-the-end)）
-- **審查預設執行儲存庫程式碼，讀取時則當它不可信。**每個 session 都問一次是否信任儲存庫，會卡住從交接接續的工作，所以審查現在預設會執行程式碼，除非你說明某個變更來自別人；沒有說明來源的變更會像你自己的一樣被執行。（[ADR 0014](docs/adr/0014-reviews-execute-repository-code-by-default.md)）
+- **分派信任儲存庫。**為讀取有惡意的儲存庫而設的規則讓每次審查都付出代價，卻什麼也隔離不了，因為審查會執行儲存庫的程式碼，Claude Code 也會先載入它的設定。現在主 Agent 與角色把它當成你自己的儲存庫來讀，並執行它的程式碼，除非你在這個 session 說不得執行；cc-feather 也不提供在你信任儲存庫之前檢查它的功能。代價是[儲存庫安全](#儲存庫安全)列出的風險都由你承擔。（[ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)）
 - **新的 context，通常是同一個模型。**每次審查都在新的 context 中自行取得證據，但通常跟主 Agent 用同一個模型。成本與模型多樣性是你用 `/cc-feather:model` 選擇的角色設定，計畫要切成多細的 claim 則由規劃步驟決定。（[ADR 0003](docs/adr/0003-review-cost-and-independence-stay-user-configured.md)）
 
 ## 交接相容性
