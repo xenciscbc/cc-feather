@@ -376,6 +376,13 @@ def listed_key(key: str, value):
     return None
 
 
+def clip(text, limit: int) -> dict:
+    """The `value` field of a finding quoting text, cut to limit characters, with `truncated` set when it was cut."""
+    if text is None:
+        return {}
+    return {"value": text[:limit], "truncated": True if len(text) > limit else None}
+
+
 def parse_listing(text: str):
     """Entries of `git config --list -z` output: (key, value), value None for a key without '='."""
     entries = []
@@ -391,16 +398,19 @@ def parse_listing(text: str):
 
 class GitDirectory:
     """A Git directory the tool reads: its components below the checked directory, the label the report gives it,
-    the directory relative paths in its configuration start from (its working tree, when known), and whether a
-    missing `config` or `hooks` is reported."""
-    __slots__ = ("parts", "label", "base", "report_absent", "fields")
+    the directory relative paths in its configuration start from (the top of its working tree, or the Git directory
+    itself for a layout without one), and whether a missing `config` or `hooks` is reported. base is None when that
+    directory could not be established, and base_problem then says why. A `core.worktree` in the Git directory's own
+    configuration replaces base when it is read (see `Check.working_tree_base`)."""
+    __slots__ = ("parts", "label", "base", "report_absent", "fields", "base_problem")
 
-    def __init__(self, parts, label, base, report_absent, fields=None):
+    def __init__(self, parts, label, base, report_absent, fields=None, base_problem=None):
         self.parts = parts
         self.label = label
         self.base = base
         self.report_absent = report_absent
         self.fields = fields or {}
+        self.base_problem = base_problem
 
 
 # ----- The check -----
@@ -717,7 +727,7 @@ class Check:
         match = re.match(r"git version (\d+)\.(\d+)(?:\.(\d+))?", text)
         if result.returncode or not match:
             self.missing("the Git version could not be read, so whether it is older than 2.32 is not known",
-                         value=text[:200])
+                         **clip(text, 200))
         elif tuple(int(part or 0) for part in match.groups()) < OLD_GIT:
             self.add("git-layout", "Git is older than 2.32, which lacks protections later versions apply to "
                      "repositories", value=text)
@@ -787,7 +797,7 @@ class Check:
         stderr = result.stderr.decode("utf-8", "replace").strip()
         if result.returncode or stderr:
             self.missing(f"{purpose} could not be read by Git (exit {result.returncode})", path=path,
-                         value=stderr[:500] or None)
+                         **clip(stderr or None, 500))
             return None
         try:
             return parse_listing(result.stdout.decode("utf-8", "surrogateescape"))
@@ -804,9 +814,50 @@ class Check:
             return "absent" if state == "absent" else None
         return self.config_entries(data, purpose, self.rel(self.real_parts(parts)))
 
-    def report_config(self, parts, entries, directory: GitDirectory, seen=None):
+    @staticmethod
+    def parts_of(inside_path: str):
+        return tuple(inside_path.split("/")) if inside_path != "." else ()
+
+    @staticmethod
+    def relative(value: str) -> bool:
+        """Whether a path value's text is placed from a base directory: not a `~` or `%(prefix)` value, a UNC path,
+        a fully qualified path or, on Windows, a drive-relative or rooted one."""
+        text = value.replace("/", "\\") if WINDOWS else value
+        if text.startswith(("~", "%(prefix)")) or is_unc(text) or fully_qualified(text):
+            return False
+        return not (WINDOWS and (re.match(r"^[A-Za-z]:", text) or text.startswith("\\")))
+
+    def working_tree_base(self, directory: GitDirectory, files):
+        """Git places relative path values in a Git directory's configuration from the top of the working tree that
+        runs them, which a `core.worktree` in that configuration names relative to the Git directory. When the
+        configuration files (not their includes, see `report_config`) set `core.worktree`, it replaces the Git
+        directory's base when its text lies inside the checked directory, crosses no link and names a directory the
+        walk found; otherwise the base is not established."""
+        values = [value for _parts, entries in files for key, value in entries
+                  if split_key(key) == ("core", None, "worktree")]
+        if not values:
+            return
+        if len(set(values)) > 1:
+            problem = "core.worktree is set more than once with different values"
+        elif not values[0]:
+            problem = "core.worktree is empty"
+        else:
+            location = self.locate(values[0], directory.parts)
+            problem = self.location_problem(location)
+            if problem is None:
+                parts = self.parts_of(location["inside_path"])
+                state, why = self.status(parts, "dir")
+                if state == "ok":
+                    directory.base, directory.base_problem = parts, None
+                    return
+                problem = why
+            problem = f"the directory core.worktree names: {problem}"
+        directory.base, directory.base_problem = None, problem
+
+    def report_config(self, parts, entries, directory: GitDirectory, seen=None, included=False):
         """Findings for the listed keys of one configuration file of a Git directory, and its includes read as data
-        when they lie inside the checked directory and pass the walk's checks."""
+        when they lie inside the checked directory and pass the walk's checks. A relative path value is placed from
+        the Git directory's base; when that base is not established, the value is unresolved and not examined."""
         seen = set() if seen is None else seen
         seen.add(self.key(parts))
         real = self.real_parts(parts)
@@ -819,16 +870,26 @@ class Check:
             section, subsection, name = split_key(key)
             fields = {"key": key, "value": value, "origin": origin}
             location = None
+            unplaced = None
             if kind in ("path", "include") and value:
                 if kind == "include":
                     base = real[:-1]
                 elif name == "worktree":
                     base = directory.parts
                 else:
-                    base = directory.base if directory.base is not None else directory.parts
-                location = self.locate(value, base, home=True)
+                    base = directory.base
+                if base is None and self.relative(value):
+                    location = {"location": "unresolved"}
+                    unplaced = ("it is relative to the working tree, and the working tree could not be established: "
+                                f"{directory.base_problem}")
+                else:
+                    location = self.locate(value, base or (), home=True)
                 fields.update(location)
             self.add("configuration", description, **fields)
+            if included and (section, subsection, name) == ("core", None, "worktree"):
+                self.missing("core.worktree is set in an included file, so the relative paths in this Git directory's "
+                             "configuration may have been placed from another working tree than the one Git uses",
+                             value=value, origin=origin)
             if kind == "include":
                 if value:
                     self.follow_include(value, location, origin, directory, seen)
@@ -837,8 +898,16 @@ class Check:
             elif (section, name) == ("core", "worktree") and self.location_problem(location):
                 self.missing(f"the working tree this configuration names was not examined: "
                              f"{self.location_problem(location)}", value=value, origin=origin)
-            elif (section, name) == ("core", "hookspath") and not self.location_problem(location):
-                self.hooks_path(location["inside_path"], origin)
+            elif (section, name) == ("core", "hookspath"):
+                # Git runs the hooks in this directory, so one the tool cannot list leaves the report incomplete.
+                problem = unplaced or self.location_problem(location)
+                if problem:
+                    self.missing(f"the hooks directory core.hooksPath names was not examined: {problem}",
+                                 value=value, origin=origin)
+                else:
+                    self.hooks_path(location["inside_path"], origin)
+            elif unplaced:
+                self.missing(f"the file {key} names was not placed: {unplaced}", value=value, origin=origin)
             elif (section, name) == ("extensions", "refstorage") and value.strip().lower() != "files":
                 self.missing(f"the refs of {self.rel(directory.parts)} were not examined: its ref storage is not "
                              "files", value=value, origin=origin)
@@ -856,10 +925,10 @@ class Check:
         if entries == "absent":
             self.missing("include target not read: it does not exist", value=value, origin=origin)
         elif entries is not None:
-            self.report_config(parts, entries, directory, seen)
+            self.report_config(parts, entries, directory, seen, included=True)
 
     def hooks_path(self, target: str, origin: str):
-        parts = tuple(target.split("/")) if target != "." else ()
+        parts = self.parts_of(target)
         self.add("hooks", "core.hooksPath names a directory inside the checked directory, so its content chooses the "
                  "hooks Git runs", path=target, origin=origin)
         state, why = self.status(parts, "dir")
@@ -885,15 +954,15 @@ class Check:
         self.queued.add(key)
         self.queue.append(directory)
 
-    def target(self, location: dict, value: str, what: str, origin: str, label: str, base):
+    def target(self, location: dict, value: str, what: str, origin: str, label: str, base, base_problem=None):
         """Queue the Git directory a gitfile or `commondir` names when it may be read, or list it as not
         examined."""
         problem = self.location_problem(location)
         if problem:
             self.missing(f"{what} was not examined: {problem}", value=value, origin=origin)
             return
-        target = location["inside_path"]
-        self.enqueue(GitDirectory(tuple(target.split("/")) if target != "." else (), label, base, True))
+        self.enqueue(GitDirectory(self.parts_of(location["inside_path"]), label, base, True,
+                                  base_problem=base_problem))
 
     def gitfile(self, parts):
         """A `.git` file: Git reads the Git directory's path from it."""
@@ -903,7 +972,7 @@ class Check:
         text = data.decode("utf-8", "surrogateescape")
         if not text.startswith("gitdir: "):
             self.add("git-layout", "a .git file that does not name a Git directory, which Git refuses",
-                     path=self.rel(parts), value=text[:500])
+                     path=self.rel(parts), **clip(text, 500))
             return
         value = text[len("gitdir: "):].rstrip("\r\n")
         location = self.locate(value, parts[:-1])
@@ -963,13 +1032,17 @@ class Check:
         finding = self.add("git-layout", f"a Git directory Git may use: {directory.label}", path=shown,
                            **directory.fields)
         absent = []
+        files = []
         for name in ("config", "config.worktree"):
             entries = self.read_config(parts + (name,), f"the configuration {self.rel(parts + (name,))}")
             if entries == "absent":
                 if name == "config":
                     absent.append("config")
             elif entries is not None:
-                self.report_config(parts + (name,), entries, directory)
+                files.append((parts + (name,), entries))
+        self.working_tree_base(directory, files)
+        for file_parts, entries in files:
+            self.report_config(file_parts, entries, directory)
         hooks = parts + ("hooks",)
         state, why = self.status(hooks, "dir")
         if state == "absent":
@@ -1035,9 +1108,9 @@ class Check:
                 continue
             name = "refs/replace/" + "/".join(entry.parts[len(real):])
             state, data = self.read_bytes(entry.parts, "a replacement ref")
-            value = data.decode("utf-8", "surrogateescape").strip()[:200] if state == "ok" else None
+            value = data.decode("utf-8", "surrogateescape").strip() if state == "ok" else None
             self.add("refs-and-submodules", "a replacement ref, which makes Git show another object in place of the "
-                     "one named", key=name, value=value, origin=self.rel(entry.parts))
+                     "one named", key=name, **clip(value, 200), origin=self.rel(entry.parts))
 
     def packed_refs(self, directory: GitDirectory):
         """The replacement refs in `packed-refs`, read in pieces so that a large file is read whole."""
@@ -1097,7 +1170,7 @@ class Check:
         self.add("git-layout", "commondir makes Git use another directory's objects, refs, configuration and hooks",
                  path=origin, value=value, **location)
         self.target(location, value, "the common directory commondir names", origin,
-                    "the common directory a commondir file names", directory.base)
+                    "the common directory a commondir file names", directory.base, directory.base_problem)
 
     def alternates(self, directory: GitDirectory):
         parts = directory.parts + ("objects", "info", "alternates")
@@ -1117,8 +1190,12 @@ class Check:
             self.missing(f"the submodule Git directories were not examined: {why}",
                          path=self.rel(self.real_parts(modules)))
         elif state == "ok":
+            # A submodule's working tree is the directory its `core.worktree` names (see `working_tree_base`); one a
+            # gitfile names was queued earlier with the gitfile's directory as its base.
             for parts in self.module_directories(self.real_parts(modules)):
-                self.enqueue(GitDirectory(parts, "a submodule Git directory", parts, True))
+                self.enqueue(GitDirectory(parts, "a submodule Git directory", None, True, base_problem=(
+                    "no gitfile in the checked directory names this submodule Git directory and its configuration "
+                    "sets no core.worktree")))
 
     def module_directories(self, parts):
         """The submodule Git directories below parts, at any depth, since a submodule's name can hold `/`: a
@@ -1162,10 +1239,25 @@ class Check:
             value = data.decode("utf-8", "surrogateescape").rstrip("\r\n") if gitdir_state == "ok" else None
             location = self.locate(value, worktree.parts) if value else {}
             self.add("git-layout", "a linked worktree", path=shown, value=value, **location)
-            if value and self.location_problem(location):
-                self.missing(f"the linked worktree's working tree was not examined: {self.location_problem(location)}",
-                             path=shown, value=value)
-            self.enqueue(GitDirectory(worktree.parts, "a linked worktree's Git directory", None, False))
+            problem = self.location_problem(location) if value else (
+                "it has no gitdir file" if gitdir_state == "absent" else "its gitdir file was not read or is empty")
+            if value and problem:
+                self.missing(f"the linked worktree's working tree was not examined: {problem}", path=shown,
+                             value=value)
+            # The working tree's top is the directory holding the `.git` entry the gitfile names.
+            base = None
+            if problem is None:
+                top = self.parts_of(location["inside_path"])
+                if top and self.is_git_name(top[-1]):
+                    top = top[:-1]
+                state, why = self.status(top, "dir")
+                if state == "ok":
+                    base = top
+                else:
+                    problem = why
+            self.enqueue(GitDirectory(worktree.parts, "a linked worktree's Git directory", base, False,
+                                      base_problem=None if base is not None else
+                                      f"the working tree its gitdir file names: {problem}"))
 
     def git_directory_entries(self, directory: GitDirectory):
         """Links and special entries inside a directory named `.git`, and one summary of its files with more than one
@@ -1320,7 +1412,7 @@ class Check:
         for name in ("mcpServers", "apiKeyHelper", "statusLine"):
             if name in settings:
                 self.add("claude-code", "a Claude Code setting that can start a program", key=name,
-                         value=json.dumps(settings[name], ensure_ascii=False)[:500], origin=self.rel(parts))
+                         **clip(json.dumps(settings[name], ensure_ascii=False), 500), origin=self.rel(parts))
 
     def mcp_servers(self, parts):
         servers = self.load_json(parts, ".mcp.json")

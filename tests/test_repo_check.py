@@ -824,7 +824,8 @@ class LayoutFixtureTests(RepoCheckCase):
         objects.mkdir()
         (fixture / ".git" / "objects" / "info").mkdir(exist_ok=True)
         (fixture / ".git" / "objects" / "info" / "alternates").write_text(f"{objects}\n", encoding="utf-8")
-        self.check(fixture, objects,
+        # Code review call 3, N2: alternates outside are listed without making the report incomplete.
+        self.check(fixture, objects, complete=True,
                    expect=[("git-layout", {"path": ".git/objects/info/alternates", "location": "outside"})])
 
     def test_core_worktree_pointing_outside(self):
@@ -842,8 +843,42 @@ class LayoutFixtureTests(RepoCheckCase):
         attributes = self.outside / "attributes-target"
         attributes.write_text("* filter=x\n", encoding="utf-8")
         git("-C", str(fixture), "config", "core.attributesFile", str(attributes))
-        self.check(fixture, attributes,
+        self.check(fixture, attributes, complete=True,
                    expect=[("configuration", {"key": "core.attributesfile", "location": "outside"})])
+
+    # Code review call 3, B2 and N2: a core.hooksPath Git would follow through a link, or outside the checked
+    # directory, names hooks the report did not examine.
+
+    def test_core_hooks_path_through_a_link_is_not_examined(self):
+        target = self.outside / "linked-hooks"
+        for name, value, location in (("hookspath-link", "jl", "inside"),
+                                      ("hookspath-link-climb", "jl/../githooks", "unresolved")):
+            with self.subTest(value=value):
+                fixture = self.plain_repository(name)
+                (fixture / "githooks").mkdir()
+                make_junction(fixture / "jl", target)
+                (target / "pre-commit").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8", newline="\n")
+                git("-C", str(fixture), "config", "core.hooksPath", value)
+                self.check(fixture, target, links=[fixture / "jl"], complete=False, expect=[
+                    ("configuration", {"key": "core.hookspath", "value": value, "location": location,
+                                       "crosses_link": "jl"}),
+                    ("not-examined", {"value": value, "origin": ".git/config",
+                                      "description": ("in", "crosses the link jl")}),
+                ])
+
+    def test_core_hooks_path_pointing_outside_is_not_examined(self):
+        hooks = self.outside / "outside-hooks"
+        hooks.mkdir()
+        (hooks / "pre-commit").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8", newline="\n")
+        for name, value in (("hookspath-outside", str(hooks)), ("hookspath-home", "~/repo-check-hooks")):
+            with self.subTest(value=value):
+                fixture = self.plain_repository(name)
+                git("config", "--file", str(fixture / ".git" / "config"), "core.hooksPath", value)
+                self.check(fixture, hooks, complete=False, expect=[
+                    ("configuration", {"key": "core.hookspath", "value": value, "location": "outside"}),
+                    ("not-examined", {"value": value, "origin": ".git/config",
+                                      "description": ("in", "lies outside")}),
+                ])
 
     def test_gitfile_into_the_fixture_whose_configuration_moves_the_worktree_and_includes(self):
         fixture = self.plain_repository("gitfile-inside")
@@ -989,7 +1024,8 @@ class LayoutFixtureTests(RepoCheckCase):
         excludes = self.outside / "excludes-target"
         excludes.write_text("*\n", encoding="utf-8")
         git("-C", str(fixture), "config", "core.excludesFile", str(excludes))
-        self.check(fixture, excludes, expect=[("configuration", {"key": "core.excludesfile"})])
+        self.check(fixture, excludes, complete=True,
+                   expect=[("configuration", {"key": "core.excludesfile", "location": "outside"})])
 
     def test_config_worktree_with_core_worktree(self):
         fixture = self.plain_repository("config-worktree")
@@ -1065,6 +1101,34 @@ class LayoutFixtureTests(RepoCheckCase):
             ("configuration", {"key": "extensions.partialclone", "origin": "extra.cfg"}),
             ("not-examined", {"value": outer.as_posix(), "origin": "extra.cfg"}),
         ])
+
+    def test_a_value_the_tool_shortens_is_marked_truncated(self):
+        # Code review call 3, N5: a quoted value cut to a length limit says so; one that fits does not.
+        fixture = self.plain_repository("truncated")
+        head = git("-C", str(fixture), "rev-parse", "HEAD").stdout.decode().strip()
+        (fixture / ".git" / "refs" / "replace").mkdir(parents=True)
+        (fixture / ".git" / "refs" / "replace" / ("3" * 40)).write_text("r" * 300 + "\n", encoding="utf-8")
+        (fixture / ".git" / "refs" / "replace" / ("4" * 40)).write_text(head + "\n", encoding="utf-8")
+        (fixture / "odd").mkdir()
+        (fixture / "odd" / ".git").write_text("x" * 600 + "\n", encoding="utf-8")
+        (fixture / "short").mkdir()
+        (fixture / "short" / ".git").write_text("not a gitfile\n", encoding="utf-8", newline="\n")
+        (fixture / ".claude").mkdir()
+        (fixture / ".claude" / "settings.json").write_text(
+            json.dumps({"statusLine": {"command": "s" * 600}, "apiKeyHelper": "short"}), encoding="utf-8")
+        run = self.check(fixture, expect=[
+            ("refs-and-submodules", {"key": f"refs/replace/{'3' * 40}", "value": "r" * 200, "truncated": True}),
+            ("git-layout", {"path": "odd/.git", "value": "x" * 500, "truncated": True}),
+            ("claude-code", {"key": "statusLine", "truncated": True}),
+        ])
+        for category, fields in (("refs-and-submodules", {"key": f"refs/replace/{'4' * 40}", "value": head}),
+                                 ("git-layout", {"path": "short/.git", "value": "not a gitfile\n"}),
+                                 ("claude-code", {"key": "apiKeyHelper", "value": '"short"'})):
+            with self.subTest(category=category, fields=str(fields)):
+                found = matching(run.findings, category, **fields)
+                self.assertTrue(found, json.dumps(run.findings)[:3000])
+                self.assertNotIn("truncated", found[0])
+        self.assertEqual(len(matching(run.findings, "claude-code", key="statusLine")[0]["value"]), 500)
 
     def test_a_local_clone_with_hard_links_is_complete(self):
         source = init(self.outside / "clone-source")
@@ -1503,6 +1567,186 @@ class OtherGitDirectoryTests(RepoCheckCase):
             ("hooks", {"path": ".git/modules/libs/foo/modules/deep/hooks/pre-commit"}),
             ("configuration", {"key": "core.fsmonitor", "origin": "nested/.git/modules/inner/config"}),
             ("hooks", {"path": "nested/.git/modules/inner/hooks/pre-commit"}),
+        ])
+
+
+# ----- Where relative paths in a submodule's or linked worktree's configuration start -----
+
+class WorkingTreeBaseTests(RepoCheckCase):
+    """Code review call 3, B3: Git places a relative `core.hooksPath`, `core.attributesFile` and similar values from
+    the top of the working tree that runs them (githooks(5)): for a submodule the directory its `core.worktree` names,
+    relative to its Git directory, and for a linked worktree the directory its `gitdir` file names. The tool places
+    them the same way when that working tree lies inside the checked directory and passes the metadata checks, and
+    otherwise lists them as unresolved and not examined. Built on T1's hostile fixture where it has a submodule; the
+    positive controls show Git running the hook from where the report places it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = cls.new_base()
+
+    def hostile(self, name):
+        markers = self.base / f"markers-{name}"
+        fixture = self.base / f"fixture-{name}"
+        build_hostile(fixture, self.base / f"outside-{name}", markers)
+        return fixture, markers
+
+    @staticmethod
+    def hook(directory: Path, marker: Path, name="pre-commit"):
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_text(f"#!/bin/sh\necho hook >> {shell_path(marker)}\n", encoding="utf-8",
+                                      newline="\n")
+        os.chmod(directory / name, 0o755)
+
+    @staticmethod
+    def module_config(fixture, *arguments):
+        git("config", "--file", str(fixture / ".git" / "modules" / "sub" / "config"), *arguments)
+
+    def check(self, fixture, *untouched, expect, complete, links=()):
+        run = Run(fixture, self.base / "logs", self.base)
+        self.assert_report_shape(run)
+        self.assert_trace(run, fixture)
+        self.assertEqual(run.report["complete"], complete, json.dumps(matching(run.findings, "not-examined")))
+        self.expect(run, expect)
+        self.assert_untouched(run, *untouched, links=links)
+        return run
+
+    def test_a_submodule_hooks_path_climbing_out_of_its_working_tree_lies_outside(self):
+        fixture, markers = self.hostile("climb")
+        outside_hooks = self.base / "outside-hooks"
+        self.hook(outside_hooks, markers / "outside-hooks")
+        self.module_config(fixture, "core.hooksPath", "../../outside-hooks")
+        self.check(fixture, outside_hooks, complete=False, expect=[
+            ("configuration", {"key": "core.hookspath", "origin": ".git/modules/sub/config", "location": "outside"}),
+            ("not-examined", {"value": "../../outside-hooks", "origin": ".git/modules/sub/config",
+                              "description": ("in", "lies outside")}),
+        ])
+        self.assertEqual(sorted(os.listdir(markers)), [])
+
+    def test_a_submodule_hooks_path_inside_its_working_tree_lists_its_hooks(self):
+        fixture, markers = self.hostile("inside")
+        self.hook(fixture / "sub" / "evilhooks", markers / "sub")
+        self.module_config(fixture, "core.hooksPath", "evilhooks")
+        self.check(fixture, complete=True, expect=[
+            ("configuration", {"key": "core.hookspath", "origin": ".git/modules/sub/config", "location": "inside",
+                               "inside_path": "sub/evilhooks"}),
+            ("hooks", {"path": "sub/evilhooks/pre-commit", "origin": ".git/modules/sub/config"}),
+        ])
+        self.assertEqual(sorted(os.listdir(markers)), [])
+
+    def test_a_submodule_without_its_gitfile_places_its_hooks_path_from_core_worktree(self):
+        # As `git submodule deinit` leaves it: `git submodule update` checks it out again and runs these hooks.
+        fixture, markers = self.hostile("no-gitfile")
+        os.unlink(fixture / "sub" / ".git")
+        self.hook(fixture / "sub" / "evilhooks", markers / "sub", "post-checkout")
+        self.module_config(fixture, "core.hooksPath", "evilhooks")
+        run = self.check(fixture, complete=True, expect=[
+            ("git-layout", {"path": ".git/modules/sub", "description": ("in", "a submodule Git directory")}),
+            ("configuration", {"key": "core.hookspath", "origin": ".git/modules/sub/config", "location": "inside",
+                               "inside_path": "sub/evilhooks"}),
+            ("hooks", {"path": "sub/evilhooks/post-checkout", "origin": ".git/modules/sub/config"}),
+        ])
+        self.assertFalse(matching(run.findings, "hooks", path=".git/modules/sub/evilhooks"))
+
+    def test_a_submodule_whose_core_worktree_names_another_directory(self):
+        fixture, markers = self.hostile("other")
+        self.hook(fixture / "sub" / "evilhooks", markers / "sub")
+        self.hook(fixture / "other" / "evilhooks", markers / "other")
+        self.module_config(fixture, "core.hooksPath", "evilhooks")
+        self.module_config(fixture, "core.worktree", "../../../other")
+        run = self.check(fixture, complete=True, expect=[
+            ("configuration", {"key": "core.worktree", "origin": ".git/modules/sub/config", "inside_path": "other"}),
+            ("configuration", {"key": "core.hookspath", "origin": ".git/modules/sub/config",
+                               "inside_path": "other/evilhooks"}),
+            ("hooks", {"path": "other/evilhooks/pre-commit", "origin": ".git/modules/sub/config"}),
+        ])
+        self.assertFalse(matching(run.findings, "hooks", path="sub/evilhooks/pre-commit"))
+
+    def test_git_runs_a_submodule_hook_from_the_working_tree_core_worktree_names(self):
+        for name, worktree, expected in (("control-sub", None, "sub"), ("control-other", "../../../other", "other")):
+            with self.subTest(core_worktree=worktree):
+                fixture, markers = self.hostile(name)
+                self.hook(fixture / "sub" / "evilhooks", markers / "sub")
+                self.hook(fixture / "other" / "evilhooks", markers / "other")
+                self.module_config(fixture, "core.hooksPath", "evilhooks")
+                if worktree:
+                    self.module_config(fixture, "core.worktree", worktree)
+                git("-C", str(fixture / "sub"), "-c", "user.name=x", "-c", "user.email=x@example.invalid", "commit",
+                    "--allow-empty", "-q", "-m", "x", check=False)
+                self.assertEqual(sorted(os.listdir(markers)), [expected])
+
+    def test_a_linked_worktree_without_its_gitfile_places_its_hooks_path_from_its_gitdir(self):
+        fixture = init(self.base / "linked")
+        (fixture / "a.txt").write_text("a\n", encoding="utf-8")
+        commit(fixture)
+        git("-C", str(fixture), *IDENTITY, "worktree", "add", "-q", "-b", "side", str(fixture / "wt"))
+        git("-C", str(fixture), "config", "extensions.worktreeConfig", "true")
+        git("config", "--file", str(fixture / ".git" / "worktrees" / "wt" / "config.worktree"), "core.hooksPath",
+            "evilhooks")
+        markers = self.base / "markers-linked"
+        markers.mkdir()
+        self.hook(fixture / "wt" / "evilhooks", markers / "wt")
+        # Positive control: with its gitfile, a commit in the linked worktree runs the hook.
+        git("-C", str(fixture / "wt"), "-c", "user.name=x", "-c", "user.email=x@example.invalid", "commit",
+            "--allow-empty", "-q", "-m", "x", check=False)
+        self.assertEqual(sorted(os.listdir(markers)), ["wt"])
+        (markers / "wt").unlink()
+        os.unlink(fixture / "wt" / ".git")
+        run = self.check(fixture, complete=True, expect=[
+            ("git-layout", {"path": ".git/worktrees/wt", "location": "inside", "inside_path": "wt/.git"}),
+            ("configuration", {"key": "core.hookspath", "origin": ".git/worktrees/wt/config.worktree",
+                               "location": "inside", "inside_path": "wt/evilhooks"}),
+            ("hooks", {"path": "wt/evilhooks/pre-commit", "origin": ".git/worktrees/wt/config.worktree"}),
+        ])
+        self.assertFalse(matching(run.findings, "hooks", path=".git/worktrees/wt/evilhooks"))
+        self.assertEqual(sorted(os.listdir(markers)), [])
+
+    def test_relative_paths_are_unresolved_when_the_working_tree_cannot_be_established(self):
+        outside = self.base / "unestablished-outside"
+        outside.mkdir()
+        absolute = str(outside / "excludes")
+        variants = {
+            "no core.worktree and no gitfile": None,
+            "core.worktree outside": "../../../../elsewhere",
+            "core.worktree through a link": "../../../jl",
+            "core.worktree that does not exist": "../../../missing",
+        }
+        for number, (variant, worktree) in enumerate(variants.items()):
+            with self.subTest(variant=variant):
+                fixture = init(self.base / f"unestablished-{number}")
+                (fixture / "a.txt").write_text("a\n", encoding="utf-8")
+                commit(fixture)
+                make_junction(fixture / "jl", outside / "jtarget")
+                self.hook(outside / "jtarget" / "evilhooks", outside / "marker")
+                (fixture / "evilhooks").mkdir()
+                OtherGitDirectoryTests.module(fixture / ".git" / "modules" / "sub")
+                self.module_config(fixture, "core.hooksPath", "evilhooks")
+                self.module_config(fixture, "core.attributesFile", "attrs")
+                self.module_config(fixture, "core.excludesFile", absolute)
+                if worktree:
+                    self.module_config(fixture, "core.worktree", worktree)
+                run = self.check(fixture, outside, links=[fixture / "jl"], complete=False, expect=[
+                    ("configuration", {"key": "core.hookspath", "value": "evilhooks", "location": "unresolved"}),
+                    ("not-examined", {"value": "evilhooks", "origin": ".git/modules/sub/config",
+                                      "description": ("in", "working tree could not be established")}),
+                    ("configuration", {"key": "core.attributesfile", "value": "attrs", "location": "unresolved"}),
+                    ("not-examined", {"value": "attrs", "origin": ".git/modules/sub/config",
+                                      "description": ("in", "working tree could not be established")}),
+                    ("configuration", {"key": "core.excludesfile", "value": absolute, "location": "outside"}),
+                ])
+                # An absolute value needs no working tree: it is placed, and listed without a not-examined finding.
+                self.assertFalse(matching(run.findings, "not-examined", value=absolute))
+                self.assertFalse(matching(run.findings, "hooks", path="evilhooks"))
+
+    def test_core_worktree_set_in_an_include_is_not_examined(self):
+        fixture, _markers = self.hostile("include-worktree")
+        module = fixture / ".git" / "modules" / "sub"
+        (module / "extra.cfg").write_text("[core]\n\tworktree = ../../../other\n", encoding="utf-8")
+        (fixture / "other").mkdir()
+        self.module_config(fixture, "core.hooksPath", "evilhooks")
+        self.module_config(fixture, "include.path", "extra.cfg")
+        self.check(fixture, complete=False, expect=[
+            ("configuration", {"key": "core.worktree", "origin": ".git/modules/sub/extra.cfg"}),
+            ("not-examined", {"origin": ".git/modules/sub/extra.cfg", "description": ("in", "included")}),
         ])
 
 
@@ -2074,6 +2318,8 @@ class SkillTextTests(unittest.TestCase):
         "A report with no findings, or only some, does not mean that the directory can be trusted, and never say "
         "that it can.",
         "Make no trust decision and recommend none unless the user asks for your view; the decision is the user's.",
+        # Code review call 3, B1: S7's sentence on a report too long to present whole.
+        "When the report is too long to present whole, say so and summarise it rather than truncating it silently.",
     )
     # Plan review call 8, N2: the explanation of the `logs` and `refs` noise.
     NOISE = ("A Git directory not named `.git`, such as a bare repository layout at the top, can bring with it "
