@@ -130,7 +130,7 @@ These hold for every Claim of this spec and are its review targets.
 ## Implementation Decisions
 
 - The three kept checks live in review state's existing What a gated pass judged and Repository authority bullets, and Execution becomes a bullet of review state, so no new reference is created; delegation-dedupe later removes any restatement.
-- `git status --porcelain --untracked-files=all --ignore-submodules=none` is the workspace check: it is what a user would run, with the two options that stop the user's configuration and `.gitmodules` from hiding a change. It runs the programs the trusted configuration selects, which is the residual Acceptance 16 states.
+- `git -c core.safecrlf=false status --porcelain --untracked-files=all --ignore-submodules=none` is the workspace check: it is what a user would run, with the two options that stop the user's configuration and `.gitmodules` from hiding a change. It runs the programs the trusted configuration selects, which is the residual Acceptance 16 states.
 - `git commit -- <claim files>` commits the named paths from the working tree and leaves the rest of the index as it was, so the user's staged work is neither committed nor lost.
 - S3 keeps the role-side fail-closed rule from 0.25.0 because the only case it serves is the one the user has asked to protect: a session in which the user said code must not run.
 - The "someone else's content" condition goes because, under a trusted repository, the user states a stop directly ("don't run this PR's tests"); the documents and the update note say so, because 0.25.0 to 0.28.0 taught users to state the origin instead.
