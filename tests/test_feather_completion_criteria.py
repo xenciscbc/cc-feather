@@ -356,44 +356,8 @@ class CompletionCriteriaTests(unittest.TestCase):
     # Acceptance item 8: both READMEs say the same thing, as (English label, Chinese label, English, Chinese).
     README_PAIRS = (
         ("Findings", "問題分級",
-         "what holds a claim's completion is that its acceptance as written is met, existing behaviour is not broken, it "
-         "introduces no security problem and no data loss, and it has no deviation from the plan.",
-         "擋住 claim 完成的，只有這幾項：驗收條件照所寫的內容達成、既有行為沒有被破壞、沒有引入安全問題或資料遺失，以及沒有偏離計畫。"),
-        ("Findings", "問題分級",
-         "A finding that shows one of these unmet is blocking and must be fixed or rejected with evidence, and a "
-         "deviation still stops main to ask you.",
-         "顯示其中一項未達成的問題是阻擋性問題，必須修正或附證據駁回；偏離計畫時，主 Agent 仍會停下來問你。"),
-        ("Findings", "問題分級",
-         "A broken existing behaviour that is neither a security problem nor data loss blocks only with a failing test or "
-         "a reproduction, judged against the claim's base revision, so a change cannot redefine what it must not break; "
-         "a regression that is only inferred does not block.",
-         "既有行為被破壞而且不是安全問題或資料遺失時，要有失敗的測試或重現步驟，並以 claim 的基準版本判斷，才會擋下，所以變更無法重新定義它不能破壞的東西；只是推測的 regression 不會擋下。"),
-        # Retained passes ticket 04 (Acceptance items 16 and 17): "BROKEN and Adversarial review are unchanged" now defers to the
-        # procedure.
-        ("Findings", "問題分級",
-         "Security findings still block as before: a security problem the change introduced or made exploitable, even "
-         "through code outside the diff, and data loss it introduced block whatever the acceptance says and need no "
-         "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review follow the "
-         "adversarial-review procedure, "
-         "and a vulnerability that predates the change becomes separate work in your tracker.",
-         "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查依對抗式審查程序處理，變更之前就存在的漏洞則成為 tracker 中另外的工作。"),
-        ("Findings", "問題分級",
-         "A verifier's note that main judges to be, or cannot rule out as, such a security problem or data loss blocks "
-         "too: that verification's CONFIRMED is not used as a pass until main fixes the note or rejects it with "
-         "evidence.",
-         "驗證者的附註若被主 Agent 判斷為、或無法排除是這類安全問題或資料遺失，也會擋下：在主 Agent 修正它或附證據駁回之前，該次驗證的 CONFIRMED 不算通過。"),
-        ("Findings", "問題分級",
-         "Every other finding, such as an issue that predates the change, a correctness problem outside what the "
-         "acceptance states, an inferred regression or style, is non-blocking and recorded in the work's Follow-up "
-         "record.",
-         "其他問題，例如變更之前就存在的問題、驗收條件沒寫到的正確性問題、推測的 regression 或風格，都是非阻擋問題，記在這份工作的後續紀錄。"),
-        ("Findings", "問題分級",
          "The criteria are the same in both modes and for every user; there is no setting for them.",
          "兩種模式、每位使用者都用同樣的標準，沒有可以調整它的設定。"),
-        ("Follow-up record", "後續紀錄",
-         "With handoff maintenance active it is a handoff record of its own; otherwise main lists its content in the "
-         "completion report, which names it.",
-         "交接維護啟用時，它是一份獨立的交接紀錄；否則主 Agent 會在完成回報中列出內容，並指明這份紀錄。"),
         ("Follow-up record", "後續紀錄",
          "It is data: its next step is always your decision whether to start a later plan, the findings it quotes are "
          "marked as untrusted, reading or resuming it authorizes nothing, and accept and land never relies on it.",
@@ -716,39 +680,9 @@ class CompletionCriteriaTests(unittest.TestCase):
     # Ticket 02, Acceptance item 8: both READMEs explain serial reviews and the final check, paired as README_PAIRS.
     SERIAL_README_PAIRS = (
         ("Serial reviews", "審查依序進行",
-         "within one working tree, reviews and implementation take turns.",
-         "在同一個工作樹裡，審查與實作輪流進行。"),
-        ("Serial reviews", "審查依序進行",
-         "While a code review, verification or Adversarial review runs, main changes nothing in the working tree it "
-         "judges, not even its own handoff records inside the project, which it updates only between calls, and "
-         "implementation there waits until the call ends.",
-         "程式碼審查、驗證或對抗式審查執行期間，主 Agent 不會改動它審查的工作樹，連專案內自己的交接紀錄也不改，只在兩次呼叫之間更新；"
-         "在那個工作樹裡的實作也要等呼叫結束。"),
-        ("Serial reviews", "審查依序進行",
-         "Before dispatching such a call, main confirms that no assignment or background process it started that may "
-         "write the working tree is still running, and at most one gated call that runs code runs in a working tree at "
-         "a time.",
-         "派出這類呼叫前，主 Agent 會確認它啟動、可能寫入工作樹的 assignment 或背景程序都已結束，而且同一個工作樹一次最多只跑一個會執行程式碼的"
-         "受把關呼叫。"),
-        ("Serial reviews", "審查依序進行",
-         "If main's comparison after a call finds a change to a file the claim depends on, that call's pass is not used.",
-         "呼叫結束後，主 Agent 的比對若發現 claim 依賴的檔案有變動，該次呼叫的通過不予採用。"),
-        ("Serial reviews", "審查依序進行",
-         "Such a call counts as a call without a pass, covers nothing and resets no count, and the next call reviews the "
-         "claim's full scope from its base revision.",
-         "這樣的呼叫算作沒有通過的呼叫，不算涵蓋任何範圍，也不重設計數，下一次呼叫會從 claim 的基準版本審查完整範圍。"),
-        ("Serial reviews", "審查依序進行",
          "Main never creates a worktree for a review on its own, since setting one up can mean reinstalling dependencies "
          "or rebuilding the project.",
          "主 Agent 不會自行為審查建立 worktree，因為建立 worktree 可能要重新安裝相依套件或重新建置專案。"),
-        # Repo trust split ticket 03 (Acceptance 16): each worktree is checked with main's workspace reads.
-        ("Serial reviews", "審查依序進行",
-         "Work you run in separate worktrees may proceed in parallel, each worktree serial in itself and each still "
-         "checked with main's workspace reads before and after every call.",
-         "你分開在不同 worktree 進行的工作可以平行，每個 worktree 內部仍依序進行，也仍各自在每次呼叫前後以主 Agent 的工作區讀取檢查。"),
-        ("Serial reviews", "審查依序進行",
-         "Shared test resources stay governed by each brief's target start and reset.",
-         "共用的測試資源仍由每份 brief 中測試目標的啟動與重設方式管理。"),
         # Repo trust split ticket 01 (Acceptance 3): the check runs under review state's Execution rule.
         ("Final check", "最終檢查",
          "before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at the "
@@ -757,49 +691,9 @@ class CompletionCriteriaTests(unittest.TestCase):
          "進入預設 branch 或 release 之前，主 Agent 會在要進入預設 branch 的 commit 上執行計畫的整體驗收檢查（例如完整測試），這是它自己的執行，"
          "遵守[審查狀態規則](../skills/delegation/references/review-state.md)中的 Execution 規則。"),
         ("Final check", "最終檢查",
-         "It is not a review step: it does not count toward the Stop threshold and adds no verdict.",
-         "它不是審查步驟：不計入停止門檻，也不產生新的結論。"),
-        # Repo trust split ticket 01 (Acceptance 3): ignored files are outside the workspace reads.
-        ("Final check", "最終檢查",
-         "It runs only when the workspace equals the commit to be landed or tagged, as main's workspace reads show; "
-         "ignored files are outside those reads.",
-         "只有在主 Agent 的工作區讀取顯示工作區與要進入預設 branch 或要加 tag 的 commit 相同時才會執行；被忽略的檔案不在這些讀取的範圍內。"),
-        ("Final check", "最終檢查",
          "When running the repository's code is not allowed, the check is recorded as not run, and main tells you so "
          "before landing and in any accept-and-land decision.",
          "不允許執行儲存庫程式碼時，這項檢查會記為未執行，主 Agent 會在進入預設 branch 之前，以及任何接受並合併的決定中告訴你。"),
-        ("Final check", "最終檢查",
-         "It runs again whenever the commit to be landed changes, after a fix or any other commit.",
-         "要進入預設 branch 的 commit 只要改變，不論是修正還是其他任何 commit，都會再執行一次。"),
-        ("Final check", "最終檢查",
-         "If main's comparison after the run finds a change to a tracked file or a file the check depends on, the run "
-         "counts as failed, with the change as its output.",
-         "執行之後，主 Agent 的比對若發現已追蹤的檔案或檢查依賴的檔案有變動，這次執行就算失敗，變動就是它的輸出。"),
-        ("Final check", "最終檢查",
-         "Landing and release wait until the check passes at the commit to be landed; otherwise only an accept-and-land "
-         "decision that states its actual state lets them proceed.",
-         "進入預設 branch 與 release 都要等這項檢查在要進入預設 branch 的 commit 上通過；否則只有寫明它實際狀態的接受並合併決定，才能讓它們繼續。"),
-        ("Final check", "最終檢查",
-         "Once the check has failed at a commit, that commit stays failed, and a later pass there lets landing proceed "
-         "only through a decision that names the failure.",
-         "檢查在某個 commit 上失敗後，該 commit 就維持失敗，之後在同一個 commit 上通過，也只有透過寫明這次失敗的決定才能進入預設 branch。"),
-        ("Final check", "最終檢查",
-         "Main takes the check's state only from its own run in this session at that commit, never from a record or an "
-         "earlier session, and runs it again after context compaction; when it cannot establish from this session that "
-         "the commit has not failed, it treats the commit as failed.",
-         "主 Agent 只採用它在這個 session 於該 commit 上自己執行的結果，絕不採用紀錄或先前 session 的結果，context 壓縮之後也會再執行一次；"
-         "無法從這個 session 確定該 commit 沒有失敗時，就視為失敗。"),
-        # Retained passes ticket 03 (Acceptance items 7 and 15): a failure reopens claims in off only.
-        ("Final check", "最終檢查",
-         "In `off`, a failure reopens the claims it affects, with its output as evidence for their reviews, and landing "
-         "and release wait for their passes again; a failure main cannot attribute with evidence reopens every claim the "
-         "check covers.",
-         "在 `off` 下，檢查失敗會重新打開受影響的 claim，並把輸出當作它們審查的證據，進入預設 branch 與 release 都要等它們"
-         "再次通過；主 Agent 無法以證據歸因的失敗，會重新打開這項檢查涵蓋的每個 claim。"),
-        ("Final check", "最終檢查",
-         "For a landing the acceptance gate does not cover, main runs the check when running code is allowed, tells you "
-         "its state before landing and waits for your instruction.",
-         "驗收把關不涵蓋的合併，主 Agent 在允許執行程式碼時會執行這項檢查，在進入預設 branch 之前告訴你它的狀態，並等你指示。"),
     )
 
     ACCEPT_LABEL = "review-state.md#Accept and land at the end of the plan"
@@ -960,56 +854,6 @@ class CompletionCriteriaTests(unittest.TestCase):
         ),
     }
 
-    # Ticket 03, Acceptance item 8: both READMEs explain the single decision, paired as README_PAIRS.
-    ACCEPT_README_PAIRS = (
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "when claims of a plan need an accept-and-land decision, main asks you once, after every claim of the plan has "
-         "finished its reviews and the final check has run or is recorded as not run, before landing or release, not "
-         "after each claim.",
-         "計畫中有 claim 需要你決定接受並合併時，主 Agent 只問你一次：在計畫的每個 claim 都完成審查、最終檢查已執行或記為未執行之後，"
-         "進入預設 branch 或 release 之前，而不是每個 claim 各問一次。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "One decision may name several claims, including a claim whose passes are complete when the final check at the "
-         "commit to be landed failed or was not run, stating for each the commit it accepts, the missing passes, the "
-         "known vulnerabilities and the remaining risk, and the final check's state at the commit to be landed: passed, "
-         "failed with its output, or not run.",
-         "一個決定可以涵蓋多個 claim，包括關卡都已通過、但最終檢查在要進入預設 branch 的 commit 上失敗或未執行的 claim，並為每個 claim 寫明所接受的"
-         " commit、缺少的關卡、已知漏洞與剩餘風險，以及最終檢查在要進入預設 branch 的 commit 上的狀態：通過、失敗（附上輸出）或未執行。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "Until then such a claim stays under the acceptance gate as it stands and its ticket stays unfinished.",
-         "在那之前，這類 claim 照原樣受驗收把關，它的 ticket 也維持未完成。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "Main asks earlier only when you ask to land a claim earlier; since that lands every claim on the branch, the "
-         "list then covers every gated claim on that branch and states the final check's actual state at that commit, "
-         "which main runs whenever running code is allowed.",
-         "只有你要求提早合併某個 claim 時，主 Agent 才會提早問；因為那會讓整個 branch 上的 claim 一起合併，清單就涵蓋該 branch "
-         "上每個受把關的 claim，並寫明最終檢查在那個 commit 上的實際狀態，只要允許執行程式碼，主 Agent 都會執行它。"),
-        # Retained passes ticket 06 (Acceptance items 10, 15 and 18): the list built only from this session's review results holds for off.
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "In `off`, main builds the list from the review results it received in this session, not from a record in "
-         "the working tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
-         "在 `off` 下，主 Agent 依它在這個 session 收到的審查結果建立清單，不依據工作樹中的紀錄（例如交接或後續紀錄），並告訴你這類紀錄與清單的差異。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "Each missing pass names the step and call that left it missing, or that the step has not run, and known "
-         "vulnerabilities appear as the role that reported them stated them, never merged or downgraded.",
-         "每個缺少的關卡都寫明是哪個步驟、哪次呼叫讓它缺少，或該步驟尚未執行；已知漏洞照回報角色的原話列出，絕不合併或降級。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "When main cannot establish a claim's verdicts or missing passes, for example after context compaction, it "
-         "stops and asks you.",
-         "主 Agent 無法確定某個 claim 的結論或缺少的關卡時（例如 context 壓縮之後），會停下來問你。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "You may confirm part of the list by whole claims, and the rest stays pending; a claim is accepted only with "
-         "everything listed for it.",
-         "你可以以整個 claim 為單位只確認清單的一部分，其餘維持待決；claim 只有連同為它列出的所有內容一起，才算被接受。"),
-        ("Accept and land at the end", "最後一次決定接受並合併",
-         "Saying \"continue\", silence or turning automatic review off is not a confirmation, and the decision covers "
-         "only what was listed: a blocking finding or known vulnerability reported after it is not covered and holds "
-         "landing until it is resolved or a new decision names it, and its final-check part covers only the commit and "
-         "output it states.",
-         "說「繼續」、沒有回應或關掉自動審查都不算確認，這個決定也只涵蓋清單上列出的內容：決定之後才回報的阻擋性問題或已知漏洞不在其中，在它解決或"
-         "新的決定寫明它之前，都會擋住合併；決定中最終檢查的部分也只涵蓋它寫明的 commit 與輸出。"),
-    )
-
     # The replaced Accept and land entry, which named one Claim and listed known vulnerabilities only for a missing
     # HELD: absent now, present at v0.23.0.
     OLD_ACCEPT_AND_LAND = {
@@ -1085,8 +929,7 @@ class CompletionCriteriaTests(unittest.TestCase):
                       self.S2_BRIEFS, self.S7_PROCEDURES):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
-        for en_label, zh_label, english, chinese in (self.README_PAIRS + self.SERIAL_README_PAIRS
-                                                     + self.ACCEPT_README_PAIRS):
+        for en_label, zh_label, english, chinese in self.README_PAIRS + self.SERIAL_README_PAIRS:
             pins.setdefault(f"reference.md#{en_label}", []).append(english)
             pins.setdefault(f"reference.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
@@ -1254,12 +1097,6 @@ class CompletionCriteriaTests(unittest.TestCase):
         lines = self.source("ADR 0008").splitlines()
         self.assertEqual(sum(line.startswith("(Amended by ADR 0013:") for line in lines), 1)
 
-    def test_both_readmes_explain_the_single_accept_and_land_decision(self):
-        for en_label, zh_label, english, chinese in self.ACCEPT_README_PAIRS:
-            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
-                with self.subTest(place=place, sentence=sentence[:40]):
-                    self.assert_whole_sentence(sentence, self.source(place))
-
     def test_the_old_accept_and_land_entry_is_gone(self):
         for place, phrases in self.OLD_ACCEPT_AND_LAND.items():
             text = self.source(place)
@@ -1357,21 +1194,6 @@ class WeighFindingsBeforeRulesTests(unittest.TestCase):
               "verification, requests to turn automatic review on or off, before proposing or adopting a requirement or "
               "fix derived from a finding, and before implementing a Security-critical change.")
     TRIGGER = "before proposing or adopting a requirement or fix derived from a finding"
-    # Acceptance item 5: one sentence in each reference, in the Follow-up record bullet beside Findings.
-    REFERENCES = (
-        ("reference.md#Follow-up record",
-         "Before main proposes or adopts a requirement or fix derived from any finding, it briefly states when the case "
-         "can occur in normal use or under the applicable threat model, its worst credible outcome and whether an "
-         "existing rule already covers it, prefers reusing or correcting a rule, and for optional work recommends fixes "
-         "for what normal use encounters, data loss and security problems, which normal-use rarity never discounts; the "
-         "weighing never changes what blocks, what counts as rejection evidence, how security findings are "
-         "dispositioned or your decisions."),
-        ("reference.zh-TW.md#後續紀錄",
-         "主 Agent 依任何問題提出或採用一項要求或修正之前，會先簡短說明這個情況在一般使用中或適用的威脅模型下何時會發生、"
-         "最壞而可信的後果，以及既有規則是否已經涵蓋，並優先沿用或修正既有規則；對可選的工作，它會建議修正一般使用會遇到的"
-         "情況、資料遺失與安全問題，安全問題不會只因一般使用中少見就被輕忽；這項權衡從不改變什麼會擋下、什麼算駁回證據、"
-         "安全問題的處置方式或你的決定。"),
-    )
     PREVIOUS = "v0.27.1"
     GIT_READ = CompletionCriteriaTests.GIT_READ
 
@@ -1412,13 +1234,6 @@ class WeighFindingsBeforeRulesTests(unittest.TestCase):
                     with self.subTest(mode=mode, scope=scope, prefix=prefix):
                         self.assertEqual(config._delegation_block(mode, prefix, scope, None).count(self.POLICY), 1)
 
-    def test_both_references_describe_the_rule_in_one_sentence(self):
-        for place, sentence in self.REFERENCES:
-            with self.subTest(place=place):
-                self.assert_whole_sentence(sentence, feather_support.review_rules_source(place))
-                whole = (config.ROOT / "docs" / place.partition("#")[0]).read_text(encoding="utf-8")
-                self.assertEqual(whole.count(sentence), 1)
-
     def previous(self, path):
         try:
             shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{self.PREVIOUS}:{path}"], cwd=config.ROOT,
@@ -1432,7 +1247,6 @@ class WeighFindingsBeforeRulesTests(unittest.TestCase):
     def test_every_new_pin_fails_on_the_v0_27_1_text(self):
         pins = [(self.SKILL, sentence) for sentence in self.PARAGRAPH]
         pins += [("templates/CLAUDE.md", self.TRIGGER)]
-        pins += [(f"docs/{place.partition('#')[0]}", sentence) for place, sentence in self.REFERENCES]
         for path, sentence in pins:
             with self.subTest(path=path, sentence=sentence[:60]):
                 self.assertNotIn(sentence, self.previous(path))

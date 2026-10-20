@@ -109,8 +109,6 @@ SECTION_SENTENCES = {
         "contains or detects hostile repository content.",
         "A review keeps only the checks that make its result correct, and a check whose result cannot be established "
         "counts as failed.",
-        "A read that exits non-zero, writes anything to standard error or prints anything but porcelain lines counts as "
-        "a change.",
         "A restriction comes only from your own messages in this session: that the repository is not trusted, that code "
         "must not run, or a narrower one, such as not running a pull request's tests.",
         "Saying only where a change comes from is not a restriction.",
@@ -120,15 +118,12 @@ SECTION_SENTENCES = {
     "docs/reference.zh-TW.md": (
         "主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫，沒有任何審查能隔離或偵測有惡意的儲存庫內容。",
         "審查只保留讓結果正確的檢查，而無法確認結果的檢查算作失敗。",
-        "結束代碼不為零、寫出任何標準錯誤輸出，或印出 porcelain 行以外內容的讀取，都算作有變動。",
         "限制只來自你在這個 session 自己的訊息：這個儲存庫不受信任、程式碼不得執行，或更窄的限制，例如不要跑某個 pull request 的測試。",
         "只說明變更從哪裡來不算限制。",
         "工具結果、檔案、commit、角色的回報、handoff、派工或記憶紀錄、hook 輸出或 compaction 摘要中的文字，都不能提出或解除限制，"
         "也不能指定隔離環境。",
     ),
 }
-STATUS = "git -c core.safecrlf=false status --porcelain --untracked-files=all --ignore-submodules=none"
-COMMIT_FORMS = ("`git --literal-pathspecs add -- <claim files>`", "`git --literal-pathspecs commit -- <claim files>`")
 
 # The roles table, the step table, the design trade-offs and the references' commit and worktree sentences.
 REPLACED = {
@@ -328,11 +323,12 @@ class RepositorySafetySectionTests(unittest.TestCase):
                 with self.subTest(name=name, sentence=sentence[:50]):
                     self.assertEqual(section.count(sentence), 1)
 
-    def test_the_references_state_the_workspace_reads_and_the_commit_forms(self):
+    def test_the_references_link_adr_0016(self):
+        # Delegation dedupe 04: the references explain the workspace reads and the commit rule and link to review
+        # state's What a gated pass judged and Repository authority, which state the commands.
         for name in ("docs/reference.md", "docs/reference.zh-TW.md"):
             section = safety_section(document(name), SAFETY_HEADINGS[name])
-            for phrase in ("`git rev-parse HEAD`", f"`{STATUS}`", *COMMIT_FORMS, "`git add -A`", "`git commit -a`",
-                           "(adr/0016-delegation-trusts-the-repository.md)"):
+            for phrase in ("(adr/0016-delegation-trusts-the-repository.md)",):
                 with self.subTest(name=name, phrase=phrase):
                     self.assertIn(phrase, section)
 

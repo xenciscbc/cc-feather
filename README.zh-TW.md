@@ -149,7 +149,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 | 結果驗證 | APPROVED 之後 | verifier | CONFIRMED |
 | 對抗式審查 | 安全關鍵 claim：在 auto 下，最終檢查在最後的 commit 上通過後，最後做一次；在 `off` 下，在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |
 
-重點如下；每條規則的完整說明見[參考文件](docs/reference.zh-TW.md#自動審查)：
+重點如下；規則寫在分派流程中，[參考文件](docs/reference.zh-TW.md#自動審查)說明每條規則的用途，並連到寫明它的流程：
 
 - **沒有計畫的工作**不自動審查；但做出安全關鍵變更、資料遷移或不可逆操作之前，要先有一份經過審查、由你核准的書面計畫。
 - **計畫就是你指名的東西。**要求主 Agent 實作時指名計畫、spec 或 ticket，就代表你同意它，而你指名的內容決定它的 claim：spec 是一個 claim，除非它自己列了 claim；一份 spec 的 ticket 是一個計畫，每張未完成的 ticket 一個 claim；單一 ticket 本身就是計畫和 claim。claim 的實作者與審查者讀的是 claim 本身和它引用的 spec 段落，不是整份 spec。
@@ -175,7 +175,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 **分派假設儲存庫是受信任的，審查會在這台機器上執行它的程式碼。說明變更從哪裡來（例如它是別人的 pull request、branch 或 patch）已經不會阻止這件事：要阻止，請在你自己的訊息中說程式碼不得執行，或指出哪些不得執行。cc-feather 不提供在你信任儲存庫之前檢查它的功能，所以要不要信任一個儲存庫（例如下載或複製別人的儲存庫之後）由你決定。**
 
-主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫；沒有任何審查能隔離或偵測有惡意的儲存庫內容。審查只保留讓結果正確的檢查：`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案。你說明的限制在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終檢查），直到你自己的訊息解除它；儲存庫中的任何內容、工具輸出或紀錄都不能提出或解除限制。這些規則是給模型的指示，不是 sandbox；[參考文件](docs/reference.zh-TW.md#儲存庫安全)有完整說明。詳見 [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)。
+主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫；沒有任何審查能隔離或偵測有惡意的儲存庫內容。審查只保留讓結果正確的檢查：`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案。你說明的限制在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終檢查），直到你自己的訊息解除它；儲存庫中的任何內容、工具輸出或紀錄都不能提出或解除限制。這些規則是給模型的指示，不是 sandbox；它們寫在分派流程中，[參考文件](docs/reference.zh-TW.md#儲存庫安全)加以說明。詳見 [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)。
 
 剩下的是你要承擔的風險：
 

@@ -3385,14 +3385,6 @@ class FeatherConfigTests(unittest.TestCase):
             config.ROOT / "CONTEXT.md": ("clears the stop without resetting the count",
                                          "the Automatic flow resumes from there",
                                          "is an automatic call, not an Explicit request"),
-            config.ROOT / "docs" / "reference.md": (
-                "the automatic flow resumes from there",
-                "in auto the automatic flow continues to the next step",
-            ),
-            config.ROOT / "docs" / "reference.zh-TW.md": (
-                "自動流程會從那裡接續",
-                "在 auto 下自動流程接著進入下一步",
-            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3434,16 +3426,6 @@ class FeatherConfigTests(unittest.TestCase):
                                                      "checks and reports it after the operation"),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("Reuse a verdict only while it is valid",
                                                                  "classify the call as [review state]"),
-            config.ROOT / "docs" / "reference.md": (
-                "needs your request again",
-                "does not count as that step's pass",
-                "a pass resets the count and a non-pass stops the step again",
-            ),
-            config.ROOT / "docs" / "reference.zh-TW.md": (
-                "都需要你要求",
-                "不算該步驟的通過",
-                "仍需要你再要求",
-            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3488,20 +3470,6 @@ class FeatherConfigTests(unittest.TestCase):
             references / "code-review.md": ("only as [review state](review-state.md)'s Pending acceptance describes",),
             references / "outcome-verification.md": ("only as [review state](review-state.md)'s Pending acceptance describes",),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("Update a claim's ticket as [review state]",),
-            config.ROOT / "docs" / "reference.md": (
-                "never counts as READY, APPROVED, CONFIRMED or HELD",
-                "does not accept a known defect",
-                "or you say it is done",
-                "one of the convention's completion values",
-                "a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass",
-            ),
-            config.ROOT / "docs" / "reference.zh-TW.md": (
-                "絕不記為 READY、APPROVED、CONFIRMED 或 HELD",
-                "不代表接受已知的缺陷",
-                "或你說它已完成",
-                "慣例定義的任一完成值",
-                "受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過",
-            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3551,34 +3519,6 @@ class FeatherConfigTests(unittest.TestCase):
             ),
             references / "code-review.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes",),
             references / "outcome-verification.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes",),
-            config.ROOT / "docs" / "reference.md": (
-                "Counts do not carry over",
-                "In `off`, passing verdicts do not carry over either, and without an active handoff record no restriction carries over",
-                "unless you authorise it",
-                "keeping a mapping from old claims to new ones",
-                "from its original text, an available record or a version you confirm",
-                "only after a later pass",
-                "a waiver stays recorded",
-                "for done work",
-                "with its scope",
-                "and their unresolved blockers",
-                "or you cancel the work, change its acceptance or waive it",
-                "A deferral keeps the note and a waiver stays recorded in it",
-            ),
-            config.ROOT / "docs" / "reference.zh-TW.md": (
-                "在 `off` 下，通過的結論也不會帶到新的 session，沒有進行中的交接記錄時，不會有任何限制帶過去",
-                "沒有進行中的交接記錄時，不會有任何限制帶過去",
-                "除非你授權",
-                "保留新舊 claim 的對應",
-                "依它的原文、現有紀錄或你確認過的版本",
-                "才會進入預設 branch、release 或回報完成",
-                "豁免也會繼續記在裡面",
-                "表示已完成的完成值",
-                "並註明範圍",
-                "與尚未解決的阻擋事項",
-                "或你取消工作、修改驗收或豁免為止",
-                "延後時記錄保留",
-            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -3683,14 +3623,6 @@ class FeatherConfigTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(path=name, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
-        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
-                                                "## Automatic review", "### Stop threshold"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 自動審查", "### 停止門檻"))
-        self.assertIn('Plan review first is an automatic call that covers the whole plan; going straight to code review records the missing READY as a waiver for the implemented claims.',
-                      english["Implemented before plan review"])
-        self.assertIn('先補計畫審查算一次自動呼叫，審查整份計畫；直接做程式碼審查則把缺少的 READY 記為已實作 claim 的豁免。',
-                      chinese["實作完才做計畫審查"])
 
     # Whole sentences, so that removing or rewording any clause of the acceptance gate fails the suite.
     ACCEPTANCE_GATE_SENTENCES = {
@@ -3723,18 +3655,6 @@ class FeatherConfigTests(unittest.TestCase):
             'record as plain text that the claim is unverified, its open findings and that it must not be landed on the default branch, released or reported complete.',
         ),
     }
-    ACCEPTANCE_GATE_README = {
-        ('en', 'Commit', "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work and open a pull request that lists the claims still unaccepted, without asking. It asks before pushing to a branch that already existed and that it did not create; in a resumed session a branch counts as its own only when a record shows that it created it for this work: in auto the dispatch record, in place of an active handoff, and in `off` an active handoff. Before a gated review or verification, main commits only when that call needs a commit. Opening a pull request is not permission to merge it, a pass is not a request to land or release, and your explicit instruction not to commit or not to push wins; a claim whose review or verification then lacks its commit is reported blocked. For a claim gated only because an active handoff records it as unreviewed, unverified or pending acceptance, main may make the local commit a review or verification needs without asking, and asks before pushes and pull requests, as in `off`. For all these claims, main lands the claim on the remote default branch, releases it, reports it complete or marks its ticket done only with a valid APPROVED and CONFIRMED, plus a valid HELD for a Security-critical claim, or with your accept-and-land decision. A cancelled claim's commits left on a branch stay listed as unaccepted until you decide to revert them, keep them off the default branch or accept and land them; a branch carrying them is not landed before that. Pushed history is never rewritten, so a fix is a new commit, and landing a branch lands every claim on it. Each review, verification and Adversarial review of such a claim judges a named commit with a clean workspace. The default branch is the one the remote's HEAD names, or a protected or shared branch you name. On the default branch, commits made before the passes are labelled unaccepted and pushed only after both passes, plus HELD for a Security-critical claim, or your accept-and-land decision, or with your explicit permission; until then main reminds you that a reclaimed environment would lose them. In `off`, nothing else changes."),
-        ('en', 'Not passed', 'a claim without APPROVED is unreviewed: it is not landed on the default branch, released or reported complete.'),
-        ('en', 'Not passed', 'A claim without a valid CONFIRMED is unverified and is not landed, released or reported complete either.'),
-        ('en', 'Your decisions', 'so a waived claim the acceptance gate covers is landed on the default branch, released or reported complete only after a later pass or your accept-and-land decision.'),
-        ('en', 'Resumed session', 'In `off`, before landing, release or completion, a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, unless its ticket was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and nothing relevant changed since.'),
-        ('zh', 'Commit 條件', '在 auto 下，主 Agent 可以不經詢問，在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch，並開 PR 列出尚未驗收的 claim。要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有紀錄顯示它為這項工作建立了該 branch，才算它自己的 branch：在 auto 下看派工紀錄，取代進行中的交接，在 `off` 下看進行中的交接。受把關約束的審查或驗證需要 commit 時，主 Agent 才會先 commit。開 PR 不等於可以 merge，通過也不代表要 land 或 release；你明確說不要 commit 或不要 push 時，以你的指示為準，因此審查或驗證缺少所需 commit 時，該 claim 會回報為受阻。只因進行中的交接記錄為未審查、未驗證或待驗收而受把關的 claim，主 Agent 可以不經詢問做審查或驗證所需的本機 commit，但 push 與開 PR 會先問你，和 `off` 相同。以上 claim 都只有在 APPROVED 與 CONFIRMED（安全關鍵 claim 還要加上 HELD）都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成。取消的 claim 留在 branch 上的 commit 會一直列為未驗收，直到你決定用新 commit revert、不讓它進入預設 branch，或接受並合併；在那之前，帶著它們的 branch 不會被合併。已推送的歷史不會改寫，修正一律加新 commit；合併一個 branch 就等於合併上面所有 claim。這類 claim 的每次審查、驗證與對抗式審查，都針對指名的 commit，且工作區乾淨。預設 branch 指遠端 HEAD 所在的 branch，或你指定為受保護或共用的 branch。在預設 branch 上，通過前的 commit 會標示為未驗收，要等兩關都通過（安全關鍵 claim 還要加上 HELD）、你決定接受並合併，或你明確允許才會推送；在那之前，主 Agent 會提醒你環境回收時這些 commit 會遺失。`off` 下其他行為不變。'),
-        ('zh', '未通過', '沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成。'),
-        ('zh', '未通過', '沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成。'),
-        ('zh', '你的決定', '所以受驗收把關約束的 claim 被豁免後，要等之後的審查或驗證通過，或你決定接受並合併，才會進入預設 branch、release 或回報完成。'),
-        ('zh', '恢復的 session', '在 `off` 下，進入預設 branch、release 或回報完成前，之前 session 通過的 claim 要重新審查與驗證，安全關鍵 claim 也要重新做對抗式審查；只有 ticket 是在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值、且之後沒有相關變更的 claim 例外。'),
-    }
 
     def test_acceptance_gate_sentences_are_stated_whole(self):
         references = config.ROOT / "skills" / "delegation" / "references"
@@ -3743,15 +3663,6 @@ class FeatherConfigTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(path=name, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
-        bullets = {
-            "en": dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
-                                              "## Automatic review", "### Stop threshold")),
-            "zh": dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
-                                              "## 自動審查", "### 停止門檻")),
-        }
-        for language, label, sentence in self.ACCEPTANCE_GATE_README:
-            with self.subTest(language=language, bullet=label, sentence=sentence[:60]):
-                self.assertIn(sentence, bullets[language][label])
         adr = config.ROOT / "docs" / "adr"
         for name, note in (("0002-session-scoped-review-counts.md", '(Amended by ADR 0007: the restriction now applies to landing on the default branch, release and reporting complete rather than to committing; a restricted claim may be committed before its passes.)'),
                            ("0006-review-state-validity-and-completion.md", '(Amended by ADR 0007: the commit gate moved to landing on the remote default branch, release, reporting complete and ticket completion; claims may be committed before their passes, and a claim that passed in an earlier session is reviewed and verified again before a gated operation unless its ticket is finished.)')):
@@ -3808,42 +3719,6 @@ class FeatherConfigTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertIn(phrase, text)
-        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
-                                                "## Automatic review", "### Stop threshold"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 自動審查", "### 停止門檻"))
-        for bullets, label, phrase in (
-                (english, "Commit", "in auto, main may commit a claim of plan-driven work before its passes, push it to a branch it created for the work"),
-                (english, "Commit", "open a pull request that lists the claims still unaccepted, without asking"),
-                (english, "Commit", "judges a named commit with a clean workspace"),
-                (english, "Not passed", "it is not landed on the default branch, released or reported complete"),
-                (english, "Not passed", "is unverified and is not landed, released or reported complete either"),
-                (chinese, "未通過", "沒拿到 APPROVED 的 claim 視為未審查，不進入預設 branch、不 release、不回報完成"),
-                (chinese, "未通過", "沒有有效 CONFIRMED 的 claim 視為未驗證，同樣不進入預設 branch、不 release、不回報完成"),
-                (english, "Commit", "main lands the claim on the remote default branch, releases it, reports it complete or marks its "
-                                    "ticket done only with a valid APPROVED and CONFIRMED"),
-                (english, "Commit", "Pushed history is never rewritten, so a fix is a new commit"),
-                (english, "Commit", "landing a branch lands every claim on it"),
-                (english, "Commit", "or a protected or shared branch you name"),
-                (english, "Commit", "a reclaimed environment would lose them"),
-                (english, "Your decisions", "A work-in-progress push you allow can move its commits to the default branch, but it is neither a release nor completion"),
-                (english, "Commit", "labelled unaccepted and pushed only after both passes, plus HELD for a Security-critical claim, or your accept-and-land decision, or with your explicit permission"),
-                (english, "Resumed session", "a claim that passed in an earlier session is reviewed and verified again, "
-                                             "and a Security-critical claim gets Adversarial review again, "
-                                             "unless its ticket was set to a done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision"),
-                (chinese, "Commit 條件", "在依計畫施工的 claim 通過前先 commit，推到它為這項工作建立的 branch"),
-                (chinese, "Commit 條件", "並開 PR 列出尚未驗收的 claim"),
-                (chinese, "Commit 條件", "都針對指名的 commit，且工作區乾淨"),
-                (chinese, "Commit 條件", "才會讓 claim 進入遠端的預設 branch、release、回報完成或把 ticket 設成完成"),
-                (chinese, "Commit 條件", "已推送的歷史不會改寫，修正一律加新 commit"),
-                (chinese, "Commit 條件", "合併一個 branch 就等於合併上面所有 claim"),
-                (chinese, "Commit 條件", "或你指定為受保護或共用的 branch"),
-                (chinese, "Commit 條件", "環境回收時這些 commit 會遺失"),
-                (chinese, "你的決定", "你允許的工作中途推送可以把它的 commit 推到預設 branch，但不算 release，也不算完成"),
-                (chinese, "Commit 條件", "通過前的 commit 會標示為未驗收，要等兩關都通過（安全關鍵 claim 還要加上 HELD）、你決定接受並合併，或你明確允許才會推送"),
-                (chinese, "恢復的 session", "之前 session 通過的 claim 要重新審查與驗證，安全關鍵 claim 也要重新做對抗式審查；只有 ticket 是在兩關通過（安全關鍵 claim 還要加上 HELD）或你決定接受並合併之後才設成表示已完成的完成值")):
-            with self.subTest(bullet=label, phrase=phrase):
-                self.assertIn(phrase, bullets[label])
         entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
         for term in ("Unreviewed claim", "Unverified claim"):
             with self.subTest(term=term):
@@ -3894,44 +3769,12 @@ class FeatherConfigTests(unittest.TestCase):
             references / "preview.md": ("a Plan with implemented Claims for which main will first ask as [review state](review-state.md)'s Implemented before plan review describes",),
             config.ROOT / "skills" / "delegation" / "SKILL.md": (
                 "in auto, implemented work first follows [review state](references/review-state.md)'s Implemented before plan review",),
-            config.ROOT / "docs" / "reference.md": (
-                "main first asks as under Implemented before plan review",
-                "Claims not yet implemented still get plan review first",
-                "names any record of an earlier plan review it found but does not treat it as a pass",
-                "a plan with implemented claims and no plan review in this session",
-                "records the missing READY as a waiver for the implemented claims",
-                "follows the usual rules, without asking again",
-                "For a plan with an implemented claim, main first asks as under Implemented before plan review",
-                "already reviewed by the automatic flow",
-            ),
-            config.ROOT / "docs" / "reference.zh-TW.md": (
-                "主 Agent 會先照「實作完才做計畫審查」問你",
-                "尚未實作的 claim 仍會先做計畫審查",
-                "它會列出找到的先前計畫審查紀錄，但不把它當成通過",
-                "已有 claim 實作但這個 session 沒有計畫審查紀錄的計畫",
-                "把缺少的 READY 記為已實作 claim 的豁免",
-                "照一般規則處理，不會再問",
-                "已有 claim 實作的計畫，主 Agent 會先照「實作完才做計畫審查」問你",
-                "自動流程已經審查過",
-            ),
         }
         for path, phrases in expected.items():
             text = path.read_text(encoding="utf-8")
             for phrase in phrases:
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertIn(phrase, text)
-        # The same deferral appears in two README bullets, so each is checked within its own bullet.
-        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
-                                                "## Automatic review", "### Stop threshold"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 自動審查", "### 停止門檻"))
-        for bullets, label, phrase in (
-                (english, "Asking for a review", "main first asks as under Implemented before plan review"),
-                (english, "Resumed session", "main first asks as under Implemented before plan review"),
-                (chinese, "要求審查時", "主 Agent 會先照「實作完才做計畫審查」問你"),
-                (chinese, "恢復的 session", "主 Agent 會先照「實作完才做計畫審查」問你")):
-            with self.subTest(bullet=label):
-                self.assertIn(phrase, bullets[label])
 
     def test_rules_whose_pairings_moved_to_newer_phrases_stay_stated(self):
         # README_RULES and GLOSSARY_RULES now pair these entries with their 0.14.0 rules; the earlier rules still hold.
@@ -3951,10 +3794,6 @@ class FeatherConfigTests(unittest.TestCase):
                  "a plan proposed in conversation and approved by the user"),
                 ("review-state.md handoff", (references / "review-state.md").read_text(encoding="utf-8"),
                  "an unresolved verdict that an active handoff records for a spec's plan"),
-                ("README Claim changes", english["Claim changes"], "main never edits a spec or ticket to add claims"),
-                ("README 修改 claim", chinese["修改 claim"], "不會為了補 claim 而修改 spec 或 ticket"),
-                ("README Resumed session", english["Resumed session"], "an unresolved verdict that an active handoff records"),
-                ("README 恢復的 session", chinese["恢復的 session"], "進行中的交接若記錄了"),
                 ("README Plan-mode", english["Plan-mode and conversation plans"], "another session cannot see them"),
                 ("README plan mode", chinese["plan mode 與對話中的計畫"], "其他 session 看不到"),
                 ("glossary Plan", entries["Plan"], "a document lacking scope or acceptance is not yet a Plan"),
@@ -3962,25 +3801,13 @@ class FeatherConfigTests(unittest.TestCase):
             with self.subTest(place=place):
                 self.assertIn(phrase, text)
 
-    def test_readme_commit_and_not_passed_bullets_state_their_scope(self):
-        english = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8"),
-                                                "## Automatic review", "### Stop threshold"))
-        chinese = dict(self.readme_rule_bullets((config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8"),
-                                                "## 自動審查", "### 停止門檻"))
-        for bullets, label, phrase in (
-                (english, "Commit", "For a claim gated only because an active handoff records it as unreviewed, unverified or pending acceptance"),
-                (chinese, "Commit 條件", "只因進行中的交接記錄為未審查、未驗證或待驗收而受把關的 claim"),
-                (english, "Not passed", "A claim without a valid CONFIRMED is unverified"),
-                (chinese, "未通過", "沒有有效 CONFIRMED 的 claim 視為未驗證")):
-            with self.subTest(label=label):
-                self.assertIn(phrase, bullets[label])
-
     def test_per_claim_bound_is_described_as_one_uninterrupted_attempt(self):
         # Configurable Stop threshold C2: the bound is K(K+1), and its K = 2 example is 6.
         # The per-claim bound holds only while nothing reopens the claim; it must never read as a total.
         readme = (config.ROOT / "README.md").read_text(encoding="utf-8")
         readme_zh = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
-        # The README keeps a Cost summary; the full Cost bullet and the Delegation preview's bound are in the reference.
+        # The README keeps a Cost summary; the full Cost bullet is in the reference, whose Delegation preview section no
+        # longer restates the preview's bound (delegation dedupe 04).
         reference = (config.ROOT / "docs" / "reference.md").read_text(encoding="utf-8")
         reference_zh = (config.ROOT / "docs" / "reference.zh-TW.md").read_text(encoding="utf-8")
         sources = {
@@ -3989,13 +3816,9 @@ class FeatherConfigTests(unittest.TestCase):
             "README cost": (readme.split("- **Cost:**", 1)[1].split("\n", 1)[0], "K(K+1)", "uninterrupted", r"[.;:] "),
             "reference cost": (reference.split("- **Cost:**", 1)[1].split("\n", 1)[0], "K(K+1)", "uninterrupted",
                                r"[.;:] "),
-            "reference preview": (reference.split("### Delegation preview", 1)[1].split("\n### ", 1)[0],
-                                  "K(K+1)", "uninterrupted", r"[.;:] "),
             "README.zh-TW cost": (readme_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "K(K+1)", "不中斷", "[。；：]"),
             "reference.zh-TW cost": (reference_zh.split("- **成本：**", 1)[1].split("\n", 1)[0], "K(K+1)", "不中斷",
                                      "[。；：]"),
-            "reference.zh-TW preview": (reference_zh.split("### 分派預覽", 1)[1].split("\n### ", 1)[0],
-                                        "K(K+1)", "不中斷", "[。；：]"),
         }
         # The bound may also be written as the numeral 6 ("6 calls", 「6 次」), but not as part of "6N".
         numeral = re.compile(r"(?<![0-9A-Za-z])[6６]\s*(?:calls?|automatic|次)")
@@ -4006,60 +3829,62 @@ class FeatherConfigTests(unittest.TestCase):
                 for sentence in sentences:
                     self.assertIn(qualifier, sentence)
         # Every place that states the bound also says what adds to it.
-        for name in ("preview.md", "README cost", "reference cost", "reference preview"):
+        for name in ("preview.md", "README cost", "reference cost"):
             with self.subTest(adds=name):
                 self.assertIn("reopened", sources[name][0])
-        for name in ("README.zh-TW cost", "reference.zh-TW cost", "reference.zh-TW preview"):
+        for name in ("README.zh-TW cost", "reference.zh-TW cost"):
             with self.subTest(adds=name):
                 self.assertIn("重新打開", sources[name][0])
 
     # Each README bullet maps English label -> (Traditional Chinese label, English phrase, Chinese phrase,
     # procedure file, procedure phrase); every bold-label bullet of the two lists must have an entry.
+    # Delegation dedupe 04: the reference now explains each rule and links to its owner, so each phrase is the
+    # reference's explanation of the rule the procedure phrase states.
     README_RULES = {
         "Unplanned work": ("沒有計畫的工作", "first needs a written plan", "須先寫出計畫",
                            "plan-review.md", "must not start without one"),
         # Retained passes ticket 01 (Acceptance items 1, 2, 3 and 17): per-Claim timing and dependent Claims.
-        "Per-claim timing": ("依 claim 審查的時機", "as soon as that claim is implemented and committed",
+        "Per-claim timing": ("依 claim 審查的時機", "each claim is reviewed and verified as soon as it is implemented and committed",
                              "一實作完成並 commit", "review-state.md",
                              "once that claim is implemented and committed, not once the whole plan is implemented"),
-        "Dependent claims": ("相依的 claim", "starts only after that claim has a valid APPROVED and CONFIRMED",
-                             "拿到有效的 APPROVED 與 CONFIRMED 才開始", "review-state.md",
+        "Dependent claims": ("相依的 claim", "waits until that claim has passed",
+                             "要等那個 claim 通過才開始", "review-state.md",
                              "starts only after that claim has a valid APPROVED and a valid CONFIRMED"),
         # Retained passes ticket 02 (Acceptance items 4, 5, 15 and 17): fixed passes in auto.
-        "Fixed passes": ("固定的通過", "they stay fixed", "它們就保持固定", "review-state.md",
+        "Fixed passes": ("固定的通過", "a claim that has passed is not reopened by another claim's change", "已通過的 claim 不會因另一個 claim 的改動而重新打開", "review-state.md",
                          "are a judgement of the commit they judged and stay fixed"),
-        "Budget": ("次數上限", "each step counts consecutive automatic calls", "每個步驟計算連續沒通過的自動呼叫次數",
+        "Budget": ("次數上限", "each step stops after as many consecutive automatic calls without a pass as the", "每個步驟連續沒通過的自動呼叫達到",
                    "plan-review.md", "Count consecutive automatic calls without a pass"),
-        "Re-review during implementation": ("施工中的重審", "a plan is reviewed again only after a material deviation",
-                                            "只有重大偏離", "plan-review.md", "a material deviation stops dependent work"),
+        "Re-review during implementation": ("施工中的重審", "a plan is reviewed again when what you agreed to changes",
+                                            "才會重審計畫", "plan-review.md", "a material deviation stops dependent work"),
         # Completion criteria ticket 01 (Acceptance items 1, 3 and 8): what holds completion and the Follow-up record
         # replace "blocking ones (correctness, security, data loss, regression, deviation from the plan)".
-        "Findings": ("問題分級", "is non-blocking and recorded in the work's Follow-up record",
-                     "都是非阻擋問題，記在這份工作的後續紀錄", "code-review.md",
+        "Findings": ("問題分級", "every other finding is recorded for later",
+                     "其他問題都記下來留待之後", "code-review.md",
                      "Non-blocking findings do not hold completion. Record them in the work's Follow-up record"),
         "Follow-up record": ("後續紀錄", "its next step is always your decision whether to start a later plan",
                              "下一步永遠是由你決定要不要開始之後的計畫", "review-state.md",
                              "its next step is always the user's decision whether to start a later plan"),
-        "Not passed": ("未通過", "it is not landed on the default branch, released or reported complete", "不進入預設 branch、不 release、不回報完成",
+        "Not passed": ("未通過", "a claim without APPROVED is unreviewed", "不進入預設 branch、不 release、不回報完成",
                        "code-review.md", "do not land it on the default branch, release it or report it complete"),
         "Authority": ("授權", "a pass grants no new authority", "通過不代表新的授權",
                       "plan-review.md", "READY grants no new authority"),
-        "Explicit requests": ("明確要求", "do not use the automatic budget", "不佔自動次數",
+        "Explicit requests": ("明確要求", "are not counted and never reset a step's count", "不計入次數",
                               "review-state.md", "Explicit calls are outside the count."),
-        "After a stop": ("停下之後", "it clears the stop and leaves the count unchanged", "次數維持在停下時的數字",
+        "After a stop": ("停下之後", "clears the stop but leaves its count", "停止狀態解除，但次數不變",
                          "review-state.md", "clears the stop and leaves the count unchanged"),
         "Asking for a review": ("要求審查時", "main states which before dispatching", "主 Agent 派出前會先說明是哪一種",
                                 "review-state.md", "State the classification before dispatching"),
         "Implemented before plan review": ("實作完才做計畫審查",
-                                           "main asks before any review whether to run plan review first",
+                                           "makes main ask before any review whether to run plan review first",
                                            "主 Agent 會在任何審查前先問你", "review-state.md", "main asks before any call"),
         "Retries": ("重試", "including a generic retry after a temporary failure", "包括暫時失敗後的一般重試",
                     "review-state.md", "including a generic retry after a temporary failure"),
-        "Lost state": ("狀態不明", "main treats the step as stopped and asks you", "主 Agent 會視為已停下並問你",
+        "Lost state": ("狀態不明", "it treats the step as stopped and asks you", "主 Agent 會視為已停下並問你",
                        "review-state.md", "treat the step as stopped and ask the user"),
         # Retained passes ticket 05 (Acceptance items 11, 12, 14 and 17): the dispatch record in auto.
-        "Dispatch record": ("派工紀錄", "main keeps one dispatch record for each plan at `.feather/dispatch/<name>.md`",
-                            "主 Agent 為每份計畫保留一份派工紀錄，放在 `.feather/dispatch/<name>.md`", "review-state.md",
+        "Dispatch record": ("派工紀錄", "one record per plan at `.feather/dispatch/<name>.md`",
+                            "放在 `.feather/dispatch/<name>.md` 的紀錄", "review-state.md",
                             "In auto, main keeps one dispatch record for each plan of plan-driven work, at "
                             "`.feather/dispatch/<name>.md` in the project"),
         "Cost": ("成本", "a claim makes at most K(K+1)", "每個 claim 最多 K(K+1) 次",
@@ -4070,53 +3895,53 @@ class FeatherConfigTests(unittest.TestCase):
         "A spec": ("一份 spec", "main first asks whether you mean the spec as it stands or its tickets",
                    "主 Agent 會先問你要實作 spec 本身還是它的 ticket", "plan-review.md",
                    "main first asks the user whether to implement the spec as it stands or its tickets"),
-        "Tickets of a spec, all or some": ("一份 spec 的 ticket（全部或部分）", "Each unfinished ticket among them is one claim",
-                                           "其中每張未完成的 ticket 是一個 claim", "plan-review.md",
+        "Tickets of a spec, all or some": ("一份 spec 的 ticket（全部或部分）", "each unfinished ticket is one claim",
+                                           "每張未完成的 ticket 是一個 claim", "plan-review.md",
                                            "each unfinished ticket in the named scope is one claim"),
-        "A single ticket": ("單一 ticket", "that ticket is the plan and its one claim", "該 ticket 就是計畫，也是它唯一的 claim",
+        "A single ticket": ("單一 ticket", "is the plan and its one claim", "就是計畫，也是它唯一的 claim",
                             "plan-review.md", "A single named ticket is the plan and its one claim"),
         "A ticket that belongs to no spec": ("不屬於任何 spec 的 ticket", "is its own plan", "自成一份計畫",
                                              "plan-review.md", "A ticket that belongs to no spec is its own plan"),
         "Example": ("例子", "makes one plan with three claims", "是一份有三個 claim 的計畫",
                     "plan-review.md", "The plan is what the user names"),
         # Claims at implementation ticket 02: the spec as a checklist for plan review over tickets, and citations.
-        "The spec as a checklist": ("spec 作為檢查清單", "The spec is not part of the plan, only a checklist",
-                                    "spec 不是計畫的一部分，只是檢查清單", "plan-review.md",
+        "The spec as a checklist": ("spec 作為檢查清單", "plan review uses the spec as a checklist rather than as part of the plan",
+                                    "計畫審查把 spec 當作檢查清單，而不是計畫的一部分", "plan-review.md",
                                     "It uses the spec only as a checklist for what the tickets must carry"),
-        "Citations": ("引用", "is not a citation", "都不算引用", "plan-review.md",
+        "Citations": ("引用", "is not a citation", "`Spec:` 行不算引用", "plan-review.md",
                       "a `Spec:` line, a parent reference or a shared directory is not a citation"),
         "Checklist limits": ("檢查清單的限制", "the checklist runs at plan review", "檢查清單在計畫審查時執行",
                              "review-state.md", "no other part of a spec is supplied"),
         # Claims at implementation ticket 03: what a claim's reviews and implementation read.
-        "What a review reads": ("審查讀什麼", "read the same reading set", "讀的是同一組閱讀範圍",
+        "What a review reads": ("審查讀什麼", "read the same reading set", "讀同一組閱讀範圍",
                                 "review-state.md", "A claim's reading set is what its implementation and every review of it read"),
-        "Already covered": ("已涵蓋", "that plan continues with no new plan review", "不重做計畫審查",
+        "Already covered": ("已涵蓋", "that plan continues with its count, verdicts and blockers", "就沿用該計畫，保留它的次數、結論與阻擋事項",
                             "plan-review.md", "otherwise that plan continues with no new plan review"),
-        "Partial overlap": ("部分重疊", "gains no new automatic calls", "不會多出新的自動呼叫",
+        "Partial overlap": ("部分重疊", "so overlapping work cannot escape a stop", "所以重疊的工作無法繞過停止",
                             "review-state.md", "gains no new automatic calls"),
         "Validity": ("有效範圍", "a pass holds only for what it judged", "通過只對它審過的內容有效",
                      "review-state.md", "A pass covers the work identity, its acceptance and the reviewed content"),
-        "Commit": ("Commit 條件", "only with a valid APPROVED and CONFIRMED", "都仍有效，或你決定接受並合併時，才會讓 claim 進入遠端的預設 branch",
+        "Commit": ("Commit 條件", "still wait for the passes or your accept-and-land decision", "仍要等審查通過或你決定接受並合併",
                    "review-state.md", "only with a valid APPROVED and a valid CONFIRMED"),
-        "Release checks": ("事後檢查", "is checked and reported by main after the operation", "在操作後檢查並回報",
+        "Release checks": ("事後檢查", "main checks and reports it after the operation", "在操作後檢查並回報",
                            "review-state.md", "checks and reports it after the operation"),
         # Completion criteria ticket 02 (Acceptance items 4, 5 and 8): serial reviews and the final check.
-        "Serial reviews": ("審查依序進行", "main changes nothing in the working tree it judges",
-                           "主 Agent 不會改動它審查的工作樹", "review-state.md",
+        "Serial reviews": ("審查依序進行", "reviews and implementation therefore take turns",
+                           "審查與實作輪流進行", "review-state.md",
                            "main does not change the working tree it judges"),
-        "Final check": ("最終檢查", "it does not count toward the Stop threshold and adds no verdict",
-                        "不計入停止門檻，也不產生新的結論", "review-state.md",
+        "Final check": ("最終檢查", "It is not a review step and adds no verdict",
+                        "它不是審查步驟，也不產生結論", "review-state.md",
                         "it is not a counted step and adds no verdict"),
         "Your decisions": ("你的決定", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land",
                            "重審、延後、取消、修改驗收、豁免或接受並合併",
                            "review-state.md", "re-review, deferral, cancellation, changed acceptance, waiver or accept and land"),
         # Completion criteria ticket 03 (Acceptance items 6 and 8): one accept-and-land decision at the end of the plan.
-        "Accept and land at the end": ("最後一次決定接受並合併", "main asks you once", "主 Agent 只問你一次",
+        "Accept and land at the end": ("最後一次決定接受並合併", "main asks for accept-and-land decisions once", "主 Agent 只問你一次",
                                        "review-state.md", "Main asks for the decision once, after every claim of the plan "
                                        "has finished its reviews"),
-        "Ticket status": ("Ticket 狀態", "noting the version or commit", "並註明版本或 commit",
+        "Ticket status": ("Ticket 狀態", "main sets a claim's ticket to the done value your tracker convention defines", "主 Agent 會把它的 ticket 設成你的 tracker 慣例定義",
                           "review-state.md", "with a note naming the version or commit"),
-        "Resumed session": ("恢復的 session", "an unfinished plan is reviewed again", "未完成的計畫會重新審查",
+        "Resumed session": ("恢復的 session", "Counts never carry over", "次數絕不會帶過去",
                             "review-state.md", "reviews an unfinished plan again before implementing it"),
         "Nothing left": ("沒有剩餘工作", "nothing is left to implement", "沒有剩下要實作",
                          "plan-review.md", "report that nothing is left to implement"),
@@ -4127,14 +3952,14 @@ class FeatherConfigTests(unittest.TestCase):
                                             "Look first at the project's instructions"),
         "Disagreement": ("不一致", "a mismatch is a blocker for you to settle", "不一致會列為阻擋事項",
                          "plan-review.md", "report a mismatch as a blocker for the user to settle"),
-        "Claim changes": ("修改 claim", "main edits only after your authorisation", "在你授權後才修改",
+        "Claim changes": ("修改 claim", "unless you authorise it", "除非你授權",
                           "review-state.md", "only after the user authorises it"),
         # Claims at implementation ticket 05 (Acceptance items 7 and 11): the deviation scope and spec-update rules.
-        "Deviations in tickets": ("ticket 的偏離", "the review after a material deviation covers the changed tickets",
-                                  "重大偏離後的審查涵蓋變動的 ticket", "review-state.md",
+        "Deviations in tickets": ("ticket 的偏離", "the review covers the tickets the change touches",
+                                  "審查涵蓋變動觸及的 ticket", "review-state.md",
                                   "covers the changed tickets and the tickets they block"),
-        "Spec updates": ("更新 spec", "main also updates the spec, only with your authorisation",
-                         "主 Agent 也會更新 spec，但只在你授權後", "review-state.md",
+        "Spec updates": ("更新 spec", "main updates the spec with your authorisation",
+                         "主 Agent 會在你授權後更新 spec", "review-state.md",
                          "main updates the spec with the user's authorisation"),
         # Claims at implementation ticket 04 (Acceptance items 5 and 11): the drafting rule.
         "Drafting a spec": ("草擬 spec", "it lists no claims and cuts none unless you ask", "除非你要求，不會在裡面列出 claim",
@@ -4737,30 +4562,6 @@ class ClaimsAtImplementationTests(unittest.TestCase):
 
     # Acceptance items 11 and 12 for these rules, S2 and S12: both READMEs, paired.
     README_BULLETS = (
-        ("A spec", "一份 spec",
-         "main first asks whether you mean the spec as it stands or its tickets: \"the spec\" makes it one claim, or its "
-         "listed claims, and \"the tickets\" makes those unfinished tickets the plan.",
-         "主 Agent 會先問你要實作 spec 本身還是它的 ticket：答「spec」，spec 就是一個 claim，或以它列出的 claim 為準；答「ticket」，"
-         "這些未完成的 ticket 就是計畫。"),
-        ("A spec", "一份 spec",
-         "A spec written earlier with its own claims table keeps it: naming it and answering \"the spec\" keeps its "
-         "listed claims, which must still agree with its tickets.",
-         "先前寫成、自己列了 claim 表的 spec 會保留它：指名它並回答「spec」時，沿用它列出的 claim，且仍須與它的 ticket 一致。"),
-        ("Tickets of a spec, all or some", "一份 spec 的 ticket（全部或部分）",
-         "those tickets are one plan, reviewed once. Each unfinished ticket among them is one claim, and its `Blocked by` "
-         "lines are its dependencies.",
-         "這些 ticket 是一份計畫，只做一次計畫審查。其中每張未完成的 ticket 是一個 claim，它的 `Blocked by` 行就是相依關係。"),
-        ("A single ticket", "單一 ticket",
-         "that ticket is the plan and its one claim",
-         "該 ticket 就是計畫，也是它唯一的 claim"),
-        ("A single ticket", "單一 ticket",
-         "Plan review treats it as a named ticket of its spec, just as when several are named.",
-         "計畫審查把它當作該 spec 被指名的 ticket，和指名多張時一樣。"),
-        ("A ticket that belongs to no spec", "不屬於任何 spec 的 ticket",
-         "**A spec without tickets** keeps the claims it lists or, when it lists none, is one claim provided it has scope "
-         "and acceptance of its own; main may say in one line that it looks separable into tickets, without stopping.",
-         "**沒有 ticket 的 spec** 沿用它列出的 claim；沒有列出時，只要有自己的範圍與驗收條件，整份就是一個 claim。主 Agent 可能用一句話"
-         "提醒它看起來可以拆成 ticket，但不會因此停下。"),
         ("Example", "例子",
          "\"Implement the login spec\" makes main ask first: \"the tickets\" makes one plan with three claims, with one "
          "plan review, and 03 waits for 02; \"the spec\" makes the whole spec one claim. \"Implement tickets 02 and 03\" "
@@ -4835,15 +4636,14 @@ class ClaimsAtImplementationTests(unittest.TestCase):
             "One independently verifiable outcome with its own acceptance: a named spec without a Claims list of its "
             "own, a single named ticket, one a spec lists itself, or one unfinished ticket among those named.",
             "A spec lists Claims only when the user asked for them.",
-            "Code review and outcome verification each judge one Claim, reading what it is written in, the parts of a "
-            "spec it cites and, for a Claim a spec lists, the spec's parts that state they hold for every Claim.",
+            # Delegation dedupe 04: the entry points to review state's Reading set, which states what is read.
+            "Code review, outcome verification and Adversarial review each judge one Claim; what its implementation and "
+            "its reviews read is review state's Reading set.",
         ),
         "Security-critical claim": (
-            # Ticket 04 aligned the timing with off mode's classification before dispatch or start, main's own work
-            # included (S7 as amended on 2026-10-13).
-            "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
-            "before the Plan's first review and before its implementation is dispatched or started, main's own work "
-            "included.",
+            # Delegation dedupe 04: the entry points to the procedures that state when main identifies the Claim.
+            "When main identifies it, and where its implementation goes, are stated in the plan-review procedure and the "
+            "delegation skill's Select and prepare.",
             "A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
     }
@@ -5068,47 +4868,6 @@ class SpecChecklistTests(unittest.TestCase):
 
     # Acceptance items 11 and 12 for this rule, S12 and Residual R1: both READMEs, paired.
     README_BULLETS = (
-        ("The spec as a checklist", "spec 作為檢查清單",
-         "when the plan is tickets of a spec, a single ticket included, plan review receives the named tickets and the "
-         "spec and, only for the coverage and invariant checks below, the spec's other tickets, finished or not.",
-         "計畫是某份 spec 的 ticket 時（包括只指名一張），計畫審查會拿到指名的 ticket 與 spec；只為了下面的涵蓋與不變條件檢查，"
-         "也會拿到該 spec 的其他 ticket，不論是否完成。"),
-        ("The spec as a checklist", "spec 作為檢查清單",
-         "It judges each ticket's outcome, acceptance and dependencies, and the tickets against each other when several "
-         "are named.",
-         "它判斷每張 ticket 的結果、驗收條件與相依關係，指名多張時也檢查 ticket 彼此之間。"),
-        ("The spec as a checklist", "spec 作為檢查清單",
-         "The spec is not part of the plan, only a checklist: each named ticket must stay within the spec's scope and "
-         "Out of Scope and cite the spec's decisions and security invariants that apply to it, including any Out of "
-         "Scope line that limits what it may change.",
-         "spec 不是計畫的一部分，只是檢查清單：每張指名的 ticket 必須留在 spec 的範圍與 Out of Scope 之內，並引用 spec 中適用於它的"
-         "決定與安全不變條件，包括限制它能改什麼的 Out of Scope 條目。"),
-        ("The spec as a checklist", "spec 作為檢查清單",
-         "When the named tickets together with the finished ones are all of the spec's tickets, they must also cover the "
-         "spec's outcome, so naming the last unfinished ticket alone runs this check too.",
-         "指名的 ticket 加上已完成的 ticket 就是 spec 的全部 ticket 時，它們還必須涵蓋 spec 的結果，所以只指名最後一張未完成的 "
-         "ticket 也會做這項檢查。"),
-        ("The spec as a checklist", "spec 作為檢查清單",
-         "Every plan review over tickets of a spec also checks that each of the spec's security invariants is cited by at "
-         "least one of its tickets, named or not. A missing coverage or citation is a blocker.",
-         "每次針對 spec 的 ticket 做的計畫審查，也會檢查 spec 的每條安全不變條件至少被它的一張 ticket 引用，不論那張 ticket 是否"
-         "被指名。缺少涵蓋或引用都是阻擋事項。"),
-        ("The spec as a checklist", "spec 作為檢查清單",
-         "For a spec that lists its own claims, plan review checks that each decision, Out of Scope line and security "
-         "invariant applying to a listed claim is in the claim's own text, a part it cites or a part the spec says holds "
-         "for every claim; a missing one is a blocker.",
-         "spec 自己列了 claim 時，計畫審查會檢查適用於每個列出 claim 的決定、Out of Scope 條目與安全不變條件，都寫在該 claim "
-         "自己的文字、它引用的部分，或 spec 聲明適用於每個 claim 的部分；缺少就是阻擋事項。"),
-        ("Citations", "引用",
-         "a citation is explicit: a named section or heading, a numbered item or an identifier such as `C1 item 1`, `D3` "
-         "or `S2`; a ticket that needs a whole section cites the section. A `Spec:` line, a parent reference or a shared "
-         "directory is not a citation.",
-         "引用必須明確：具名的段落或標題、編號項目，或 `C1 item 1`、`D3`、`S2` 這類識別碼；需要整個段落的 ticket 就引用那個段落。"
-         "`Spec:` 行、parent 參照或同一個目錄都不算引用。"),
-        ("Citations", "引用",
-         "A reviewer follows a citation to the cited part only, and a citation that does not resolve to exactly one part "
-         "of the spec is a blocker at plan review.",
-         "審查者只會順著引用讀到被引用的那個部分；引用無法對應到 spec 中恰好一個部分時，在計畫審查就是阻擋事項。"),
         # S12: the checklist's limits, with S13's exception (added 2026-10-13).
         ("Checklist limits", "檢查清單的限制",
          "the checklist runs at plan review, on the spec and tickets as written then; its coverage check runs only when "
@@ -5539,7 +5298,9 @@ class ReadingSetTests(unittest.TestCase):
                 self.assertEqual(text.count(self.READ_LIMIT), 1 if name == "review-state.md" else 0)
                 self.assertEqual(self.unqualified_every_claim_parts(text), [])
         claim = feather_support.glossary_entries(self.text(config.ROOT / "CONTEXT.md"))["Claim"]
-        self.assertIn("for a Claim a spec lists, the spec's parts that state they hold for every Claim", claim)
+        # Delegation dedupe 04: the glossary points to review state's Reading set instead of restating the read limit.
+        self.assertIn("review state's Reading set", claim)
+        self.assertEqual(self.unqualified_every_claim_parts(claim), [])
 
     def test_the_tracker_note_says_a_spec_line_is_not_a_citation(self):
         line = next(line for line in self.text(config.ROOT / "docs" / "agents" / "issue-tracker.md").splitlines()
@@ -5548,70 +5309,11 @@ class ReadingSetTests(unittest.TestCase):
 
     # Acceptance items 11 and 12 for this rule, and S12: both READMEs, paired.
     README_BULLETS = (
-        ("What a review reads", "審查讀什麼",
-         "a claim's code review, outcome verification and Adversarial review, and the implementer of it, read the same "
-         "reading set: the text the claim is written in and the spec parts it cites, including any Out of Scope line "
-         "that limits it, and, only for a claim a spec lists, the parts the spec says hold for every claim.",
-         "claim 的程式碼審查、結果驗證與對抗式審查，以及實作它的角色，讀的是同一組閱讀範圍：claim 所寫的文字與它引用的 spec 部分，"
-         "包括限制它的 Out of Scope 條目；只有 spec 自己列出的 claim，才另外讀 spec 聲明適用於每個 claim 的部分。"),
-        # S13 (added 2026-10-13): the whole spec for a ticket without a READY for its plan in this session.
-        ("What a review reads", "審查讀什麼",
-         "The whole spec is read only when the spec itself is the claim, except as the next sentence says; a ticket's "
-         "`Spec:` line records where the ticket came from and brings no part of the spec in. When a ticket of a spec is "
-         "implemented or reviewed without a READY for its plan in this session, as in `off`, after a waived plan review "
-         "or for an explicit call, the checklist has not passed, so its implementer and reviewers read the whole spec as "
-         "context, as before 0.23.0, and main records and compares the ticket and the whole spec as its reading set, "
-         "while its security invariants and test targets stay those named below.",
-         "只有 spec 本身就是 claim 時才讀整份 spec，下一句所說的情況除外；ticket 的 `Spec:` 行只記錄 ticket 從哪裡來，不會帶進 "
-         "spec 的任何部分。某份 spec 的 ticket 在這個 session 沒有它的計畫的 READY 就被實作或審查時（例如 `off`、豁免了計畫審查，"
-         "或明確要求的呼叫），檢查清單並未通過，所以實作者與審查者會把整份 spec 當作背景來讀，和 0.23.0 之前一樣，主 Agent 也把"
-         "該 ticket 與整份 spec 當作它的閱讀範圍來記錄與比對；它的安全不變條件與測試目標仍是下面所說的那些。"),
-        # S4's composed-review sentence (added 2026-10-13).
-        ("What a review reads", "審查讀什麼",
-         "The one exception is a composed review: when a claim owns the composed review of changes that share security "
-         "assumptions with an already accepted claim, its Adversarial review brief also carries that accepted claim's "
-         "security invariants and test targets, taken from that claim's reading set as recorded in this session or, "
-         "without recorded content (only a hash, or no record, as for a claim accepted in an earlier session), from that "
-         "claim's text and the parts it cites at the commit where it was accepted, checked against any recorded hash; "
-         "main records them with the owning claim's reading set, labelled with their source, and accepts HELD only if "
-         "they are covered too.",
-         "唯一的例外是組合後版本的審查：某個 claim 負責審查與已驗收的 claim 共用安全假設的變更組合後的版本時，它的對抗式審查 "
-         "brief 也會帶上那個已驗收 claim 的安全不變條件與測試目標，取自這個 session 記錄的該 claim 閱讀範圍；沒有記錄內容時"
-         "（只有雜湊，或沒有記錄，例如在先前 session 驗收的 claim），則取自該 claim 驗收時那個 commit 上它的文字與它引用的部分，"
-         "並與任何已記錄的雜湊核對；主 Agent 把它們連同負責審查的 claim 的閱讀範圍一起記錄，並標明來源，而且只有它們也都涵蓋到時"
-         "才接受 HELD。"),
-        # B1: a non-spec plan's claim reads the whole plan.
-        ("What a review reads", "審查讀什麼",
-         "For a claim of a plan that is neither a spec nor tickets of a spec, such as a plan file, a plan-mode plan or a "
-         "conversation plan with several claims, the text the claim is written in is the whole plan, so its implementer "
-         "and reviewers read the whole plan, as before 0.23.0, and a change to another claim's part of it changes the "
-         "reading set.",
-         "既不是 spec、也不是 spec 的 ticket 的計畫（例如計畫檔、plan mode 的計畫，或有多個 claim 的對話中計畫），其 claim "
-         "所寫的文字就是整份計畫，所以實作者與審查者讀整份計畫，和 0.23.0 之前一樣，而改動其他 claim 在其中的部分也會改變閱讀"
-         "範圍。"),
-        # S4 as amended: the claim's own text or part, its citations and the listed-claim every-claim parts.
-        ("What a review reads", "審查讀什麼",
-         "For a Security-critical claim, the security invariants and test targets the briefs carry are exactly those "
-         "written in the claim's own text (for a claim of such a plan, its own part of the plan), the parts it cites "
-         "and, for a claim a spec or other plan lists, the parts stated to hold for every claim, never another claim's, "
-         "and any finding main gives the implementer also goes to the reviewers.",
-         "安全關鍵 claim 的 brief 所帶的安全不變條件與測試目標，恰好就是寫在該 claim 自己的文字（這類計畫的 claim 是它自己在"
-         "計畫中的部分）、它引用的部分，以及 spec 或其他計畫列出的 claim 另外有的、聲明適用於每個 claim 的部分裡的那些，不會是"
-         "其他 claim 的；主 Agent 給實作者的任何發現，也會交給審查者。"),
-        ("What a review reads", "審查讀什麼",
-         "Main records the reading set when plan review returns READY, or at the claim's first dispatch in a session "
-         "without one, and confirms it is unchanged before each implementation or review; a change you did not "
-         "authorise is a material deviation, while the ticket status and note main writes are not a change.",
-         "主 Agent 在計畫審查回傳 READY 時記錄這組閱讀範圍，這個 session 沒有 READY 時則在該 claim 第一次派出時記錄，並在每次"
-         "實作或審查前確認它沒有改變；未經你授權的變更是重大偏離，主 Agent 自己寫的 ticket 狀態與註記則不算變更。"),
         # S12: the limit of this rule.
         ("What a review reads", "審查讀什麼",
          "These are instructions to the model: a role can still open the whole spec file, and only its brief keeps it to "
          "the cited parts.",
          "這些是給模型的指示：角色仍可能打開整份 spec 檔案，只有它的 brief 讓它停在被引用的部分。"),
-        ("A single ticket", "單一 ticket",
-         "that ticket is the plan and its one claim. Plan review treats it",
-         "該 ticket 就是計畫，也是它唯一的 claim。計畫審查把它當作"),
         ("Example", "例子",
          "\"Implement ticket 02\" in a fresh session makes ticket 02 the plan and its one claim, whose reviews read ticket "
          "02 and the parts of `login.md` it cites.",
@@ -5811,36 +5513,6 @@ class DraftingSpecTests(unittest.TestCase):
         self.assertIn(self.TRACKER, line)
         self.assertNotIn(self.TRACKER_REPLACED, text)
 
-    # Acceptance items 11 and 12 for these rules, S7, S8 and S12: both READMEs, paired.
-    README_DRAFTING = (
-        ("when main drafts a spec for you, it lists no claims and cuts none unless you ask: its claims are decided when "
-         "you name the spec or its tickets for implementation.",
-         "主 Agent 替你草擬 spec 時，除非你要求，不會在裡面列出 claim，也不會切分 claim：它的 claim 在你指名要實作這份 spec 或它的 "
-         "ticket 時才決定。"),
-        ("A spec main drafts is not a plan main proposes itself, so its claims are classified like those of a spec you "
-         "wrote, before its first plan review; see [Security-critical work](#security-critical-work).",
-         "主 Agent 草擬的 spec 不算它自己提出的計畫，所以它的 claim 和你寫的 spec 一樣，在第一次計畫審查前分類；見"
-         "[安全關鍵工作](#安全關鍵工作)。"),
-    )
-
-    README_SECURITY = (
-        ("Main marks each Security-critical claim when it writes a plan it proposes itself, such as the plan that "
-         "unplanned work needs, whatever its form; it classifies the claims of any other plan, such as a spec you wrote "
-         "or one main drafted for you, before its first plan review in the session or, for implemented work, before its "
-         "code review, and in `off` before dispatching or starting their implementation, main's own work included.",
-         "主 Agent 寫自己提出的計畫時（例如沒有計畫的工作所需要的計畫，不論形式），會在其中標出每個安全關鍵 claim；其他計畫（例如你寫的 "
-         "spec，或主 Agent 替你草擬的 spec）會在這個 session 第一次計畫審查前分類，已實作的工作則在程式碼審查前分類，`off` 下則在派出"
-         "或開始實作前分類，主 Agent 自己做的工作也一樣。"),
-        ("Classifying a ticket's claim reads the ticket and its whole spec, not only the parts it cites.",
-         "分類 ticket 的 claim 時，會讀該 ticket 與它的整份 spec，不只它引用的部分。"),
-        ("A Security-critical change an executor reports also goes to security-executor.",
-         "executor 回報的安全關鍵變更也交給 security-executor。"),
-        # S4, writing side.
-        ("Main writes those invariants and test targets into the claim's own text or a spec part it cites, so that its "
-         "implementer and reviewers read them.",
-         "主 Agent 把這些不變條件與測試目標寫進該 claim 自己的文字或它引用的 spec 部分，讓實作者與審查者都讀得到。"),
-    )
-
     # Replaced README wording: marking in any plan main writes.
     README_REPLACED = (
         ("reference.md", "Main marks each Security-critical claim in a plan it writes"),
@@ -5851,16 +5523,8 @@ class DraftingSpecTests(unittest.TestCase):
     )
 
     def test_readmes_state_the_drafting_rule_and_when_claims_are_classified_in_both_languages(self):
-        english, chinese = self.reference_bullets("reference.md"), self.reference_bullets("reference.zh-TW.md")
-        for en, zh in self.README_DRAFTING:
-            with self.subTest(sentence=en[:50]):
-                self.assertIn(en, english["Drafting a spec"])
-                self.assertIn(zh, chinese["草擬 spec"])
-        sections = {name: self.reference_security_section(name) for name in ("reference.md", "reference.zh-TW.md")}
-        for en, zh in self.README_SECURITY:
-            with self.subTest(sentence=en[:50]):
-                self.assertIn(en, sections["reference.md"])
-                self.assertIn(zh, sections["reference.zh-TW.md"])
+        # Delegation dedupe 04: the reference explains drafting and classification and links to the plan-review
+        # procedure, so only the absence of the replaced wording is pinned here.
         for name, sentence in self.README_REPLACED:
             with self.subTest(readme=name, removed=sentence[:40]):
                 self.assertNotIn(sentence, feather_support.reference_and_readme(name))
@@ -5878,9 +5542,9 @@ class DraftingSpecTests(unittest.TestCase):
     # Re-checked against the procedures after this ticket: a plan main proposes itself, and off-mode timing.
     GLOSSARY = {
         "Security-critical claim": (
-            "It is identified when main writes a Plan it proposes itself, such as one for Unplanned work, or, otherwise, "
-            "before the Plan's first review and before its implementation is dispatched or started, main's own work "
-            "included.",
+            # Delegation dedupe 04: the entry points to the procedures that state when main identifies the Claim.
+            "When main identifies it, and where its implementation goes, are stated in the plan-review procedure and the "
+            "delegation skill's Select and prepare.",
             "A spec main drafts at the user's request is not a Plan main proposes itself.",
         ),
         "Claim": ("A spec lists Claims only when the user asked for them.",),
@@ -6072,59 +5736,12 @@ class DeviationScopeTests(unittest.TestCase):
 
     # Acceptance item 11 for these rules, and S12: both READMEs, paired.
     README_BULLETS = (
-        ("Deviations in tickets", "ticket 的偏離",
-         "when the plan is tickets of a spec, the review after a material deviation covers the changed tickets, the "
-         "tickets they block and every ticket that shares a file, a trust boundary or a security invariant with a "
-         "changed ticket.",
-         "計畫是某份 spec 的 ticket 時，重大偏離後的審查涵蓋變動的 ticket、被它們擋住的 ticket，以及與變動的 ticket 共用檔案、"
-         "信任邊界或安全不變條件的每張 ticket。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "It runs the spec checklist again only when the change touches the spec's stated outcome, scope, decisions or "
-         "invariants; when main judges that a change does not, it says why in the review's brief and in its report, and "
-         "analyst, which still gets the spec, may require the checklist.",
-         "只有變動觸及 spec 明定的結果、範圍、決定或不變條件時，才會再做 spec 檢查清單；主 Agent 判斷沒有觸及時，會在審查的 brief "
-         "與它的回報中說明理由，而仍會拿到 spec 的 analyst 可以要求做檢查清單。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "A change that stops the tickets covering the spec's outcome touches the spec's outcome, so the checklist runs "
-         "again, its coverage check included when its usual condition holds.",
-         "讓 ticket 不再涵蓋 spec 結果的變動，就是觸及 spec 的結果，所以會再做檢查清單，原有條件成立時也包括涵蓋檢查。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "Each such review still checks that every security invariant of the spec is cited by at least one of its "
-         "tickets.",
-         "這樣的審查仍會檢查 spec 的每條安全不變條件至少被它的一張 ticket 引用。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "A change to a claim's reading set that you did not authorise counts as such a deviation.",
-         "未經你授權而改變 claim 的閱讀範圍，也算這種偏離。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "A deviation that adds or changes a security control or invariant first reopens the security analysis under its "
-         "usual triggers, and the review then checks the citations of all the plan's tickets.",
-         "新增或改變安全控制或不變條件的偏離，會先依原有的觸發條件重新做安全分析，審查時再檢查計畫所有 ticket 的引用。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "The review is narrowed only after a plan review that completed; after one that did not, the whole plan is "
-         "reviewed.",
-         "只有在上一次計畫審查完成時，審查才會縮小範圍；上一次沒有完成時，會審查整份計畫。"),
-        ("Deviations in tickets", "ticket 的偏離",
-         "The count, the Stop threshold and your approval of the revised plan work as for any deviation.",
-         "次數、停止門檻與修訂後的計畫需要你同意，都和其他偏離一樣。"),
         # S12: the limits of these rules.
         ("Deviations in tickets", "ticket 的偏離",
          "These are instructions to the model: main judges which tickets a change touches and whether it touches the "
          "spec, and the checklist otherwise runs only at plan review, on the text as written then.",
          "這些是給模型的指示：哪些 ticket 受變動影響、變動是否觸及 spec，由主 Agent 判斷；除此之外，檢查清單只在計畫審查時執行，"
          "看的是當時寫下的文字。"),
-        ("Spec updates", "更新 spec",
-         "once tickets are cut, they govern implementation.",
-         "ticket 切好之後，實作以 ticket 為準。"),
-        ("Spec updates", "更新 spec",
-         "When a change you agree to alters the spec's stated outcome, scope, decisions or invariants, main also updates "
-         "the spec, only with your authorisation, so later checklist checks and other sessions read the agreed version.",
-         "你同意的變動改變了 spec 明定的結果、範圍、決定或不變條件時，主 Agent 也會更新 spec，但只在你授權後，讓之後的檢查清單與"
-         "其他 session 讀到同意後的版本。"),
-        ("Spec updates", "更新 spec",
-         "An agreed change to a spec part a claim cites, or to a part the spec says holds for every claim, reopens the "
-         "READY, APPROVED, CONFIRMED and HELD of every claim that cites or reads it, as a change to its acceptance does.",
-         "你同意的變動若改到某個 claim 引用的 spec 部分，或 spec 聲明適用於每個 claim 的部分，會重新打開每個引用或讀到它的 claim 的 "
-         "READY、APPROVED、CONFIRMED 與 HELD，和修改它的驗收條件一樣。"),
     )
 
     def test_readmes_state_the_deviation_and_spec_update_rules_in_both_languages(self):

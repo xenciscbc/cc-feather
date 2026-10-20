@@ -190,32 +190,8 @@ class CommandScopeTests(unittest.TestCase):
                     "off that no active handoff restricts, judges the workspace change from the base revision, except that "
                     "an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) "
                     "reviews the range that command defines, and main does not commit that work to review it.")
-    # Items 5 and 9.7 (E7, sw-6): the READMEs' command paragraph, paired.
-    README = (
-        ("For work the acceptance gate does not cover, it needs no prior passes and satisfies no gate: with a commit range "
-         "it reviews that range at its end commit and leaves out uncommitted changes; without a range it reviews your "
-         "uncommitted change against HEAD, including new files, and leaves out committed branch changes; with a clean "
-         "workspace and no range, main asks you what to review.",
-         "對驗收把關不涵蓋的工作，它不需要先前的通過，也不滿足任何把關：給了 commit 範圍就以範圍終點的 commit 審查該範圍，"
-         "不含未 commit 的變更；沒給範圍就審查相對於 HEAD 的未 commit 變更，包括新檔案，不含分支上已 commit 的變更；"
-         "工作區乾淨又沒給範圍時，主 Agent 會問你要審查什麼。"),
-        ("Paths narrow that range and never fall back to whole files: when they have no change in it, main asks you.",
-         "路徑只會縮小這個範圍，絕不改成審查整個檔案：路徑在範圍內沒有變更時，主 Agent 會問你。"),
-        ("A claim the gate covers is reviewed at a clean commit, the one you name or HEAD; when the commit you name is not "
-         "your workspace's content, main asks you instead of checking it out.",
-         "把關涵蓋的 claim 則在乾淨的 commit 上審查，也就是你指定的 commit 或 HEAD；你指定的 commit 不是工作區的內容時，"
-         "主 Agent 會問你，而不是替你 checkout。"),
-        ("For such a claim that is not Security-critical, the call needs no prior passes and satisfies no gate, and a "
-         "BROKEN is a material deviation: dependent work stops until a revised plan is reviewed and you approve it, or you "
-         "decide otherwise.",
-         "這樣的 claim 若不是安全關鍵，這次呼叫不需要先前的通過，也不滿足任何把關，而 BROKEN 算重大偏離：相依的工作會停下，"
-         "直到修訂後的計畫通過審查並經你同意，或由你另行決定。"),
-        ("For a Security-critical claim, the call is classified like a call of the other steps, and an early call made "
-         "before its APPROVED and CONFIRMED does not count.",
-         "安全關鍵 claim 則和其他步驟的呼叫一樣分類，在拿到 APPROVED 與 CONFIRMED 之前的提早呼叫不算通過。"),
-        ("The result names the reviewed commit or range, what it left out and whether the verdict counts.",
-         "結果會說明審查的 commit 或範圍、排除了什麼，以及結論算不算通過。"),
-    )
+    # Items 5 and 9.7 (E7, sw-6): the reference's command paragraph kept the targets sentence; its scope summary was
+    # removed in delegation-dedupe 04, since the command states the scope (ADR 0017).
     README_TARGETS = ("Targets come only from a plan you approved or from your own arguments; without one, the role "
                       "analyses statically and reports INCONCLUSIVE for what needs execution.",
                       "目標只來自你同意的計畫或你自己的參數；沒有目標時，角色只做靜態分析，需要實際執行的部分回報 INCONCLUSIVE。")
@@ -319,9 +295,8 @@ class CommandScopeTests(unittest.TestCase):
         self.assertTrue((feather_support.REVIEW_RULES_REFERENCES / "../../adversarial-review/SKILL.md").resolve().is_file())
 
     def test_readme_command_paragraph_summarises_the_scope_in_both_languages(self):
-        for english, chinese in (*self.README, self.README_TARGETS):
-            with self.subTest(sentence=english[:60]):
-                self.assert_pinned({"reference.md#command": (english,), "reference.zh-TW.md#command": (chinese,)})
+        english, chinese = self.README_TARGETS
+        self.assert_pinned({"reference.md#command": (english,), "reference.zh-TW.md#command": (chinese,)})
         for place, phrases in self.README_REMOVED.items():
             for phrase in phrases:
                 with self.subTest(place=place, phrase=phrase):
@@ -369,9 +344,7 @@ class CommandScopeTests(unittest.TestCase):
          ()),
         ("paths that have no change in the reviewed range",
          "main asks instead of reviewing whole files",
-         (("command#Paths", PATHS[1]),
-          ("reference.md#command", README[1][0]),
-          ("reference.zh-TW.md#command", README[1][1])),
+         (("command#Paths", PATHS[1]),),
          ()),
         ("an early explicit call that names no commit",
          "it reviews HEAD with the workspace equal to it and does not count as the step's pass",
@@ -382,9 +355,7 @@ class CommandScopeTests(unittest.TestCase):
           ("command#Before the passes", "against the commit it names,"))),
         ("the user names a commit that is not the workspace's content",
          "main does not check out, stash, reset or switch branches; it reports the mismatch and asks",
-         (("command#gated", PREPARATION[3]),
-          ("reference.md#command", README[2][0]),
-          ("reference.zh-TW.md#command", README[2][1])),
+         (("command#gated", PREPARATION[3]),),
          ()),
         ("an early call whose reviewed commit does not change the claim's files",
          "main asks the user instead of dispatching",
@@ -395,8 +366,7 @@ class CommandScopeTests(unittest.TestCase):
          (("command#results", BROKEN[0]),
           ("command#results", BROKEN[1]),
           ("plan-review.md#5", "in addition, discovering a security control or invariant the plan lacks is a material deviation."),
-          ("plan-review.md#5", "a material deviation stops dependent work for another review of the revised plan,"),
-          ("reference.md#command", README[3][0])),
+          ("plan-review.md#5", "a material deviation stops dependent work for another review of the revised plan,")),
          ()),
         ("main rejects that BROKEN with evidence",
          "the stop holds until the user waives the finding or approves the unrevised plan; neither is recorded as a pass",
@@ -547,15 +517,15 @@ class StopThresholdCommandTests(unittest.TestCase):
     }
 
     # Item 6: both READMEs list the command next to auto-on and auto-off and describe it in their Stop threshold section.
+    # The reference's command paragraph; delegation dedupe 04 kept the session-value limits and dropped the restated
+    # saving and refusal rules, which the Stop threshold procedure states.
     README_PAIRS = (
         ("`/cc-feather:stop-threshold` sets it, or asking main in your own words does the same.",
          "用 `/cc-feather:stop-threshold` 設定，或用自己的話請主 Agent 設定，效果相同。"),
-        ("Without a scope (or with `session`) it applies to this session only and writes nothing, and main reminds you that a new or resumed session uses the saved value and that context compaction may drop the session value.",
-         "不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案，主 Agent 會提醒你新的或恢復的 session 會用已儲存的值，而且 context 壓縮可能讓 session 的值遺失。"),
-        ("`project` or `user` saves it in an existing delegation installation of that scope after a preview, without a further confirmation; it never installs delegation, and guidance from an older template needs setup update first.",
-         "加 `project` 或 `user` 時，會在預覽後儲存到該範圍既有的 agent 分派安裝，不再另外確認；它絕不會安裝 agent 分派，舊版範本的指引要先執行 setup update。"),
-        ("A value outside 2–10 or an unclear scope is refused or clarified before anything is applied or written.",
-         "不在 2–10 的值或不明確的範圍，會在套用或寫入任何東西之前被拒絕或先釐清。"),
+        ("Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` saves it in an existing delegation installation of that scope, and it never installs delegation.",
+         "不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。"),
+        ("A session choice does not carry into a new or resumed session and is not written into a handoff, and context compaction may drop it.",
+         "session 選擇不會帶到新的或恢復的 session，也不會寫進交接，而且 context 壓縮可能讓它遺失。"),
     )
     README_LISTINGS = {
         "README.md": ("- `/cc-feather:auto-off`: disable automatic review.\n"

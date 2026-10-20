@@ -245,13 +245,12 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
             "before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at "
             "the commit to be landed, as its own run under the Execution rule of [review "
             "state](../skills/delegation/references/review-state.md).",
-            "It runs only when the workspace equals the commit to be landed or tagged, as main's workspace reads show; "
-            "ignored files are outside those reads.",
+            # Delegation dedupe 04: the reference no longer restates when the check runs; that ignored files are outside
+            # the workspace check stays among its Repository safety residual risks.
         ),
         "reference.zh-TW.md#最終檢查": (
             "進入預設 branch 或 release 之前，主 Agent 會在要進入預設 branch 的 commit 上執行計畫的整體驗收檢查（例如完整測試），"
             "這是它自己的執行，遵守[審查狀態規則](../skills/delegation/references/review-state.md)中的 Execution 規則。",
-            "只有在主 Agent 的工作區讀取顯示工作區與要進入預設 branch 或要加 tag 的 commit 相同時才會執行；被忽略的檔案不在這些讀取的範圍內。",
         ),
     }
     # The final check's replaced sentences: absent now, present at the tag.

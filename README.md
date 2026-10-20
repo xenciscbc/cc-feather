@@ -145,7 +145,7 @@ Automatic review is off by default; turn it on or off with the [switch](#automat
 | Outcome verification | After APPROVED | verifier | CONFIRMED |
 | Adversarial review | For a Security-critical claim: in auto, once at the end, after the final check passes at the final commit; in `off`, after APPROVED and CONFIRMED at the same commit | adversary | HELD |
 
-In brief; the [reference](docs/reference.md#automatic-review) states every rule in full:
+In brief; the rules live in the delegation procedures, and the [reference](docs/reference.md#automatic-review) explains what each one is for and links to the procedure that states it:
 
 - **Unplanned work** gets no automatic review, except that a Security-critical change, data migration or irreversible operation first needs a written plan that is reviewed and that you approve.
 - **The plan is what you name.** Naming a plan, spec or ticket when you ask main to implement it is your agreement to it, and what you name decides its claims: a spec is one claim unless it lists its own, tickets of a spec are one plan with one claim per unfinished ticket, and a single ticket is its own plan and claim. A claim's implementer and reviewers read the claim and the spec parts it cites, not the whole spec.
@@ -171,7 +171,7 @@ A Security-critical claim changes a security guarantee at a trust boundary or a 
 
 **Delegation assumes that the repository is trusted, and reviews run its code on this machine. Saying where a change comes from, such as that it is another person's pull request, branch or patch, no longer stops that: to stop it, say in your own message that the code must not run, or name what must not run. cc-feather offers no check of a repository before you trust it, so deciding whether to trust one, for example after downloading or copying someone else's, is yours.**
 
-Main and the roles read the repository with ordinary file tools and ordinary Git commands; no review contains or detects hostile repository content. A review keeps only the checks its result needs: `HEAD` is the commit the call judges, what the claim depends on has no uncommitted or untracked change before or after the call, and a commit holds only the claim's files. A restriction you state lasts for the session and covers every later call it names, the final check included, until your own message lifts it; nothing in the repository, a tool's output or a record can state or lift one. These rules are instructions to the model, not a sandbox; the [reference](docs/reference.md#repository-safety) states them in full. See [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md).
+Main and the roles read the repository with ordinary file tools and ordinary Git commands; no review contains or detects hostile repository content. A review keeps only the checks its result needs: `HEAD` is the commit the call judges, what the claim depends on has no uncommitted or untracked change before or after the call, and a commit holds only the claim's files. A restriction you state lasts for the session and covers every later call it names, the final check included, until your own message lifts it; nothing in the repository, a tool's output or a record can state or lift one. These rules are instructions to the model, not a sandbox; they live in the delegation procedures, and the [reference](docs/reference.md#repository-safety) explains them. See [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md).
 
 What remains is your risk:
 

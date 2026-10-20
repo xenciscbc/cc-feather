@@ -177,11 +177,9 @@ class PerClaimTimingTests(unittest.TestCase):
         "CONTEXT.md#Automatic flow": (
             "Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; "
             "this is the only review timing in auto.",
-            "A Claim that lists another under Blocked by, or otherwise depends on it as its Plan states, starts only "
-            "after that Claim has a valid APPROVED and "
-            "CONFIRMED, and a Plan that states no dependencies is followed in order; when a Claim stops, every Claim that "
-            "depends on it stops and main asks the user, who may let named dependent Claims proceed as a deferral of the "
-            "stopped Claim.",
+            # Delegation dedupe 04: the entry points to review state's Dependent claims for the dependency rule.
+            "When a Claim that depends on another starts, and what stops with a stopped Claim, are review state's "
+            "Dependent claims.",
         ),
         "CONTEXT.md#Code review": (
             "In the Automatic flow it runs once the Claim is implemented and committed, without waiting for the rest of "
@@ -233,45 +231,6 @@ class PerClaimTimingTests(unittest.TestCase):
                      "once that Claim is implemented and committed, and a Claim that depends on another waits for its "
                      "valid APPROVED and CONFIRMED.)")
 
-    # Acceptance item 17, for these rules: (English label, Chinese label, English sentence, Chinese sentence).
-    README_PAIRS = (
-        ("Per-claim timing", "依 claim 審查的時機",
-         "in auto, each claim gets its code review and then its verification as soon as that claim is implemented and "
-         "committed, not after the whole plan is implemented, so a problem in an early claim is found before later "
-         "claims build on it.",
-         "在 auto 下，每個 claim 一實作完成並 commit，就接著做它的程式碼審查，再做結果驗證，不等整份計畫實作完，所以早期 "
-         "claim 的問題會在後面的 claim 建立在它之上之前被發現。"),
-        ("Per-claim timing", "依 claim 審查的時機",
-         "This is the only timing in auto: no setting or plan statement chooses another, and a plan with a single claim "
-         "works as before.",
-         "這是 auto 唯一的審查時機：沒有任何設定或計畫寫法能選擇別的時機，只有一個 claim 的計畫照舊。"),
-        ("Per-claim timing", "依 claim 審查的時機",
-         "Reviews and implementation in one working tree still take turns, as Serial reviews says, so even a claim that "
-         "depends on no other waits while a review runs in the same working tree.",
-         "同一個工作樹裡的審查與實作仍然輪流進行，如「審查依序進行」所說，所以即使不依賴任何 claim，也要等同一個工作樹裡"
-         "正在進行的審查結束。"),
-        ("Dependent claims", "相依的 claim",
-         "a claim that lists another under `Blocked by`, or otherwise depends on it as its plan states, starts only "
-         "after that claim has a valid APPROVED and CONFIRMED; a claim with no such dependency does not wait for other "
-         "claims' passes.",
-         "在 `Blocked by` 列出另一個 claim，或依計畫所述以其他方式依賴它的 claim，要等那個 claim 拿到有效的 APPROVED 與 "
-         "CONFIRMED 才開始；沒有這種相依的 claim 不必等其他 claim 通過。"),
-        ("Dependent claims", "相依的 claim",
-         "When a plan states no dependencies between its claims, main follows the plan's order and treats each claim as "
-         "depending on those before it.",
-         "計畫沒寫 claim 之間的相依時，主 Agent 依計畫順序進行，把每個 claim 都視為依賴排在它前面的 claim。"),
-        ("Dependent claims", "相依的 claim",
-         "When a claim's code review or verification stops, its verification cannot be resolved, it has a deviation or "
-         "it would need your accept-and-land decision, every claim that depends on it stops and main asks you.",
-         "某個 claim 的程式碼審查或驗證停下、驗證無法解決、出現偏離，或需要你決定接受並合併時，所有依賴它的 claim "
-         "都會停下，主 Agent 會問你。"),
-        ("Dependent claims", "相依的 claim",
-         "You may let named dependent claims proceed: main records that as a deferral of the upstream claim whose scope "
-         "names the claims allowed to start, and the upstream claim stays pending acceptance until its passes become "
-         "valid or you decide on it at the end of the plan.",
-         "你可以讓指定的相依 claim 繼續：主 Agent 會把這記為上游 claim 的延後，範圍寫明允許開始的 claim，而上游 claim "
-         "維持待驗收，直到它的審查與驗證重新有效，或你在計畫最後對它做出決定。"),
-    )
 
     # Acceptance item 18: the replaced statements that reviews start once the reviewed Plan is implemented.
     REPLACED = {
@@ -297,9 +256,6 @@ class PerClaimTimingTests(unittest.TestCase):
             for place, sentences in group.items():
                 pins.setdefault(place, []).extend(sentences)
         pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
-        for en_label, zh_label, english, chinese in self.README_PAIRS:
-            pins.setdefault(f"reference.md#{en_label}", []).append(english)
-            pins.setdefault(f"reference.zh-TW.md#{zh_label}", []).append(chinese)
         return pins
 
     def test_per_claim_timing_is_the_only_timing_in_auto(self):
@@ -328,12 +284,6 @@ class PerClaimTimingTests(unittest.TestCase):
         lines = self.source("ADR 0013").splitlines()
         self.assertIn(self.ADR_0013_NOTE, lines)
         self.assertEqual(sum(line.startswith("(Amended by ADR 0015:") for line in lines), 1)
-
-    def test_both_readmes_explain_per_claim_timing_and_dependent_claims(self):
-        for en_label, zh_label, english, chinese in self.README_PAIRS:
-            for place, sentence in ((f"reference.md#{en_label}", english), (f"reference.zh-TW.md#{zh_label}", chinese)):
-                with self.subTest(place=place, sentence=sentence[:40]):
-                    self.assert_whole_sentence(sentence, self.source(place))
 
     def test_reviews_no_longer_start_once_the_plan_is_implemented(self):
         for place, phrases in self.REPLACED.items():
@@ -468,19 +418,16 @@ class FixedPassesTests(unittest.TestCase):
         ),
     }
 
-    # Acceptance item 16, for these rules: the glossary entries state fixed passes.
+    # Acceptance item 16, for these rules: the glossary entries name fixed passes; delegation dedupe 04 replaced their
+    # restatement, which differed from review state's (an environment change reopens only verification), with a pointer.
     CONTEXT = {
         "CONTEXT.md#Code review": (
-            "In the Automatic flow its APPROVED stays fixed when another Claim of the same Plan changes the Claim's files "
-            "or what they depend on within the range that Claim's own completed Code review and Outcome verification "
-            "judged, both of which passed; any other change, and in off any change to the Claim's files or what they "
-            "depend on, reopens it.",
+            "When its APPROVED stays valid, and when it stays fixed in the Automatic flow, is review state's What a pass "
+            "covers.",
         ),
         "CONTEXT.md#Outcome verification": (
-            "In the Automatic flow its CONFIRMED stays fixed when another Claim of the same Plan changes the Claim's "
-            "files or what they depend on within the range that Claim's own completed Code review and Outcome "
-            "verification judged, both of which passed; any other change, and in off any change to the Claim's files or "
-            "what they depend on, reopens it.",
+            "When its CONFIRMED stays valid, and when it stays fixed in the Automatic flow, is review state's What a pass "
+            "covers.",
         ),
     }
 
@@ -536,61 +483,11 @@ class FixedPassesTests(unittest.TestCase):
     # Acceptance item 17, for these rules: (English label, Chinese label, English sentence, Chinese sentence).
     README_PAIRS = (
         ("Fixed passes", "固定的通過",
-         "in auto, once a claim has a valid APPROVED and CONFIRMED, they stay fixed: when another claim of the same "
-         "plan, a fix claim included, changes its files or what they depend on, they are not reopened as long as that "
-         "change lies within what that other claim's own completed code review and verification judged, and both "
-         "passed.",
-         "在 auto 下，claim 一拿到有效的 APPROVED 與 CONFIRMED，它們就保持固定：同一份計畫的另一個 claim（包括修正用的 "
-         "claim）改動它的檔案或其相依項目時，只要這項改動落在那個 claim 自己完成的程式碼審查與驗證所審過的範圍內，而且兩者"
-         "都通過，就不會重新打開它們。"),
-        ("Fixed passes", "固定的通過",
-         "A problem the change causes is that other claim's to fix, in its own reviews.",
-         "這項改動造成的問題，由那個 claim 在它自己的審查中修正。"),
-        ("Fixed passes", "固定的通過",
-         "A pass stays fixed only for a change a passing review judged: when that other claim's review stops, is "
-         "cancelled, is deferred or ends in your accept-and-land decision without both passes, its changes reopen the "
-         "claims whose files or dependencies they touch, as Validity says.",
-         "只有通過的審查審過的改動，才會讓通過保持固定：那個 claim 的審查停下、被取消、被延後，或沒拿到兩項通過就以你決定"
-         "接受並合併結束時，它的改動會依「有效範圍」重新打開它碰到的檔案或相依項目所屬的 claim。"),
-        ("Fixed passes", "固定的通過",
-         "Every other change still reopens as Validity says, such as your own edit outside the plan's claims, a rebase, "
-         "an environment or test target change, a change to the claim's reading set, or a change whose claim ends "
-         "without both passes; fixed passes do not change what reopens a HELD.",
-         "其他改動仍依「有效範圍」重新打開，例如你在計畫的 claim 以外所做的修改、rebase、環境或測試目標的變更、claim 閱讀"
-         "範圍的變更，或所屬 claim 沒拿到兩項通過就結束的改動；固定的通過也不改變什麼會重新打開 HELD。"),
-        ("Fixed passes", "固定的通過",
-         "A claim may change a file another claim's acceptance checks run or read, such as its tests, expected values, "
-         "fixtures, test discovery or runner configuration and their support code, only where its own reading set says "
-         "it does; otherwise that is a deviation and blocks.",
-         "claim 只有在它自己的閱讀範圍寫明時，才能改動另一個 claim 的驗收檢查會執行或讀取的檔案，例如它的測試、預期值、"
-         "fixture、測試探索或執行器設定，以及它們的輔助程式碼；否則就是偏離，會擋下。"),
-        ("Fixed passes", "固定的通過",
-         "Main decides which files these are from the changing claim's commit, files it adds included, and counts any "
-         "file it cannot rule out; that claim's code review then also reads the acceptance of each claim whose checks it "
-         "changed and checks that the change does not weaken it, for example by loosening an assertion, replacing a "
-         "fixture or turning off discovery, and a weakening blocks.",
-         "主 Agent 從做出改動的 claim 的 commit 判斷是哪些檔案，包括它新增的檔案，無法排除的檔案也算在內；該 claim 的程式碼"
-         "審查接著也會讀每個驗收檢查被它改動的 claim 的驗收條件，並檢查這項改動沒有削弱它，例如放寬斷言、換掉 fixture 或關掉"
-         "測試探索，削弱就會擋下。"),
-        ("Fixed passes", "固定的通過",
-         "Fixed passes hold in auto only: in `off`, any change to a claim's files or what they depend on still reopens "
-         "its code review and verification as Validity says, and turning automatic review off for a plan before your "
-         "decision at the end of the plan reopens every fixed pass whose claim's files or dependencies another claim "
-         "changed after it, with `off`'s rules for resumed sessions from then on.",
-         "固定的通過只在 auto 下成立：在 `off` 下，改動 claim 的檔案或其相依項目，仍依「有效範圍」重新打開它的程式碼審查與"
-         "驗證；在你對計畫做出最後決定之前就關掉自動審查，會重新打開每一個在通過之後被另一個 claim 改動了檔案或相依項目的"
-         "固定通過，之後恢復 session 的規則也改用 `off` 的。"),
-        ("Fixed passes", "固定的通過",
          "Fixed passes have limits: a later claim's reviewer reads only its own reading set and may not know an earlier "
          "claim's design intent, and a property of an earlier claim that no acceptance check the final check runs covers "
          "can be broken without the final check noticing.",
          "固定的通過有其限制：後面 claim 的 reviewer 只讀它自己的閱讀範圍，可能不知道前面 claim 的設計用意；前面 claim 的某項"
          "性質，若沒有任何最終檢查執行的驗收檢查涵蓋，就可能被破壞而最終檢查沒有發現。"),
-        ("Validity", "有效範圍",
-         "Changing a claim's files or what they depend on reopens its code review and verification, except where its "
-         "passes stay fixed in auto, as Fixed passes says;",
-         "改動 claim 的檔案或其相依項目，會重新打開程式碼審查與驗證，但 auto 下依「固定的通過」保持固定的通過除外；只改環境"
-         "則只重新打開驗證；其他改動，主 Agent 會說明為什麼通過仍然有效。"),
     )
 
     # Acceptance item 18: the replaced statements of file-level reopening in auto, which said any later change to a
@@ -957,46 +854,11 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
     # Acceptance item 17, for these rules: (English label, Chinese label, English sentence, Chinese sentence).
     README_PAIRS = (
         ("Final check", "最終檢查",
-         "In auto it still counts toward no step, but it stops at the Stop threshold's value, as below.",
-         "在 auto 下它仍不計入任何步驟，但會依停止門檻的值停下，如下所述。"),
-        ("Final check", "最終檢查",
-         "In auto, before the check main confirms that each claim's reading set is unchanged from what it recorded, and "
-         "the check also reruns every claim's primary acceptance at that commit, taken from the claim's recorded reading "
-         "set.",
-         "在 auto 下，檢查之前主 Agent 會確認每個 claim 的閱讀範圍與它記錄的相同，檢查也會在該 commit 上重跑每個 claim "
-         "的主要驗收，依據的是該 claim 記錄下來的閱讀範圍。"),
-        ("Final check", "最終檢查",
-         "A failure main attributes with evidence to a claim is fixed by that claim, through its code review and "
-         "verification, whose counts continue as for a reopened call, and no other claim is reopened.",
-         "主 Agent 以證據歸因於某個 claim 的失敗，由那個 claim 修正，並經過它的程式碼審查與驗證，次數像重新打開的呼叫一樣接續"
-         "計算，其他 claim 都不會重新打開。"),
-        ("Final check", "最終檢查",
-         "A failure main cannot attribute with evidence is fixed by a fix claim, and no claim is reopened.",
-         "主 Agent 無法以證據歸因的失敗，由修正用的 claim 修正，任何 claim 都不會重新打開。"),
-        ("Final check", "最終檢查",
-         "A fix claim is a claim main adds to the plan for one fix, without asking you and with no plan review and no "
-         "ticket: its acceptance is that the failing check passes, or that a defect a later claim's review found is "
-         "fixed, its reading set is the plan's text with that failure or defect, and it gets code review and "
-         "verification with counts of its own.",
-         "修正用的 claim 是主 Agent 為一項修正加進計畫的 claim，不會先問你，也沒有計畫審查與 ticket：它的驗收條件是失敗的"
-         "檢查通過，或後面 claim 的審查找到的缺陷已修正；它的閱讀範圍是計畫的文字加上那項失敗或缺陷；它有自己的程式碼審查"
-         "與驗證，次數也自己計算。"),
-        ("Final check", "最終檢查",
-         "A fix claim never changes the check whose failure it fixes or another claim's acceptance checks; a fix that "
-         "needs to, or a fix beyond the plan's scope, is a deviation, and main asks you.",
-         "修正用的 claim 絕不改動它所修正的那項失敗檢查，也不改動其他 claim 的驗收檢查；需要改動它們的修正，或超出計畫範圍"
-         "的修正，都是偏離，主 Agent 會問你。"),
-        ("Final check", "最終檢查",
          "A fix claim that changes a security control is Security-critical, but main still adds it without asking: it "
          "gets no plan review, security analysis or Adversarial review, and main discloses it at the end with its problem "
          "and a summary of the fix, so you decide whether to land with it.",
          "修正用的 claim 若改動安全控制，就屬於安全關鍵，但主 Agent 仍不先問你就加入：它沒有計畫審查、安全分析或對抗式審查，"
          "主 Agent 會在最後揭露它，附上問題與修正摘要，由你決定是否帶著它合併。"),
-        ("Final check", "最終檢查",
-         "The check runs again after each fix, and when it fails at as many different commits in a row as the Stop "
-         "threshold, without passing in between, main stops fixing and asks you.",
-         "每次修正後檢查都會再執行一次；檢查在連續幾個不同的 commit 上失敗，次數達到停止門檻，而且其間沒有通過時，主 Agent "
-         "就停止修正並問你。"),
         ("Final check", "最終檢查",
          "The check does not repeat everything at the final commit: acceptance items other than a claim's primary "
          "acceptance are not rerun, and an acceptance check that cannot be rerun, such as a manual check, is not "
@@ -1009,29 +871,6 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
          "which the check runs again.",
          "檢查所執行的儲存庫程式碼掌控自己的輸出，所以它可以讓該失敗的檢查通過、隱藏檢查少跑了測試，或讓失敗指向錯誤的 "
          "claim；最後這種只會讓修正找錯對象，修正之後檢查會再執行一次。"),
-        ("Final check", "最終檢查",
-         "In `off`, a failure reopens the claims it affects, with its output as evidence for their reviews, and landing "
-         "and release wait for their passes again; a failure main cannot attribute with evidence reopens every claim the "
-         "check covers.",
-         "在 `off` 下，檢查失敗會重新打開受影響的 claim，並把輸出當作它們審查的證據，進入預設 branch 與 release 都要等它們"
-         "再次通過；主 Agent 無法以證據歸因的失敗，會重新打開這項檢查涵蓋的每個 claim。"),
-        ("Findings", "問題分級",
-         "In auto, every review brief also names the plan's base revision, and main, not the role, judges from Git "
-         "whether a finding reported as pre-existing was introduced after it.",
-         "在 auto 下，每份審查的 brief 也會寫明計畫的基準版本，由主 Agent 而不是角色依 Git 判斷被回報為先前就存在的問題，"
-         "是否在那之後才引入。"),
-        ("Findings", "問題分級",
-         "A problem in an earlier claim of the same plan that predates the plan's base revision is non-blocking, and a "
-         "later claim fixes it only when its own acceptance needs it; a defect an earlier claim introduced after it is "
-         "fixed by the later claim when its acceptance needs it and otherwise by a fix claim, as Final check says, "
-         "without reopening the earlier claim.",
-         "同一份計畫中前面 claim 的問題若早於計畫的基準版本，就是非阻擋問題，後面的 claim 只在自己的驗收需要時才修正；前面 "
-         "claim 在那之後引入的缺陷，後面 claim 的驗收需要時由它修正，否則依「最終檢查」由修正用的 claim 修正，都不會重新打開"
-         "前面的 claim。"),
-        ("Findings", "問題分級",
-         "When a later claim changes a security control, main classifies it again as Security-critical by what the "
-         "change does.",
-         "後面的 claim 改動安全控制時，主 Agent 會依改動的作用重新判斷它是否屬於安全關鍵。"),
     )
 
     # Acceptance item 18: the replaced statement that a failure reopens claims in either mode; in auto no claim is
@@ -1471,7 +1310,7 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "It also covers an upstream Claim that has passed no step yet and stays pending because the user let named "
             "dependent Claims proceed after it stopped, as a deferral of it, and, in the Automatic flow, a "
             "Security-critical claim whose Adversarial review at the final commit returned BROKEN, which stays pending "
-            "with that result and its findings listed until the user's decision at the end of the Plan.",
+            "with that result as the Adversarial review procedure's At the final commit states.",
         ),
     }
 
@@ -1538,67 +1377,9 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
     # Acceptance item 17, for these rules: (README place, Chinese place, English sentence, Chinese sentence).
     README_PAIRS = (
         ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
-         "Adversarial review is the third step: adversary tries to break the claim and answers HELD, BROKEN or "
-         "INCONCLUSIVE; in `off`, a call counts only after a valid APPROVED and CONFIRMED at the same commit, and in auto "
-         "it runs at the end, as below.",
-         "對抗式審查是第三步：adversary 嘗試攻破這個 claim，回覆 HELD、BROKEN 或 INCONCLUSIVE；在 `off` 下，要在同一個 commit "
-         "拿到有效的 APPROVED 與 CONFIRMED 之後才算數，在 auto 下則在最後執行，如下所述。"),
-        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
-         "In auto, Adversarial review runs once, at the end: when the final check has passed at the final commit with the "
-         "workspace equal to it, each Security-critical claim of the plan except a fix claim gets one Adversarial review "
-         "there, whose brief carries only that claim's own security invariants and test targets and the plan's base "
-         "revision.",
-         "在 auto 下，對抗式審查只在最後執行一次：最終檢查在最後的 commit 上通過、且工作區與它相同時，計畫中除了修正用的 "
-         "claim 以外，每個安全關鍵 claim 都在那裡做一次對抗式審查，brief 只帶該 claim 自己的安全不變條件與測試目標，以及計畫"
-         "的基準版本。"),
-        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
-         "The claim's APPROVED and CONFIRMED are then a record of the commits they judged, and only a call made after the "
-         "final check passed at the commit to be landed gives the claim's result: a result from an earlier or another "
-         "commit, or an explicit call made before then, counts as not run, so the claim needs a new call or your "
-         "accept-and-land decision.",
-         "這時 claim 的 APPROVED 與 CONFIRMED 是它們所審 commit 的紀錄，只有在最終檢查於要進入預設 branch 的 commit 上通過之後"
-         "才做的呼叫，才給出該 claim 的結果：來自較早或其他 commit 的結果，或在那之前明確要求的呼叫，都視為沒有執行，所以這個 "
-         "claim 需要重新呼叫，或你決定接受並合併。"),
-        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
-         "A break of the claim's security invariant at that commit is reported whichever claim's change caused it, and one "
-         "introduced after the plan's base revision is not pre-existing; an INCONCLUSIVE is handled as in any Adversarial "
-         "review, within the Stop threshold.",
-         "在那個 commit 上破壞 claim 的安全不變條件，不論是哪個 claim 的改動造成的都會回報，在計畫的基準版本之後才引入的也不算"
-         "先前就存在；INCONCLUSIVE 和任何對抗式審查一樣處理，在停止門檻之內。"),
-        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
-         "A BROKEN there is recorded, not fixed in the plan: it counts as a call without a pass, main does not repeat the "
-         "call on unchanged code, and its findings go to the work's Follow-up record, with only a summary in any tracked "
-         "record unless you agree.",
-         "在那裡得到的 BROKEN 只記錄、不在這份計畫中修正：它算一次沒通過的呼叫，程式碼沒變時主 Agent 不會重複呼叫，它的發現"
-         "寫進這項工作的後續紀錄，任何有追蹤的紀錄只寫摘要，除非你同意。"),
-        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
-         "The claim stays pending acceptance with its result, which main lists when it asks you at the end of the plan, "
-         "and the findings stay listed, and go with every later attack on the claim, until a HELD at the commit to be "
-         "landed that covered them replaces them.",
-         "這個 claim 帶著它的結果維持待驗收，主 Agent 在計畫最後問你時會列出這個結果，而這些發現會一直列著，也會隨之後每次"
-         "對它的攻擊提供，直到要進入預設 branch 的 commit 上涵蓋了它們的 HELD 取代它們。"),
-        ("reference.md#disclosure", "reference.zh-TW.md#disclosure",
          "This has limits: the commit an Adversarial review attacks was not judged as a whole by the claim's own code "
          "review and verification, and its findings are not fixed in the plan.",
          "這有其限制：對抗式審查攻擊的 commit，沒有整體經過該 claim 自己的程式碼審查與驗證，它的發現也不在這份計畫中修正。"),
-        ("reference.md#Not passed", "reference.zh-TW.md#未通過",
-         "A Security-critical claim without a valid HELD is not landed, released or reported complete either; in `off`, "
-         "the fix for a BROKEN goes through code review, verification and Adversarial review again, while in auto a "
-         "BROKEN is recorded rather than fixed, as [Security-critical work](#security-critical-work) says, and when that "
-         "step stops or a BROKEN stays unresolved, an active handoff records that the claim is pending acceptance with "
-         "its Adversarial review missing, even if it had no note before.",
-         "沒有有效 HELD 的安全關鍵 claim 同樣不進入預設 branch、不 release、不回報完成；在 `off` 下，BROKEN 的修正要重新經過"
-         "程式碼審查、驗證與對抗式審查，在 auto 下 BROKEN 則只記錄、不修正，如[安全關鍵工作](#安全關鍵工作)所說，而該步驟停下"
-         "或 BROKEN 仍未解決時，進行中的交接會記下這個 claim 待驗收、缺少對抗式審查，即使之前沒有記錄也一樣。"),
-        ("reference.md#Findings", "reference.zh-TW.md#問題分級",
-         "Security findings still block as before: a security problem the change introduced or made exploitable, even "
-         "through code outside the diff, and data loss it introduced block whatever the acceptance says and need no "
-         "reproduction, so a removed or weakened security control blocks; BROKEN and Adversarial review follow the "
-         "adversarial-review procedure, and a vulnerability that predates the change becomes separate work in your "
-         "tracker.",
-         "安全問題照舊擋下：這次變更引入或使其可被利用的安全問題（即使經由 diff 以外的程式碼），以及它引入的資料遺失，不論驗收"
-         "條件怎麼寫都會擋下，也不需要重現，所以移除或削弱安全控制也會擋下；BROKEN 與對抗式審查依對抗式審查程序處理，變更之前"
-         "就存在的漏洞則成為 tracker 中另外的工作。"),
         ("README.md", "README.zh-TW.md",
          "| Adversarial review | For a Security-critical claim: in auto, once at the end, after the final check passes at "
          "the final commit; in `off`, after APPROVED and CONFIRMED at the same commit | adversary | HELD |",
@@ -1991,19 +1772,6 @@ class DispatchRecordTests(unittest.TestCase):
         "SKILL.md#Plan review": (
             "In off, main keeps the cross-session rules of [review state](references/review-state.md)'s Resumed sessions.",
         ),
-        "reference.md#Dispatch record": ("In `off`, main writes none and the rules under Resumed session hold as before.",),
-        "reference.zh-TW.md#派工紀錄": ("在 `off` 下，主 Agent 不寫派工紀錄，「恢復的 session」的規則照舊。",),
-        "reference.md#Resumed session": (
-            "In `off`, passing verdicts do not carry over either, and without an active handoff record no restriction "
-            "carries over.",
-            "In `off`, before landing, release or completion, a claim that passed in an earlier session is reviewed and "
-            "verified again, and a Security-critical claim gets Adversarial review again, unless its ticket was set to a "
-            "done value after both passes (plus HELD for a Security-critical claim) or your accept-and-land decision and "
-            "nothing relevant changed since.",
-        ),
-        "reference.zh-TW.md#恢復的 session": (
-            "在 `off` 下，通過的結論也不會帶到新的 session，沒有進行中的交接記錄時，不會有任何限制帶過去。",
-        ),
         "CONTEXT.md#Active handoff": ("In off, it is how unresolved verdicts and gate notes reach a resumed session.",),
     }
 
@@ -2078,71 +1846,10 @@ class DispatchRecordTests(unittest.TestCase):
     # Acceptance item 17, for these rules: (English place, Chinese place, English sentence, Chinese sentence).
     README_PAIRS = (
         ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "in auto, main keeps one dispatch record for each plan at `.feather/dispatch/<name>.md`, named after the plan: "
-         "the spec's slug for a spec or its tickets, the ticket's slug for a single ticket, the plan file's name, or a "
-         "short name main tells you for a plan-mode or conversation plan.",
-         "在 auto 下，主 Agent 為每份計畫保留一份派工紀錄，放在 `.feather/dispatch/<name>.md`，以計畫命名：spec 或它的 "
-         "ticket 用 spec 的 slug，單一 ticket 用該 ticket 的 slug，計畫檔用檔名，plan mode 或對話中的計畫則用主 Agent "
-         "告訴你的簡短名稱。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "It holds what a later session needs: the plan, its base revision and its plan-review READY; for each claim, "
-         "its classification, its reading set's hash, its base revision, and each review call's judged commit and "
-         "verdict with a one-line summary; each fix claim with its problem and a summary of the fix; the branches main "
-         "created for the work; and your decisions with their scope.",
-         "它保存之後的 session 需要的內容：計畫、計畫的基準版本與計畫審查的 READY；每個 claim 的分類、閱讀範圍的雜湊、"
-         "基準版本，以及每次審查呼叫所審的 commit 與結論，附一行摘要；每個修正用的 claim 及其問題與修正摘要；主 Agent "
-         "為這項工作建立的 branch；以及你的決定和範圍。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "It holds no counts, exploit details or secrets, and until your decision at the end of the plan it holds each "
-         "claim's pass state.",
-         "它不保存次數、攻擊細節或機密，而在你對計畫做出最後決定之前，它保存每個 claim 的通過狀態。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "Main writes it only between review calls and keeps it out of Git: when no rule already ignores it, main adds "
-         "`/.feather/dispatch/` to `.gitignore`, and it never stages or commits the record.",
-         "主 Agent 只在審查呼叫之間寫入它，並讓它不進 Git：沒有規則已經忽略它時，主 Agent 會把 `/.feather/dispatch/` "
-         "加進 `.gitignore`，且從不 stage 或 commit 這份紀錄。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "In auto it, not an active handoff's notes, is where review state crosses sessions; an active handoff records "
-         "progress and names the dispatch record.",
-         "在 auto 下，審查狀態是靠它、而不是進行中交接的記錄帶到新的 session；進行中的交接記錄進度，並寫明派工紀錄。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "A new session, and main after context compaction, take the plan's READY, reading sets, passes, Adversarial "
-         "review results and your decisions from it as if received in that session, so a claim that passed earlier is "
-         "not reviewed again and implemented work whose READY it holds is not asked about again, and the unresolved "
-         "verdicts and a BROKEN's listed findings it holds stay with their claims.",
-         "新的 session，以及 context 壓縮後的主 Agent，會從它取得計畫的 READY、閱讀範圍、通過、對抗式審查結果與你的決定，"
-         "視同在該 session 中收到，所以之前通過的 claim 不會重新審查，它記有 READY 的已實作工作也不會再問一次，而它記錄的"
-         "未解決結論與 BROKEN 列出的發現仍跟著各自的 claim。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "Counts still restart in each session, and the Stop threshold and the final check's state come only from the "
-         "current session, so main runs the final check again before landing; where the record lacks what main needs, "
-         "main treats the step as stopped and asks you.",
-         "次數仍在每個 session 重新計算，停止門檻與最終檢查的狀態只來自目前的 session，所以主 Agent 會在進入預設 branch "
-         "前重新執行最終檢查；紀錄缺少主 Agent 需要的內容時，主 Agent 會視為已停下並問你。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
          "Main takes the dispatch record as written, so an edit to it, by repository code a review or the final check "
          "runs or by a person, changes which passes and results main believes; cc-feather does not defend against that.",
          "主 Agent 照紀錄所寫的內容採信，所以有人或審查、最終檢查執行的儲存庫程式碼修改它，就會改變主 Agent 相信哪些通過"
          "與結果；cc-feather 不防範這一點。"),
-        ("reference.md#Resumed session", "reference.zh-TW.md#恢復的 session",
-         "In auto, an unfinished plan is reviewed again unless its dispatch record holds its READY, and the plan's "
-         "passes, Adversarial review results, unresolved verdicts and your decisions carry over through the dispatch "
-         "record, as Dispatch record says.",
-         "在 auto 下，未完成的計畫會重新審查，除非它的派工紀錄記有 READY，而計畫的通過、對抗式審查結果、未解決的結論與你的"
-         "決定都透過派工紀錄帶過去，如「派工紀錄」所說。"),
-        ("reference.md#Resumed session", "reference.zh-TW.md#恢復的 session",
-         "Counts do not carry over, and in either mode finished tickets are not redone.",
-         "次數不會帶到新的 session，而且不論哪種模式，已完成的 ticket 都不會重做。"),
-        ("reference.md#Commit", "reference.zh-TW.md#Commit 條件",
-         "It asks before pushing to a branch that already existed and that it did not create; in a resumed session a "
-         "branch counts as its own only when a record shows that it created it for this work: in auto the dispatch "
-         "record, in place of an active handoff, and in `off` an active handoff.",
-         "要推到原本就存在、不是它建立的 branch 前，會先問你；恢復的 session 裡，只有紀錄顯示它為這項工作建立了該 branch，"
-         "才算它自己的 branch：在 auto 下看派工紀錄，取代進行中的交接，在 `off` 下看進行中的交接。"),
-        ("reference.md#Implemented before plan review", "reference.zh-TW.md#實作完才做計畫審查",
-         "In auto, a plan whose dispatch record holds its READY counts as reviewed in a new session or after context "
-         "compaction too, so main does not ask.",
-         "在 auto 下，派工紀錄記有 READY 的計畫，在新的 session 或 context 壓縮後也算已審查，主 Agent 不會再問。"),
     )
 
     # Acceptance item 18: the replaced statements that passing verdicts and HELD do not cross sessions and that an
@@ -2248,8 +1955,10 @@ class DispatchRecordTests(unittest.TestCase):
         self.assert_pinned(self.OFF)
         self.assertTrue(self.source("review-state.md#Dispatch record").startswith(
             "- **Dispatch record.** In auto, main keeps one dispatch record"))
-        self.assertTrue(self.source("reference.md#Dispatch record").startswith(" in auto, main keeps one dispatch record"))
-        self.assertTrue(self.source("reference.zh-TW.md#派工紀錄").startswith("在 auto 下，主 Agent 為每份計畫保留一份派工紀錄"))
+        # Delegation dedupe 04: the reference explains the record and links to review state; its bullet stays scoped to
+        # auto.
+        self.assertTrue(self.source("reference.md#Dispatch record").startswith(" in auto, "))
+        self.assertTrue(self.source("reference.zh-TW.md#派工紀錄").startswith("在 auto 下，"))
         self.assertTrue(self.source("CONTEXT.md#Dispatch record").startswith(
             "Main's record of one Plan's review state in the Automatic flow"))
         # The toggle procedure and the installed policy name no dispatch record, so turning auto off writes none.
@@ -2604,31 +2313,6 @@ class DecisionAtTheEndTests(unittest.TestCase):
     ACCEPT = ("reference.md#Accept and land at the end", "reference.zh-TW.md#最後一次決定接受並合併")
     README_PAIRS = (
         (*ACCEPT,
-         "In auto, this becomes one decision at the end of the plan: after every claim's code review and verification, "
-         "the final check and the Adversarial reviews at the end have run or are recorded as not run, main confirms that "
-         "each claim's reading set is unchanged and asks you once, before landing or release, even when no claim needs "
-         "your accept-and-land decision.",
-         "在 auto 下，這會成為計畫最後的一個決定：在每個 claim 的程式碼審查與驗證、最終檢查與最後的對抗式審查都已執行或記為未執行之後，"
-         "主 Agent 會確認每個 claim 的閱讀範圍沒有改變，並在進入預設 branch 或 release 之前只問你一次，即使沒有 claim 需要你決定接受並合併也會問。"),
-        (*ACCEPT,
-         "Main builds the list from the dispatch record and what it observed itself in this session, never from another "
-         "record in the working tree such as a handoff, a ticket or the Follow-up record, and tells you where such a "
-         "record differs.",
-         "主 Agent 依派工紀錄與它自己在這個 session 觀察到的內容建立清單，絕不依據工作樹中的其他紀錄（例如交接、ticket 或後續紀錄），"
-         "並告訴你這類紀錄與清單的差異。"),
-        (*ACCEPT,
-         "The list states the final check's state at the commit to be landed; for each claim, the commit its passes "
-         "judged, each pass, each missing pass and each unresolved blocking finding; for each Security-critical claim, "
-         "its Adversarial review result at that commit, that is a BROKEN with its findings as the adversary stated them, "
-         "or by their one-line summary from the dispatch record when they were reported in an earlier session, an "
-         "INCONCLUSIVE with its gaps, or not run; each Security-critical fix claim, with its problem, a summary of the "
-         "fix and that it had no Adversarial review; the Follow-up record, which the list names without relying on it; "
-         "and what this flow does not check.",
-         "清單寫明最終檢查在要進入預設 branch 的 commit 上的狀態；每個 claim 的通過所審的 commit、每個通過、每個缺少的關卡與每個未解決的阻擋性問題；"
-         "每個安全關鍵 claim 在該 commit 上的對抗式審查結果，也就是 BROKEN 連同 adversary 原話列出的發現（若發現是在先前的 session 回報，"
-         "則列出派工紀錄中的一行摘要）、INCONCLUSIVE 連同它的缺口，或未執行；每個安全關鍵的修正用 claim，連同它的問題、修正摘要，"
-         "以及它沒有經過對抗式審查；後續紀錄，清單只寫明它而不依據它；以及這個流程不檢查的事項。"),
-        (*ACCEPT,
          "What this flow does not check is: a later claim's reviewer reads only its own reading set and may not know an "
          "earlier claim's design intent; a property of an earlier claim that no rerun acceptance check covers can be "
          "broken without the final check noticing, and acceptance items other than the primary acceptance are not rerun "
@@ -2643,58 +2327,6 @@ class DecisionAtTheEndTests(unittest.TestCase):
          "對抗式審查的發現不在這份計畫中修正；安全關鍵的修正用 claim 不經過對抗式審查；以及主 Agent 照派工紀錄所寫的內容採信，"
          "所以修改它就會改變主 Agent 相信的內容。"),
         (*ACCEPT, "A re-review you choose at the decision can recover part of this.", "你在這個決定中選擇的重審可以補回其中一部分。"),
-        (*ACCEPT,
-         "A blocking finding about a claim, reported after its passes and not yet resolved, is listed under that claim, "
-         "and that claim needs your accept-and-land decision.",
-         "某個 claim 通過之後才回報、尚未解決的阻擋性問題，會列在該 claim 底下，而該 claim 需要你決定接受並合併。"),
-        (*ACCEPT, "You choose to land the branch as it stands or to re-review named claims.",
-         "你可以選擇讓 branch 照現狀合併，或指名重審某些 claim。"),
-        (*ACCEPT,
-         "Landing as it stands is recorded as your accept-and-land decision only for the claims that need it: a claim "
-         "with a missing pass or an unresolved blocking finding, a Security-critical claim whose BROKEN you land with, "
-         "each finding named as a known vulnerability, a Security-critical claim whose Adversarial review is "
-         "INCONCLUSIVE or not run, a Security-critical fix claim, and, when the final check at the commit to be landed "
-         "failed or was not run, each claim landed with it.",
-         "照現狀合併只會為需要的 claim 記為你決定接受並合併：缺少關卡或有未解決阻擋性問題的 claim、你帶著 BROKEN 合併的安全關鍵 claim"
-         "（每個發現都寫明為已知漏洞）、對抗式審查為 INCONCLUSIVE 或未執行的安全關鍵 claim、安全關鍵的修正用 claim，"
-         "以及最終檢查在要進入預設 branch 的 commit 上失敗或未執行時，隨它一起合併的每個 claim。"),
-        (*ACCEPT,
-         "When nothing listed needs it, the question is only your authority to land, which landing needs anyway.",
-         "清單上沒有任何項目需要時，這個問題只是在問你是否授權合併，而合併本來就需要你的授權。"),
-        (*ACCEPT,
-         "A re-review follows the usual rules; when it changes the code, main runs the final check again, treats each "
-         "Adversarial review result that no longer judges the commit to be landed as not run, and asks you again.",
-         "重審依一般規則進行；重審改動了程式碼時，主 Agent 會重新執行最終檢查，把不再針對要進入預設 branch 的 commit 的對抗式審查結果視為未執行，"
-         "並再問你一次。"),
-        (*ACCEPT,
-         "Confirming part of the list, what is not a confirmation and what the decision covers stay as above.",
-         "只確認清單的一部分、什麼不算確認，以及決定涵蓋什麼，都照上面所說。"),
-        ("reference.md#Ticket status", "reference.zh-TW.md#Ticket 狀態",
-         "In auto, main sets a claim's ticket to a done value only after your decision at the end of the plan, even when "
-         "the claim has passed; until then the dispatch record holds the claim's pass state.",
-         "在 auto 下，即使 claim 已經通過，主 Agent 也要等你對計畫做出最後決定之後，才把它的 ticket 設成表示已完成的完成值；"
-         "在那之前，派工紀錄保存該 claim 的通過狀態。"),
-        ("reference.md#Dispatch record", "reference.zh-TW.md#派工紀錄",
-         "A note an active handoff still holds that a claim is unreviewed, unverified or pending acceptance still "
-         "restricts that claim.",
-         "進行中的交接仍記著某個 claim 未審查、未驗證或待驗收時，這筆記錄仍會限制該 claim。"),
-        ("reference.md#Your decisions", "reference.zh-TW.md#你的決定",
-         "In auto, the dispatch record holds your decisions with their scope and carries them into a resumed session in "
-         "the same way, and main tells you where an active handoff's record of a decision differs from it.",
-         "在 auto 下，派工紀錄保存你的決定和範圍，並以同樣方式把它們帶到恢復的 session；進行中交接對某個決定的記錄與它不同時，"
-         "主 Agent 會告訴你。"),
-    )
-    # Item 15 in both READMEs: off keeps the list built only from this session's review results.
-    README_OFF_PAIRS = (
-        (*ACCEPT,
-         "In `off`, main builds the list from the review results it received in this session, not from a record in the "
-         "working tree such as a handoff or the Follow-up record, and tells you where such a record differs.",
-         "在 `off` 下，主 Agent 依它在這個 session 收到的審查結果建立清單，不依據工作樹中的紀錄（例如交接或後續紀錄），"
-         "並告訴你這類紀錄與清單的差異。"),
-        (*ACCEPT,
-         "In `off`, main asks at the time above, only for claims that need your accept-and-land decision, and builds "
-         "the list only from the review results it received in this session.",
-         "在 `off` 下，主 Agent 在上面所說的時間點、只為需要你決定接受並合併的 claim 詢問，並只依它在這個 session 收到的審查結果建立清單。"),
     )
     # The cost explanation, rewritten for per-Claim timing, fixed passes, the final check's reruns and fix Claims, and
     # Adversarial review at the end; the per-claim bound stays one uninterrupted attempt.
@@ -2719,15 +2351,6 @@ class DecisionAtTheEndTests(unittest.TestCase):
          "claim and about 8 + 6N + 2S per plan; at K = 10 it is 110, 120 and about 1000 + 110N + 10S.",
          "預設 K = 2 時，一次不中斷的完成過程中每個 claim 最多 6 次、安全關鍵 claim 最多 8 次，整份計畫約 8 + 6N + 2S 次；"
          "K = 10 時則是 110 次、120 次與約 1000 + 110N + 10S 次。"),
-        ("reference.md#Cost", "reference.zh-TW.md#成本",
-         "Per-claim timing changes when a claim is reviewed, not how many calls it makes; fixed passes remove the "
-         "reviews that another claim's reviewed change used to reopen; the final check and its reruns of every claim's "
-         "primary acceptance are main's own runs and make no calls, while each fix after a failure adds calls as above; "
-         "and Adversarial review runs once at the end, with no fix after a BROKEN, which removes the rounds of code "
-         "review, verification and attack that a BROKEN used to start.",
-         "依 claim 審查的時機只改變 claim 何時審查，不改變它的呼叫次數；固定的通過省去了以往另一個 claim 已審查的變更所重新打開的審查；"
-         "最終檢查與它對每個 claim 主要驗收的重新執行是主 Agent 自己的執行，不算呼叫，但失敗後的每次修正會如上增加呼叫；"
-         "對抗式審查只在最後執行一次，BROKEN 之後不修正，省去以往 BROKEN 引發的程式碼審查、驗證與攻擊的循環。"),
         ("reference.md#Cost", "reference.zh-TW.md#成本",
          "A re-review you choose in the decision at the end adds the calls of the reviews you choose, and when it changes "
          "the code, the final check runs again.",
@@ -2797,8 +2420,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
                 pins.setdefault(place, []).extend(sentences)
         pins.setdefault("ADR 0008", []).append(self.ADR_0008_NOTE)
         pins.setdefault("ADR 0013", []).append(self.ADR_0013_NOTE)
-        for english_place, chinese_place, english, chinese in (self.README_PAIRS + self.README_OFF_PAIRS
-                                                               + self.COST_PAIRS):
+        for english_place, chinese_place, english, chinese in self.README_PAIRS + self.COST_PAIRS:
             pins.setdefault(english_place, []).append(english)
             pins.setdefault(chinese_place, []).append(chinese)
         return pins
@@ -2844,7 +2466,6 @@ class DecisionAtTheEndTests(unittest.TestCase):
         # review results, or if the auto rules stop being scoped to auto.
         self.assert_pinned(self.OFF)
         self.assert_pinned(self.OFF_KEPT)
-        self.assert_pairs(self.README_OFF_PAIRS)
         text = self.source(self.LABEL)
         self.assertLess(text.index(self.OFF[self.LABEL][0]), text.index(self.DECISION[self.LABEL][0]))
         for sentence in self.DECISION[self.LABEL][1:]:
