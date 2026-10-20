@@ -1,6 +1,6 @@
 # Delegation preview
 
-This procedure runs only through cc-feather:delegation-preview. It forecasts how main would carry out the given work, using the same rules as real dispatch: routing and dispatch from [delegation](../SKILL.md), model and effort resolution from [model](../../model/SKILL.md) and the Review mode from [plan review](plan-review.md). It cites those rules; where they change, the preview follows them.
+This procedure runs only through cc-feather:delegation-preview. It forecasts how main would carry out the given work, using the same rules as real dispatch: routing and dispatch from [delegation](../SKILL.md), model and effort resolution from [model](../../model/SKILL.md) and the Review mode from [plan review](plan-review.md). It cites those rules; where they change, the preview follows them. Before resolving a value or writing any part of the preview that depends on a rule review state owns, such as the Stop threshold, in off and in auto, main reads [review state](review-state.md) in full, every line, and when one read returns only part of the file it reads the rest before acting; a full read whose text is still in main's context serves here until main reads review state again, which it does after any context compaction, at the start of a new or resumed session and whenever it cannot quote the owner's sentence it is about to apply.
 
 ## Boundaries
 
