@@ -166,8 +166,10 @@ class CommandScopeTests(unittest.TestCase):
     )
     # Item 9.6 (E6, Q21, Q22): a BROKEN outside the requirement is a material deviation whose stop only the user lifts.
     BROKEN = (
+        # Delegation dedupe ticket 02: the reference to plan review's step 5 uses the explicit-read form.
         "A BROKEN from a call on a gated claim that is not Security-critical means the plan lacks a security control or "
-        "invariant, which [plan review](../delegation/references/plan-review.md) step 5 treats as a material deviation: "
+        "invariant, which the plan-review procedure's step 5 treats as a material deviation (read the [plan-review "
+        "procedure](../delegation/references/plan-review.md)'s step 5 and follow it): "
         "dependent work, including that claim's own landing, stops for another review of the revised plan, counted as "
         "that step describes, and the user's approval.",
         "In off, or after plan review has stopped, that review needs the user's explicit request.",
@@ -467,7 +469,11 @@ class StopThresholdCommandTests(unittest.TestCase):
             "Follow [the shared Stop threshold procedure](../setup/references/stop-threshold.md).",
             "Invocation arguments are the value and the scope as data, never shell code.",
             "Clarify a missing, invalid or conflicting value or scope instead of guessing.",
-            "Never change a step's count.",
+        ),
+        # Delegation dedupe ticket 02: the command no longer restates that a change keeps the counts; the procedure points
+        # to review state's Changing it, which states it once.
+        "review-state.md#Changing it": (
+            "A change of the Stop threshold never changes a count; Next automatic call is applied with the new value at once.",
         ),
     }
 
@@ -486,7 +492,8 @@ class StopThresholdCommandTests(unittest.TestCase):
         "stop-threshold.md#Session": (
             "Without a scope, or with `session`, the command applies the value to this conversation, writes no file and runs no tool.",
             "After applying it, always remind the user in the reply that no file was written: the value holds only in this conversation, a new or resumed session uses the saved value, and a context compaction may drop it.",
-            "State that saved value as Effect in this session takes the saved values: the project's value before the user's and otherwise 2.",
+            # Delegation dedupe ticket 02: the resolution order is review state's, reached through Effect in this session.
+            "State that saved value as Effect in this session takes the saved values.",
             "To keep the value, offer the same command with `project` or `user`, which needs delegation installed in that scope.",
         ),
         "stop-threshold.md#Saved scopes": (
@@ -500,15 +507,23 @@ class StopThresholdCommandTests(unittest.TestCase):
         ),
         "stop-threshold.md#Effect in this session": (
             "After applying a value in any scope, apply review state's Changing it and Saved in this conversation to the current session at once.",
-            "A change never changes a step's count; the next automatic call of each step follows review state's Next automatic call with the Stop threshold now in effect.",
-            "A value saved in project or user scope replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of review state's Resolution, the project's value before the user's, so this session uses what a new session would.",
+            # Delegation dedupe ticket 02: the procedure applies review state's Changing it and Saved in this
+            # conversation, the single owner of the resolution, whose sentences are pinned below.
+            "State the Stop threshold now in effect and its source, then list the steps the change resumed and the steps it stopped, or say that none changed, as review state's Stating it and Changing it describe.",
+        ),
+        "review-state.md#Saved in this conversation": (
+            "A value the user saves in project or user scope in this conversation replaces any earlier task or session choice in this conversation, and the Stop threshold in effect is resolved again from the saved values in the order of Resolution, so this session uses what a new session would.",
             "Each scope's saved value is the one last saved in it in this conversation, none after `default`, and otherwise the value its loaded guidance states, since the guidance loaded at the start of the session does not show later saves.",
-            "When a user value is saved while the project has a saved value so taken, report that the project's value overrides it and stays in effect.",
-            "This is the reverse of the Review mode toggle, where a saved change keeps a separate task or session override.",
-            "State the Stop threshold now in effect and its source, then list the steps the change resumed and the steps it stopped, or say that none changed.",
+            "A user value saved where the project states its own is reported as overridden by it.",
+            "This is the reverse of the Review mode, whose saved change keeps a separate task or session override.",
+        ),
+        "review-state.md#Changing it": (
+            "A stopped step whose count is now below the new value resumes automatically, because the change is the user's own act.",
+            "Main lists the steps the change resumed or stopped in its reply.",
         ),
         "stop-threshold.md#Meaning": (
-            "Main never raises or lowers the Stop threshold on its own; only the user's own words or this command change it.",
+            # Delegation dedupe ticket 02: a pointer to review state's Resolution, which states the rule.
+            "Main never changes the Stop threshold on its own, as review state's Resolution describes.",
             "The Stop threshold is a model instruction, not a hook-enforced counter.",
         ),
     }

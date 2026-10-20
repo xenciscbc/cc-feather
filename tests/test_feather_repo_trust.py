@@ -151,8 +151,10 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
         "every change in it are the user's own or content the user chose to accept, and reading and running it is the "
         "user's risk.",
         "Main and the roles read it with ordinary file tools and ordinary Git commands.",
-        "No review contains or detects hostile repository content, and saying where a change comes from does not stop "
-        "a review from running it; only a restriction the user states in this session does, as [review "
+        # Delegation dedupe ticket 02: the restated Execution condition became a pointer; review state's Execution states
+        # that only a restriction the user stated in this session stops execution and that provenance is not one (pinned
+        # in EXECUTION below).
+        "No review contains or detects hostile repository content; whether a review runs repository code is as [review "
         "state](references/review-state.md)'s Execution describes.",
     )
     # The two reads of S4, exactly.
@@ -195,22 +197,22 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
             "tracked file or a file the check depends on, or a read that counts as a change, makes that run a failed "
             "run, with the change as its output, while files the check writes elsewhere, such as its artefacts, do not.",
         ),
+        # Delegation dedupe ticket 02: plan review, the delegation skill's security analysis and its Dispatch point to
+        # What a gated pass judged and Serial within a working tree, whose sentences are pinned above.
         "plan-review.md#2": (
-            "Before the call, main runs the workspace reads [review state](review-state.md)'s What a gated pass judged "
-            "states, without requiring a clean workspace.",
+            "Before the call, main runs the workspace reads as [review state](review-state.md)'s What a gated pass judged "
+            "describes for plan review.",
         ),
         "plan-review.md": (
             "Analyst has no shell, but main still runs the same reads after each call, compares them with those before "
             "it, and preserves or reports any difference.",
         ),
         "SKILL.md#Select and prepare": (
-            "Main runs the workspace reads of [review state](references/review-state.md)'s What a gated pass judged "
-            "before and after a security analysis and reports any difference, without requiring a clean workspace.",
+            "Main runs the workspace reads around a security analysis as [review state](references/review-state.md)'s "
+            "What a gated pass judged describes.",
         ),
-        "SKILL.md#Dispatch": (
-            "Work the user runs in separate worktrees may proceed in parallel, each worktree serial in itself and still "
-            "checked as [review state](references/review-state.md)'s What a gated pass judged describes.",
-        ),
+        # The delegation skill's Dispatch no longer restates the worktree rule (delegation dedupe ticket 02); review
+        # state's sentence above holds it, and tests/test_feather_completion_criteria.py pins the skill's pointer.
         "code-review.md#2": (
             "Main prepares the call with the workspace reads [review state](review-state.md)'s What a gated pass judged "
             "states.",
@@ -316,9 +318,9 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
         ),
         "SKILL.md#Code review": (
             "When the installed policy, a session preference that turns automatic review on or an explicit user request "
-            "requires code review, read and follow [the code-review procedure](references/code-review.md) after the "
-            "primary acceptance passes, or is recorded as not run under [review state](references/review-state.md)'s "
-            "Execution, and before outcome verification.",
+            # Delegation dedupe ticket 02: code review's step 1, pinned below, owns running the primary acceptance first.
+            "requires code review, read and follow [the code-review procedure](references/code-review.md) before outcome "
+            "verification.",
         ),
         "code-review.md#1": (
             "Main runs it only as [review state](review-state.md)'s Execution allows; when main may not run it, main "
@@ -344,18 +346,13 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
             "describes; the adversary executes repository code only as that outcome allows.",
         ),
         "adversarial-review.md#3": (
-            "Dynamic probing follows [review state](review-state.md)'s Execution: it runs on this machine unless a "
-            "restriction the user stated in this session covers the call, and then only in an isolated environment the "
-            "user's own message names; without one, the role analyses statically and reports INCONCLUSIVE for what "
-            "needs execution.",
-            "Saying only where a change comes from is not a restriction.",
+            # Delegation dedupe ticket 02: step 3 points to Execution, whose sentences are pinned above.
+            "Dynamic probing follows [review state](review-state.md)'s Execution.",
             "The brief states the outcome of that determination.",
         ),
         "command": (
             "Targets named in the arguments enter the brief only as step 3 of the procedure describes, including its "
-            "rule that dynamic probing follows [review state](../delegation/references/review-state.md)'s Execution, so "
-            "it runs on this machine unless a restriction the user stated in this session covers the call, and then "
-            "only in an isolated environment the user's own message names.",
+            "rule that dynamic probing follows [review state](../delegation/references/review-state.md)'s Execution.",
         ),
         "reference.md#command": (
             "Dynamic probing follows the Execution rule of [review state](../skills/delegation/references/review-state.md): "

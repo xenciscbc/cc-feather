@@ -235,9 +235,10 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "review-state.md#Commit and completion": ("and for any claim an active handoff records as unreviewed, unverified or pending acceptance, main lands the claim",),
         "review-state.md#Existing handoff notes": ("An active handoff's record that a claim is unreviewed, unverified or pending acceptance restricts it under the acceptance gate whatever its wording,",),
         "review-state.md#Resumed sessions": ("as is a claim whose pending-acceptance note records an accept-and-land decision that still holds;",),
-        "code-review.md": ("When a later call passes it, replace that note with a pending-acceptance note naming what is still missing; change or remove the note only as [review state](review-state.md)'s Pending acceptance describes, so a deferral keeps it and a waiver stays visible in it.",
+        # Delegation dedupe ticket 02: the restatement became a pointer; the owner's sentence is pinned beside it.
+        "code-review.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes.",
                            "a claim an active handoff records as unreviewed, unverified or pending acceptance, and the handoff note changes after a pass as [review state](review-state.md)'s Pending acceptance describes in either mode;"),
-        "outcome-verification.md": ("When a later call passes it, replace that note with a pending-acceptance note naming what is still missing; change or remove the note only as [review state](review-state.md)'s Pending acceptance describes, so a deferral keeps it and a waiver stays visible in it.",),
+        "outcome-verification.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes.",),
         "reference.md#Not passed": (
             "After a pass, the note says the claim is pending acceptance and names what is still missing; it is removed only when the claim is landed, released or reported complete, or cancelled with its commits decided, so an approval alone, as from an explicit review in `off`, never lets the claim reach the default branch.",
             "A deferral keeps the note and a waiver stays recorded in it.",
@@ -295,12 +296,13 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         "review-state.md#What a gated pass judged": (
             "and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes.",
         ),
+        # Delegation dedupe ticket 02: the restatement became a pointer; the owner's sentence is pinned beside it.
         "code-review.md": (
-            "On a later call for the same claim, state whether the previous call completed with a verdict; the reviewer narrows its review only when the brief says it did, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "On a later call for the same claim, state whether the previous call completed with a verdict, as [review state](review-state.md)'s Completed calls and coverage describes.",
             "the range from the previously judged commit to the new one; when the previous call did not complete, supply instead the full range from the claim's base revision with earlier and partial findings as evidence.",
         ),
         "plan-review.md": (
-            "On a later call for the same plan, state whether the previous call completed with a verdict; analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "On a later call for the same plan, state whether the previous call completed with a verdict, as [review state](review-state.md)'s Completed calls and coverage describes.",
         ),
         "reviewer.md": ('When the brief says the previous call for this claim completed with a verdict, check only whether the earlier findings are closed and whether the fixes introduced regressions; do not expand into unrelated work. When it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the full scope from the base revision and treat earlier and partial findings supplied as evidence only.',),
         "analyst.md": ('When the brief says the previous call for this plan completed with a verdict, verify resolved blockers and material regressions introduced by the revision without expanding into unrelated work; when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only.',),
@@ -406,7 +408,9 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ("a plan review call fails, then the next call",
          "analyst reviews the whole plan",
          (("analyst.md", "when it does not, because that call failed, was interrupted, broke protocol or returned no verdict, review the whole plan and treat earlier and partial findings supplied as evidence only."),
-          ("plan-review.md", "analyst narrows its review only when the brief says it did, and otherwise reviews the whole plan,")),
+          # Delegation dedupe ticket 02: plan review points to the owner, which states the whole-plan rule.
+          ("plan-review.md", "state whether the previous call completed with a verdict, as [review state](review-state.md)'s Completed calls and coverage describes."),
+          ("review-state.md#Completed calls and coverage", "After a call that did not complete, the next call reviews the claim's full scope from its base revision (for plan review, the whole plan),")),
          (("analyst.md", "On a second review, verify resolved blockers"),)),
         ("as many consecutive automatic calls as the Stop threshold fail (budget exhausted)",
          "the step stops and waits for the user's explicit request; nothing changes the budget",
@@ -416,13 +420,17 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
         ("off mode, an active handoff records the claim as unreviewed, an explicit code review returns APPROVED",
          "the note becomes pending acceptance and the claim stays gated; no verification starts",
          (("review-state.md#Pending acceptance", "A gated claim stays gated after either single pass, and a Security-critical claim after both until it also has a valid HELD."),
-          ("code-review.md", "When a later call passes it, replace that note with a pending-acceptance note naming what is still missing;"),
-          ("code-review.md", "An explicit user request for code review applies in either mode and does not start verification."),
+          # Delegation dedupe ticket 02: code review points to Pending acceptance and What an explicit call runs.
+          ("code-review.md", "Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes."),
+          ("review-state.md#Pending acceptance", "When a pass resolves an active handoff's unreviewed or unverified note for a gated claim, main replaces it with a note that the claim is pending acceptance,"),
+          ("code-review.md", "An explicit user request for code review runs as [review state](review-state.md)'s What an explicit call runs describes."),
+          ("review-state.md#What an explicit call runs", "An explicit call runs only the requested step;"),
           ("reference.md#Not passed", "so an approval alone, as from an explicit review in `off`, never lets the claim reach the default branch.")),
          (("code-review.md", 'Once the claim is resolved, because a later call passes it or the user decides'),)),
         ("off mode, an active handoff records the claim as unverified, an explicit verification returns CONFIRMED",
          "the note becomes pending acceptance and the claim stays gated",
-         (("outcome-verification.md", "When a later call passes it, replace that note with a pending-acceptance note naming what is still missing;"),
+         (("outcome-verification.md", "Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes."),
+          ("review-state.md#Pending acceptance", "When a pass resolves an active handoff's unreviewed or unverified note for a gated claim, main replaces it with a note that the claim is pending acceptance,"),
           ("review-state.md#Pending acceptance", "A gated claim stays gated after either single pass, and a Security-critical claim after both until it also has a valid HELD.")),
          (("outcome-verification.md", 'Once the claim is resolved, because a later call passes it or the user decides'),)),
         ("both passes, not yet landed",
@@ -447,7 +455,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
          ()),
         ("negative control: an explicit code review of ungated work in off",
          "it judges the workspace change and starts no verification; nothing is committed for it",
-         (("code-review.md", "An explicit user request for code review applies in either mode and does not start verification."),
+         (("code-review.md", "An explicit user request for code review runs as [review state](review-state.md)'s What an explicit call runs describes."),
+          ("review-state.md#What an explicit call runs", "An explicit call runs only the requested step;"),
           ("review-state.md", "A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.")),
          ()),
         ("the user accepts a gated claim that lacks a pass (accept and land)",
@@ -572,8 +581,10 @@ class PostFixReviewTests(unittest.TestCase):
         "When the previous verification call completed, use the next call to recheck the original failure plus a bounded "
         "regression check; after a verification call that did not complete, the next call verifies the claim's full "
         "acceptance rather than only the original failure.",
+        # Delegation dedupe ticket 02: the pointer to step 7 uses the explicit-read form.
         "A fix after BROKEN also comes to this procedure once code review approves it, with a brief that carries the "
-        "adversary's findings as [Adversarial review](adversarial-review.md) step 7 describes.",
+        "adversary's findings as the Adversarial review procedure's step 7 describes: read the [Adversarial review "
+        "procedure](adversarial-review.md)'s step 7 and follow it.",
         "After a BROKEN, every public or possibly public record main writes from the findings or from the verifier's "
         "report, such as those [code review](code-review.md) lists for the review of a fix, follows [Adversarial "
         "review](adversarial-review.md) step 10 and gets only a summary unless the user agrees; the verifier's report to "
@@ -619,7 +630,9 @@ class PostFixReviewTests(unittest.TestCase):
 
     def test_code_review_states_the_fix_rule_once(self):
         self.assert_pinned({"code-review.md#fix": (self.FIX_ENTRY, self.FIX_RULE)})
-        self.assertIn("Its count continues from where it stands", self.source("code-review.md#fix"))
+        # Delegation dedupe ticket 02: the count of the fix's review points to review state's Reopened calls.
+        self.assertIn("Its count continues as [review state](review-state.md)'s Reopened calls describes",
+                      self.source("code-review.md#fix"))
         # Stated once: no other procedure or role restates the narrowed range or the no-preceding-review case.
         for path in sorted(self.REFERENCES.glob("*.md")) + [self.AGENTS / "reviewer.md", self.AGENTS / "verifier.md"]:
             text = path.read_text(encoding="utf-8")
@@ -741,7 +754,9 @@ class PostFixReviewTests(unittest.TestCase):
          "the brief says the previous call did not complete and the next call verifies the full acceptance",
          (("outcome-verification.md#2", VERIFICATION_STEP_2),
           ("outcome-verification.md#4", VERIFICATION_STEP_4[1]),
-          ("outcome-verification.md#3", "failed, interrupted and protocol-failure calls count,")),
+          # Delegation dedupe ticket 02: outcome verification points to review state's count, which names these calls.
+          ("outcome-verification.md#3", "as [review state](review-state.md)'s Consecutive non-pass count and Transitions describe"),
+          ("review-state.md", "Automatic calls in a row that did not pass, including failed, interrupted and protocol-failure calls.")),
          (("outcome-verification.md", "Use the next call to recheck the original failure plus a bounded regression check, and send it"),)),
     )
 
@@ -786,11 +801,13 @@ class StopThresholdProceduresTests(unittest.TestCase):
             "When main cannot establish whether a task or session choice exists, for example after context compaction, it treats the Stop threshold as unknown, as Unknown state does for counts: affected steps are treated as stopped and main asks the user.",
             "A step whose count is below 2 is not affected, since no Stop threshold is lower.",
         ),
+        # Delegation dedupe ticket 02: plan review and the delegation skill point to review state's Stop threshold,
+        # whose owner sentences are pinned above and under Stating it.
         "plan-review.md": (
-            "Resolve the Stop threshold in effect, the number of consecutive automatic calls without a pass that stops each step, as [review state](review-state.md) describes, and state it and its source whenever a review decision comes up.",
+            "Resolve and state the Stop threshold in effect as [review state](review-state.md)'s Stop threshold describes.",
         ),
         "delegation SKILL.md": (
-            "Each step of the automatic flow stops at the Stop threshold, which main resolves, states and applies to a change as [review state](references/review-state.md) describes and never changes on its own.",
+            "Each step of the automatic flow stops at the Stop threshold, as [review state](references/review-state.md)'s Stop threshold describes.",
         ),
     }
 
@@ -806,11 +823,12 @@ class StopThresholdProceduresTests(unittest.TestCase):
             "A count that reaches the Stop threshold in effect without READY stops automatic submission (step 6).",
         ),
         "plan-review.md#6": (
+            # Delegation dedupe ticket 02: step 6 points to Next automatic call and Clearing a stop, pinned under NEXT_CALL.
             "Once the count reaches the Stop threshold in effect without READY, stop automatic submission.",
-            "While the count stays at or above the Stop threshold, further review requires an explicit user request, and an explicit call is outside the count; an explicit READY clears the stop and lets work continue, as [review state](review-state.md) describes.",
+            "Further review then follows [review state](review-state.md)'s Next automatic call and Clearing a stop.",
         ),
         "code-review.md#3": (
-            "A count that reaches the Stop threshold in effect without APPROVED stops automatic review (step 6); the Stop threshold is resolved and stated as [review state](review-state.md) describes.",
+            "A count that reaches the Stop threshold in effect without APPROVED stops automatic review (step 6).",
         ),
         "code-review.md#6": (
             "When the count reaches the Stop threshold in effect without APPROVED, for any reason (a retry counts as a call), the claim is unreviewed: stop automatic review, do not start automatic outcome verification, do not land it on the default branch, release it or report it complete, report its open findings and require an explicit user request for another call.",
@@ -822,11 +840,13 @@ class StopThresholdProceduresTests(unittest.TestCase):
             "When the count reaches the Stop threshold in effect without CONFIRMED, stop automatic verification, report the claim as unverified with the findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
         ),
         "adversarial-review.md#4": (
-            "A count that reaches the Stop threshold in effect without HELD stops automatic Adversarial review (step 8).",
+            # Delegation dedupe ticket 02, D3.
+            "A count that reaches the Stop threshold in effect without an automatic HELD main accepts under step 6 stops automatic Adversarial review (step 8).",
         ),
         "adversarial-review.md#5": ("Either next call counts toward the stop of step 4.",),
         "adversarial-review.md#8": (
-            "When the count reaches the Stop threshold in effect without HELD, stop automatic Adversarial review, report the claim with its Adversarial review missing and its open findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
+            # Delegation dedupe ticket 02, D3.
+            "When the count reaches the Stop threshold in effect without an automatic HELD main accepts under step 6, stop automatic Adversarial review, report the claim with its Adversarial review missing and its open findings, do not land it on the default branch, release it or report it complete, and require an explicit user request for another call.",
         ),
     }
 
@@ -849,12 +869,13 @@ class StopThresholdProceduresTests(unittest.TestCase):
         ),
         "plan-review.md#5": (
             "The same applies when implementation deviates from the plan: a material deviation stops dependent work for another review of the revised plan, counted from the reset of the last automatic READY, or from the unchanged count after an explicit READY that cleared a stop, and the user's approval.",
-            "That review needs the user's explicit request exactly while the count is at or above the Stop threshold in effect, as [review state](review-state.md)'s Next automatic call describes.",
+            # Delegation dedupe ticket 02: a pointer to the one rule.
+            "Whether that review needs the user's explicit request follows [review state](review-state.md)'s Next automatic call.",
             "When the count is already at or above the Stop threshold, report the deviation and keep dependent work stopped; another review then needs an explicit user request, as in step 6.",
         ),
+        # Delegation dedupe ticket 02: code review points to Reopened calls and Next automatic call, pinned above.
         "code-review.md": (
-            "Its count continues from where it stands, which is zero after an automatic APPROVED and unchanged after an explicit APPROVED that cleared a stop.",
-            "The review of the fix follows [review state](review-state.md)'s Next automatic call: a reopened automatic call needs the user's explicit request exactly while that count is at or above the Stop threshold in effect.",
+            "Its count continues as [review state](review-state.md)'s Reopened calls describes, and the review of the fix follows its Next automatic call.",
         ),
         "outcome-verification.md#3": (
             "Whether the next automatic call, such as the recheck after a fix or a reopened verification, needs the user's explicit request follows [review state](review-state.md)'s Next automatic call.",
@@ -897,8 +918,9 @@ class StopThresholdProceduresTests(unittest.TestCase):
         "review-state.md#Not counted": (
             "The security analysis before plan review is not a counted step, and the Stop threshold does not apply to it.",
         ),
+        # Delegation dedupe ticket 02: plan review points to the owner pinned above.
         "plan-review.md": (
-            "The security analysis is not a counted step, and the Stop threshold does not apply to it.",
+            "The security analysis is not counted, as [review state](review-state.md)'s Not counted describes.",
         ),
     }
 
@@ -1032,7 +1054,8 @@ class StopThresholdProceduresTests(unittest.TestCase):
         self.assertEqual(self.source("review-state.md").count(self.NEXT_CALL_RULE), 1)
         for name in ("plan-review.md", "code-review.md", "outcome-verification.md", "adversarial-review.md"):
             with self.subTest(procedure=name):
-                self.assertIn("[review state](review-state.md)'s Next automatic call", self.source(name))
+                # Delegation dedupe ticket 02: code review names the owner once for both of its pointers.
+                self.assertRegex(self.source(name), r"\[review state\]\(review-state\.md\)'s (?:Reopened calls describes, and the review of the fix follows its )?Next automatic call")
 
     def test_a_change_of_the_stop_threshold_and_stating_it(self):
         self.assert_pinned(self.CHANGE)
@@ -1165,9 +1188,10 @@ class ReviewerInconclusiveTests(unittest.TestCase):
             "A second review, narrowed to the earlier findings and the fixes, and the range from the previously judged commit follow only when the previous call completed.",
             "The code review after an INCONCLUSIVE covers every gap that call named, even though that call completed: a narrowed follow-up never closes a gap it did not examine, and no APPROVED is given while a named gap is unexamined.",
         ),
+        # Delegation dedupe ticket 02: the brief requirements stay at code review and point to the owner pinned above.
         "code-review.md#2": (
-            "On a later call for the same claim, state whether the previous call completed with a verdict; the reviewer narrows its review only when the brief says it did, as [review state](review-state.md)'s Completed calls and coverage describes.",
-            "When the previous call answered INCONCLUSIVE, the brief names every gap that call named, and the next call covers each of them even though that call completed; a narrowed follow-up never closes a gap it did not examine, and no APPROVED is given while a named gap is unexamined.",
+            "On a later call for the same claim, state whether the previous call completed with a verdict, as [review state](review-state.md)'s Completed calls and coverage describes.",
+            "When the previous call answered INCONCLUSIVE, the brief names every gap that call named, as [review state](review-state.md)'s Completed calls and coverage describes.",
         ),
         "reviewer.md": (
             "When the previous call answered INCONCLUSIVE, cover every gap it named, even though that call completed: a narrowed review never closes a gap you did not examine, and you do not answer APPROVED while a named gap is unexamined.",

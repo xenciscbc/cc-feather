@@ -114,35 +114,28 @@ class PerClaimTimingTests(unittest.TestCase):
             "claim with no dependency still waits for a review call running in the same working tree.",
             "Which claim starts next follows Dependent claims.",
         ),
+        # Delegation dedupe ticket 02: the procedures and the delegation skill point to Per-claim timing, pinned above,
+        # and the once-pins of tests/test_feather_delegation_dedupe.py keep its conditions out of them.
         "plan-review.md": (
-            "Once a claim is implemented, its reviews judge it against the completion criteria [review "
-            "state](review-state.md) states: its acceptance as written is met; existing behaviour is not broken, shown by "
-            "a failing test or a reproduction judged against the claim's base revision; it introduces no security problem "
-            "and no data loss; and it has no deviation from the plan.",
-            "In auto, each claim of the reviewed plan gets [code review](code-review.md), then [outcome "
-            "verification](outcome-verification.md) and, for a Security-critical claim, then [Adversarial "
-            "review](adversarial-review.md) before main reports it complete; its code review and outcome verification "
-            "run once that claim is implemented and committed, without waiting for the rest of the plan, as [review "
-            "state](review-state.md)'s Per-claim timing describes.",
-            "This is the only review timing in auto, and no setting or plan statement selects another; a claim that "
-            "depends on another starts as [review state](review-state.md)'s Dependent claims describes.",
+            "Once a claim is implemented, its reviews judge it against [review state](review-state.md)'s Completion "
+            "criteria.",
+            "In auto, each claim of the reviewed plan then gets [code review](code-review.md) and [outcome "
+            "verification](outcome-verification.md) as [review state](review-state.md)'s Per-claim timing describes, and "
+            "a claim that depends on another starts as [review state](review-state.md)'s Dependent claims describes; for "
+            "a Security-critical claim's Adversarial review, read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "code-review.md": (
-            "In auto, a claim's code review runs once that claim is implemented and committed, without waiting for the "
-            "rest of the plan, as [review state](review-state.md)'s Per-claim timing describes; this is the only review "
-            "timing in auto.",
+            "In auto, a claim gets code review before its [outcome verification](outcome-verification.md), as [review "
+            "state](review-state.md)'s Per-claim timing describes.",
         ),
         "outcome-verification.md": (
-            "In auto, a claim's outcome verification runs once that claim is implemented and committed and its code "
-            "review has returned APPROVED, without waiting for the rest of the plan, as [review "
-            "state](review-state.md)'s Per-claim timing describes; this is the only review timing in auto.",
+            "In auto, a claim gets outcome verification after its [code review](code-review.md), as [review "
+            "state](review-state.md)'s Per-claim timing describes.",
         ),
         "SKILL.md#Plan review": (
-            "In auto, each claim of plan-driven work also needs code review and then outcome verification once that "
-            "claim is implemented and committed, and a Security-critical claim then Adversarial review; in off, an "
-            "explicit plan-review request does not imply them.",
-            "This per-claim timing is the only review timing in auto, and reviews and implementation in one working tree "
-            "stay serial.",
+            "In auto, each claim of plan-driven work then gets code review and outcome verification as [review state](references/review-state.md)'s Per-claim timing describes, and a claim that depends on another starts as [review state](references/review-state.md)'s Dependent claims describes;",
+            "In off, what an explicit plan-review request runs is as [review state](references/review-state.md)'s What "
+            "an explicit call runs describes.",
         ),
     }
 
@@ -155,13 +148,9 @@ class PerClaimTimingTests(unittest.TestCase):
             "Where a plan states no dependencies between its claims, main follows the plan's order and treats each claim "
             "as depending on those before it.",
         ),
+        # Delegation dedupe ticket 02 (inventory K1): the delegation skill's pointer to Dependent claims stays auto-only.
         "SKILL.md#Plan review": (
-            "A claim that lists another under `Blocked by`, or otherwise depends on it as its plan states, starts only "
-            "after that claim has a valid APPROVED and "
-            "CONFIRMED, a plan that states no dependencies is followed in order, and when a claim stops, the claims that "
-            "depend on it stop and main asks the user, who may let named dependent claims proceed as a deferral of the "
-            "stopped claim, as [review state](references/review-state.md)'s Per-claim timing and Dependent claims "
-            "describe.",
+            "In auto, each claim of plan-driven work then gets code review and outcome verification as [review state](references/review-state.md)'s Per-claim timing describes, and a claim that depends on another starts as [review state](references/review-state.md)'s Dependent claims describes;",
         ),
     }
 
@@ -430,8 +419,9 @@ class FixedPassesTests(unittest.TestCase):
             "judged by another claim's completed code review and outcome verification of the same plan, both of which "
             "passed; a fix claim counts as another claim.",
             "A Blocking finding in that other claim's reviews is that claim's to fix.",
-            "Which files of another claim's acceptance checks a claim may change, and what its code review then checks, "
-            "are as [code review](code-review.md) step 2 describes.",
+            # Delegation dedupe ticket 02: the reference to code review's step 2 uses the explicit-read form.
+            "For which files of another claim's acceptance checks a claim may change, and what its code review then "
+            "checks, read the [code-review procedure](code-review.md)'s step 2 and follow it.",
             "Any other change keeps the file-level rules above, such as an edit outside the plan's claims, a rebase, an "
             "environment or test target change, a change to the claim's reading set, or a change whose claim ends without "
             "both passes.",
@@ -472,8 +462,9 @@ class FixedPassesTests(unittest.TestCase):
             "The installed reviewer definition is unchanged: the brief states this check.",
         ),
         "review-state.md#Reading set": (
-            "In auto, a code review brief also carries another claim's acceptance where [code review](code-review.md) "
-            "step 2 adds it for a claim that changes that claim's acceptance checks.",
+            "In auto, a code review brief also carries another claim's acceptance where the code-review procedure's step "
+            "2 adds it for a claim that changes that claim's acceptance checks: read the [code-review "
+            "procedure](code-review.md)'s step 2 and follow it.",
         ),
     }
 
@@ -651,11 +642,12 @@ class FixedPassesTests(unittest.TestCase):
     def test_another_claims_acceptance_checks_get_a_weakening_check(self):
         self.assert_pinned(self.ACCEPTANCE_CHECKS)
         # The brief's rule that it carries only the recorded reading set still stands beside the stated exception.
-        self.assertIn("Before dispatch, main confirms that the reading set is unchanged and supplies only the reading "
-                      "set it recorded, as [review state](review-state.md)'s Reading set describes.",
+        # Delegation dedupe ticket 02: code review points to the owner, which states the rule beside its exceptions.
+        self.assertIn("Main supplies the recorded reading set as [review state](review-state.md)'s Reading set describes.",
                       self.source("code-review.md"))
-        self.assertIn("and the briefs use only the recorded reading set, except as [adversarial review]"
-                      "(adversarial-review.md) step 2 adds for a claim that owns a composed review.",
+        self.assertIn("and the briefs use only the recorded reading set, except as the Adversarial review procedure's "
+                      "step 2 adds for a claim that owns a composed review: read the [Adversarial review "
+                      "procedure](adversarial-review.md)'s step 2 and follow it.",
                       self.source("review-state.md#Reading set"))
 
     def test_glossary_states_fixed_passes(self):
@@ -754,9 +746,10 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
     FINAL = "review-state.md#Final check"
 
     # S3 and Acceptance item 7: the reading-set confirmation before the final check, and the reruns.
+    # Delegation dedupe ticket 02: the reference to plan review's step 5 uses the explicit-read form.
     S3 = ("In auto, before the final check main confirms that each claim's reading set is unchanged from its recorded "
-          "content or hash, as Reading set describes; a change the user did not authorise is a material deviation, as "
-          "[plan review](plan-review.md) step 5 describes.")
+          "content or hash, as Reading set describes; a change the user did not authorise is a material deviation: read "
+          "the [plan-review procedure](plan-review.md)'s step 5 and follow it.")
     RERUNS = ("In auto, the final check also reruns every claim's primary acceptance at the commit to be landed or "
               "tagged, taken from the claim's recorded reading set, within the same Execution rules.")
 
@@ -777,7 +770,8 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
         "for a defect [code review](code-review.md) step 5 assigns to a fix claim, that the reported defect is fixed; its "
         "reading set is the plan's text with that failure or defect; and it gets code review and outcome verification "
         "with counts of its own.",
-        "Main adds a fix claim without asking, as it makes a fix today: it gets no plan review and no ticket, and main "
+        # Delegation dedupe ticket 02, H10.
+        "Main adds a fix claim without asking: it gets no plan review and no ticket, and main "
         "keeps it in the session's state and in any active handoff; a fix beyond the plan's scope is a Deviation, as "
         "Deviations describes.",
         "A fix claim is classified as Security-critical by what it changes, and main still does not ask: a fix claim that "
@@ -787,9 +781,10 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
     )
 
     # S4: a fix Claim never changes what it is judged by.
+    # Delegation dedupe ticket 02: the reference to code review's step 2 uses the explicit-read form.
     S4 = ("A fix claim never changes the check whose failure it fixes or another claim's acceptance checks, the files "
-          "[code review](code-review.md) step 2 describes; a fix that needs to is a Deviation and stops main to ask the "
-          "user.")
+          "the code-review procedure's step 2 describes: read the [code-review procedure](code-review.md)'s step 2 and "
+          "follow it; a fix that needs to is a Deviation and stops main to ask the user.")
 
     # Acceptance item 14 for the final check, and the residual risks "Check output" and "Security-critical fix Claims".
     LIMITS = (
@@ -827,21 +822,19 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
             "the plan's base revision; such a finding is a defect of the plan, handled as [code review](code-review.md) "
             "step 5 describes, or, for a broken security invariant, a BROKEN of the claim whose invariant it breaks.",
         ),
+        # Delegation dedupe ticket 02: the brief requirement stays in each procedure; who judges a pre-existing finding
+        # is review state's Evidence for a regression, pinned above.
         "code-review.md#2": (
             "In auto, every such brief also names the plan's base revision beside the claim's base revision, as that "
-            "bullet describes, and main, not the reviewer, judges from Git whether a finding the reviewer reports as "
-            "pre-existing was introduced after it.",
+            "bullet describes.",
         ),
         "outcome-verification.md#2": (
             "In auto, every such brief also names the plan's base revision beside the claim's base revision, as that "
-            "bullet describes, and main, not the verifier, judges from Git whether a finding the verifier reports as "
-            "pre-existing was introduced after it.",
+            "bullet describes.",
         ),
         "adversarial-review.md#2": (
-            "In auto, every such brief also names the plan's base revision beside the claim's base revision, as that "
-            "bullet describes, and main, not the adversary, judges from Git whether a vulnerability the adversary "
-            "reports as pre-existing was introduced after it; one introduced after it that breaks a security invariant "
-            "is a BROKEN of the claim whose invariant it breaks, not separate pre-existing work.",
+            "In auto, every such brief also names the plan's base revision beside the claim's base revision, and main "
+            "judges a vulnerability the adversary reports as pre-existing, as that bullet describes.",
         ),
     }
     EARLIER_CLAIM = {
@@ -1109,8 +1102,9 @@ class FinalCheckAndFixClaimsTests(unittest.TestCase):
         # The claim's base revision is still named beside it in every procedure.
         for place in ("code-review.md#2", "outcome-verification.md#2", "adversarial-review.md#2"):
             with self.subTest(place=place):
-                self.assertIn("names the claim's base revision, which main establishes itself from Git in this session",
-                              self.source(place))
+                # Delegation dedupe ticket 02: how main establishes it is review state's, pinned in S1.
+                self.assertIn("names the claim's base revision, as [review state](review-state.md)'s Evidence for a "
+                              "regression describes", self.source(place))
 
     def test_findings_about_an_earlier_claim_follow_the_plans_base_revision(self):
         self.assert_pinned(self.EARLIER_CLAIM)
@@ -1263,25 +1257,23 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "call the user requests before then still runs, against the commit the user names, or HEAD when the user names "
             "none, with the workspace equal to that commit, but it counts as not run.",
         ),
+        # Delegation dedupe ticket 02: outcome verification, the delegation skill and plan review point to the
+        # procedure's step 1 and At the final commit in the explicit-read form; the procedure's sentences, the fix-Claim
+        # exception included, are pinned above.
         "outcome-verification.md": (
-            "In off, for a Security-critical claim, [Adversarial review](adversarial-review.md) follows a valid CONFIRMED "
-            "at the same commit before main reports it complete; in auto, it runs once the final check has passed at the "
-            "final commit, as its At the final commit describes.",
+            "For when a Security-critical claim's Adversarial review follows, read the [Adversarial review "
+            "procedure](adversarial-review.md)'s step 1 and At the final commit and follow them.",
         ),
         "outcome-verification.md#6": (
             "With CONFIRMED, continue to completion under the existing authority; for a Security-critical claim in the "
-            "automatic flow, [Adversarial review](adversarial-review.md) follows at the final commit once the final check "
-            "has passed there, as its At the final commit describes.",
+            "automatic flow, read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
-        # The carried note: the delegation skill and plan review state the fix-Claim exception for auto.
         "SKILL.md#Plan review": (
-            "In auto, that Adversarial review runs once, at the final commit after the final check has passed there, for "
-            "each Security-critical claim except a fix claim, which gets none, as [the adversarial-review "
-            "procedure](references/adversarial-review.md) describes.",
+            "for a Security-critical claim's Adversarial review, read the [adversarial-review "
+            "procedure](references/adversarial-review.md)'s At the final commit and follow it.",
         ),
         "plan-review.md": (
-            "In auto, a Security-critical claim's Adversarial review runs once, at the final commit after the final check "
-            "has passed there, and a fix claim gets none, as [Adversarial review](adversarial-review.md) describes.",
+            "for a Security-critical claim's Adversarial review, read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
     }
 
@@ -1299,25 +1291,23 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at "
             "the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and "
             "CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an "
-            "explicit call made before then, counts as not run, as [adversarial review](adversarial-review.md)'s At the "
-            "final commit describes.",
+            "explicit call made before then, counts as not run: read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "review-state.md#What a pass covers": (
             "In auto, a Security-critical claim's HELD judges only the commit it attacked, the commit to be landed: when "
             "the commit to be landed is another commit, the claim's Adversarial review result counts as not run, so the "
             "claim needs accept and land or a new call, and a BROKEN's findings stay listed, carried in every later "
-            "call's brief and treated as open, until a HELD at the commit to be landed that covered them replaces them, as "
-            "[adversarial review](adversarial-review.md)'s At the final commit describes.",
+            "call's brief and treated as open, until a HELD at the commit to be landed that covered them replaces them: "
+            "read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "review-state.md#Clearing a stop": (
             "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the "
-            "workspace equal to it, does not clear a stop either, since it counts as not run, as [adversarial "
-            "review](adversarial-review.md)'s At the final commit describes.",
+            "workspace equal to it, does not clear a stop either, since it counts as not run: read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "review-state.md#What an explicit call runs": (
             "In auto, an explicit Adversarial review made before the final check passed at the commit to be landed, with "
-            "the workspace equal to it, counts as not run even after the claim's valid APPROVED and CONFIRMED, as "
-            "[adversarial review](adversarial-review.md)'s At the final commit describes.",
+            "the workspace equal to it, counts as not run even after the claim's valid APPROVED and CONFIRMED: "
+            "read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "command#classifying": (
             "In auto, such a call needs, in place of a valid APPROVED and a valid CONFIRMED at the same commit, the final "
@@ -1436,8 +1426,9 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         ),
         "review-state.md#What a gated pass judged": (
             "In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid "
-            "CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; "
-            "an explicit one the user requests before them runs but does not count.",
+            "CONFIRMED at that same commit, so it follows them: read the [Adversarial review "
+            "procedure](adversarial-review.md)'s step 1 and follow it; an explicit one the user requests before them runs "
+            "but does not count.",
         ),
         "command#Before the passes": (
             "A call in off for a Security-critical claim the gate covers that does not yet have a valid APPROVED and a "
@@ -1455,8 +1446,9 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "review](adversarial-review.md) procedure.",
         ),
         "review-state.md#Security findings": (
-            "The adversary's BROKEN is handled as the [adversarial review](adversarial-review.md) procedure describes, and "
-            "a pre-existing vulnerability still becomes separate work in the project's tracker, as its step 10 describes.",
+            # Delegation dedupe ticket 02: both references to the procedure use the explicit-read form.
+            "For the adversary's BROKEN, read the [Adversarial review procedure](adversarial-review.md) and follow it; for a "
+            "pre-existing vulnerability, read its step 10 and follow it.",
         ),
     }
 
@@ -1828,8 +1820,9 @@ class DispatchRecordTests(unittest.TestCase):
             "its classification, its reading set's hash, its base revision, and each review call's judged commit and "
             "verdict with a one-line summary; each fix claim with its problem and a summary of the fix; the branches "
             "main created for the work; and the user's decisions with their scope.",
-            "It holds no counts, and no exploit details or secrets, which follow [adversarial "
-            "review](adversarial-review.md) step 10.",
+            # Delegation dedupe ticket 02: the reference to step 10 uses the explicit-read form.
+            "It holds no counts, and no exploit details or secrets, which follow the Adversarial review procedure's step "
+            "10: read the [Adversarial review procedure](adversarial-review.md)'s step 10 and follow it.",
             "Main writes it only between review calls, as Serial within a working tree states for handoff records, and "
             "keeps it out of Git: when no rule already ignores it, main adds `/.feather/dispatch/` to `.gitignore`, and "
             "it never stages or commits the record.",
@@ -1837,13 +1830,9 @@ class DispatchRecordTests(unittest.TestCase):
             "In auto it replaces an active handoff's notes as the place review state crosses sessions; an active handoff "
             "records progress and names the dispatch record.",
         ),
+        # Delegation dedupe ticket 02: the delegation skill points to Dispatch record, whose sentences are pinned above.
         "SKILL.md#Plan review": (
-            "In auto, main keeps one dispatch record for each plan of plan-driven work, at `.feather/dispatch/<name>.md`, "
-            "named after the plan, holding the plan, its base revision and READY, each claim's classification, reading "
-            "set hash, base revision and review calls with their judged commits and verdicts, the fix claims, the "
-            "branches main created and the user's decisions, but no counts, exploit details or secrets; main writes it "
-            "only between review calls, keeps it out of Git and never stages or commits it, as [review "
-            "state](references/review-state.md)'s Dispatch record describes.",
+            "In auto, main keeps one dispatch record for each plan of plan-driven work, and a resumed session, and main after a context compaction, take the plan's review state from it, as [review state](references/review-state.md)'s Dispatch record and Resumed sessions describe.",
         ),
     }
 
@@ -1869,7 +1858,8 @@ class DispatchRecordTests(unittest.TestCase):
             "dispatch record, as Dispatch record describes, and they count as if received in this session: a claim is "
             "not reviewed again for having passed in an earlier session, and implemented work whose READY the record "
             "holds does not ask again under Implemented before plan review.",
-            "Counts still restart in each session, as ADR 0002 decided, and the Stop threshold in effect and the final "
+            # Delegation dedupe ticket 02, H13.
+            "Counts still restart in each session, and the Stop threshold in effect and the final "
             "check's state come only from this session, so main runs the final check again in the new session before "
             "landing, as Final check describes.",
             "Where the dispatch record lacks what main needs, Unknown state applies.",
@@ -1890,60 +1880,32 @@ class DispatchRecordTests(unittest.TestCase):
             "decisions from it, as Resumed sessions describes, while a note an active handoff still holds keeps "
             "restricting the claim as Existing handoff notes describes.",
         ),
+        # Delegation dedupe ticket 02: every place that restated the cross-session rules points to review state's
+        # Resumed sessions and Unknown state, whose sentences are pinned above.
         "plan-review.md#1": (
-            "In off, passing verdicts do not cross sessions either; in auto, a resumed session reviews an unfinished "
-            "plan again before implementing it unless the plan's dispatch record holds its READY; in either mode, "
-            "finished tickets are not redone, as [review state](review-state.md) describes.",
-            "In auto, a resumed session, and main after a context compaction, take the plan's READY, its claims' "
-            "reading sets, passes and Adversarial review results, unresolved verdicts and the user's decisions from the "
-            "plan's dispatch record, and they count as if received in this session, while counts, the Stop threshold in "
-            "effect and the final check's state still come only from this session, as [review "
-            "state](review-state.md)'s Resumed sessions describes.",
-            "In off, an unresolved verdict restricts a resumed session only when an active handoff records it, and in "
-            "auto when an active handoff or the plan's dispatch record records it; it then applies, in either mode, "
-            "until a later call passes it or the user cancels the work, changes its acceptance or waives it.",
+            "Identify the logical plan and recover its current count, verdicts and blockers as [review "
+            "state](review-state.md)'s Resumed sessions, Unknown state and What does not reset a count describe.",
         ),
         "plan-review.md": (
-            "In a resumed session, an unresolved verdict that an active handoff records for a spec's plan applies to "
-            "that spec's tickets when they are named; one recorded for a ticket's plan still restricts that ticket when "
-            "the whole spec is named, and in off, without such a record no restriction carries over; in auto, an "
-            "unresolved verdict a plan's dispatch record holds restricts in the same way, as [review "
-            "state](review-state.md)'s Resumed sessions describes.",
+            "In a resumed session, unresolved verdicts restrict the named work as [review state](review-state.md)'s "
+            "Resumed sessions describes.",
         ),
         "code-review.md#3": (
-            "Recover the count, verdicts and open findings as in [plan review](plan-review.md) step 1: counts are per "
-            "session, a resumed session starts a new count, an in-session state that cannot be established makes the "
-            "step stopped until the user decides, and in off an unresolved verdict restricts a resumed session only when "
-            "an active handoff records it; in auto, a resumed session, and main after a context compaction, take the "
-            "claim's passes, verdicts and open findings from the plan's dispatch record as if received in this session, "
-            "as [review state](review-state.md)'s Resumed sessions describes.",
+            "Recover the count, verdicts and open findings as [review state](review-state.md)'s Resumed sessions and "
+            "Unknown state describe.",
         ),
         "outcome-verification.md#3": (
-            "Recover the count, verdicts and open findings as in [plan review](plan-review.md) step 1: counts are per "
-            "session, a resumed session starts a new count, an in-session state that cannot be established makes the "
-            "step stopped until the user decides, and in off an unresolved verdict restricts a resumed session only when "
-            "an active handoff records it; in auto, a resumed session, and main after a context compaction, take the "
-            "claim's passes, verdicts and open findings from the plan's dispatch record as if received in this session, "
-            "as [review state](review-state.md)'s Resumed sessions describes.",
+            "Recover the count, verdicts and open findings as [review state](review-state.md)'s Resumed sessions and "
+            "Unknown state describe.",
         ),
         "adversarial-review.md#4": (
-            "Recover the count, verdicts, coverage and open gaps as in [plan review](plan-review.md) step 1: counts are "
-            "per session, a resumed session starts a new count, in off HELD does not cross sessions, an in-session state "
-            "that cannot be established makes the step stopped until the user decides, and in off an unresolved verdict "
-            "restricts a resumed session only when an active handoff records it; in auto, a resumed session, and main "
-            "after a context compaction, take the claim's Adversarial review result and a BROKEN's listed findings, by "
-            "their one-line summary, from the plan's dispatch record as if received in this session, their details "
-            "staying where step 10 puts them, as [review state](review-state.md)'s Resumed sessions describes.",
+            "Recover the count, verdicts, coverage and open gaps as [review state](review-state.md)'s Resumed sessions "
+            "and Unknown state describe.",
         ),
         "SKILL.md#Plan review": (
-            "Keep the review count and unresolved verdicts across mode changes within a session; a resumed session "
-            "starts a new count, while unresolved verdicts recorded in an active handoff still apply and, in auto, so "
-            "does what the plan's dispatch record holds.",
-            "A resumed session, and main after a context compaction, take the plan's READY, reading sets, passes, "
-            "Adversarial review results and the user's decisions from it as if received in this session, while counts, "
-            "the Stop threshold in effect and the final check's state still come only from this session, as [review "
-            "state](references/review-state.md)'s Resumed sessions describes; an active handoff records progress and "
-            "names the dispatch record.",
+            "Keep the review count and unresolved verdicts as [review state](references/review-state.md)'s What does "
+            "not reset a count and Resumed sessions describe.",
+            "In auto, main keeps one dispatch record for each plan of plan-driven work, and a resumed session, and main after a context compaction, take the plan's review state from it, as [review state](references/review-state.md)'s Dispatch record and Resumed sessions describe.",
         ),
     }
 
@@ -1980,7 +1942,8 @@ class DispatchRecordTests(unittest.TestCase):
         "review-state.md#Resumed sessions": (
             "Unresolved verdicts and open findings the record holds restrict their claims as if received in this "
             "session, and a BROKEN's findings that the record lists by their one-line summary stay listed, their details "
-            "staying where [adversarial review](adversarial-review.md) step 10 puts them.",
+            "staying where the Adversarial review procedure's step 10 puts them: read the [Adversarial review "
+            "procedure](adversarial-review.md)'s step 10 and follow it.",
             "Main may also take the plan's base revision and the branches it created for the work from it, as Evidence "
             "for a regression and Commits before the passes describe.",
         ),
@@ -1998,7 +1961,8 @@ class DispatchRecordTests(unittest.TestCase):
             "runs or by a person, changes which passes and results main believes; this flow does not defend against "
             "that.",
         ),
-        "SKILL.md#Plan review": ("Main takes the dispatch record as written, so an edit to it changes what main believes.",),
+        # Delegation dedupe ticket 02: the delegation skill points to Dispatch record, which states this.
+        "SKILL.md#Plan review": ("In auto, main keeps one dispatch record for each plan of plan-driven work, and a resumed session, and main after a context compaction, take the plan's review state from it, as [review state](references/review-state.md)'s Dispatch record and Resumed sessions describe.",),
     }
 
     # Acceptance item 15: off writes no dispatch record and keeps the earlier cross-session rules.
@@ -2022,9 +1986,10 @@ class DispatchRecordTests(unittest.TestCase):
             "passes from the current session, as passing verdicts do not cross sessions, unless the note records an "
             "accept-and-land decision that still holds or the claim's ticket is exempt as under Resumed sessions.",
         ),
+        # Delegation dedupe ticket 02: the off sentence points to Resumed sessions; review state's own sentence that off
+        # writes no dispatch record is pinned above.
         "SKILL.md#Plan review": (
-            "Off mode writes no dispatch record and keeps the cross-session rules of [review "
-            "state](references/review-state.md)'s Resumed sessions for off.",
+            "In off, main keeps the cross-session rules of [review state](references/review-state.md)'s Resumed sessions.",
         ),
         "reference.md#Dispatch record": ("In `off`, main writes none and the rules under Resumed session hold as before.",),
         "reference.zh-TW.md#派工紀錄": ("在 `off` 下，主 Agent 不寫派工紀錄，「恢復的 session」的規則照舊。",),
@@ -2408,7 +2373,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "The list states the final check's state at the commit to be landed, as Final check describes; for each "
             "claim, the commit its passes judged, each pass, each missing pass and each unresolved Blocking finding "
             "listed under it; for each Security-critical claim, its Adversarial review result at the commit to be "
-            "landed, as [adversarial review](adversarial-review.md)'s At the final commit describes, that is a BROKEN "
+            "landed, as the Adversarial review procedure's At the final commit describes, that is a BROKEN "
             "with its findings as the adversary stated them, or by the one-line summary the dispatch record holds for "
             "findings reported in an earlier session, an INCONCLUSIVE with its gaps, or not run; each fix claim that is "
             "Security-critical, with its problem, a summary of the fix and that it had no Adversarial review; the work's "
@@ -2421,12 +2386,14 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "whose Adversarial review is INCONCLUSIVE or not run; a Security-critical fix claim; and, when the final "
             "check at the commit to be landed failed or was not run, each claim landed with it, the decision stating "
             "that state.",
+            # Delegation dedupe ticket 02, H12, and the explicit-read form for At the final commit.
             "When nothing listed needs it, the question is only the user's authority to land, which landing needs as "
-            "before, and nothing is recorded as accept and land.",
+            "Repository authority describes, and nothing is recorded as accept and land.",
             "A re-review follows the existing rules, classified as Classifying a request describes; when it changes the "
             "code, main runs the final check again at the new commit to be landed, treats each Adversarial review result "
-            "that no longer judges the commit to be landed as not run, as [adversarial review](adversarial-review.md)'s "
-            "At the final commit describes, and asks again.",
+            "that no longer judges the commit to be landed as not run, as the Adversarial review procedure's At the "
+            "final commit describes, and asks again; read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
+            "For each Security-critical claim's Adversarial review result, read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
             "Confirming part of the list, what is not a confirmation and what a decision covers stay as the sentences "
             "above state.",
         ),
@@ -2436,8 +2403,8 @@ class DecisionAtTheEndTests(unittest.TestCase):
     S3 = {
         LABEL: (
             "Before asking, main again confirms that each claim's reading set is unchanged from its recorded content or "
-            "hash, as Reading set describes; a change the user did not authorise is a material deviation, as [plan "
-            "review](plan-review.md) step 5 describes.",
+            "hash, as Reading set describes; a change the user did not authorise is a material deviation: read the "
+            "[plan-review procedure](plan-review.md)'s step 5 and follow it.",
         ),
     }
 

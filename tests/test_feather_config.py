@@ -3217,21 +3217,28 @@ class FeatherConfigTests(unittest.TestCase):
                 self.assertIn("rerun setup", text)
 
     def test_explicit_reviews_are_outside_every_automatic_budget(self):
-        rule = "Explicit calls do not count toward the automatic budget below"
+        # Delegation dedupe ticket 02, D2: "the automatic budget" became "the count", in each procedure and review state.
+        rule = "Explicit calls are outside the count below"
         references = config.ROOT / "skills" / "delegation" / "references"
         for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
             with self.subTest(reference=name):
                 self.assertIn(rule, (references / name).read_text(encoding="utf-8"))
-        self.assertIn("an explicit call is outside the count",
-                      (references / "plan-review.md").read_text(encoding="utf-8"))
+        self.assertIn("Explicit calls are outside the count.",
+                      (references / "review-state.md").read_text(encoding="utf-8"))
 
     def test_every_step_counts_consecutive_failures_and_a_pass_resets(self):
         references = config.ROOT / "skills" / "delegation" / "references"
+        # Delegation dedupe ticket 02: each procedure counts and points to review state's count rules; the automatic
+        # pass that resets the count is stated there.
         for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
             text = (references / name).read_text(encoding="utf-8")
-            for phrase in ("Count consecutive automatic calls without a pass", "resets the count to zero"):
+            for phrase in ("Count consecutive automatic calls without a pass",
+                           "as [review state](review-state.md)'s Consecutive non-pass count and Transitions describe"):
                 with self.subTest(reference=name, phrase=phrase):
                     self.assertIn(phrase, text)
+        state = (references / "review-state.md").read_text(encoding="utf-8")
+        self.assertIn("which is zero after an automatic pass", state)
+        self.assertIn("so a pass resets the count and a non-pass stops the step again", state)
 
     def test_a_fix_after_refuted_is_code_reviewed_before_the_recheck(self):
         references = config.ROOT / "skills" / "delegation" / "references"
@@ -3245,11 +3252,16 @@ class FeatherConfigTests(unittest.TestCase):
 
     def test_an_explicit_verdict_never_changes_the_automatic_count(self):
         references = config.ROOT / "skills" / "delegation" / "references"
+        # Delegation dedupe ticket 02: the rule is review state's; the procedures point to it.
+        state = (references / "review-state.md").read_text(encoding="utf-8")
+        for phrase in ("Explicit calls are outside the count.",
+                       "An explicit call that passes clears the stop and leaves the count unchanged"):
+            with self.subTest(reference="review-state.md", phrase=phrase):
+                self.assertIn(phrase, state)
         for name in ("plan-review.md", "code-review.md", "outcome-verification.md"):
-            text = (references / name).read_text(encoding="utf-8")
-            for phrase in ("an explicit call's verdict", "does not change it"):
-                with self.subTest(reference=name, phrase=phrase):
-                    self.assertIn(phrase, text)
+            with self.subTest(reference=name):
+                self.assertIn("Explicit calls are outside the count below",
+                              (references / name).read_text(encoding="utf-8"))
 
     def test_the_named_document_is_the_plan_and_its_tickets_are_its_claims(self):
         references = config.ROOT / "skills" / "delegation" / "references"
@@ -3258,7 +3270,8 @@ class FeatherConfigTests(unittest.TestCase):
                        "each unfinished ticket in the named scope is one claim",
                        "no plan in this session already covers the named work",
                        "keeps its count, verdicts and blockers",
-                       "applies to that spec's tickets when they are named",
+                       # Delegation dedupe ticket 02: a pointer to Resumed sessions, which states the rule.
+                       "unresolved verdicts restrict the named work as [review state](review-state.md)'s Resumed sessions describes",
                        "Main does not edit a spec or ticket to add claims"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, plan_review)
@@ -3316,10 +3329,14 @@ class FeatherConfigTests(unittest.TestCase):
             ("plan-review.md", "must agree with all of them"),
             ("plan-review.md", "a spec that refers to none is one claim without asking"),
             ("plan-review.md", "Main never approves such a plan itself"),
-            ("plan-review.md", "If the in-session state is unknown"),
-            ("code-review.md", "Its count continues from where it stands"),
+            # Delegation dedupe ticket 02: these now point to review state's Unknown state and Reopened calls.
+            ("plan-review.md", "Resumed sessions, Unknown state and What does not reset a count describe"),
+            ("review-state.md", "In that case main never assumes a count of zero."),
+            ("code-review.md", "Its count continues as [review state](review-state.md)'s Reopened calls describes"),
+            ("review-state.md", "A reopened call continues the step's count from where it stands"),
             ("code-review.md", "do not land it on the default branch, release it or report it complete"),
-            ("outcome-verification.md", "made before the automatic flow reached verification does not complete a claim of plan-driven work"),
+            ("outcome-verification.md", "In auto, an explicit verification made before the automatic flow reached verification counts as"),
+            ("review-state.md", "An explicit review or verification made before the automatic flow reached that step does not count as that step's pass."),
         )
         for name, phrase in rules:
             with self.subTest(reference=name, phrase=phrase):
@@ -3351,18 +3368,20 @@ class FeatherConfigTests(unittest.TestCase):
                 "explicit if the step has stopped or the request is outside the flow",
                 "including a call the user requests for a step the flow is due to run",
             ),
-            references / "plan-review.md": ("treat the step as stopped and ask the user",
+            # Delegation dedupe ticket 02: the procedures and the delegation skill point to review state's Unknown
+            # state, Clearing a stop and What counts as a call, whose phrases are pinned above.
+            references / "plan-review.md": ("Unknown state",
                                             "its count and stop for them",
-                                            "an explicit READY clears the stop"),
+                                            "Next automatic call and Clearing a stop"),
             references / "outcome-verification.md": ("made before the automatic flow reached verification",
-                                                     "An explicit CONFIRMED that clears a verification step",
-                                                     "makes the step stopped until the user decides"),
+                                                     "An explicit CONFIRMED clears a stopped verification step",
+                                                     "Resumed sessions and Unknown state describe"),
             references / "code-review.md": ("the automatic flow resumes",
                                             "after an explicit review outside a stopped automatic step",
-                                            "makes the step stopped until the user decides",
+                                            "Resumed sessions and Unknown state describe",
                                             "a retry counts as a call"),
-            config.ROOT / "skills" / "delegation" / "SKILL.md": ("the automatic flow resumes",
-                                                                 "is never used on a stopped step"),
+            config.ROOT / "skills" / "delegation" / "SKILL.md": ("resume the automatic flow",
+                                                                 "What counts as a call describes"),
             config.ROOT / "CONTEXT.md": ("clears the stop without resetting the count",
                                          "the Automatic flow resumes from there",
                                          "is an automatic call, not an Explicit request"),
@@ -3406,14 +3425,15 @@ class FeatherConfigTests(unittest.TestCase):
                 "checks and reports it after the operation",
                 "in a step whose stop was cleared, a later call that step needs",
             ),
-            references / "plan-review.md": ("after an explicit READY that cleared a stop", "never assume a count of zero"),
-            references / "code-review.md": ("a reopened automatic call needs the user's explicit request",
+            # Delegation dedupe ticket 02: review state's Unknown state and Reopened calls hold these, pinned above.
+            references / "plan-review.md": ("after an explicit READY that cleared a stop", "Unknown state"),
+            references / "code-review.md": ("the review of the fix follows its Next automatic call",
                                             "In off, an explicit APPROVED is reported like any explicit review"),
             references / "outcome-verification.md": ("do not land it on the default branch, release it or report it complete",
                                                      "must not be landed on the default branch, released or reported complete",
                                                      "checks and reports it after the operation"),
             config.ROOT / "skills" / "delegation" / "SKILL.md": ("Reuse a verdict only while it is valid",
-                                                                 "classify it as [review state]"),
+                                                                 "classify the call as [review state]"),
             config.ROOT / "docs" / "reference.md": (
                 "needs your request again",
                 "does not count as that step's pass",
@@ -3440,6 +3460,7 @@ class FeatherConfigTests(unittest.TestCase):
             references / "review-state.md": (
                 "sets its ticket's status to the completion value",
                 "with a note naming the version or commit",
+                "main never assumes a count of zero",
                 "reports which tickets it considers done",
                 "or the user says it is done",
                 "without a defined value, main asks",
@@ -3457,14 +3478,16 @@ class FeatherConfigTests(unittest.TestCase):
                 "in the report and in any active handoff",
                 "A waiver does not complete a claim the acceptance gate covers",
                 "which is zero after an automatic pass",
+                "a deferral keeps it and a waiver stays visible in it",
             ),
-            references / "plan-review.md": ("status equals a completion value the project's tracker convention defines",
+            # Delegation dedupe ticket 02: the procedures point to Ticket status and Pending acceptance, whose rules
+            # (a deferral keeps the note, a waiver stays visible) are pinned in review state.
+            references / "plan-review.md": ("Whether a ticket is finished is as [review state](review-state.md)'s Ticket status describes",
                                             "as [review state](review-state.md) records it",
                                             "keeping any waiver visible"),
-            references / "code-review.md": ("only as [review state](review-state.md)'s Pending acceptance describes", "a waiver stays visible in it"),
-            references / "outcome-verification.md": ("only as [review state](review-state.md)'s Pending acceptance describes",
-                                                     "a waiver stays visible in it"),
-            config.ROOT / "skills" / "delegation" / "SKILL.md": ("update its ticket as [review state]",),
+            references / "code-review.md": ("only as [review state](review-state.md)'s Pending acceptance describes",),
+            references / "outcome-verification.md": ("only as [review state](review-state.md)'s Pending acceptance describes",),
+            config.ROOT / "skills" / "delegation" / "SKILL.md": ("Update a claim's ticket as [review state]",),
             config.ROOT / "docs" / "reference.md": (
                 "never counts as READY, APPROVED, CONFIRMED or HELD",
                 "does not accept a known defect",
@@ -3501,7 +3524,10 @@ class FeatherConfigTests(unittest.TestCase):
                 "the user or the planning step decides",
                 "only after the user authorises it",
                 "keeping a mapping from old claims to new ones",
-                "only from its original text, an available record of it or a version the user confirms",
+                # Delegation dedupe ticket 02: conversation plans point to plan review's plan identification.
+                "read the [plan-review procedure](plan-review.md)'s plan identification and follow it",
+                "or the user cancels the work, changes its acceptance or waives it",
+                "or the user says it is done; without a defined value, main asks",
                 "without reverting changes already made",
                 "keeps the work, its blockers and any handoff note waiting",
                 "a waiver kept in that handoff counts as that record for the gate",
@@ -3511,20 +3537,20 @@ class FeatherConfigTests(unittest.TestCase):
                 "only after a later pass",
                 "for done work",
             ),
+            # Delegation dedupe ticket 02: plan review points to Resumed sessions and Ticket status, and the other
+            # procedures to Pending acceptance; review state's phrases are pinned above.
             references / "plan-review.md": (
-                "In off, passing verdicts do not cross sessions either",
-                "still restricts that ticket when the whole spec is named",
-                "in off, without such a record no restriction carries over",
+                "Resumed sessions, Unknown state and What does not reset a count describe",
+                "unresolved verdicts restrict the named work as [review state](review-state.md)'s Resumed sessions describes",
                 "unless the user authorises a claim change",
                 "or when the user asks",
                 "is identified only from its original text, an available record or a version the user confirms",
                 "is reported for the user or the planning step to decide",
-                "or the user says it is done; without a defined value, ask",
+                "Whether a ticket is finished is as [review state](review-state.md)'s Ticket status describes",
                 "unless the decision is a deferral",
-                "or the user cancels the work, changes its acceptance or waives it",
             ),
-            references / "code-review.md": ("so a deferral keeps it and a waiver stays visible in it",),
-            references / "outcome-verification.md": ("so a deferral keeps it and a waiver stays visible in it",),
+            references / "code-review.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes",),
+            references / "outcome-verification.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes",),
             config.ROOT / "docs" / "reference.md": (
                 "Counts do not carry over",
                 "In `off`, passing verdicts do not carry over either, and without an active handoff record no restriction carries over",
@@ -3623,12 +3649,10 @@ class FeatherConfigTests(unittest.TestCase):
 
     # 0.15.0 sentences that had no guard of their own, pinned whole so no clause can drift silently.
     FOLLOW_UP_SENTENCES = {
+        # Delegation dedupe ticket 02: step 1 points to review state, whose Resumed sessions bullet is pinned whole below.
         'plan-review.md step 1': (
-            # Retained passes ticket 05 (Acceptance items 12 and 15): passing verdicts and the handoff-only restriction
-            # hold in off.
-            "In off, passing verdicts do not cross sessions either; in auto, a resumed session reviews an unfinished plan again before implementing it unless the plan's dispatch record holds its READY; in either mode, finished tickets are not redone, as [review state](review-state.md) describes.",
-            "In off, an unresolved verdict restricts a resumed session only when an active handoff records it, and in auto when an active handoff or the plan's dispatch record records it; it then applies, in either mode, until a later call passes it or the user cancels the work, changes its acceptance or waives it. A re-review is another call and lifts it only by passing, and a deferral keeps it.",
-            "In auto, a plan that is implemented, in part or whole, and has no plan-review state in this session is handled before any call as [review state](review-state.md)'s Implemented before plan review describes: main asks the user whether to run plan review first or go straight to code review with the missing READY waived.",
+            "1. Identify the logical plan and recover its current count, verdicts and blockers as [review state](review-state.md)'s Resumed sessions, Unknown state and What does not reset a count describe.",
+            "In auto, implemented work is handled before any call as [review state](review-state.md)'s Implemented before plan review describes.",
         ),
         'plan-review.md': (
             '4. On REVISE, a blocker that needs claims added, split or changed is reported for the user or the planning step to decide, as [review state](review-state.md) describes; it cannot be dispositioned FIX until the user authorises the claim change.',
@@ -3636,12 +3660,13 @@ class FeatherConfigTests(unittest.TestCase):
         'review-state.md': (
             # Retained passes ticket 05 (Acceptance items 11, 12 and 15): off keeps the earlier rules, auto adds the
             # dispatch record.
-            "- **Resumed sessions.** Counts do not cross sessions. In off, passing verdicts do not cross sessions either. In auto, a resumed session reviews an unfinished plan again before implementing it unless the plan's dispatch record holds its READY; in either mode it does not redo tickets that are finished. In either mode, an unresolved verdict that an active handoff records for a spec's plan restricts that spec's tickets when they are named, and one recorded for a ticket's plan still restricts that ticket when the whole spec is named, and in auto one that a plan's dispatch record holds restricts in the same way; in off, without an active handoff record, no restriction carries into a resumed session. An unresolved verdict that restricts a resumed session in this way then applies, in either mode, until a later call passes it or the user cancels the work, changes its acceptance or waives it; a re-review is another call and lifts it only by passing, and a deferral keeps it. In off, before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, counted as usual. Only a claim whose ticket was set to a done value after valid passes or an accept-and-land decision, with no relevant change since, is exempt and counts as accepted for landing and release, as is a claim whose pending-acceptance note records an accept-and-land decision that still holds; any other finished ticket is only not redone. For a plan in auto, a resumed session, and main after a context compaction, take the plan's READY, each claim's reading set, its passes, its Adversarial review results and the user's decisions from the plan's dispatch record, as Dispatch record describes, and they count as if received in this session: a claim is not reviewed again for having passed in an earlier session, and implemented work whose READY the record holds does not ask again under Implemented before plan review. Unresolved verdicts and open findings the record holds restrict their claims as if received in this session, and a BROKEN's findings that the record lists by their one-line summary stay listed, their details staying where [adversarial review](adversarial-review.md) step 10 puts them. Main may also take the plan's base revision and the branches it created for the work from it, as Evidence for a regression and Commits before the passes describe. Counts still restart in each session, as ADR 0002 decided, and the Stop threshold in effect and the final check's state come only from this session, so main runs the final check again in the new session before landing, as Final check describes. Where the dispatch record lacks what main needs, Unknown state applies. For a plan in auto, this replaces the rules above that passing verdicts do not cross sessions and that an unresolved verdict reaches a resumed session only through an active handoff, and the rule that the list Accept and land at the end of the plan describes is never built from a record in the working tree: what main takes from the dispatch record counts as received in this session. For a plan with an implemented claim, Implemented before plan review comes first.",
+            # Delegation dedupe ticket 02: H13 and the explicit-read form for step 10.
+            "- **Resumed sessions.** Counts do not cross sessions. In off, passing verdicts do not cross sessions either. In auto, a resumed session reviews an unfinished plan again before implementing it unless the plan's dispatch record holds its READY; in either mode it does not redo tickets that are finished. In either mode, an unresolved verdict that an active handoff records for a spec's plan restricts that spec's tickets when they are named, and one recorded for a ticket's plan still restricts that ticket when the whole spec is named, and in auto one that a plan's dispatch record holds restricts in the same way; in off, without an active handoff record, no restriction carries into a resumed session. An unresolved verdict that restricts a resumed session in this way then applies, in either mode, until a later call passes it or the user cancels the work, changes its acceptance or waives it; a re-review is another call and lifts it only by passing, and a deferral keeps it. In off, before a gated operation, a claim needs valid passes from this session, so a claim that passed in an earlier session is reviewed and verified again, and a Security-critical claim gets Adversarial review again, counted as usual. Only a claim whose ticket was set to a done value after valid passes or an accept-and-land decision, with no relevant change since, is exempt and counts as accepted for landing and release, as is a claim whose pending-acceptance note records an accept-and-land decision that still holds; any other finished ticket is only not redone. For a plan in auto, a resumed session, and main after a context compaction, take the plan's READY, each claim's reading set, its passes, its Adversarial review results and the user's decisions from the plan's dispatch record, as Dispatch record describes, and they count as if received in this session: a claim is not reviewed again for having passed in an earlier session, and implemented work whose READY the record holds does not ask again under Implemented before plan review. Unresolved verdicts and open findings the record holds restrict their claims as if received in this session, and a BROKEN's findings that the record lists by their one-line summary stay listed, their details staying where the Adversarial review procedure's step 10 puts them: read the [Adversarial review procedure](adversarial-review.md)'s step 10 and follow it. Main may also take the plan's base revision and the branches it created for the work from it, as Evidence for a regression and Commits before the passes describe. Counts still restart in each session, and the Stop threshold in effect and the final check's state come only from this session, so main runs the final check again in the new session before landing, as Final check describes. Where the dispatch record lacks what main needs, Unknown state applies. For a plan in auto, this replaces the rules above that passing verdicts do not cross sessions and that an unresolved verdict reaches a resumed session only through an active handoff, and the rule that the list Accept and land at the end of the plan describes is never built from a record in the working tree: what main takes from the dispatch record counts as received in this session. For a plan with an implemented claim, Implemented before plan review comes first.",
             "After a claim has passed (both passes, plus HELD for a Security-critical claim) and is committed, and any postcondition holds, main sets its ticket's status to the completion value the project's tracker convention defines for done work, with a note naming the version or commit; after an accept-and-land decision it does the same, and the note also names the decision and its remaining risk.",
             'A postcondition that does not hold leaves the claim incomplete and its ticket unfinished, with the observed state noted.',
         ),
         'SKILL.md': (
-            'After a claim passes and is committed, and any postcondition holds, update its ticket as [review state](references/review-state.md) describes.',
+            "Update a claim's ticket as [review state](references/review-state.md)'s Ticket status describes.",
         ),
     }
 
@@ -3676,7 +3701,8 @@ class FeatherConfigTests(unittest.TestCase):
             # Retained passes ticket 04 (Acceptance items 8 and 15, S2): the same-commit premise holds in off; auto gives the result only
             # at the commit to be landed.
             # Repo trust split ticket 01 (Acceptance 3, S4): the bullet states the two workspace reads.
-            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. Main establishes this with two reads, `git rev-parse HEAD` and `git -c core.safecrlf=false status --porcelain --untracked-files=all --ignore-submodules=none`: before dispatch, the first names the commit in the brief and the second lists no path the claim's files or acceptance checks depend on, and after the call the same reads show the same commit and no such path changed. A read that exits non-zero, writes anything to standard error, or prints output that is not porcelain v1 lines counts as a change: the call is not dispatched, or its pass is not used and the step is not cleared, the same as a change found. The command line overrides the user's `status.showUntrackedFiles` and submodule-ignore settings, and `core.safecrlf=false` keeps line-ending conversion warnings off standard error. Ignored files and files marked assume-unchanged or skip-worktree are outside this check, which is residual risk. The final check uses the same reads before and after it, as Final check describes. Plan review and security analysis do not need a clean workspace, since they often read an uncommitted plan: main runs the same reads before and after the call and reports any difference. In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them, as [adversarial review](adversarial-review.md) describes; an explicit one the user requests before them runs but does not count. In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an explicit call made before then, counts as not run, as [adversarial review](adversarial-review.md)'s At the final commit describes. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.",
+            # Delegation dedupe ticket 02: the references to the Adversarial review procedure use the explicit-read form.
+            "- **What a gated pass judged.** For a claim the acceptance gate covers, main dispatches a code review, outcome verification or Adversarial review only when the workspace equals the commit it names in the brief: HEAD is that commit, nothing the claim's files or acceptance checks depend on has an uncommitted or untracked change, and nothing changes the workspace during the call. Main establishes this with two reads, `git rev-parse HEAD` and `git -c core.safecrlf=false status --porcelain --untracked-files=all --ignore-submodules=none`: before dispatch, the first names the commit in the brief and the second lists no path the claim's files or acceptance checks depend on, and after the call the same reads show the same commit and no such path changed. A read that exits non-zero, writes anything to standard error, or prints output that is not porcelain v1 lines counts as a change: the call is not dispatched, or its pass is not used and the step is not cleared, the same as a change found. The command line overrides the user's `status.showUntrackedFiles` and submodule-ignore settings, and `core.safecrlf=false` keeps line-ending conversion warnings off standard error. Ignored files and files marked assume-unchanged or skip-worktree are outside this check, which is residual risk. The final check uses the same reads before and after it, as Final check describes. Plan review and security analysis do not need a clean workspace, since they often read an uncommitted plan: main runs the same reads before and after the call and reports any difference. In off, an Adversarial review that can count as the step's pass also needs a valid APPROVED and a valid CONFIRMED at that same commit, so it follows them: read the [Adversarial review procedure](adversarial-review.md)'s step 1 and follow it; an explicit one the user requests before them runs but does not count. In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an explicit call made before then, counts as not run: read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it. The pass covers that commit, and a second review after a completed review receives the range from the previously judged commit to the new one, as Completed calls and coverage describes. A call for work the gate does not cover, such as an explicit review of unplanned edits or of work in off that no active handoff restricts, judges the workspace change from the base revision, except that an Adversarial review run through [the adversarial-review command](../../adversarial-review/SKILL.md) reviews the range that command defines, and main does not commit that work to review it.",
             '- **Existing handoff notes.** An active handoff\'s record that a claim is unreviewed, unverified or pending acceptance restricts it under the acceptance gate whatever its wording, such as "must not be committed"; main updates the wording at the next handoff maintenance.',
             'A waiver does not complete a claim the acceptance gate covers: such a claim is landed on the default branch, released or reported complete only after a later pass or an accept-and-land decision.',
             'For a claim an active handoff recorded as unreviewed, unverified or pending acceptance, a waiver kept in that handoff counts as that record for the gate.',
@@ -3685,13 +3711,14 @@ class FeatherConfigTests(unittest.TestCase):
         ),
         'code-review.md': (
             "while [review state](review-state.md)'s acceptance gate still covers, in either mode, a claim an active handoff records as unreviewed, unverified or pending acceptance, and the handoff note changes after a pass as [review state](review-state.md)'s Pending acceptance describes in either mode;",
-            'For a claim the acceptance gate covers, also name the commit under review and dispatch only with a clean workspace at that commit, as [review state](review-state.md) describes.',
+            # Delegation dedupe ticket 02: the brief requirement stays; the clean-workspace rule is review state's.
+            "For a claim the acceptance gate covers, also name the commit under review, and dispatch as [review state](review-state.md)'s What a gated pass judged describes.",
             "and, for a claim the acceptance gate covers, the range from the previously judged commit to the new one; when the previous call did not complete, supply instead the full range from the claim's base revision with earlier and partial findings as evidence.",
             'do not land it on the default branch, release it or report it complete, report its open findings',
             'record as plain text that the claim is unreviewed, its open findings and that it must not be landed on the default branch, released or reported complete.',
         ),
         'outcome-verification.md': (
-            'For a claim the acceptance gate covers, also name the base revision and the commit under verification, and dispatch only with a clean workspace at that commit, as [review state](review-state.md) describes.',
+            "For a claim the acceptance gate covers, also name the base revision and the commit under verification, and dispatch as [review state](review-state.md)'s What a gated pass judged describes.",
             'do not land it on the default branch, release it or report it complete, and require',
             'record as plain text that the claim is unverified, its open findings and that it must not be landed on the default branch, released or reported complete.',
         ),
@@ -3768,11 +3795,11 @@ class FeatherConfigTests(unittest.TestCase):
             ),
             references / "code-review.md": (
                 "acceptance gate still covers, in either mode",
-                "also name the commit under review and dispatch only with a clean workspace at that commit",
+                "also name the commit under review, and dispatch as [review state](review-state.md)'s What a gated pass judged describes",
                 "the range from the previously judged commit to the new one",
                 "must not be landed on the default branch, released or reported complete"),
             references / "outcome-verification.md": (
-                "also name the base revision and the commit under verification, and dispatch only with a clean workspace",
+                "also name the base revision and the commit under verification, and dispatch as [review state](review-state.md)'s What a gated pass judged describes",
                 "do not land it on the default branch, release it or report it complete",
                 "must not be landed on the default branch, released or reported complete"),
         }
@@ -3862,10 +3889,11 @@ class FeatherConfigTests(unittest.TestCase):
                 "When plan-review state cannot be established, Unknown state applies",
                 "work overlapping a stopped plan keeps the Overlap rule",
             ),
-            references / "plan-review.md": ("has no plan-review state in this session is handled before any call",),
-            references / "preview.md": ("a Plan with implemented Claims and no plan-review state in this session",),
+            # Delegation dedupe ticket 02: the other places point to Implemented before plan review, pinned above.
+            references / "plan-review.md": ("In auto, implemented work is handled before any call as [review state](review-state.md)'s Implemented before plan review describes",),
+            references / "preview.md": ("a Plan with implemented Claims for which main will first ask as [review state](review-state.md)'s Implemented before plan review describes",),
             config.ROOT / "skills" / "delegation" / "SKILL.md": (
-                "when implemented work's plan has no plan-review state in this session, first ask",),
+                "in auto, implemented work first follows [review state](references/review-state.md)'s Implemented before plan review",),
             config.ROOT / "docs" / "reference.md": (
                 "main first asks as under Implemented before plan review",
                 "Claims not yet implemented still get plan review first",
@@ -3914,11 +3942,14 @@ class FeatherConfigTests(unittest.TestCase):
                                                 "## 自動審查", "### 停止門檻"))
         entries = self.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
         for place, text, phrase in (
+                # Delegation dedupe ticket 02: code review points to What an explicit call runs.
                 ("code-review.md", (references / "code-review.md").read_text(encoding="utf-8"),
-                 "applies in either mode and does not start verification"),
+                 "An explicit user request for code review runs as [review state](review-state.md)'s What an explicit call runs describes"),
+                ("review-state.md", (references / "review-state.md").read_text(encoding="utf-8"),
+                 "An explicit call runs only the requested step"),
                 ("plan-review.md", (references / "plan-review.md").read_text(encoding="utf-8"),
                  "a plan proposed in conversation and approved by the user"),
-                ("plan-review.md handoff", (references / "plan-review.md").read_text(encoding="utf-8"),
+                ("review-state.md handoff", (references / "review-state.md").read_text(encoding="utf-8"),
                  "an unresolved verdict that an active handoff records for a spec's plan"),
                 ("README Claim changes", english["Claim changes"], "main never edits a spec or ticket to add claims"),
                 ("README 修改 claim", chinese["修改 claim"], "不會為了補 claim 而修改 spec 或 ticket"),
@@ -4014,7 +4045,7 @@ class FeatherConfigTests(unittest.TestCase):
         "Authority": ("授權", "a pass grants no new authority", "通過不代表新的授權",
                       "plan-review.md", "READY grants no new authority"),
         "Explicit requests": ("明確要求", "do not use the automatic budget", "不佔自動次數",
-                              "plan-review.md", "Explicit calls do not count toward the automatic budget below"),
+                              "review-state.md", "Explicit calls are outside the count."),
         "After a stop": ("停下之後", "it clears the stop and leaves the count unchanged", "次數維持在停下時的數字",
                          "review-state.md", "clears the stop and leaves the count unchanged"),
         "Asking for a review": ("要求審查時", "main states which before dispatching", "主 Agent 派出前會先說明是哪一種",
@@ -4055,10 +4086,10 @@ class FeatherConfigTests(unittest.TestCase):
         "Citations": ("引用", "is not a citation", "都不算引用", "plan-review.md",
                       "a `Spec:` line, a parent reference or a shared directory is not a citation"),
         "Checklist limits": ("檢查清單的限制", "the checklist runs at plan review", "檢查清單在計畫審查時執行",
-                             "plan-review.md", "a ticket's reviews after plan review do not read the parts of the spec"),
+                             "review-state.md", "no other part of a spec is supplied"),
         # Claims at implementation ticket 03: what a claim's reviews and implementation read.
         "What a review reads": ("審查讀什麼", "read the same reading set", "讀的是同一組閱讀範圍",
-                                "code-review.md", "A claim's reading set is what its implementation and every review of it read"),
+                                "review-state.md", "A claim's reading set is what its implementation and every review of it read"),
         "Already covered": ("已涵蓋", "that plan continues with no new plan review", "不重做計畫審查",
                             "plan-review.md", "otherwise that plan continues with no new plan review"),
         "Partial overlap": ("部分重疊", "gains no new automatic calls", "不會多出新的自動呼叫",
@@ -4646,11 +4677,9 @@ class ClaimsAtImplementationTests(unittest.TestCase):
         "The named-plan rule applies only when no plan in this session already covers the named work; otherwise that "
         "plan continues with no new plan review and keeps its count, verdicts and blockers, and a new plan that partly "
         "overlaps one inherits its unresolved verdicts and blockers for the overlapping tickets,",
-        "In a resumed session, an unresolved verdict that an active handoff records for a spec's plan applies to that "
-        "spec's tickets when they are named; one recorded for a ticket's plan still restricts that ticket when the "
-        "whole spec is named, and in off, without such a record no restriction carries over; in auto, an unresolved verdict "
-        "a plan's dispatch record holds restricts in the same way, as [review state](review-state.md)'s Resumed sessions "
-        "describes.",  # Retained passes ticket 05: the handoff-only restriction holds in off.
+        # Delegation dedupe ticket 02: a pointer to review state's Resumed sessions, which states the restriction.
+        "In a resumed session, unresolved verdicts restrict the named work as [review state](review-state.md)'s Resumed "
+        "sessions describes.",
         "Recognise a spec's tickets by an explicit link such as a `Spec:` line or parent reference, a shared feature "
         "directory, or the user naming them; ask when none or several plans match, and state the tickets used.",
         "Look first at the project's instructions, such as CLAUDE.md or AGENTS.md, and any file they point to, for "
@@ -4926,9 +4955,10 @@ class SpecChecklistTests(unittest.TestCase):
     # Acceptance item 3 and Implementation Decisions "The checklist": the spec is a checklist, not Plan content and
     # not a Claim's acceptance.
     CHECKLIST = (
+        # Delegation dedupe ticket 02: what a ticket's reviews read is review state's Reading set.
         "It uses the spec only as a checklist for what the tickets must carry: the spec is not part of the plan's "
-        "content, and it is not a claim's acceptance, so a ticket's reviews after plan review do not read the parts of "
-        "the spec it does not cite.",
+        "content, and it is not a claim's acceptance; what a ticket's reviews after plan review read is as [review "
+        "state](review-state.md)'s Reading set describes.",
     )
 
     # Acceptance item 3 and S3: the scope, Out of Scope and citation parts run for any named tickets of a spec.
@@ -5177,18 +5207,20 @@ class ReadingSetTests(unittest.TestCase):
     WHOLE_PLAN = (
         "For a claim of a plan that is neither a spec nor tickets of a spec, such as a plan file, a plan-mode plan or a "
         "conversation plan with several claims, the text the claim is written in is the whole plan: the whole plan is "
-        "supplied to the claim's implementation and every review of it, as before cc-feather 0.23.0, and main records "
+        "supplied to the claim's implementation and every review of it, and main records "
         "and compares it, with any part of a spec the claim cites, as the claim's reading set, so a change to another "
         "claim's part of that plan is a change to the reading set."
-    )
+    )  # Delegation dedupe ticket 02: H2, and stated only in review state
 
     # S4 (amended 2026-10-13): where a Security-critical claim's invariants and targets may be written; a non-spec
     # plan's claim takes only its own part's, never another claim's.
+    # Delegation dedupe ticket 02, D1: the bracketed form, stated only in review state.
     SOURCES = (
-        "the claim's own text, which for a claim of a plan that is neither a spec nor tickets of a spec is its own part "
-        "of that plan, the parts it cites and, for a claim a spec or other plan lists, the parts stated to hold for "
-        "every claim"
+        "the claim's own text (for a claim of a plan that is neither a spec nor tickets of a spec, its own part of that "
+        "plan), the parts it cites and, for a claim a spec or other plan lists, the parts stated to hold for every claim"
     )
+    # The construction D1 replaced, which no runtime file keeps.
+    SOURCES_REPLACED = "which for a claim of a plan that is neither a spec nor tickets of a spec is its own part"
     LISTED_EXCEPTION = "for a claim a spec or other plan lists, the parts stated to hold for every claim"
 
     # S1's read limit and S11's reopening, the other places that name the parts holding for every claim.
@@ -5196,16 +5228,15 @@ class ReadingSetTests(unittest.TestCase):
     REOPENING = "or to a part the spec states holds for every claim, reopens"
 
     # Implementation Decisions "Citations": ticket 02's definition, used by reference.
+    # Delegation dedupe ticket 02: the explicit-read pointer to plan review's citations, with the brief requirement.
     CITES = (
-        "Citations are as [plan review](plan-review.md) defines them, so a `Spec:` line, a parent reference or a shared "
-        "directory brings in no part of a spec, and the brief tells the role to follow a citation to the cited part only."
+        "Citations are as plan review defines them: read the [plan-review procedure](plan-review.md)'s definition of a "
+        "citation and follow it, and the brief tells the role to follow a citation to the cited part only."
     )
 
     # S5: confirmed unchanged before dispatch; briefs use only the recorded set.
-    RECORDED = (
-        "Before dispatch, main confirms that the reading set is unchanged and supplies only the reading set it recorded, "
-        "as [review state](review-state.md)'s Reading set describes."
-    )
+    # Delegation dedupe ticket 02: the procedures point to review state's Reading set, which states the confirmation.
+    RECORDED = "Main supplies the recorded reading set as [review state](review-state.md)'s Reading set describes."
 
     # The step-2 sentences that now name the reading set where the single ticket's spec was context.
     SUPPLY = {
@@ -5226,18 +5257,22 @@ class ReadingSetTests(unittest.TestCase):
 
     # S4: exactly the invariants and targets written where S4 allows, and main's findings to the implementer go to
     # reviewers.
+    # Delegation dedupe ticket 02: the brief requirement stays, pointing to the owner of where they are written, and
+    # the step-7 limit uses the explicit-read form.
     SECURITY_CRITICAL = (
-        "For a Security-critical claim, the security invariants and test targets the brief carries are exactly those "
-        "written in " + SOURCES + ", never another claim's, and the brief also carries every finding or disposition "
-        "main gave the claim's implementer, masked and limited as [Adversarial review](adversarial-review.md) step 7 "
-        "sets for findings it passes to code review or outcome verification."
+        "For a Security-critical claim, the security invariants and test targets the brief carries are exactly the "
+        "claim's own, never another claim's, as [review state](review-state.md)'s Reading set describes, and the brief "
+        "also carries every finding or disposition main gave the claim's implementer, masked and limited as the "
+        "Adversarial review procedure's step 7 sets for findings it passes to code review or outcome verification: read "
+        "the [Adversarial review procedure](adversarial-review.md)'s step 7 and follow it."
     )
 
     ADVERSARIAL = (
-        "The security invariants and test targets the brief carries are exactly those written in " + SOURCES + ", never "
-        "another claim's except as the next sentence adds for a composed review, together with any target the user's "
-        "own command arguments name as step 3 allows, and the brief also carries every finding or disposition main gave "
-        "the claim's implementer, with any secret, credential or real data masked as step 7 requires."
+        "The security invariants and test targets the brief carries are exactly the claim's own, as [review "
+        "state](review-state.md)'s Reading set describes, never another claim's except as the next sentence adds for a "
+        "composed review, together with any target the user's own command arguments name as step 3 allows, and the brief "
+        "also carries every finding or disposition main gave the claim's implementer, with any secret, credential or real "
+        "data masked as step 7 requires."
     )
 
     # The exception-free wording the composed-review exception replaced (HEAD c40d7b6).
@@ -5295,8 +5330,9 @@ class ReadingSetTests(unittest.TestCase):
     READING_SET = (
         "- **Reading set.** " + REVIEW_STATE_READS,
         REVIEW_STATE_READS + " " + WHOLE_PLAN,
-        "Citations are as [plan review](plan-review.md) defines them, and a `Spec:` line, a parent reference or a shared "
-        "directory brings in no part of a spec.",
+        # Delegation dedupe ticket 02: the explicit-read pointer to plan review's citations.
+        "Citations are as plan review defines them: read the [plan-review procedure](plan-review.md)'s definition of a "
+        "citation and follow it; a `Spec:` line, a parent reference or a shared directory brings in no part of a spec.",
         "A Security-critical claim's security invariants and test targets are those written in " + SOURCES + "; a claim "
         "of such a plan takes no other claim's invariants or targets from the rest of that plan.",
         "When plan review returns READY, main records each claim's reading set, by content or by hash; when no READY was "
@@ -5304,11 +5340,13 @@ class ReadingSetTests(unittest.TestCase):
         "records it at the claim's first dispatch in this session.",
         # S5 as amended (2026-10-13): briefs use only the recorded set, except as S4's composed-review sentence adds.
         "Before dispatching the claim's implementation or any of its reviews, main confirms that the reading set is "
-        "unchanged, and the briefs use only the recorded reading set, except as [adversarial review]"
-        "(adversarial-review.md) step 2 adds for a claim that owns a composed review.",
+        "unchanged, and the briefs use only the recorded reading set, except as the Adversarial review procedure's step 2 "
+        "adds for a claim that owns a composed review: read the [Adversarial review procedure](adversarial-review.md)'s "
+        "step 2 and follow it.",
         "The status and note main writes under Ticket status are not a change to the reading set.",
-        "A change the user did not authorise is a material deviation, as [plan review](plan-review.md) step 5 describes; "
-        "after a change the user authorises, main records the changed reading set before the claim's next dispatch.",
+        "A change the user did not authorise is a material deviation: read the [plan-review procedure](plan-review.md)'s "
+        "step 5 and follow it; after a change the user authorises, main records the changed reading set before the "
+        "claim's next dispatch.",
     )
 
     # S13 (added 2026-10-13): without a READY for its plan in this session, a ticket of a spec reads the whole spec,
@@ -5316,28 +5354,26 @@ class ReadingSetTests(unittest.TestCase):
     S13 = (
         "When a ticket of a spec is implemented or reviewed without a READY for its plan in this session, as in off mode, "
         "after a waived plan review or for an explicit call, the checklist has not passed, so its implementation and "
-        "every review of it read the whole spec as context, as before cc-feather 0.23.0, and main records and compares "
+        "every review of it read the whole spec as context, and main records and compares "
         "the ticket and the whole spec as its reading set, while its security invariants and test targets stay those "
         "named above."
-    )
+    )  # Delegation dedupe ticket 02, H3
 
     # The exception-free S5 sentence the composed-review exception replaced (HEAD c40d7b6).
     S5_REPLACED = "and the briefs use only the recorded reading set."
 
-    PLAN_REVIEW_READY = ("Main records each claim's reading set at that READY, as [review state](review-state.md)'s "
-                         "Reading set describes.")
+    PLAN_REVIEW_READY = "Main records each claim's reading set as [review state](review-state.md)'s Reading set describes."
 
     # Acceptance item 4: the implementing Assignment's brief carries the same material.
+    # Delegation dedupe ticket 02: the implementing brief points to review state's Reading set, where the material,
+    # the whole-plan rule, citations and the confirmation are stated once.
     IMPLEMENTING = (
         "The brief of an Assignment that implements a claim carries the claim's reading set, as [review state]"
-        "(references/review-state.md)'s Reading set describes: " + CORE + S13_EXCEPTION + S13_POINTER["SKILL.md"] + ".",
-        WHOLE_PLAN,
-        "Citations are as [plan review](references/plan-review.md) defines them.",
-        "This is the same material the claim's code review, outcome verification and Adversarial review read; main "
-        "confirms it unchanged before dispatch and supplies only the reading set it recorded.",
-        "For a Security-critical claim, the brief carries exactly the security invariants and test targets written in "
-        + SOURCES + ", never another claim's, and any finding or disposition main gives the implementer also goes to "
-        "the claim's code review, outcome verification and Adversarial review.",
+        "(references/review-state.md)'s Reading set describes.",
+        "For a Security-critical claim, the brief carries exactly the claim's own security invariants and test targets, "
+        "never another claim's, and any finding or disposition main gives the implementer also goes to the claim's code "
+        "review, outcome verification and Adversarial review, as [review state](references/review-state.md)'s Reading "
+        "set describes.",
     )
 
     # Acceptance item 10, the `Spec:` part.
@@ -5345,32 +5381,42 @@ class ReadingSetTests(unittest.TestCase):
                "records where the ticket came from and is not a citation of the whole spec.")
 
     def test_each_review_states_what_a_claim_s_reviews_read(self):
+        # Delegation dedupe ticket 02: each review supplies the reading set and points to review state's Reading set,
+        # which alone states what it is (test_review_state_records_and_confirms_the_reading_set).
         for name in self.REVIEWS:
             step = self.step(name, 2)
-            for sentence in (self.SUPPLY[name], self.reads(name), self.CITES, self.RECORDED):
+            for sentence in (self.SUPPLY[name], self.CITES, self.RECORDED):
                 with self.subTest(procedure=name, sentence=sentence[:60]):
                     self.assertIn(sentence, step)
             with self.subTest(procedure=name, part="order"):
-                self.assertLess(step.index(self.SUPPLY[name]), step.index(self.reads(name)))
+                self.assertLess(step.index(self.SUPPLY[name]), step.index(self.RECORDED))
+            with self.subTest(procedure=name, part="stated once"):
+                self.assertNotIn(self.CORE, step)
 
     def test_a_claim_of_a_non_spec_plan_reads_the_whole_plan(self):
         # B1: the whole plan, right after the material it widens and before the citation rule, in every place a
         # claim's brief is built from.
+        # Delegation dedupe ticket 02: stated once, in review state's Reading set; the procedures and the delegation
+        # skill point to it.
         places = {name: self.step(name, 2) for name in self.REVIEWS}
-        places["review-state.md"] = feather_support.review_rules_source("review-state.md#Reading set")
         skill = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
         places["SKILL.md"] = skill.split("## Dispatch", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(self.core("review-state.md") + ". " + self.WHOLE_PLAN + " Citations are as ",
+                      feather_support.review_rules_source("review-state.md#Reading set"))
         for name, text in places.items():
             with self.subTest(place=name):
-                self.assertIn(self.core(name) + ". " + self.WHOLE_PLAN + " Citations are as ", text)
+                self.assertNotIn("the whole plan is supplied to the claim's implementation", text)
+                self.assertIn("Reading set describes", text)
 
     def test_the_whole_spec_rule_names_s13_s_exception_everywhere(self):
         # S13: every place that states the shared material gains the exception; the unconditional ending is gone.
+        # Delegation dedupe ticket 02: the shared material and its exception are stated only in review state.
         places = {name: self.text(self.REFERENCES / name) for name in self.REVIEWS + ("review-state.md",)}
         places["SKILL.md"] = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        self.assertIn(self.core("review-state.md"), places["review-state.md"])
         for name, text in places.items():
             with self.subTest(place=name):
-                self.assertIn(self.core(name), text)
+                self.assertEqual(text.count(self.CORE), 1 if name == "review-state.md" else 0)
                 self.assertNotIn(self.UNCONDITIONAL, text)
 
     def test_a_ticket_without_a_ready_reads_the_whole_spec(self):
@@ -5440,12 +5486,17 @@ class ReadingSetTests(unittest.TestCase):
                 with self.subTest(place=name, removed=removed):
                     self.assertNotIn(removed, text)
         # Every sentence that says where the invariants and test targets are written names the listed-claim
-        # every-claim exception and excludes other claims' invariants and targets.
+        # every-claim exception and excludes other claims' invariants and targets. Delegation dedupe ticket 02: review
+        # state states it once; each brief writer carries "exactly the claim's own" and points to it.
         for name, text in self.invariant_places().items():
             sentences = [sentence for sentence in re.split(r"(?<=\.) ", text)
                          if "invariants and test targets" in sentence and " written in " in sentence]
             with self.subTest(place=name, part="found"):
-                self.assertEqual(len(sentences), 1, sentences)
+                self.assertEqual(len(sentences), 1 if name == "review-state.md" else 0, sentences)
+                self.assertNotIn(self.SOURCES_REPLACED, text)
+                if name != "review-state.md":
+                    self.assertIn("the claim's own", text)
+                    self.assertIn("never another claim's", text)
             for sentence in sentences:
                 with self.subTest(place=name, sentence=sentence[:60]):
                     self.assertIn(self.SOURCES, sentence)
@@ -5482,9 +5533,10 @@ class ReadingSetTests(unittest.TestCase):
     def test_every_claim_parts_are_read_only_for_a_listed_claim(self):
         # S1: wherever this rule names the parts that hold for every Claim, it limits them to a Claim a spec lists, or,
         # for the invariants and targets, to a claim a spec or other plan lists (S4).
+        # Delegation dedupe ticket 02: review state states the read limit once; the others point to it.
         for name, text in self.invariant_places().items():
             with self.subTest(place=name):
-                self.assertGreater(text.count(self.READ_LIMIT), 0)
+                self.assertEqual(text.count(self.READ_LIMIT), 1 if name == "review-state.md" else 0)
                 self.assertEqual(self.unqualified_every_claim_parts(text), [])
         claim = feather_support.glossary_entries(self.text(config.ROOT / "CONTEXT.md"))["Claim"]
         self.assertIn("for a Claim a spec lists, the spec's parts that state they hold for every Claim", claim)
@@ -5650,10 +5702,11 @@ class DraftingSpecTests(unittest.TestCase):
     )
 
     # Kept: the timing for every other plan.
+    # Delegation dedupe ticket 02, H7.
     OTHER_PLANS = (
-        "For any other plan, such as a spec or ticket the user wrote, one written before cc-feather 0.18.0 or a "
-        "conversation plan, main classifies its claims before the first plan review of that plan in the session or, for "
-        "implemented work, before its code review."
+        "For any other plan, including one whose claims were not classified when it was written, such as a spec or "
+        "ticket the user wrote or a conversation plan, main classifies its claims before the first plan review of that "
+        "plan in the session or, for implemented work, before its code review."
     )
 
     # S8: classification reads the whole spec, unlike a claim's reviews.
@@ -5664,9 +5717,11 @@ class DraftingSpecTests(unittest.TestCase):
 
     # S7 (amended 2026-10-13): off mode classifies before dispatching or starting the implementation, main's own work
     # included, and an executor's reported Security-critical change is routed.
-    OFF_MODE = "In off mode, main classifies a plan's claims before dispatching or starting their implementation, " \
-               "main's own work included, so that Security-critical work is routed to security-executor."
-    EXECUTOR_REPORT = "In either mode, a Security-critical change an executor reports goes to security-executor."
+    # Delegation dedupe ticket 02: plan review points to the delegation skill, which states both rules (SKILL_OFF_MODE
+    # and SKILL_EXECUTOR_REPORT below).
+    OFF_MODE = ("In either mode, for when main classifies claims and where Security-critical work goes, read the "
+                "[delegation skill](../SKILL.md)'s Select and prepare and follow it.")
+    EXECUTOR_REPORT = OFF_MODE
 
     SKILL_OFF_MODE = (
         "A Security-critical claim is a claim whose outcome includes a Security-critical change; classify claims as "
@@ -5710,6 +5765,9 @@ class DraftingSpecTests(unittest.TestCase):
             with self.subTest(place=name, removed=sentence[:50]):
                 self.assertNotIn(sentence, texts[name])
         self.assertIn(self.OFF_MODE, self.classification_paragraph())
+        skill = self.text(config.ROOT / "skills" / "delegation" / "SKILL.md")
+        self.assertIn(self.SKILL_OFF_MODE, skill)
+        self.assertIn(self.SKILL_EXECUTOR_REPORT, skill)
 
     # S4, writing side: accepted controls and test targets go where the claim's reading set reaches.
     WRITTEN_INTO_THE_CLAIM = (
@@ -5868,19 +5926,19 @@ class DeviationScopeTests(unittest.TestCase):
         # Acceptance item 7 and S9: the changed tickets, the tickets they block, and tickets sharing a file, trust
         # boundary or security invariant with a changed ticket.
         "scope": "For a plan that is tickets of a spec, a single named ticket included, the review of the revised plan "
-                 "after a material deviation, as [plan review](plan-review.md) step 5 describes, covers the changed "
+                 "after a material deviation, as the plan-review procedure's step 5 describes, covers the changed "
                  "tickets and the tickets they block, and also every ticket that shares a file, a trust boundary or a "
                  "security invariant with a changed ticket.",
         # Acceptance item 7 (outcome added on 2026-10-13 by the user's decision): the checklist only when the change
         # touches the spec's stated outcome, scope, decisions or invariants, and losing coverage touches the outcome.
         "checklist": "It runs the spec checklist again only when the change touches the spec's stated outcome, scope, "
                      "decisions or invariants; a change that stops the tickets covering the spec's outcome touches the "
-                     "spec's outcome, so the checklist, its coverage part included, runs again as [plan review]"
-                     "(plan-review.md) describes.",
+                     "spec's outcome, so the checklist, its coverage part included, runs again: read the [plan-review "
+                     "procedure](plan-review.md)'s checklist and follow it.",
         # S2's check is kept in every review.
         "citations": "Every plan review over tickets of a spec, a narrowed one included, still checks that each of the "
-                     "spec's security invariants is cited by at least one of its tickets, as [plan review]"
-                     "(plan-review.md) describes.",
+                     "spec's security invariants is cited by at least one of its tickets: read the [plan-review "
+                     "procedure](plan-review.md)'s checklist and follow it.",
         # S10: main states why, and the analyst receives the spec and may require the checklist.
         "why": "When main judges that a change does not touch the spec's stated outcome, scope, decisions or invariants, "
                "it states why in the plan-review brief and in its report; the brief still supplies the spec, and analyst "
@@ -5897,8 +5955,8 @@ class DeviationScopeTests(unittest.TestCase):
                      "previous plan-review call completed, and after a call that did not complete, the next call reviews "
                      "the whole plan.",
         # Out of Scope item 4: counts, the Stop threshold and the approval step are unchanged.
-        "unchanged": "The count, the Stop threshold and the user's approval of the revised plan are as [plan review]"
-                     "(plan-review.md) step 5 describes.",
+        "unchanged": "The count, the Stop threshold and the user's approval of the revised plan are as the plan-review "
+                     "procedure's step 5 describes: read the [plan-review procedure](plan-review.md)'s step 5 and follow it.",
     }
 
     # Acceptance item 7 and S11: the spec-update rule.
@@ -5923,15 +5981,16 @@ class DeviationScopeTests(unittest.TestCase):
             "a material deviation stops dependent work for another review of the revised plan, counted from the reset of "
             "the last automatic READY, or from the unchanged count after an explicit READY that cleared a stop, and the "
             "user's approval.",
-            "That review needs the user's explicit request exactly while the count is at or above the Stop threshold in "
-            "effect, as [review state](review-state.md)'s Next automatic call describes.",
+            # Delegation dedupe ticket 02: a pointer to the one rule.
+            "Whether that review needs the user's explicit request follows [review state](review-state.md)'s Next "
+            "automatic call.",
             "A deviation is material when it changes the plan's outcome, scope or acceptance; in addition, discovering a "
             "security control or invariant the plan lacks is a material deviation.",
         ),
         "plan-review.md#security analysis": (
             "Security analysis reopens only for a new trust boundary, a changed attacker capability or a materially "
             "revised control, and then covers only what changed, before plan review runs again.",
-            "The security analysis is not a counted step, and the Stop threshold does not apply to it.",
+            "The security analysis is not counted, as [review state](review-state.md)'s Not counted describes.",
         ),
         "review-state.md#Completed calls and coverage": (
             "Only a completed review establishes coverage.",
@@ -5940,9 +5999,8 @@ class DeviationScopeTests(unittest.TestCase):
             "Every attempted call still counts as under What counts as a call, and the budgets are unchanged.",
         ),
         "review-state.md#Reading set": (
-            "A change the user did not authorise is a material deviation, as [plan review](plan-review.md) step 5 "
-            "describes; after a change the user authorises, main records the changed reading set before the claim's next "
-            "dispatch.",
+            "A change the user did not authorise is a material deviation: read the [plan-review procedure](plan-review.md)'s step 5 and follow it; after a change the user authorises, "
+            "main records the changed reading set before the claim's next dispatch.",
         ),
         "review-state.md#Claim changes": (
             "Main edits a spec or ticket for it only after the user authorises it, keeping a mapping from old claims to "
