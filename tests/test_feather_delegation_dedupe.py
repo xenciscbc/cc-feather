@@ -721,12 +721,16 @@ ABSENT = (
     "saying where a change comes from does not stop",
     "at the final commit after the final check has passed there",
     "state the classification before dispatching",
+    # The restored owner sentence in RESTORED (code review: "does not start verification") carries this condition;
+    # this entry blocks only the old restated wording.
     "without starting verification",
     "the next call covers each of them even though that call completed",
     "narrows its review only when the brief says it did",
     "dispatch only with a clean workspace",
     "replace that note with a pending-acceptance note",
     "in off HELD does not cross sessions",
+    # The restored owner sentences in RESTORED (code review and outcome verification: "applies in either mode (read
+    # the ...) and does not ...") carry this condition; this entry blocks only the old restated wording.
     "applies in either mode and does not",
     "an explicit call's verdict does not change it",
     "resumed session starts a new count",
@@ -861,7 +865,7 @@ READ_POINTERS = (
     ("review-state.md#Deviation scope", "the review of the revised plan after a material deviation (read the [plan-review procedure](plan-review.md)'s step 5 and follow it) covers the changed tickets"),
     ("review-state.md#Deviation scope", "For the count, the Stop threshold and the user's approval of the revised plan, read the [plan-review procedure](plan-review.md)'s step 5 and follow it."),
     ("code-review.md#@Resolve the active review mode", "It applies in either mode (read the [plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not start verification."),
-    ("outcome-verification.md#@Resolve the active review mode", "It applies in either mode (read the [plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not require code review first."),
+    ("outcome-verification.md#@Resolve the active review mode", "An explicit verification request applies in either mode (read the [plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not require code review first."),
     ("adversarial-review SKILL.md#@The command takes a required attack scope", "Targets named in the arguments enter the brief only under step 3 of the procedure: read the [adversarial-review procedure](../delegation/references/adversarial-review.md)'s step 3 and follow it, including its rule that dynamic probing follows"),
 )
 # Ticket 02's code review: references in review state that ticket 02 wrote naming another owner with a bare "as ...
@@ -871,7 +875,8 @@ BARE_OTHER_OWNER = re.compile(r"as the (?:Adversarial review|plan-review|code-re
 # Ticket 02's code review: baseline conditions ticket 02 lost, restored at their owner with their original predicate
 # (place, whole sentences).
 RESTORED = {
-    # Outcome verification's own precondition (OV:5 at f4671bd; inventory R10.1 notes OV:5 adds it).
+    # Outcome verification's own precondition, the baseline OV:5 text itself (OV:5 at f4671bd); inventory R10.1 lists
+    # OV:5 only as a copy of the per-claim timing.
     "only after code review returns APPROVED": (
         "outcome-verification.md#@Resolve the active review mode",
         "In auto, plan-driven work gets outcome verification only after [code review](code-review.md) returns APPROVED."),
@@ -885,8 +890,9 @@ RESTORED = {
     "an explicit verification applies in either mode and does not require code review first": (
         "outcome-verification.md#@Resolve the active review mode",
         "Whether a request runs outcome verification, in either mode, is as [review state](review-state.md)'s What an "
-        "explicit call runs describes. It applies in either mode (read the [plan-review procedure](plan-review.md)'s "
-        "review mode resolution and follow it) and does not require code review first."),
+        "explicit call runs describes. An explicit verification request applies in either mode (read the "
+        "[plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not require code "
+        "review first."),
     # AR:11 at f4671bd; inventory R18.11 (owner AR:11).
     "static analysis and INCONCLUSIVE without an isolated environment": (
         "adversarial-review.md#3",
