@@ -1000,19 +1000,21 @@ class RepoTrustSplitReleaseTests(unittest.TestCase):
         section = self.section(self.text(name), heading)
         return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
 
-    def test_manifest_is_0_29_0(self):
-        self.assertEqual("0.29.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.30.0, delegation dedupe).
 
     def test_updates_sections_start_with_the_trusted_repository_note_in_both_languages(self):
         previous = WeighFindingsBeforeRulesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = DelegationDedupeReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.29.0 note starts right after the section's opening sentence, its sentences in order, before 0.28.0's.
+            # The 0.29.0 note starts right after the 0.30.0 note, its sentences in order, before 0.28.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -1089,6 +1091,110 @@ class RepoTrustSplitReleaseTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
                                                             "Ticket 04:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.30.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(DelegationDedupeReleaseTests.ENTRY_HEADING))
+
+
+class DelegationDedupeReleaseTests(unittest.TestCase):
+    """0.30.0 (docs/specs/delegation-dedupe.md, Acceptance items 14 and 15): the manifest version is 0.30.0; the Updates
+    note says the delegation rules are each written once and the reference explains and links, discloses the loading
+    cost, says that no `/cc-feather:setup update` is needed because no role definition, policy template or their
+    rendering changed, that the update takes effect in a fresh session and how to go back to 0.29.0, in both languages;
+    the validation entry records the test counts, T1 and T2, the unchanged templates, the review round under S5, that no
+    live review rehearsal was run and the tag."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.30.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.30.0 writes each delegation rule once, in the file responsible for it, with a pointer wherever else it applies, and main reads review state in full before a decision that depends on it; the [reference](docs/reference.md) now explains what each rule is for and links to the procedure that states it, and no rule changes.",
+         "Counted by every file the links reach, each entry loads about 9 KB less; counted by the files main is told to read, every entry loads more, most of all the preview, the Stop threshold command and the brief of a claim's implementation, which now read review state in full; the [results](docs/specs/delegation-dedupe-results.md#loading-cost) record both.",
+         "It changes no role definition, installed policy template or the setup tool's rendering of them, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "To go back to 0.29.0, reinstall the 0.29.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.30.0 把每條分派規則只寫在負責它的檔案中，其他適用的地方改為指向它，主 Agent 在依賴 review state 的決定之前會完整讀過它；[參考文件](docs/reference.zh-TW.md)改為說明每條規則的用途並連到寫明它的流程，沒有任何規則改變。",
+         "以連結所及的所有檔案計算，每個入口少載入約 9 KB；以主 Agent 被指示讀取的檔案計算，每個入口都載入更多，其中預覽、Stop threshold 指令與 claim 實作的 brief 增加最多，因為它們現在要完整讀 review state；兩種計算都記錄在[結果檔](docs/specs/delegation-dedupe-results.md#loading-cost)。",
+         "它沒有改任何角色定義、已安裝的政策範本或 setup 工具對它們的產生方式，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "要回到 0.29.0，重新安裝 0.29.0 的 plugin 即可；不需要做 setup update 或先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def test_manifest_is_0_30_0(self):
+        self.assertEqual("0.30.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_dedupe_note_in_both_languages(self):
+        previous = RepoTrustSplitReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.30.0 note starts right after the section's opening sentence, its sentences in order, before 0.29.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_state_that_no_setup_update_is_needed_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertNotIn("need the plugin update and then", note)
+                self.assertNotIn("再於每個裝有分派元件的範圍執行", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            for target in re.findall(r"\]\(([^)#]+)", self.note(name, heading, sentences)):
+                with self.subTest(readme=name, target=target):
+                    self.assertTrue((config.ROOT / target).is_file())
+        self.assertIn("\n## Loading cost\n", self.text("docs/specs/delegation-dedupe-results.md"))
+
+    # The validation entry: what it implements, no setup update with its check, the validation, T1 and T2, no
+    # rehearsal, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.30.0 each delegation rule written once\n"
+    ENTRY = (
+        "Implements [the delegation dedupe spec](specs/delegation-dedupe.md), committed with its condition inventory in 471b6ff;",
+        "**No setup update is required.**",
+        "as `git diff-tree -r --name-only v0.29.0 HEAD -- templates scripts skills/setup/references/auto-review.md` shows",
+        "To go back to 0.29.0, reinstall the 0.29.0 plugin; no setup update or remove is needed.",
+        "at f4671bd, the commit of the installed 0.29.0, each ran 842 tests with 30 skips;",
+        "[results file](specs/delegation-dedupe-results.md)",
+        "T1, the verifier's two-way check of the condition inventory at 4a50719, reported REFUTED under the strict reading:",
+        "T2: all eight scenarios passed;",
+        "No live review rehearsal was run for this release;",
+        "`v0.30.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "All reviews used the installed 0.29.0 roles and procedures from the plugin cache,",
+        "follow the commit carrying this entry and are recorded after it.",
+    )
+
+    def test_validation_entry_records_the_checks_evidence_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
+                                                            "Ticket 04:", "Ticket 05:")]
         self.assertEqual(tickets, sorted(tickets))
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
