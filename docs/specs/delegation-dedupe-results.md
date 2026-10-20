@@ -4,7 +4,7 @@ This file records the evidence that the [delegation-dedupe spec](delegation-dedu
 
 - **Frozen inventory:** commit `471b6ff` (the spec and the inventory as the user approved them). At the judged commit the inventory is byte-identical to `471b6ff` (sha256 `437b669b3e336305fbb1bb61587b0d46ca1c016324fce93042953fbb07547d3e`).
 - **Judged commit:** `4a50719`, the commit that completes the Runtime part (tickets 01 and 02), with a clean working tree.
-- **Baseline:** `f4671bd7a953afff0bbcc2c48919be1b060afa66`, the commit of the installed cc-feather 0.29.0 (`v0.29.0`).
+- **Baseline:** `f4671bd7a953afff0bbcc2c48919be1b060afa66`, the commit of the installed cc-feather 0.29.0. The tag `v0.29.0` points at its parent `71fe7e8`; `f4671bd` adds only the release's validation entry, and `skills/` is the same in both.
 
 ## Runs
 
@@ -55,7 +55,7 @@ No answer was given the recorded expectation. Each answer recorded:
 
 - both directions of the check;
 - the D and H items, which match word for word;
-- the U items, which are unchanged;
+- the U items, which are unchanged, except N3 (U8's PR:17 text removed as an R6.1 copy) and N4 (U9's sentence moved word for word to RS:26), neither of which settles a reading;
 - the default routes, apart from M3;
 - the pointers' qualifiers, apart from M1 and M2;
 - the reverse direction, which states no rule the baseline lacks.
@@ -137,7 +137,7 @@ These are cases where both answers agree with each other but not with the expect
 
 ## Loading cost
 
-The bytes of delegation text main is directed to load at each entry are given below for the baseline (`f4671bd`) and the new text (`4a50719`). Each file counts once, in full, with one full read of review state per intact context. Main computed these figures with a script that reads each file through `git show`.
+The bytes of delegation text main is directed to load at each entry are given below for the baseline (`f4671bd`) and the new text (`4a50719`). Each file counts once, in full, with one full read of review state per intact context. Main computed these figures with scripts that read each file through `git show`; the rule (i) figure for the implementation brief's new text is the sum of the two files the rule names (SK and RS), added by hand because the script does not follow the delegation skill's own directions.
 
 **Rule (i).** Rule (i) counts the files that a sentence on the entry's path directs main to read or follow:
 
@@ -145,24 +145,35 @@ The bytes of delegation text main is directed to load at each entry are given be
 - It adds each file that one of those files directs main to read, follow, or read and follow through a link.
 - A bare "as X describes" link is not such a direction.
 - The delegation skill's directions count only for the implementation brief, whose entry it is.
-- Directions are taken one hop from the entry's own files. Following them transitively through review state would pull in every procedure that review state's conditional explicit-read pointers name, whatever the situation.
+- Directions are taken one hop from the entry's own files. Following them transitively through review state would pull in every procedure that review state's conditional explicit-read pointers name, whatever the situation. The spec does not fix the number of hops, so the transitive variant is also given below as an upper bound.
 
-**Rule (ii).** Rule (ii) counts every file in item 1's scope reachable through links from the entry's own files, followed transitively. The delegation skill's links are not followed, because they lead to every entry.
+**Rule (ii).** Rule (ii) counts every file in item 1's scope reachable through links from the entry's own files, followed transitively, the delegation skill's links included, as item 9 states.
 
 | Entry | (i) baseline | (i) new | (i) change | (ii) baseline | (ii) new | (ii) change |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| plan review | 105,603 | 126,454 | +20,851 | 172,034 | 163,247 | −8,787 |
-| code review | 124,466 | 140,910 | +16,444 | 172,034 | 163,247 | −8,787 |
-| outcome verification | 120,224 | 136,754 | +16,530 | 172,034 | 163,247 | −8,787 |
-| Adversarial review | 124,466 | 140,910 | +16,444 | 172,034 | 163,247 | −8,787 |
-| implementation brief of a claim | 15,990 | 87,115 | +71,125 | 15,990 | 14,842 | −1,148 |
+| plan review | 105,603 | 126,454 | +20,851 | 177,991 | 168,138 | −9,853 |
+| code review | 124,466 | 140,910 | +16,444 | 177,991 | 168,138 | −9,853 |
+| outcome verification | 120,224 | 136,754 | +16,530 | 177,991 | 168,138 | −9,853 |
+| Adversarial review | 124,466 | 140,910 | +16,444 | 177,991 | 168,138 | −9,853 |
+| implementation brief of a claim | 15,990 | 87,115 | +71,125 | 177,991 | 168,138 | −9,853 |
 | preview | 7,769 | 99,324 | +91,555 | 185,760 | 176,440 | −9,320 |
 | Stop threshold command | 6,723 | 78,062 | +71,339 | 178,757 | 169,036 | −9,721 |
 | `/cc-feather:adversarial-review` command | 120,164 | 138,105 | +17,941 | 177,991 | 168,138 | −9,853 |
 
-**Under rule (ii).** Every entry costs less. The eleven runtime files fall from 186,526 to 176,737 bytes.
+Rule (i) with directions followed transitively, as an upper bound (the delegation skill's directions again counting only for the implementation brief):
 
-**Under rule (i).** Every entry costs more. There are two causes:
+| Entry | baseline | new | change |
+| --- | ---: | ---: | ---: |
+| plan review, code review, Adversarial review | 146,533 | 140,910 | −5,623 |
+| outcome verification | 160,346 | 151,210 | −9,136 |
+| implementation brief of a claim | 15,990 | 140,910 | +124,920 |
+| preview | 7,769 | 176,440 | +168,671 |
+| Stop threshold command | 6,723 | 169,036 | +162,313 |
+| `/cc-feather:adversarial-review` command | 142,231 | 168,138 | +25,907 |
+
+**Under rule (ii).** Every entry costs less. The eleven runtime files fall from 186,526 to 177,338 bytes.
+
+**Under rule (i).** Every entry costs more when directions are taken one hop; taken transitively, the review entries cost less and the others more. There are two causes of the increases:
 
 - **Explicit-read pointers.** The pointers item 3 requires for owners other than review state turn links that were bare into directions to read. Examples are a review procedure's pointer to plan review's citations and to the Adversarial review procedure.
 - **Item 4's read.** The full read of review state now precedes the entries' dependent decisions. The preview entry, the Stop threshold command and the implementation brief did not direct that read at the baseline.
@@ -183,28 +194,26 @@ These are points that neither text decides, or that the checks observed. None of
 - N6: the pointers at PR:19, CR:9, OV:9 and AR:12 name "Consecutive non-pass count", which is a table row rather than a bold item.
 - N2 and N4 need no change.
 
-**From T2's N items:**
+**From T2's N items.** Every item an adjudicator classed N goes to review-gate-fixes; the item numbers are those of the adjudications' difference tables in Appendix C.
 
-- **S-1**
-  - The reading set of a ticket implemented without a READY that later gets one.
-  - Whether CR:8's "another claim" includes the spec's other tickets.
-  - Whether off with no review counts as "a review decision comes up".
-- **S-2**
+- **S-1**, items 1–6:
+  - The reading set of a ticket implemented without a READY that later gets one (item 1).
+  - Whether a security analysis's findings must be given to the implementer (item 2).
+  - Whether CR:8's "another claim" includes the spec's other tickets (item 3).
+  - Whether off with no review counts as "a review decision comes up" (item 4).
+  - The order of classification against the Implemented before plan review question, and of plan review's step 1 against the plan-driven statement (items 5 and 6).
+- **S-2**, items 2 and 3:
   - Whether a security analysis's finding fixed by the claim is a "pre-existing vulnerability" under AR:18.
   - Whether the code-review and outcome-verification briefs carry test targets as well as security invariants.
-- **S-3**
-  - Missing inputs: C2's classification, whether the disposition is done, and the ticket's state.
-- **S-4**
-  - Items 1 and 3–7 of its table.
-  - STP:15's reminder with `default`.
-- **S-5**
+- **S-3**, items 1–4 and 7–10:
+  - The order of stating the mode, the count, the Stop threshold, the final check and the restriction (items 1–3 and 10).
+  - Missing inputs: whether the disposition is done, C2's classification, the workspace comparison and the ticket's state (items 4, 7, 8 and 9).
+- **S-4**, items 1 and 3–7, and STP:15's reminder with `default`.
+- **S-5**, items 4 and 5:
   - Main's next step after an early explicit Adversarial review in auto while the step is not stopped.
   - The handoff note's wording after a HELD in off.
-- **S-7**
-  - Items 3, 5a, 8 and 12 of its table.
-- **S-8**
-  - Items 2, 3, 5, 6 and 7 of its table.
-  - The handling of an unused APPROVED's findings.
+- **S-7**, items 3, 5a, 8 and 12.
+- **S-8**, items 2, 3, 5, 6 and 7, and the handling of an unused APPROVED's findings.
 
 **From the loading cost:**
 
