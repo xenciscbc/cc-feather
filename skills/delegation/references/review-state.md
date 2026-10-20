@@ -2,6 +2,8 @@
 
 Plan review, code review, outcome verification and Adversarial review keep the same kind of state for each step. This file names it once; [plan review](plan-review.md), [code review](code-review.md), [outcome verification](outcome-verification.md) and [adversarial review](adversarial-review.md) state how their own step changes it. It also states, under Completion criteria, what a claim's reviews judge it against and where the findings that do not hold completion go.
 
+- **Reading it.** Main reads review state in full, every line, and when one read returns only part of the file it reads the rest before acting. A full read whose text is still in main's context serves later places until main reads review state again, which it does after any context compaction, at the start of a new or resumed session and whenever it cannot quote the owner's sentence it is about to apply. This holds in off and in auto.
+
 | State | Meaning |
 | --- | --- |
 | Work identity | What the step judges: the logical plan for plan review, one claim for code review, for outcome verification and for Adversarial review, identified as in [plan review](plan-review.md). |

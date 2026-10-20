@@ -4,8 +4,10 @@ docs/specs/delegation-dedupe-inventory.md sections 0–6): each condition the in
 rule's owner with its original predicate, one predicate per destination; main is told, at every place item 4 names, to
 read review state in full before a decision, brief or gate operation that depends on it; review state's Resolution
 points to Saved in this conversation (D7); and every brief requirement of the inventory's S2 index still stands in the
-procedure that writes the brief. The read sentence is repeated at each place on purpose, since a command entry may run
-without the delegation skill loaded.
+procedure that writes the brief. A short read sentence is repeated at each place on purpose, since a command entry may
+run without the delegation skill loaded; as ticket 02 revised it (the user's decision of 2026-10-20, option 1), each one
+keeps its trigger, the full read and "in off and in auto", and points to review state's Reading it rule, the first rule
+of review state, which states the details of the read once.
 
 Ticket 02 (the contract step; Acceptance items 1, 3, 5, 6 and 8, S1–S4 and T3) adds DelegationDedupeContractTests: each
 rule the inventory's section 1 lists is stated once, at its owner; every other copy is a pointer that names an owner part
@@ -84,25 +86,36 @@ def source(name: str) -> str:
     return place_text(name, (config.ROOT / PATHS[name.partition("#")[0]]).read_text(encoding="utf-8"))
 
 
-# Acceptance item 4's read sentence. Every place states it in one sentence: what the read precedes at that place, then
-# this text, then, where the place covers dispatch, that a scout or Explore lookup needs no such read.
-READ_TAIL = (", in off and in auto, main reads [review state]({link}) in full, every line, and when one read returns "
-             "only part of the file it reads the rest before acting; a full read whose text is still in main's "
-             "context serves here until main reads review state again, which it does after any context compaction, at "
-             "the start of a new or resumed session and whenever it cannot quote the owner's sentence it is about to "
-             "apply")
-SCOUT = "; a scout or Explore lookup needs no such read"
-# The parts the ticket's Acceptance 4 lists, each a phrase of the sentence.
+# Acceptance item 4's read, as ticket 02 revised it (the user's decision of 2026-10-20, option 1): the details of reading
+# review state are stated once, in review state's Reading it rule, the first rule of the file and before its table of
+# steps, so that the first part of any read includes it.
+READING_IT = (
+    "- **Reading it.** Main reads review state in full, every line, and when one read returns only part of the file it "
+    "reads the rest before acting. A full read whose text is still in main's context serves later places until main "
+    "reads review state again, which it does after any context compaction, at the start of a new or resumed session and "
+    "whenever it cannot quote the owner's sentence it is about to apply. This holds in off and in auto."
+)
+# The parts ticket 01's Acceptance 4 lists, each a phrase of the Reading it rule.
 READ_PARTS = {
-    "reading in full": "in full, every line",
+    "reading in full": "Main reads review state in full, every line",
     "in parts when one read returns part": "when one read returns only part of the file it reads the rest before acting",
-    "reuse of a full read still in context": "a full read whose text is still in main's context serves here",
+    "reuse of a full read still in context":
+        "A full read whose text is still in main's context serves later places until main reads review state again",
     "rereading after a compaction": "after any context compaction",
     "rereading at a new or resumed session": "at the start of a new or resumed session",
     "rereading when main cannot quote the owner's sentence":
         "whenever it cannot quote the owner's sentence it is about to apply",
-    "off and auto": "in off and in auto",
+    "off and auto": "This holds in off and in auto.",
 }
+# Every place states the read in one short sentence: what the read precedes at that place (its trigger), then this
+# text, then, where the place covers dispatch, that a scout or Explore lookup needs no such read. Reading is the
+# default; the sentence states no exception and points to Reading it for when an earlier full read still serves.
+READ_TAIL = (", in off and in auto, main reads [review state]({link}) in full; review state's Reading it says when an "
+             "earlier full read still serves")
+SCOUT = "; a scout or Explore lookup needs no such read"
+# Wording the short sentence never carries: the rule's own details and any exception stated at the place.
+READ_NOT_AT_PLACE = ("every line", "returns only part", "serves here", "serves later places", "context compaction",
+                     "new or resumed session", "cannot quote", "unless", "except", "need not", "needs no read")
 # Each place item 4 names, with what the read precedes there and whether the place covers dispatch.
 READ_PLACES = {
     # The delegation skill's Select and prepare, a security analysis's brief and its workspace reads included.
@@ -477,29 +490,79 @@ class DelegationDedupeExpandTests(unittest.TestCase):
         self.assertTrue(source("review-state.md#Saved in this conversation").startswith(
             "- **Saved in this conversation.**"))
 
-    # Acceptance item 4.
+    # Acceptance item 4, as ticket 02 revised it: the Reading it rule once, with every part.
+    def test_reading_it_is_review_states_first_rule_before_its_table(self):
+        text = (REFERENCES / "review-state.md").read_text(encoding="utf-8")
+        lines = text.splitlines()
+        bullets = [index for index, line in enumerate(lines) if line.startswith("- **")]
+        self.assertEqual(lines[bullets[0]], READING_IT)
+        self.assertLess(bullets[0], lines.index("| State | Meaning |"))
+        self.assertEqual(text.count("- **Reading it.**"), 1)
+
+    def test_reading_it_states_every_part(self):
+        rule = source("review-state.md#Reading it")
+        for part, phrase in READ_PARTS.items():
+            with self.subTest(part=part):
+                self.assertIn(phrase, rule)
+
+    def test_the_parts_of_reading_it_are_stated_only_there(self):
+        # The details of the read are not restated at the places; "in off and in auto" is in every read sentence.
+        files = runtime_markdown()
+        for part, phrase in READ_PARTS.items():
+            if part == "off and auto":
+                continue
+            for path, text in files.items():
+                with self.subTest(part=part, path=path):
+                    owner = path == PATHS["review-state.md"]
+                    self.assertEqual(text.count(phrase), 1 if owner else 0)
+
+    # Acceptance item 4 at each place: exactly one short read sentence with its trigger.
     def test_the_read_sentence_is_at_every_place_once(self):
         for place in READ_PLACES:
+            name = place.partition("#")[0]
             text = source(place)
             sentence = read_sentence(place)
             with self.subTest(place=place):
                 self.assert_whole_sentence(sentence, text)
-                self.assertEqual(text.count(READ_TAIL.format(link=REVIEW_STATE_LINK[place.partition("#")[0]])), 1)
+                self.assertEqual(text.count(READ_TAIL.format(link=REVIEW_STATE_LINK[name])), 1)
+                whole = (config.ROOT / PATHS[name]).read_text(encoding="utf-8")
+                self.assertEqual(whole.count(sentence), 1)
 
-    def test_the_read_sentence_states_every_part(self):
+    def test_the_read_sentence_states_its_parts(self):
+        names = review_state_names((REFERENCES / "review-state.md").read_text(encoding="utf-8"))
+        self.assertIn("Reading it", names)
+        for place in READ_PLACES:
+            head, dispatch = READ_PLACES[place]
+            name = place.partition("#")[0]
+            link = REVIEW_STATE_LINK[name]
+            sentence = read_sentence(place)
+            with self.subTest(place=place):
+                self.assertTrue(sentence.startswith(head + ", "))
+                self.assertIn(f"main reads [review state]({link}) in full", sentence)
+                self.assertIn("in off and in auto", sentence)
+                self.assertIn("review state's Reading it says when an earlier full read still serves", sentence)
+                # The link resolves to review state from that file.
+                target = ((config.ROOT / PATHS[name]).parent / link).resolve()
+                self.assertEqual(target, (REFERENCES / "review-state.md").resolve())
+            with self.subTest(place=place, part="scout or Explore"):
+                self.assertEqual(sentence.endswith(SCOUT + "."), dispatch)
+                self.assertEqual(source(place).count(SCOUT), 1 if dispatch else 0)
+
+    def test_the_read_sentence_states_no_detail_or_exception(self):
+        for place in READ_PLACES:
+            head, _ = READ_PLACES[place]
+            rest = read_sentence(place)[len(head):].replace(SCOUT, "")
+            for phrase in READ_NOT_AT_PLACE:
+                with self.subTest(place=place, phrase=phrase):
+                    self.assertNotIn(phrase, rest)
+
+    def test_the_read_sentence_is_one_short_sentence(self):
         for place in READ_PLACES:
             sentence = read_sentence(place)
-            for part, phrase in READ_PARTS.items():
-                with self.subTest(place=place, part=part):
-                    self.assertIn(phrase, sentence)
-            if READ_PLACES[place][1]:
-                with self.subTest(place=place, part="scout or Explore"):
-                    self.assertTrue(sentence.endswith(SCOUT + "."))
-
-    def test_the_read_sentence_is_one_sentence(self):
-        for place in READ_PLACES:
             with self.subTest(place=place):
-                self.assertEqual(len(feather_support.sentences(read_sentence(place))), 1)
+                self.assertEqual(len(feather_support.sentences(sentence)), 1)
+                # The trigger is the place's own; the rest stays short.
+                self.assertLessEqual(len(sentence.encode("utf-8")) - len(READ_PLACES[place][0].encode("utf-8")), 220)
 
     def test_each_delegation_skill_section_item_4_names_has_the_read(self):
         text = (DELEGATION / "SKILL.md").read_text(encoding="utf-8")
@@ -555,6 +618,7 @@ class DelegationDedupeExpandTests(unittest.TestCase):
         pins = [(place.partition("#")[0], sentence) for place, sentences in MOVED.items() for sentence in sentences]
         pins += [(place.partition("#")[0], read_sentence(place)) for place in READ_PLACES]
         pins += [("review-state.md", D7_SENTENCE)]
+        pins += [("review-state.md", sentence) for sentence in feather_support.sentences(READING_IT)]
         return pins
 
     def test_every_new_pin_fails_on_the_v0_29_0_text(self):
@@ -563,9 +627,14 @@ class DelegationDedupeExpandTests(unittest.TestCase):
                 self.assertNotIn(sentence, self.tagged(name))
 
     def test_the_read_rule_is_absent_from_the_v0_29_0_text(self):
+        tagged = self.tagged("review-state.md")
+        self.assertNotIn("**Reading it.**", tagged)
+        for part, phrase in READ_PARTS.items():
+            with self.subTest(part=part):
+                self.assertNotIn(phrase, tagged)
         for name in sorted({place.partition("#")[0] for place in READ_PLACES}):
             with self.subTest(place=name):
-                self.assertNotIn("a full read whose text is still in main's context", self.tagged(name))
+                self.assertNotIn("Reading it says when an earlier full read still serves", self.tagged(name))
 
     def test_every_s2_and_s4_pin_matches_the_v0_29_0_text(self):
         # These pins hold the baseline's text in place, so they already hold at the tag.
