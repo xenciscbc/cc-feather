@@ -5926,7 +5926,8 @@ class DeviationScopeTests(unittest.TestCase):
         # Acceptance item 7 and S9: the changed tickets, the tickets they block, and tickets sharing a file, trust
         # boundary or security invariant with a changed ticket.
         "scope": "For a plan that is tickets of a spec, a single named ticket included, the review of the revised plan "
-                 "after a material deviation, as the plan-review procedure's step 5 describes, covers the changed "
+                 "after a material deviation (read the [plan-review procedure](plan-review.md)'s step 5 and follow it) "
+                 "covers the changed "
                  "tickets and the tickets they block, and also every ticket that shares a file, a trust boundary or a "
                  "security invariant with a changed ticket.",
         # Acceptance item 7 (outcome added on 2026-10-13 by the user's decision): the checklist only when the change
@@ -5955,8 +5956,8 @@ class DeviationScopeTests(unittest.TestCase):
                      "previous plan-review call completed, and after a call that did not complete, the next call reviews "
                      "the whole plan.",
         # Out of Scope item 4: counts, the Stop threshold and the approval step are unchanged.
-        "unchanged": "The count, the Stop threshold and the user's approval of the revised plan are as the plan-review "
-                     "procedure's step 5 describes: read the [plan-review procedure](plan-review.md)'s step 5 and follow it.",
+        "unchanged": "For the count, the Stop threshold and the user's approval of the revised plan, read the "
+                     "[plan-review procedure](plan-review.md)'s step 5 and follow it.",
     }
 
     # Acceptance item 7 and S11: the spec-update rule.

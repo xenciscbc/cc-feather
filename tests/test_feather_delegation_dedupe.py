@@ -743,6 +743,8 @@ ABSENT = (
     "A missing role found before dispatch",
     "as [adversarial review](adversarial-review.md) step",
     "as [plan review](plan-review.md) step 5 describes",
+    # Ticket 02's code review: the command points to step 3 in the explicit-read form.
+    "as step 3 of the procedure describes",
 )
 # Text the inventory keeps (H9 and H11, section 3) is the one place its phrase may stay.
 ABSENT_EXCEPT = {
@@ -853,7 +855,45 @@ READ_POINTERS = (
     ("review-state.md#Follow-up record", "For what it records about a vulnerability, read the [Adversarial review procedure](adversarial-review.md)'s step 10 and follow it."),
     ("review-state.md#Conversation plans", "In a new session, main identifies a plan-mode or conversation plan as plan review does: read the [plan-review procedure](plan-review.md)'s plan identification and follow it."),
     ("adversarial-review SKILL.md#@A BROKEN from a call on a gated claim", "(read the [plan-review procedure](../delegation/references/plan-review.md)'s step 5 and follow it)"),
+    # Ticket 02's code review: references ticket 02 wrote as a bare "as ... describes" now use the explicit-read form.
+    ("review-state.md#Accept and land at the end of the plan", "For each Security-critical claim's Adversarial review result, read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it. The list states the final check's state at the commit to be landed,"),
+    ("review-state.md#Accept and land at the end of the plan", "treats each Adversarial review result that no longer judges the commit to be landed as not run, and asks again; read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it."),
+    ("review-state.md#Deviation scope", "the review of the revised plan after a material deviation (read the [plan-review procedure](plan-review.md)'s step 5 and follow it) covers the changed tickets"),
+    ("review-state.md#Deviation scope", "For the count, the Stop threshold and the user's approval of the revised plan, read the [plan-review procedure](plan-review.md)'s step 5 and follow it."),
+    ("code-review.md#@Resolve the active review mode", "It applies in either mode (read the [plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not start verification."),
+    ("outcome-verification.md#@Resolve the active review mode", "It applies in either mode (read the [plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not require code review first."),
+    ("adversarial-review SKILL.md#@The command takes a required attack scope", "Targets named in the arguments enter the brief only under step 3 of the procedure: read the [adversarial-review procedure](../delegation/references/adversarial-review.md)'s step 3 and follow it, including its rule that dynamic probing follows"),
 )
+# Ticket 02's code review: references in review state that ticket 02 wrote naming another owner with a bare "as ...
+# describes". This wording is not in the v0.29.0 text, so it is checked here rather than in ABSENT.
+BARE_OTHER_OWNER = re.compile(r"as the (?:Adversarial review|plan-review|code-review) procedure's [^.;:]+? describes")
+
+# Ticket 02's code review: baseline conditions ticket 02 lost, restored at their owner with their original predicate
+# (place, whole sentences).
+RESTORED = {
+    # Outcome verification's own precondition (OV:5 at f4671bd; inventory R10.1 notes OV:5 adds it).
+    "only after code review returns APPROVED": (
+        "outcome-verification.md#@Resolve the active review mode",
+        "In auto, plan-driven work gets outcome verification only after [code review](code-review.md) returns APPROVED."),
+    # CR:5 at f4671bd; inventory R9.4 (owner: plan review's mode resolution).
+    "an explicit code review applies in either mode and does not start verification": (
+        "code-review.md#@Resolve the active review mode",
+        "An explicit user request for code review runs as [review state](review-state.md)'s What an explicit call runs "
+        "describes. It applies in either mode (read the [plan-review procedure](plan-review.md)'s review mode "
+        "resolution and follow it) and does not start verification."),
+    # OV:5 at f4671bd; inventory R9.4 (owner: plan review's mode resolution).
+    "an explicit verification applies in either mode and does not require code review first": (
+        "outcome-verification.md#@Resolve the active review mode",
+        "Whether a request runs outcome verification, in either mode, is as [review state](review-state.md)'s What an "
+        "explicit call runs describes. It applies in either mode (read the [plan-review procedure](plan-review.md)'s "
+        "review mode resolution and follow it) and does not require code review first."),
+    # AR:11 at f4671bd; inventory R18.11 (owner AR:11).
+    "static analysis and INCONCLUSIVE without an isolated environment": (
+        "adversarial-review.md#3",
+        "Dynamic probing follows [review state](review-state.md)'s Execution. When a restriction covers the call, "
+        "dynamic probing runs only in an isolated environment the user's own message names; without one, the role "
+        "analyses statically and reports INCONCLUSIVE for what needs execution."),
+}
 # How a named part of an owner other than review state is found in that owner's text.
 NAMED_PARTS = {
     "At the final commit": "\n**At the final commit.** ",
@@ -1031,6 +1071,17 @@ class DelegationDedupeContractTests(unittest.TestCase):
                         self.assertTrue(named_part_exists(target, part), part)
                 found += 1
         self.assertGreater(found, len(READ_POINTERS))
+
+    # Item 3: no reference ticket 02 wrote in review state names another owner with a bare "as ... describes" in place
+    # of the explicit-read form.
+    def test_review_state_names_other_owners_in_the_explicit_read_form(self):
+        self.assertEqual(BARE_OTHER_OWNER.findall((REFERENCES / "review-state.md").read_text(encoding="utf-8")), [])
+
+    # S1 and item 2: the conditions ticket 02 lost are stated again at their owner, with their original predicate.
+    def test_the_conditions_ticket_02_lost_are_restored_at_their_owner(self):
+        for condition, (place, sentences) in RESTORED.items():
+            with self.subTest(condition=condition, place=place):
+                self.assert_whole_sentence(sentences, source(place))
 
     # Inventory K1 and spec item 3: the delegation skill's pointer to Dependent claims, and its Adversarial review
     # pointer, stay in sentences the baseline qualified as auto-only.

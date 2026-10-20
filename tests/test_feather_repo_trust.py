@@ -351,8 +351,9 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
             "The brief states the outcome of that determination.",
         ),
         "command": (
-            "Targets named in the arguments enter the brief only as step 3 of the procedure describes, including its "
-            "rule that dynamic probing follows [review state](../delegation/references/review-state.md)'s Execution.",
+            "Targets named in the arguments enter the brief only under step 3 of the procedure: read the "
+            "[adversarial-review procedure](../delegation/references/adversarial-review.md)'s step 3 and follow it, "
+            "including its rule that dynamic probing follows [review state](../delegation/references/review-state.md)'s Execution.",
         ),
         "reference.md#command": (
             "Dynamic probing follows the Execution rule of [review state](../skills/delegation/references/review-state.md): "

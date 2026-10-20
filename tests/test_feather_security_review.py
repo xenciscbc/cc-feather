@@ -1326,7 +1326,8 @@ class AdversarialReviewCommandTests(unittest.TestCase):
             # (Acceptance 6): the condition it restates is the new Execution's. Repo trust split ticket 01 (Acceptance 5):
             # it restates review state's Execution.
             # Delegation dedupe ticket 02: the restated condition became a pointer to review state's Execution.
-            "Targets named in the arguments enter the brief only as step 3 of the procedure describes, including its rule that dynamic probing follows [review state](../delegation/references/review-state.md)'s Execution.",
+            # Ticket 02's code review: the pointer to step 3 uses the explicit-read form.
+            "Targets named in the arguments enter the brief only under step 3 of the procedure: read the [adversarial-review procedure](../delegation/references/adversarial-review.md)'s step 3 and follow it, including its rule that dynamic probing follows [review state](../delegation/references/review-state.md)'s Execution.",
         ),
     }
 

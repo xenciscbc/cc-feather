@@ -2373,7 +2373,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "The list states the final check's state at the commit to be landed, as Final check describes; for each "
             "claim, the commit its passes judged, each pass, each missing pass and each unresolved Blocking finding "
             "listed under it; for each Security-critical claim, its Adversarial review result at the commit to be "
-            "landed, as the Adversarial review procedure's At the final commit describes, that is a BROKEN "
+            "landed, that is a BROKEN "
             "with its findings as the adversary stated them, or by the one-line summary the dispatch record holds for "
             "findings reported in an earlier session, an INCONCLUSIVE with its gaps, or not run; each fix claim that is "
             "Security-critical, with its problem, a summary of the fix and that it had no Adversarial review; the work's "
@@ -2391,8 +2391,7 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "Repository authority describes, and nothing is recorded as accept and land.",
             "A re-review follows the existing rules, classified as Classifying a request describes; when it changes the "
             "code, main runs the final check again at the new commit to be landed, treats each Adversarial review result "
-            "that no longer judges the commit to be landed as not run, as the Adversarial review procedure's At the "
-            "final commit describes, and asks again; read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
+            "that no longer judges the commit to be landed as not run, and asks again; read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
             "For each Security-critical claim's Adversarial review result, read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
             "Confirming part of the list, what is not a confirmation and what a decision covers stay as the sentences "
             "above state.",
