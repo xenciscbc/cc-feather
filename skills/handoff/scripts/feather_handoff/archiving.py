@@ -108,8 +108,16 @@ def _pending(work: Snapshot, history_path: Path, code: str, message: str,
             "pending": [str(work.path)] if work.path.exists() else []}
 
 
-def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool = True) -> dict:
-    """apply_tracking is False only when a save already applied tracking before archiving."""
+def _denied_cause(store: Store, error: BaseException, result: dict) -> dict:
+    """A partial result keeps its code; in a shared run a denied store write adds it as cause_code."""
+    return {**result, "cause_code": "store-unwritable"} if store.unwritable(error) else result
+
+
+def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool = True,
+                 denied_as_error: bool = True) -> dict:
+    """apply_tracking is False only when a save already applied tracking before archiving. denied_as_error is False
+    for the archival a completed save runs, which keeps its partial history-save-failed result when the shared store
+    denies the history write; an explicit archive returns that denial as the store-unwritable error."""
     store.require_write_root()
     expected, tracking = _input(raw)
     require_track_choice(store, tracking)
@@ -159,13 +167,15 @@ def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool =
             try:
                 saved = replace_file(existing, candidate)
             except (OSError, ValueError) as error:
+                if denied_as_error and store.unwritable(error):
+                    raise  # Nothing was written: the work and history are as they were.
                 observed = None
                 try:
                     observed = read_file(history_path)
                 except (OSError, ValueError):
                     pass
-                return _pending(work, history_path, "history-save-failed", str(error),
-                                identity, title, completed, observed)
+                return _denied_cause(store, error, _pending(work, history_path, "history-save-failed", str(error),
+                                                            identity, title, completed, observed))
             appended = True
     else:
         candidate = _candidate(None, entry_data)
@@ -178,13 +188,15 @@ def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool =
         try:
             saved = create_file(history_path, candidate)
         except (OSError, ValueError) as error:
+            if denied_as_error and store.unwritable(error):
+                raise  # Nothing was written: the work is as it was and no history was created.
             observed = None
             try:
                 observed = read_file(history_path)
             except (OSError, ValueError):
                 pass
-            return _pending(work, history_path, "history-save-failed", str(error),
-                            identity, title, completed, observed)
+            return _denied_cause(store, error, _pending(work, history_path, "history-save-failed", str(error),
+                                                        identity, title, completed, observed))
         appended = True
 
     try:

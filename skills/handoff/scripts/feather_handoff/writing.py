@@ -329,7 +329,8 @@ def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
         from .archiving import archive_work
         try:
             # Tracking was applied above; archive_work must not run it a second time.
-            archived = archive_work(store, name, {"version": result["version"]}, apply_tracking=False)
+            archived = archive_work(store, name, {"version": result["version"]}, apply_tracking=False,
+                                    denied_as_error=False)
         except (OSError, ValueError) as error:
             observed = {}
             try:

@@ -13,6 +13,8 @@ from .baseline import unique_object
 def error_code(error: Exception, store: Store | None, command: str | None) -> str:
     """A missing file is not-found only within the Working checkout or the checkout that holds the store; any other
     missing file is an I/O failure."""
+    if store is not None and store.unwritable(error):
+        return "store-unwritable"
     if not isinstance(error, FileNotFoundError):
         return getattr(error, "code", "io")
     name = error.filename
@@ -110,6 +112,11 @@ def main() -> int:
     except (OSError, UnicodeError, ValueError) as error:
         code = error_code(error, store, getattr(args, "command", None))
         result = {"status": "error", "complete": False, "code": code, "message": str(error)}
+        if code == "store-unwritable":
+            # No fallback: a denied store is reported, never replaced by a location in the Working checkout.
+            result.update(store=str(store.directory), access="write", message=(
+                f"The Handoff store {store.directory} is not writable: {error}. The session needs write access to "
+                f"{store.directory}; nothing was written in the Working checkout in its place."))
     except Exception as error:
         result = {"status": "error", "complete": False, "code": "internal",
                   "message": f"{type(error).__name__}: {error}"}

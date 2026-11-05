@@ -597,14 +597,47 @@ def read_file(path: Path) -> Snapshot:
     return Snapshot(path, data)
 
 
+# Windows errors that deny access to a path (ERROR_ACCESS_DENIED, ERROR_WRITE_PROTECT); a sharing or lock violation
+# also maps to EACCES but is a file another process holds, not a denial.
+_DENIED_WINDOWS = {5, 19}
+_DENIED_ERRNO = {errno.EACCES, errno.EPERM, errno.EROFS}
+
+
+def _mark_denied(error: OSError) -> None:
+    """Tag error when creating a new file or directory failed because the operating system or the session sandbox
+    denied access; the error itself propagates unchanged, so every caller keeps its own result for it.
+
+    Only creations are judged: a denied creation leaves every existing file as it was, while a failed replacement of
+    an existing target can also mean that another process holds it open or that it is read-only."""
+    winerror = getattr(error, "winerror", None)
+    if WINDOWS and winerror is not None:
+        denied = winerror in _DENIED_WINDOWS
+    else:
+        denied = error.errno in _DENIED_ERRNO
+    if denied:
+        error.handoff_creation_denied = True
+
+
+def creation_denied(error: BaseException) -> bool:
+    """Whether error is a creation in the store that _mark_denied judged denied; nothing was written by it."""
+    return isinstance(error, OSError) and getattr(error, "handoff_creation_denied", False)
+
+
 def create_file(path: Path, data: bytes) -> Snapshot:
     check_path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        _mark_denied(error)
+        raise
     check_path(path)
     try:
         handle = path.open("xb")
     except FileExistsError:
         raise HandoffError("exists", f"Existing data preserved: {path}") from None
+    except OSError as error:
+        _mark_denied(error)
+        raise
     identity = None
     try:
         try:
@@ -651,6 +684,9 @@ def replace_file(snapshot: Snapshot, data: bytes) -> Snapshot:
                 descriptor = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
             except FileExistsError:
                 continue
+            except OSError as error:
+                _mark_denied(error)
+                raise
             temporary = candidate
             break
         else:
@@ -732,6 +768,11 @@ class Store:
                                f"Handoff store not established ({self.uncertain['store']}). No writes made. "
                                f"Confirm the project root, then use --project <confirmed-root> --exact-root. "
                                f"Current read scope: {self.directory}")
+
+    def unwritable(self, error: BaseException) -> bool:
+        """Whether error is a denied creation in the shared Handoff store, reported as store-unwritable; a
+        checkout-local store keeps each operation's previous result for the same error."""
+        return bool(self.root["shared"]) and creation_denied(error)
 
     def work_path(self, name: str) -> Path:
         legal_name(name)

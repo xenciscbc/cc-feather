@@ -56,6 +56,8 @@ def clear_history(store: Store, raw: object) -> dict:
     try:
         saved = replace_file(original, expected)
     except (OSError, ValueError) as error:
+        if store.unwritable(error):
+            raise  # Nothing was written: the source is as it was.
         observed = None
         try:
             observed = read_file(original.path)
@@ -202,10 +204,14 @@ def seal_history(store: Store, raw: object) -> dict:
         require_current(saved)
         require_current(source)
     except (OSError, ValueError) as error:
+        if store.unwritable(error) and saved is existing:
+            raise  # This call wrote nothing; a destination it already wrote is reported below for the retry.
         result = {"status": "partial", "complete": False, "code": getattr(error, "code", "seal-failed"),
                   "message": str(error), "source": "history.md", "destination": str(destination),
                   "destination_version": saved.version if saved else None,
                   "ids": payload["ids"], "recovery": "Preserve copies; query source version and retry the same destination and identities"}
+        if store.unwritable(error):
+            result["cause_code"] = "store-unwritable"
         return with_warnings(result, warnings)
     return with_warnings({"status": "ok", "complete": True, "source": "history.md", "version": source.version,
                           "destination": str(destination), "destination_version": saved.version,
