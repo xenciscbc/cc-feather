@@ -671,7 +671,8 @@ class PlantedGitTest(unittest.TestCase):
 
     def operations(self, head: str):
         self.assertNotEqual(os.path.normcase(str(self.cwd)), os.path.normcase(str(self.repo)))
-        root = {"requested": str(self.repo), "path": str(self.repo), "state": "git"}
+        root = {"requested": str(self.repo), "path": str(self.repo), "state": "git",
+                "checkout": str(self.repo), "store": str(self.repo), "shared": False}
         listed = self.run_tool("list")
         self.assertEqual((listed["status"], listed["root"]), ("missing", root), listed)
         snapshot = self.run_tool("snapshot", payload={"paths": ["a.txt"]})

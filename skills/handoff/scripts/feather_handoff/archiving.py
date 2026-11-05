@@ -127,7 +127,7 @@ def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool =
                            "keeping the same title, 更新 and 狀態：完成") from None
     title, completed = item["title"], item["updated"]
     body = work_body(work, title)
-    history_path = store.directory / "history.md"
+    history_path = store.history
 
     existing = None
     try:

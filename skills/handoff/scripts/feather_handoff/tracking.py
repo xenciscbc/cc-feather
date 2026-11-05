@@ -16,21 +16,25 @@ def rule_line(line: str) -> str:
 
 
 def git(store: Store, *arguments: str, no_lazy_fetch: bool = False) -> subprocess.CompletedProcess:
-    return run_git(store.project, *arguments, no_lazy_fetch=no_lazy_fetch)
+    """A command applying the ignore rules, run in the checkout that holds the store with paths relative to it."""
+    return run_git(store.store_checkout, *arguments, no_lazy_fetch=no_lazy_fetch)
 
 
 def object_reads(store: Store) -> bool:
     """The promisor-remote check before the first command that can read objects and before any write to the rules.
 
-    Returns whether those commands carry --no-lazy-fetch; raises promisor-remote or promisor-unknown when none may
-    run, and git-unavailable when Git could not be run, like the first probe."""
+    Runs in the same directory as git(), the checkout that holds the store, so the answer governs exactly the
+    commands it guards. Returns whether those commands carry --no-lazy-fetch; raises promisor-remote or
+    promisor-unknown when none may run, and git-unavailable when Git could not be run, like the first probe."""
     try:
-        return lazy_fetch_guard(store.project)
+        return lazy_fetch_guard(store.store_checkout)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise HandoffError("git-unavailable", f"Git could not be run or did not respond: {error}") from None
 
 
 def ensure_tracking(store: Store, work: str, choice: str) -> str:
+    """Apply the ignore rules for one work file in the checkout that holds the store: its .gitignore, and ls-files
+    and check-ignore there after that checkout's lazy-fetch guard."""
     try:
         probe = git(store, "rev-parse", "--is-inside-work-tree")
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -41,7 +45,7 @@ def ensure_tracking(store: Store, work: str, choice: str) -> str:
     if probe.stdout.strip() != "true":
         return "non-git"
     relative = f".feather/handoffs/{work}"
-    path = store.project / ".gitignore"
+    path = store.store_checkout / ".gitignore"
     check_path(path)
     original = read_file(path) if path.exists() else None
     content = original.data.decode("utf-8") if original else ""

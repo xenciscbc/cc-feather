@@ -239,7 +239,8 @@ def lazy_fetch_guard(directory: Path) -> bool:
     return True
 
 
-# Canonical project roots resolved in this process; links above them were followed once.
+# Canonical roots (Working checkouts and checkouts that hold the store) resolved strictly in this process; links
+# above them were followed once.
 _ROOTS: set[str] = set()
 
 
@@ -287,7 +288,7 @@ def _is_link(part: Path, info) -> bool:
 def check_path(path: Path) -> None:
     """Check existing ancestors before following any target, including junctions.
 
-    The walk stops at a registered project root after confirming it still resolves to itself."""
+    The walk stops at a registered root after confirming it still resolves to itself."""
     chain = [path, *path.parents]
     for index, part in enumerate(chain):
         key = os.path.normcase(str(part))
@@ -419,6 +420,15 @@ def _resolve_root(value: str, exact: bool) -> tuple[dict, bool]:
 
 def resolve_root(value: str, exact: bool = False) -> dict:
     return _resolve_root(value, exact)[0]
+
+
+def _select_store(root: dict, trusted: bool) -> tuple[Path, bool, str | None]:
+    """The checkout that holds the Handoff store: (its directory, whether it came from a strict real-path resolution
+    and may be registered as a root, why it is uncertain or None).
+
+    The store stays under the root that discovery selected, so it is strictly resolved exactly when that root is, and
+    uncertain whenever that root is; a root from a volume that cannot resolve real paths is never registered."""
+    return Path(root["path"]), trusted, root["reason"] if root["state"] == "uncertain" else None
 
 
 def legal_name(name: str) -> None:
@@ -553,20 +563,49 @@ def replace_file(snapshot: Snapshot, data: bytes) -> Snapshot:
 
 
 class Store:
+    """The two locations of one invocation, each resolved on its own and never derived from the other.
+
+    project is the Working checkout: sources, Git state and their containment are read there. store_checkout is
+    the checkout that holds the Handoff store, where the ignore rules apply; directory is the store directory under
+    it, and every work file, history.md and archive/ is a direct descendant of it. Each location is registered as a
+    root only when it came from a strict real-path resolution, so the path check stops at it only after confirming
+    it still resolves to itself. uncertain maps each uncertain location ("checkout", "store") to its reason; while
+    it is nonempty every mutation is refused and reads are partial."""
+
     def __init__(self, project: str, *, exact_root: bool = False):
-        self.root, trusted = _resolve_root(project, exact_root)
-        self.project = Path(self.root["path"])
+        root, trusted = _resolve_root(project, exact_root)
+        self.project = Path(root["path"])
         if trusted:
             register_root(self.project)
-        self.directory = self.project / ".feather" / "handoffs"
+        self.store_checkout, store_trusted, store_reason = _select_store(root, trusted)
+        if store_trusted:
+            register_root(self.store_checkout)
+        self.uncertain: dict[str, str] = {}
+        if root["state"] == "uncertain":
+            self.uncertain["checkout"] = root["reason"]
+        if store_reason is not None:
+            self.uncertain["store"] = store_reason
+        shared = os.path.normcase(str(self.project)) != os.path.normcase(str(self.store_checkout))
+        # path keeps its place and meaning for callers that read only it: the directory that holds the records.
+        self.root = {**root, "path": str(self.store_checkout), "checkout": str(self.project),
+                     "store": str(self.store_checkout), "shared": shared}
+        self.directory = self.store_checkout / ".feather" / "handoffs"
+        self.history = self.directory / "history.md"
+        self.archive = self.directory / "archive"
         check_path(self.directory)
 
     def require_write_root(self) -> None:
-        if self.root["state"] == "uncertain":
+        """Refuse a mutation before its first write while either location is uncertain."""
+        if "checkout" in self.uncertain:
             raise HandoffError("project-root-uncertain",
-                               f"Root discovery failed: {self.root['reason']}. No writes made. "
+                               f"Root discovery failed: {self.uncertain['checkout']}. No writes made. "
                                f"Confirm the project root, then use --project <confirmed-root> --exact-root. "
                                f"Current read scope: {self.project}")
+        if "store" in self.uncertain:
+            raise HandoffError("project-root-uncertain",
+                               f"Handoff store discovery failed: {self.uncertain['store']}. No writes made. "
+                               f"Confirm the project root, then use --project <confirmed-root> --exact-root. "
+                               f"Current read scope: {self.directory}")
 
     def work_path(self, name: str) -> Path:
         legal_name(name)

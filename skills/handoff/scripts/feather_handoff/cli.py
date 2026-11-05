@@ -11,7 +11,8 @@ from .baseline import unique_object
 
 
 def error_code(error: Exception, store: Store | None, command: str | None) -> str:
-    """A missing file is not-found only within the selected project; any other missing file is an I/O failure."""
+    """A missing file is not-found only within the Working checkout or the checkout that holds the store; any other
+    missing file is an I/O failure."""
     if not isinstance(error, FileNotFoundError):
         return getattr(error, "code", "io")
     name = error.filename
@@ -20,7 +21,9 @@ def error_code(error: Exception, store: Store | None, command: str | None) -> st
     if store is None or not isinstance(name, (str, bytes, os.PathLike)):
         return "io"
     target = Path(os.path.normcase(os.path.abspath(os.fsdecode(name))))
-    return "not-found" if target.is_relative_to(os.path.normcase(str(store.project))) else "io"
+    within = any(target.is_relative_to(os.path.normcase(str(location)))
+                 for location in (store.project, store.store_checkout))
+    return "not-found" if within else "io"
 
 
 def input_payload():
@@ -112,7 +115,7 @@ def main() -> int:
                   "message": f"{type(error).__name__}: {error}"}
     if store is not None:
         result["root"] = store.root
-        if store.root["state"] == "uncertain" and result["status"] != "error":
+        if store.uncertain and result["status"] != "error":
             result.update(operation_status=result["status"], status="partial", complete=False)
     print(json.dumps(result, ensure_ascii=False))
     return 2 if result["status"] in {"error", "partial"} or (

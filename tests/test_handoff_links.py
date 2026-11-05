@@ -146,7 +146,9 @@ class LinkedAncestorTest(LinkBase):
         make_link(self, self.base / "link", real)
         requested = self.base / "link" / "project"
         listed = self.run_tool(requested, "list")
-        self.assertEqual(listed["root"], {"requested": str(requested), "path": str(real / "project"), "state": "non-git"})
+        self.assertEqual(listed["root"], {"requested": str(requested), "path": str(real / "project"), "state": "non-git",
+                                          "checkout": str(real / "project"), "store": str(real / "project"),
+                                          "shared": False})
         created = self.run_tool(requested, "create", "--work", "w.md", payload=FIELDS)
         self.assertEqual(created["root"]["path"], str(real / "project"))
         self.assertTrue((real / "project/.feather/handoffs/w.md").is_file())
@@ -316,7 +318,8 @@ class GitRootTest(LinkBase):
         make_link(self, self.base / "link", self.base / "real")
         requested = self.base / "link" / "repo" / "sub"
         created = self.run_tool(requested, "create", "--work", "w.md", payload=FIELDS)
-        self.assertEqual(created["root"], {"requested": str(requested), "path": str(repo), "state": "git"})
+        self.assertEqual(created["root"], {"requested": str(requested), "path": str(repo), "state": "git",
+                                           "checkout": str(repo), "store": str(repo), "shared": False})
         self.assertTrue((repo / ".feather/handoffs/w.md").is_file())
 
     def test_link_below_the_repository_root_is_uncertain(self):

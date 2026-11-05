@@ -235,7 +235,7 @@ def update_work(store: Store, name: str, raw: object) -> dict:
         if (after["title"], after["updated"], after["status"]) != (before["title"], before["updated"], "完成"):
             raise HandoffError("completed", "A completed work replacement must keep its title, 更新 and 狀態：完成")
         try:
-            history = parse_history(read_file(store.directory / "history.md"))
+            history = parse_history(read_file(store.history))
         except FileNotFoundError:
             history = None
         if history is not None and _matching(history, before["title"], before["updated"]):

@@ -222,7 +222,7 @@ def query_history(store: Store, work: str | None = None, date_from: str | None =
     sources: list[tuple[Path, str]] = []
     issues = []
     available = False
-    history = store.directory / "history.md"
+    history = store.history
     try:
         check_path(history)
         if history.exists():
@@ -232,7 +232,7 @@ def query_history(store: Store, work: str | None = None, date_from: str | None =
         issues.append({"source": "history.md", "code": getattr(error, "code", "io"), "message": str(error)})
 
     if include_sealed:
-        archive = store.directory / "archive"
+        archive = store.archive
         try:
             check_path(archive)
             if archive.exists():

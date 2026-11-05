@@ -109,6 +109,7 @@ def capture(store: Store, payload: object) -> dict:
     if not isinstance(payload, dict) or set(payload) != {"paths"}:
         raise HandoffError("snapshot-input", "Expected JSON {paths: [...]}")
     paths = baseline.paths_input(payload["paths"])
+    # Sources, Git state and their containment are the Working checkout's, never the store's.
     git_before = git_observation(store.project)
     budget = [baseline.MAX_TOTAL_BYTES]
     observed = [observe(store.project, name, budget) for name in paths]

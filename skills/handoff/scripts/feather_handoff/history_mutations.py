@@ -8,13 +8,13 @@ from .writing import input_object
 
 def history_path(store: Store, source: object):
     if source == "history.md":
-        path = store.directory / "history.md"
+        path = store.history
     elif isinstance(source, str) and source.startswith("archive/"):
         name = source[len("archive/"):]
         legal_name(name)
         if not name.lower().endswith(".md"):
             raise HandoffError("scope", "Sealed source must be Markdown")
-        path = store.directory / "archive" / name
+        path = store.archive / name
     else:
         raise HandoffError("scope", "Source must be history.md or explicit archive/<batch>.md")
     check_path(path)
