@@ -7,7 +7,7 @@ from .archiving import _matching, check_archivable
 from .history import parse_history
 from .records import FIELDS, REQUIRED, STATUSES, read_work, summary, valid_time
 from .storage import HandoffError, Snapshot, Store, create_file, read_file, replace_file
-from .tracking import ensure_tracking
+from .tracking import ensure_tracking, require_track_choice
 from . import baseline
 from .observations import verify_for_save
 
@@ -110,6 +110,7 @@ def create_work(store: Store, name: str, raw: object) -> dict:
     tracking = payload.get("tracking", "default")
     if not isinstance(tracking, str) or tracking not in {"default", "track"}:
         raise HandoffError("input", "tracking must be default or track")
+    require_track_choice(store, tracking)
     content = f"# {title}\n" + "\n".join(f"{label}：{fields[key]}" for key, label in FIELDS.items() if key in fields) + "\n"
     warnings = []
     if "details" in payload:
@@ -248,6 +249,7 @@ def update_work(store: Store, name: str, raw: object) -> dict:
     tracking = payload.get("tracking", "default")
     if not isinstance(tracking, str) or tracking not in {"default", "track"}:
         raise HandoffError("input", "tracking must be default or track")
+    require_track_choice(store, tracking)
     replace_file(original, data)
     result = finish_save(store, name, tracking, payload)
     if siblings is not None:

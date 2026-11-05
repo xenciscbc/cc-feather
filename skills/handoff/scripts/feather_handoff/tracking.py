@@ -1,4 +1,5 @@
 """Respect existing Git tracking choices when recording handoffs."""
+from pathlib import Path
 import subprocess
 
 from .storage import (HandoffError, Store, check_path, create_file, lazy_fetch_guard, read_file, replace_file,
@@ -13,6 +14,36 @@ MARKER = "# cc-feather: track /.feather/handoffs/"
 def rule_line(line: str) -> str:
     """A .gitignore line as Git reads it: leading whitespace is part of the pattern, trailing spaces are not."""
     return line.rstrip("\r\n").rstrip(" ")
+
+
+def detect_tracking(checkout: Path) -> str:
+    """The tracking state of a Working checkout while its store is chosen: tracked when its own .gitignore holds the
+    track marker or its index already tracks a file under .feather/handoffs/, otherwise untracked.
+
+    Runs entirely in the Working checkout, after that checkout's own lazy-fetch guard, with paths relative to it; it
+    never reads the marker of the checkout that holds the store. HandoffError (promisor-remote, promisor-unknown,
+    unsafe-path, git), OSError, UnicodeError and subprocess.TimeoutExpired propagate: the state is then unknown."""
+    lazy = lazy_fetch_guard(checkout)
+    path = checkout / ".gitignore"
+    check_path(path)
+    try:
+        content = read_file(path).data.decode("utf-8")
+    except FileNotFoundError:
+        content = ""
+    if any(rule_line(line) == MARKER for line in content.splitlines()):
+        return "tracked"
+    listed = run_git(checkout, "ls-files", "--", ".feather/handoffs/", errors="replace", no_lazy_fetch=lazy)
+    if listed.returncode:
+        raise HandoffError("git", listed.stderr.strip() or f"git ls-files exited with {listed.returncode}")
+    return "tracked" if listed.stdout.strip() else "untracked"
+
+
+def require_track_choice(store: Store, choice: str) -> None:
+    """Before a save or archive writes anything: a track choice is refused in a run that uses the shared store."""
+    if choice == "track" and store.root["shared"]:
+        raise HandoffError("input", "tracking is chosen from the checkout whose records it should track; this run "
+                           f"keeps its records in the shared Handoff store under {store.store_checkout}, so choose "
+                           "track from that checkout. Nothing was written")
 
 
 def git(store: Store, *arguments: str, no_lazy_fetch: bool = False) -> subprocess.CompletedProcess:

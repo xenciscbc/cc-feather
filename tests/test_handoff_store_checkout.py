@@ -500,8 +500,10 @@ class ToolReferenceRootFieldsTest(unittest.TestCase):
         "Every `root` also reports `checkout`, the Working checkout whose sources and Git state the tool reads, "
         "`store`, the directory that holds `.feather/handoffs/`, and `shared`, which is true when the two differ; "
         "`path` stays the store's directory, so a caller that reads only `path` still finds the records.",
-        "The store is currently always under the Working checkout, so `checkout` and `store` name the same "
-        "directory and `shared` is false.",
+        "From an untracked linked worktree the store is the repository's main worktree, so `shared` is true and "
+        "`path` and `store` name the main worktree's directory; in every other case, the main worktree itself, a "
+        "non-Git project, `--exact-root` and tracked mode, the store is under the Working checkout, so `checkout` and "
+        "`store` name the same directory and `shared` is false.",
     )
 
     def test_root_fields_are_documented(self):

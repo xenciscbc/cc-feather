@@ -422,13 +422,137 @@ def resolve_root(value: str, exact: bool = False) -> dict:
     return _resolve_root(value, exact)[0]
 
 
+class _StoreRefused(Exception):
+    """The Handoff store of a linked worktree could not be accepted; the message is the root's reason."""
+
+
+def _git_directory(directory: Path, *arguments: str) -> str:
+    """The one path a rev-parse query reports: exactly one line, fully qualified, naming an existing directory.
+
+    A non-zero exit, empty or relative output, or more than one line, such as an older Git echoing an option it does
+    not know, is refused; nothing falls back to a relative path or the working directory."""
+    command = " ".join(arguments)
+    try:
+        result = run_git(directory, *arguments, errors="replace")
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise _StoreRefused(f"git {command} could not be run in {directory}: {error}") from None
+    if result.returncode:
+        raise _StoreRefused(f"git {command} failed in {directory}: "
+                            + (result.stderr.strip() or f"exit {result.returncode}"))
+    text = result.stdout[:-1] if result.stdout.endswith("\n") else result.stdout
+    if not text or any(character in text for character in "\r\n\0") or not _fully_qualified(text):
+        raise _StoreRefused(f"git {command} in {directory} did not report exactly one absolute path")
+    if not os.path.isdir(text):
+        raise _StoreRefused(f"git {command} in {directory} reported {text}, which is not an existing directory")
+    return text
+
+
+def _identical(first, second) -> bool:
+    try:
+        return _same(first, second)
+    except OSError as error:
+        raise _StoreRefused(f"could not compare {first} with {second}: {error}") from None
+
+
+def _common_directory(checkout: Path) -> Path | None:
+    """The repository's common directory when the Working checkout is a linked worktree, else None.
+
+    Decided only by the filesystem identities of its Git directory and the common directory, so a main checkout
+    with a separate Git directory is never linked."""
+    git_directory = _git_directory(checkout, "rev-parse", "--absolute-git-dir")
+    common = _git_directory(checkout, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return None if _identical(git_directory, common) else Path(common)
+
+
+def _main_worktree(checkout: Path, common: Path) -> Path:
+    """The strict real path of the main worktree of a linked worktree's repository.
+
+    Only the first NUL-delimited record of `git worktree list --porcelain -z` run from the Working checkout is
+    read. It must name a fully qualified path, not be marked bare, resolve strictly to an existing directory that is
+    neither the common directory nor inside it (Git reports the Git directory itself for a separate Git directory or
+    a submodule), be its own top level, hold a .git entry, and have the common directory as its Git directory."""
+    try:
+        listed = run_git(checkout, "worktree", "list", "--porcelain", "-z", errors="replace")
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise _StoreRefused(f"git worktree list could not be run: {error}") from None
+    if listed.returncode:
+        raise _StoreRefused("git worktree list --porcelain -z failed: "
+                            + (listed.stderr.strip() or f"exit {listed.returncode}"))
+    fields = listed.stdout.split("\0")
+    if "" not in fields:
+        raise _StoreRefused("git worktree list --porcelain -z reported no NUL-terminated worktree record")
+    record = fields[:fields.index("")]
+    if not record or not record[0].startswith("worktree "):
+        raise _StoreRefused("the first git worktree list record does not start with a worktree path")
+    candidate = record[0][len("worktree "):]
+    if not _fully_qualified(candidate) or "\n" in candidate:
+        raise _StoreRefused(f"the first git worktree list record has no absolute path: {candidate!r}")
+    if "bare" in record[1:]:
+        raise _StoreRefused(f"the repository's first worktree entry {candidate} is bare, so it has no main worktree "
+                            "to hold the shared Handoff store")
+    try:
+        main = Path(os.path.realpath(candidate, strict=True))
+    except FileNotFoundError:
+        raise _StoreRefused(f"the main worktree {candidate} does not exist; it may have been moved or deleted") from None
+    except OSError as error:
+        raise _StoreRefused(f"the main worktree {candidate} could not be resolved to a strict real path: {error}") from None
+    if not main.is_dir():
+        raise _StoreRefused(f"the main worktree {main} is not a directory")
+    if any(_identical(part, common) for part in [main, *main.parents]):
+        raise _StoreRefused(f"the first worktree entry {main} is the repository's Git directory or inside it "
+                            "(a separate Git directory or a submodule), not a main worktree")
+    if not _identical(_git_directory(main, "rev-parse", "--show-toplevel"), main):
+        raise _StoreRefused(f"the main worktree {main} is not its own Git top level")
+    try:
+        (main / ".git").lstat()
+    except OSError:
+        raise _StoreRefused(f"the main worktree {main} holds no .git entry") from None
+    if not _identical(_git_directory(main, "rev-parse", "--absolute-git-dir"), common):
+        raise _StoreRefused(f"the Git directory of the main worktree {main} is not the repository's common directory")
+    return main
+
+
 def _select_store(root: dict, trusted: bool) -> tuple[Path, bool, str | None]:
     """The checkout that holds the Handoff store: (its directory, whether it came from a strict real-path resolution
     and may be registered as a root, why it is uncertain or None).
 
-    The store stays under the root that discovery selected, so it is strictly resolved exactly when that root is, and
-    uncertain whenever that root is; a root from a volume that cannot resolve real paths is never registered."""
-    return Path(root["path"]), trusted, root["reason"] if root["state"] == "uncertain" else None
+    For a Git root that is a linked worktree, the tracking state is detected in the Working checkout first and
+    reported as root["tracking"]; an untracked one keeps its records in the main worktree, accepted by _main_worktree
+    and registered as the strict real path of that worktree once its store directory passes the path check. Every
+    other root keeps the store under the root that discovery selected, strictly resolved exactly when that root is.
+    When the main worktree or the tracking state cannot be established, root["state"] becomes uncertain with the
+    reason, and the store stays under the Working checkout so reads stay partial there and every mutation is
+    refused; it never falls back to an unregistered store."""
+    checkout = Path(root["path"])
+    if root["state"] != "git":
+        return checkout, trusted, root["reason"] if root["state"] == "uncertain" else None
+    try:
+        common = _common_directory(checkout)
+        if common is None:
+            return checkout, trusted, None
+        from .tracking import detect_tracking
+        try:
+            root["tracking"] = detect_tracking(checkout)
+        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+            raise _StoreRefused(f"the tracking state of the linked worktree {checkout} could not be detected: "
+                                f"{getattr(error, 'code', type(error).__name__)}: {error}") from None
+        if root["tracking"] == "tracked":
+            return checkout, trusted, None
+        main = _main_worktree(checkout, common)
+        key = os.path.normcase(str(main))
+        registered = key in _ROOTS
+        register_root(main)
+        try:
+            check_path(main / ".feather" / "handoffs")
+        except HandoffError as error:
+            if not registered:
+                _ROOTS.discard(key)
+            raise _StoreRefused(f"the shared Handoff store under the main worktree {main} is refused: {error}") from None
+        return main, True, None
+    except _StoreRefused as refused:
+        reason = f"Handoff store discovery failed: {refused}"
+        root.update(state="uncertain", reason=reason)
+        return checkout, trusted, reason
 
 
 def legal_name(name: str) -> None:
@@ -570,19 +694,21 @@ class Store:
     it, and every work file, history.md and archive/ is a direct descendant of it. Each location is registered as a
     root only when it came from a strict real-path resolution, so the path check stops at it only after confirming
     it still resolves to itself. uncertain maps each uncertain location ("checkout", "store") to its reason; while
-    it is nonempty every mutation is refused and reads are partial."""
+    it is nonempty every mutation is refused and reads are partial. An untracked linked worktree's store_checkout
+    is its repository's main worktree (see _select_store); every other root keeps it at the Working checkout."""
 
     def __init__(self, project: str, *, exact_root: bool = False):
         root, trusted = _resolve_root(project, exact_root)
         self.project = Path(root["path"])
         if trusted:
             register_root(self.project)
-        self.store_checkout, store_trusted, store_reason = _select_store(root, trusted)
-        if store_trusted:
-            register_root(self.store_checkout)
         self.uncertain: dict[str, str] = {}
         if root["state"] == "uncertain":
             self.uncertain["checkout"] = root["reason"]
+        # Selection may turn the root uncertain when a linked worktree's store cannot be established.
+        self.store_checkout, store_trusted, store_reason = _select_store(root, trusted)
+        if store_trusted:
+            register_root(self.store_checkout)
         if store_reason is not None:
             self.uncertain["store"] = store_reason
         shared = os.path.normcase(str(self.project)) != os.path.normcase(str(self.store_checkout))
@@ -603,7 +729,7 @@ class Store:
                                f"Current read scope: {self.project}")
         if "store" in self.uncertain:
             raise HandoffError("project-root-uncertain",
-                               f"Handoff store discovery failed: {self.uncertain['store']}. No writes made. "
+                               f"Handoff store not established ({self.uncertain['store']}). No writes made. "
                                f"Confirm the project root, then use --project <confirmed-root> --exact-root. "
                                f"Current read scope: {self.directory}")
 

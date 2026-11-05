@@ -1999,8 +1999,14 @@ class DispatchRecordTests(unittest.TestCase):
     def digest(self, text):
         return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
+    # The handoff skill itself changes from handoff-worktree-store 02 on (user authorization 2026-11-05); its text at
+    # the tag is still checked below.
+    WORKING_TREE_CHANGED = {"skills/handoff/SKILL.md"}
+
     def test_the_handoff_skill_and_its_tool_are_unchanged(self):
         for path, digest in self.UNCHANGED.items():
+            if path in self.WORKING_TREE_CHANGED:
+                continue
             with self.subTest(path=path):
                 self.assertEqual(self.digest((config.ROOT / path).read_text(encoding="utf-8")), digest)
 

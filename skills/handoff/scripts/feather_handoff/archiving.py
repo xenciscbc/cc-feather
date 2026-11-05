@@ -5,7 +5,7 @@ import subprocess
 from .history import HEADING, MODERN, HistoryDocument, HistoryEntry, parse_history
 from .records import summary
 from .storage import HandoffError, Snapshot, Store, create_file, read_file, replace_file, require_current
-from .tracking import ensure_tracking
+from .tracking import ensure_tracking, require_track_choice
 
 
 HISTORY_HEADER = b"# \xe4\xba\xa4\xe6\x8e\xa5\xe6\xad\xb7\xe5\x8f\xb2\n\n"
@@ -112,6 +112,7 @@ def archive_work(store: Store, name: str, raw: object, *, apply_tracking: bool =
     """apply_tracking is False only when a save already applied tracking before archiving."""
     store.require_write_root()
     expected, tracking = _input(raw)
+    require_track_choice(store, tracking)
     work = read_file(store.work_path(name))
     if expected != work.version:
         raise HandoffError("conflict", "Source changed or version missing; read the completed work again")
