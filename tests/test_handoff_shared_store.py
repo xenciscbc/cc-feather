@@ -450,25 +450,30 @@ class DiscoveryFailureTest(SharedBase):
         self.assert_uncertain(linked, "is the repository's Git directory or inside it")
         self.assertEqual(list((superproject / ".git" / "modules").rglob(".feather")), [])
 
-    def test_a_moved_main_worktree_is_uncertain_and_not_recreated(self):
-        moved = self.base / "moved"
-        os.rename(self.main, moved)
+    def assert_broken_linked_worktree(self):
+        """A moved or deleted main worktree breaks the linked worktree itself: the Working checkout's own root
+        discovery fails with Git's error as the reason, before any store discovery; reads are partial, mutations
+        are refused and the old main worktree path is not recreated."""
         listed = self.run_tool(self.wt1, "list", expected=2)
-        self.assertEqual((listed["status"], listed["root"]["state"], listed["root"]["store"]),
-                         ("partial", "uncertain", str(self.wt1)), listed)
+        root = listed["root"]
+        self.assertEqual((listed["status"], root["state"], root["store"], root["shared"]),
+                         ("partial", "uncertain", str(self.wt1), False), listed)
+        self.assertIn("not a git repository", root["reason"].lower(), root)
+        self.assertNotIn(DISCOVERY_FAILED, root["reason"], root)
         refused = self.run_tool(self.wt1, "create", "--work", "w.md", payload={"title": "w", "fields": FIELDS},
                                 expected=2)
-        self.assertEqual(refused["code"], "project-root-uncertain", refused)
+        self.assertEqual((refused["code"], refused["root"]["reason"]), ("project-root-uncertain", root["reason"]),
+                         refused)
         self.assertFalse(self.main.exists())
         self.assertEqual(list(self.base.rglob(".feather")), [])
 
+    def test_a_moved_main_worktree_is_uncertain_and_not_recreated(self):
+        os.rename(self.main, self.base / "moved")
+        self.assert_broken_linked_worktree()
+
     def test_a_deleted_main_worktree_is_uncertain_and_not_recreated(self):
         remove_base(self.main)
-        refused = self.run_tool(self.wt1, "create", "--work", "w.md", payload={"title": "w", "fields": FIELDS},
-                                expected=2)
-        self.assertEqual((refused["code"], refused["root"]["state"]), ("project-root-uncertain", "uncertain"), refused)
-        self.assertFalse(self.main.exists())
-        self.assertEqual(list(self.base.rglob(".feather")), [])
+        self.assert_broken_linked_worktree()
 
     def test_a_store_reached_through_a_directory_link_is_uncertain(self):
         feather_support.make_directory_link(self.main / ".feather", self.outside)
@@ -748,13 +753,15 @@ class ToolReferenceSharedStoreTest(unittest.TestCase):
         "marked bare, resolves to an existing directory that is neither the repository's Git directory nor inside it, "
         "is its own top level, holds a `.git` entry and has the repository's common directory as its Git directory; "
         "paths are compared by filesystem identity, and the store under it passes the link checks below.",
-        "When the tracking state or the main worktree cannot be established, such as a bare repository, a moved or "
-        "deleted main worktree, a separate Git directory or submodule whose first entry is the Git directory itself, "
+        "When the tracking state or the main worktree cannot be established, such as a bare repository, a separate "
+        "Git directory or submodule whose first entry is the Git directory itself, "
         "`.feather` reached through a link, a main worktree without a strict real path, a promisor remote the "
         "installed Git cannot guard, or a Git too old for `--path-format` or `worktree list -z`, the root is "
         "`uncertain` with a `reason` that starts \"Handoff store discovery failed\" and names what failed, `path` and "
         "`store` stay the Working checkout, reads return its own records as `partial`, and mutations fail with "
         "`project-root-uncertain` until a root is confirmed with `--exact-root`.",
+        "A moved or deleted main worktree breaks the linked worktree itself, so its root is `uncertain` with Git's own "
+        "discovery error as the `reason`, reads are `partial` and mutations fail with `project-root-uncertain`.",
         "Records are never written inside the linked worktree in place of the shared store.",
         "Writing in a Git project needs Git 2.31 or later, for `--path-format`, and a shared store needs Git 2.36 or "
         "later, for `worktree list -z`; on older Git the root is `uncertain` and `--exact-root` is the recovery.",
