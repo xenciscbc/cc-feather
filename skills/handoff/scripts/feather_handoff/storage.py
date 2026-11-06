@@ -598,7 +598,9 @@ def read_file(path: Path) -> Snapshot:
 
 
 # Windows errors that deny access to a path (ERROR_ACCESS_DENIED, ERROR_WRITE_PROTECT); a sharing or lock violation
-# also maps to EACCES but is a file another process holds, not a denial.
+# also maps to EACCES but is a file another process holds, not a denial. Only mkdir reports winerror: a file opened
+# through the C runtime reports errno alone, and EACCES there also covers a directory already at the target path, so
+# create_file judges a failed open only when nothing exists at the target.
 _DENIED_WINDOWS = {5, 19}
 _DENIED_ERRNO = {errno.EACCES, errno.EPERM, errno.EROFS}
 
@@ -636,7 +638,8 @@ def create_file(path: Path, data: bytes) -> Snapshot:
     except FileExistsError:
         raise HandoffError("exists", f"Existing data preserved: {path}") from None
     except OSError as error:
-        _mark_denied(error)
+        if not os.path.lexists(path):
+            _mark_denied(error)
         raise
     identity = None
     try:

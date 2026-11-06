@@ -302,6 +302,17 @@ class OtherFailuresKeepTheirCodesTest(SharedBase):
         self.assertEqual((result["status"], result["code"]), ("error", "io"), result)
         self.assertEqual(self.changed(before, self.tree()), set())
 
+    def test_a_directory_named_like_the_work_file_is_not_an_unwritable_store(self):
+        # Windows reports EACCES for an exclusive create over a directory; POSIX reports EEXIST.
+        (self.store / "c.md").mkdir(parents=True)
+        before = self.tree()
+        result = self.run_tool(self.wt1, "create", "--work", "c.md", expected=2,
+                               payload={"title": "c", "fields": FIELDS})
+        self.assertEqual((result["status"], result["code"]), ("error", "io" if WINDOWS else "exists"), result)
+        self.assertNotIn("store", result)
+        self.assertNotIn("access", result)
+        self.assertEqual(self.changed(before, self.tree()), set())
+
 
 class UnwritableStoreDocumentationTest(unittest.TestCase):
     """Acceptance 12's skill and tool-reference share for item 5."""
