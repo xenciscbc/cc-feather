@@ -10,7 +10,7 @@
     "skills/handoff/scripts/feather_handoff/history.py": "1a5b9fbd1b61dc8d02f2c0ece4598f0088ecd3a07289947f1f482a3fd30b474e",
     "skills/handoff/scripts/feather_handoff/history_mutations.py": "6c709beadb0ebd4ae4acdb4750639aa5852945d990be399b2051dc88ecad9a52",
     "skills/handoff/scripts/feather_handoff/observations.py": "1f6dc4e776e81b55f9aa244361b1e403a3064918495d58df6333e5aa1edc1aac",
-    "skills/handoff/scripts/feather_handoff/records.py": "00caa0a37277ea9a6f7a16f6ac365a416ef69f47da443be66e3fbb414c4cf268",
+    "skills/handoff/scripts/feather_handoff/records.py": "6aa23ce3d37ac3e7dd924f78a52dcfbfe8ae6348d7893d1104877decfa1eb506",
     "skills/handoff/scripts/feather_handoff/storage.py": "835d374156427edc41c283c366e3fbc4504433683659796307a0f0160fa797c3",
     "skills/handoff/scripts/feather_handoff/tracking.py": "0a0a22530901ebfef260466749526d8e36c27cec9c8b2c8d40d096d578cadaf4",
     "skills/handoff/scripts/feather_handoff/writing.py": "538c44c91abb24e386bca3625fa94261745049c1020352c0a31b7bc3f1414ad8",
@@ -113,7 +113,7 @@
     },
     "skills/handoff/scripts/feather_handoff/records.py": {
       "source_sha256": "429cb242fe35379d06b283b588c880857986a6dd425d000fb382052fc615f099",
-      "change": "Local fix pending upstream: read/list report a whitespace-only work title as a format problem (Work title must not be blank). The summary reads the header up to baseline.header_end, the fence-aware ATX boundary, instead of the first column-0 '#' heading followed by a space."
+      "change": "Local fix pending upstream: read/list report a whitespace-only work title as a format problem (Work title must not be blank). The summary reads the header up to baseline.header_end, the fence-aware ATX boundary, instead of the first column-0 '#' heading followed by a space. Local change (handoff-worktree-store 05): list also reports other_stores, the records in other checkouts' Handoff stores read through other_stores.py, and an other store that cannot be read or no longer exists makes the list partial unless the root is already uncertain."
     }
   }
 }

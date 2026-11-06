@@ -75,8 +75,14 @@ def list_work(store: Store) -> dict:
                 issues.append({"work": path.name, "code": "changed", "message": "Work changed during listing"})
     except (OSError, ValueError) as error:
         issues.append({"work": "", "code": "changed", "message": str(error)})
-    return {"status": "partial" if issues else ("ok" if store.directory.exists() else "missing"),
-            "complete": not issues, "items": items, "issues": issues}
+    # Records in other checkouts' stores are reported beside the current store's, which keeps its fields and
+    # meaning; an other store that cannot be read makes the result incomplete. Under an uncertain root no other
+    # checkout is searched, and the whole result is already partial, so operation_status stays the current store's.
+    from .other_stores import other_stores
+    others = other_stores(store)
+    complete = not issues and (others["other_stores_complete"] or bool(store.uncertain))
+    return {"status": "partial" if not complete else ("ok" if store.directory.exists() else "missing"),
+            "complete": complete, "items": items, "issues": issues, **others}
 
 
 def read_work(store: Store, name: str) -> dict:

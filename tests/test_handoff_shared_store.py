@@ -536,11 +536,26 @@ class DiscoveryFailureTest(SharedBase):
                 self.assert_uncertain(self.wt1, reason, subprocess_run=False, context=self.git_as(override=override))
 
     def test_the_linked_decision_precedes_the_worktree_list(self):
-        """S02-1: a main checkout runs no worktree list; a linked one reads its Git and common directories first."""
+        """S02-1: a main checkout decides its store without the worktree list, which only other_stores reads after
+        the Git and common directories; a linked one reads its Git and common directories first."""
         with self.git_as() as calls:
             code, listed = self.invoke(self.main, "list")
         self.assertEqual((code, listed["root"]["shared"]), (0, False), listed)
-        self.assertNotIn(["worktree", "list", "--porcelain", "-z"], [git_call(args)[1] for args in calls])
+        commands = [git_call(args)[1] for args in calls]
+        self.assertIn(["worktree", "list", "--porcelain", "-z"], commands)
+        for index, command in enumerate(commands):
+            if command[:2] == ["worktree", "list"]:
+                self.assertLess(commands.index(["rev-parse", "--absolute-git-dir"]), index)
+                self.assertLess(commands.index(["rev-parse", "--path-format=absolute", "--git-common-dir"]), index)
+
+        def failing(directory, command):
+            if os.path.normcase(directory) == os.path.normcase(str(self.main)) and command[:2] == ["worktree", "list"]:
+                return 128, "", "fatal: worktree list failed\n"
+            return None
+        with self.git_as(override=failing):
+            code, listed = self.invoke(self.main, "list")
+        self.assertEqual((listed["root"]["shared"], listed["root"]["store"]), (False, str(self.main)), listed)
+        self.assertIs(listed["other_stores_complete"], False, listed)
         with self.git_as() as calls:
             code, listed = self.invoke(self.wt1, "list")
         self.assertEqual((code, listed["root"]["shared"]), (0, True), listed)
