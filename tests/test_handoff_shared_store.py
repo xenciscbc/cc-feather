@@ -555,7 +555,11 @@ class DiscoveryFailureTest(SharedBase):
         with self.git_as(override=failing):
             code, listed = self.invoke(self.main, "list")
         self.assertEqual((listed["root"]["shared"], listed["root"]["store"]), (False, str(self.main)), listed)
+        # Only other_stores is incomplete: the root is still established and the current store reads as before.
+        self.assertEqual((listed["root"]["state"], listed["issues"]), ("git", []), listed)
+        self.assertNotIn("operation_status", listed)
         self.assertIs(listed["other_stores_complete"], False, listed)
+        self.assertEqual([issue["code"] for issue in listed["other_stores_issues"]], ["git"], listed)
         with self.git_as() as calls:
             code, listed = self.invoke(self.wt1, "list")
         self.assertEqual((code, listed["root"]["shared"]), (0, True), listed)
