@@ -6,7 +6,7 @@ import subprocess
 from .archiving import _matching, check_archivable
 from .history import parse_history
 from .records import FIELDS, REQUIRED, STATUSES, read_work, summary, valid_time
-from .storage import HandoffError, Snapshot, Store, create_file, read_file, replace_file
+from .storage import HandoffError, LockError, Snapshot, Store, create_file, read_file, replace_file
 from .tracking import ensure_tracking, require_track_choice
 from . import baseline
 from .observations import verify_for_save
@@ -331,6 +331,15 @@ def finish_save(store: Store, name: str, tracking: str, payload: dict) -> dict:
             # Tracking was applied above; archive_work must not run it a second time.
             archived = archive_work(store, name, {"version": result["version"]}, apply_tracking=False,
                                     denied_as_error=False)
+        except LockError as locked:
+            if locked.code != "history-locked":
+                raise
+            # Another operation holds history: the completed work is kept as with defer_history, history unchanged.
+            return {**result, "status": "partial", "complete": False, "code": "deferred",
+                    "cause_code": "history-locked", "defer_history": True, "lock": locked.lock,
+                    "message": "Completed work saved; shared history deferred and unchanged because the history lock "
+                               f"{locked.lock['path']} is held; retry archive once it is released",
+                    "recovery": "retry-archive"}
         except (OSError, ValueError) as error:
             observed = {}
             try:

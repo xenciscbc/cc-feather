@@ -161,20 +161,38 @@ class UnwritableStoreTest(StoreFixture, SharedBase):
         self.assertEqual(archived["archived"], True, archived)
         self.assertFalse((self.wt1 / ".feather").exists())
 
-    def test_a_seal_denied_after_writing_its_destination_keeps_it_for_the_retry(self):
+    def test_a_seal_in_a_denied_store_directory_is_refused_at_the_history_lock(self):
         versions = self.prepare()
-        # Only the store directory itself is denied; archive/ keeps accepting the destination.
+        # Only the store directory itself is denied: the history lock, taken before the destination is written, fails.
         self.deny(self.store, inherit=False)
         before = self.tree()
         command, option, work, payload = self.mutations(versions)["seal"]
         sealed = self.run_mutation(command, option, work, payload, expected=2)
+        self.assert_unwritable(sealed)
+        self.assertEqual(self.changed(before, self.tree()), set())
+        self.assertFalse((self.wt1 / ".feather").exists())
+
+    def test_a_seal_denied_after_writing_its_destination_keeps_it_for_the_retry(self):
+        versions = self.prepare()
+        before = self.tree()
+        command, option, work, payload = self.mutations(versions)["seal"]
+        real = os.open
+
+        def open_(path, *args, **kwargs):
+            # Deny only the history's temporary file, after the lock is held and the destination is written.
+            if Path(path).parent == self.store and Path(path).name.startswith(".feather-"):
+                raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), str(path))
+            return real(path, *args, **kwargs)
+        with mock.patch.object(storage.os, "open", side_effect=open_):
+            code, sealed = self.invoke(self.wt1, command, payload=payload)
+        self.assertEqual(code, 2)
         # The partial result and its retry are those of the claim base; the shared run adds the cause.
         self.assertEqual((sealed["status"], sealed["code"], sealed["cause_code"]),
                          ("partial", "seal-failed", "store-unwritable"), sealed)
         destination = self.store / "archive" / "batch.md"
         self.assertEqual(self.changed(before, self.tree()), {"main/.feather/handoffs/archive/batch.md"})
         self.assertEqual(sealed["destination_version"], hashlib.sha256(destination.read_bytes()).hexdigest())
-        self.grant_access()
+        self.assertFalse((self.store / ".history.lock").exists())
         retried = self.run_tool(self.wt1, "seal", payload={**payload, "destination_version": sealed["destination_version"]})
         self.assertEqual((retried["status"], Path(retried["destination"])), ("ok", destination), retried)
         self.assertFalse((self.wt1 / ".feather").exists())

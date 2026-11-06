@@ -1,10 +1,13 @@
 """Project containment and content snapshots shared by public operations."""
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import errno
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
+import socket
 import stat
 import subprocess
 import secrets
@@ -757,6 +760,7 @@ class Store:
         self.directory = self.store_checkout / ".feather" / "handoffs"
         self.history = self.directory / "history.md"
         self.archive = self.directory / "archive"
+        self.history_lock = self.directory / LOCK_NAME
         check_path(self.directory)
 
     def require_write_root(self) -> None:
@@ -797,3 +801,251 @@ class Store:
 def is_work_name(name: str) -> bool:
     """One rule for creating and listing work: a .md suffix after a nonempty stem, other than history.md."""
     return Path(name).suffix.lower() == ".md" and name.lower() != "history.md"
+
+
+# The history lock: one file in the store directory that every history mutation holds from the history read it acts
+# on until its last history write and source removal are verified. Its name does not end in .md, so it is never a
+# work file (is_work_name) and never listed as a record.
+LOCK_NAME = ".history.lock"
+# A lock older than this is reported stale: far above the expected hold time of a history mutation and well below a
+# session's typical idle time. Only unlock, on the user's decision, removes a stale lock.
+STALE_AFTER_SECONDS = 600
+
+
+class LockError(HandoffError):
+    """A result about the history lock; lock describes the lock as it was observed (see _read_lock)."""
+
+    def __init__(self, code: str, message: str, lock: dict):
+        super().__init__(code, message)
+        self.lock = lock
+
+
+def _lock_content(data: bytes) -> tuple[datetime | None, dict | None]:
+    """(creation time, holder) from a lock written by acquire_history_lock, or (None, None) for any other content,
+    such as an empty file left by a crash between the exclusive create and the write."""
+    try:
+        value = json.loads(data.decode("utf-8"))
+        created = datetime.fromisoformat(value["created"])
+    except (UnicodeError, ValueError, TypeError, KeyError):
+        return None, None
+    if (not isinstance(value, dict) or set(value) != {"created", "host", "pid"} or created.utcoffset() is None
+            or not isinstance(value["host"], str) or type(value["pid"]) is not int):
+        return None, None
+    return created, {"pid": value["pid"], "host": value["host"]}
+
+
+def _listed(path: Path) -> bool | None:
+    """Whether the parent directory lists an entry with exactly path's name; None when it cannot be listed."""
+    try:
+        with os.scandir(path.parent) as entries:
+            return any(entry.name == path.name for entry in entries)
+    except OSError:
+        return None
+
+
+def _check_lock_path(path: Path) -> bool:
+    """The path check for the lock path; True when it holds a file the tool can see only through its directory.
+
+    A file pending deletion on Windows cannot be opened, so its lstat comes from the directory entry, without a link
+    count or file identity (st_nlink 0), or fails; the path check would call the former hard-linked. Such a file is a
+    held lock that cannot be read, and nothing is ever written through it. The ancestors always pass the full path
+    check, and every other entry at the lock path, a link or a hard-linked file included, is checked and refused as
+    the path check decides."""
+    check_path(path.parent)
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        info = None
+    except OSError:
+        if _listed(path):
+            return True
+        raise
+    if info is not None and stat.S_ISREG(info.st_mode) and info.st_nlink == 0 and not _is_link(path, info):
+        return True
+    check_path(path)
+    return False
+
+
+def _unreadable(path: Path, reason: str) -> dict:
+    return {"path": str(path), "readable": False, "format_valid": False, "created": None, "holder": None,
+            "age_seconds": None, "version": None, "stale": False,
+            "message": f"The history lock exists but could not be read: {reason}"}
+
+
+def _read_lock(path: Path) -> tuple[dict, Snapshot | None]:
+    """The lock as observed now, and its snapshot when it could be read.
+
+    created is the creation time the lock holds, or the file's modification time when its content is not a lock the
+    tool wrote (format_valid false); age_seconds counts from it, and stale is true above STALE_AFTER_SECONDS. A lock
+    that exists but cannot be read, such as a lock file pending deletion on Windows, is reported with readable false
+    and no version, so unlock never matches it."""
+    try:
+        if _check_lock_path(path):
+            return _unreadable(path, "it is visible only in its directory listing, as a file pending deletion on "
+                                     "Windows is"), None
+        snapshot = read_file(path)
+        info = path.lstat()
+    except (OSError, ValueError) as error:
+        return _unreadable(path, str(error)), None
+    created, holder = _lock_content(snapshot.data)
+    valid = created is not None
+    if created is None:
+        created = datetime.fromtimestamp(info.st_mtime, timezone.utc)
+    age = int((datetime.now(timezone.utc) - created).total_seconds())
+    return {"path": str(path), "readable": True, "format_valid": valid, "created": created.isoformat(),
+            "holder": holder, "age_seconds": age, "version": snapshot.version,
+            "stale": age > STALE_AFTER_SECONDS}, snapshot
+
+
+def _held_message(lock: dict) -> str:
+    if not lock["readable"]:
+        held = "History is locked by a lock file that could not be read (for example one pending deletion on Windows)"
+    else:
+        holder = lock["holder"]
+        who = f"process {holder['pid']} on {holder['host']}" if holder else "an unrecognized holder"
+        held = f"History is locked by {who} since {lock['created']} ({lock['age_seconds']} s ago)"
+    advice = (" The lock is stale; show its holder and age to the user, and only on their decision run unlock with "
+              "its version." if lock["stale"] else " Retry once the holder finishes.")
+    return f"{held}: {lock['path']}. Nothing was changed.{advice}"
+
+
+def _held(path: Path) -> LockError:
+    lock = _read_lock(path)[0]
+    return LockError("history-locked", _held_message(lock), lock)
+
+
+class HistoryLock:
+    """A history lock this process created; release removes it only while it is still the same file."""
+
+    def __init__(self, path: Path, data: bytes, identity: tuple[int, int]):
+        self.path, self.data, self.identity = path, data, identity
+
+    def release(self) -> str | None:
+        """Remove the lock through the path check; returns why it was left in place, or None once it is gone."""
+        try:
+            current = read_file(self.path)
+            info = self.path.lstat()
+            if current.data != self.data or (self.identity[1] and (info.st_dev, info.st_ino) != self.identity):
+                return f"The history lock was replaced by another file and was left in place: {self.path}"
+            check_path(self.path)
+            self.path.unlink()
+            if os.path.lexists(self.path):
+                return f"The history lock still exists after removal: {self.path}"
+        except (OSError, ValueError) as error:
+            return f"The history lock could not be removed: {error}"
+        return None
+
+
+def acquire_history_lock(store: Store) -> HistoryLock:
+    """Create the history lock exclusively and write and flush its holder before returning, so before the history
+    read it guards.
+
+    The lock path passes the path check before the create (see _check_lock_path) and again after it, so a link or
+    hard link at the lock path, or along the chain to the registered store root, is refused. An existing lock raises
+    LockError history-locked with the lock's description. Any other failed create propagates unchanged and, only
+    when nothing exists at the lock path, is tagged by _mark_denied, so a store the session cannot write is
+    store-unwritable in a shared run. Windows reports EACCES both for a denied directory and for a lock file pending
+    deletion, and a stat of the latter comes from its directory entry or can fail, so a failed create is judged by
+    lstat and, when lstat finds nothing, by the parent directory listing, which still holds the name of a file
+    pending deletion: a regular file or a listed name is a held lock, any other entry at the path is not-file, and
+    only an absent, unlisted name is a denial. No store directory is created for the lock: a store without one has
+    no history to change."""
+    path = store.history_lock
+    if _check_lock_path(path):
+        raise _held(path)
+    created = datetime.now().astimezone().isoformat(timespec="microseconds")
+    data = (json.dumps({"created": created, "host": socket.gethostname(), "pid": os.getpid()},
+                       ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o644)
+    except FileExistsError:
+        raise _held(path) from None
+    except FileNotFoundError:
+        if not store.directory.is_dir():
+            raise HandoffError("not-found", f"No Handoff store directory at {store.directory}; "
+                               "no history to change") from None
+        raise
+    except OSError as error:
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            info = None
+        except OSError:
+            if _listed(path):
+                raise _held(path) from None
+            raise error from None
+        if info is not None:
+            if not stat.S_ISREG(info.st_mode):
+                raise HandoffError("not-file", f"The history lock path is not a regular file: {path}") from None
+            raise _held(path) from None
+        if _listed(path):
+            raise _held(path) from None
+        _mark_denied(error)
+        raise
+    identity = (0, 0)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            opened = os.fstat(handle.fileno())
+            identity = (opened.st_dev, opened.st_ino)
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        check_path(path)
+    except BaseException:
+        # Remove only the possibly partial lock this call created, matched by file identity; the error propagates.
+        try:
+            if identity[1]:
+                check_path(path)
+                current = path.lstat()
+                if (current.st_dev, current.st_ino) == identity:
+                    path.unlink()
+        except (OSError, ValueError):
+            pass
+        raise
+    return HistoryLock(path, data, identity)
+
+
+def with_history_lock(lock: HistoryLock, action):
+    """Run action while holding lock and remove the lock afterwards, including when action raises a handled error.
+
+    An interruption that is not an Exception, such as KeyboardInterrupt or SystemExit, leaves the lock in place as a
+    crash does; it is then reported, not broken. When the lock cannot be removed after action returned, the result
+    keeps its status and reports the lock left in place as lock_left."""
+    try:
+        result = action()
+    except Exception:
+        lock.release()
+        raise
+    problem = lock.release()
+    if problem is not None:
+        result = {**result, "lock_left": {"path": str(lock.path), "message": problem}}
+    return result
+
+
+def unlock_history(store: Store, raw: object) -> dict:
+    """Remove a stale history lock whose content is unchanged since the user saw it, on the user's decision.
+
+    raw is {"version": "<the lock version a history-locked result reported>"}. A missing or changed lock is
+    conflict and a lock not older than STALE_AFTER_SECONDS is not-stale; both change nothing. The removal goes
+    through the path check and rereads the lock first, so only that same content is removed."""
+    store.require_write_root()
+    if not isinstance(raw, dict) or set(raw) != {"version"} or not isinstance(raw["version"], str):
+        raise HandoffError("input", "Unlock input must be a JSON object containing only the lock version")
+    path = store.history_lock
+    _check_lock_path(path)
+    if not os.path.lexists(path) and not _listed(path):
+        raise LockError("conflict", f"No history lock exists at {path}; nothing was removed",
+                        {"path": str(path), "present": False})
+    lock, snapshot = _read_lock(path)
+    if snapshot is None or lock["version"] != raw["version"]:
+        raise LockError("conflict", f"The history lock changed since it was reported; nothing was removed. Show "
+                        f"the current holder and age to the user before deciding again: {path}", lock)
+    if not lock["stale"]:
+        raise LockError("not-stale", f"The history lock is {lock['age_seconds']} s old, not older than "
+                        f"{STALE_AFTER_SECONDS} s; nothing was removed: {path}", lock)
+    require_current(snapshot)
+    check_path(path)
+    path.unlink()
+    if os.path.lexists(path):
+        raise HandoffError("changed", f"The history lock still exists after removal: {path}")
+    return {"status": "ok", "complete": True, "removed": True, "lock": lock}

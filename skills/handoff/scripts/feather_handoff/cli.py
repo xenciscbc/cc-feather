@@ -69,6 +69,8 @@ def main() -> int:
     archive.add_argument("--work", required=True)
     commands.add_parser("clear", parents=[root_options], help="JSON {source, version, ids} on stdin")
     commands.add_parser("seal", parents=[root_options], help="JSON {version, ids, destination} on stdin")
+    commands.add_parser("unlock", parents=[root_options],
+                        help="Remove a stale, unchanged history lock on the user's decision: JSON {version} on stdin")
     history = commands.add_parser("history", parents=[root_options])
     history.add_argument("--work")
     history.add_argument("--from-date")
@@ -102,6 +104,9 @@ def main() -> int:
         elif args.command == "seal":
             from .history_mutations import seal_history
             result = seal_history(store, input_payload())
+        elif args.command == "unlock":
+            from .storage import unlock_history
+            result = unlock_history(store, input_payload())
         elif args.command == "history":
             from .history import query_history
             result = query_history(store, work=args.work, date_from=args.from_date,
@@ -112,6 +117,9 @@ def main() -> int:
     except (OSError, UnicodeError, ValueError) as error:
         code = error_code(error, store, getattr(args, "command", None))
         result = {"status": "error", "complete": False, "code": code, "message": str(error)}
+        if getattr(error, "lock", None) is not None:
+            # history-locked, not-stale and an unlock conflict report the lock as observed, version included.
+            result["lock"] = error.lock
         if code == "store-unwritable":
             # No fallback: a denied store is reported, never replaced by a location in the Working checkout.
             result.update(store=str(store.directory), access="write", message=(

@@ -2,7 +2,8 @@
 import re
 
 from .history import HistoryDocument, HistoryEntry, parse_history
-from .storage import HandoffError, Store, check_path, create_file, legal_name, read_file, replace_file, require_current
+from .storage import (HandoffError, Store, acquire_history_lock, check_path, create_file, creation_denied, legal_name,
+                      read_file, replace_file, require_current, with_history_lock)
 from .writing import input_object
 
 
@@ -46,7 +47,31 @@ def clear_history(store: Store, raw: object) -> dict:
     if set(payload) - {"source", "version", "ids"}:
         raise HandoffError("input", "Unknown clear options")
     source = payload.get("source", "history.md")
-    original = read_file(history_path(store, source))
+    path = history_path(store, source)
+    try:
+        lock = acquire_history_lock(store)
+    except OSError as error:
+        if not creation_denied(error) or store.unwritable(error):
+            raise  # Nothing was written: the source is as it was.
+        # The store denied the lock as it would deny the replacement: the same partial result as that denial.
+        observed = _observed(path)
+        return {"status": "partial", "complete": False, "code": "clear-failed", "message": str(error),
+                "source": source, "source_path": str(path), "state": "unreadable" if observed is None else "unchanged",
+                "source_version": observed.version if observed else None, "ids": payload.get("ids"),
+                "recovery": "Preserve the source; query and reconcile these exact identities before retrying"}
+    return with_history_lock(lock, lambda: _clear_locked(store, payload, source, path))
+
+
+def _observed(path):
+    try:
+        return read_file(path)
+    except (OSError, ValueError):
+        return None
+
+
+def _clear_locked(store: Store, payload: dict, source: str, path) -> dict:
+    """The source read, replacement and verification of one clear, run while holding the history lock."""
+    original = read_file(path)
     if payload.get("version") != original.version:
         raise HandoffError("conflict", "History changed or version missing; query and reconcile original selection")
     document = parse_history(original, source)
@@ -163,6 +188,22 @@ def seal_history(store: Store, raw: object) -> dict:
     if not isinstance(name, str):
         raise HandoffError("input", "destination must be a legal Markdown basename")
     destination = history_path(store, "archive/" + name)
+    try:
+        lock = acquire_history_lock(store)
+    except OSError as error:
+        if not creation_denied(error) or store.unwritable(error):
+            raise  # This call wrote nothing.
+        # The store denied the lock as it would deny the destination: the same partial result as that denial.
+        return {"status": "partial", "complete": False, "code": "seal-failed", "message": str(error),
+                "source": "history.md", "destination": str(destination), "destination_version": None,
+                "ids": payload.get("ids"),
+                "recovery": "Preserve copies; query source version and retry the same destination and identities"}
+    return with_history_lock(lock, lambda: _seal_locked(store, payload, name, destination))
+
+
+def _seal_locked(store: Store, payload: dict, name: str, destination) -> dict:
+    """The history read, destination write, source replacement and verification of one seal, run while holding the
+    history lock."""
     original = read_file(history_path(store, "history.md"))
     if payload.get("version") != original.version:
         raise HandoffError("conflict", "History changed; query and reconcile the original selection")
