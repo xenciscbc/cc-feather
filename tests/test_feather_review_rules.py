@@ -198,7 +198,8 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
                            "a claim an active handoff records as unreviewed, unverified or pending acceptance, and the handoff note changes after a pass as [review state](review-state.md)'s Pending acceptance describes in either mode;"),
         "outcome-verification.md": ("Change or remove that note only as [review state](review-state.md)'s Pending acceptance describes.",),
         "CONTEXT.md#Active handoff": (
-            "An unfinished Feather handoff record for the work under the project's `.feather/handoffs/`.",
+            # Handoff worktree store ticket 07: Active handoff refers to the Handoff store.
+            "An unfinished Feather handoff record for the work in the Handoff store.",
             "In off, it is how unresolved verdicts and gate notes reach a resumed session.",
         ),
         "CONTEXT.md#Pending-acceptance claim": (

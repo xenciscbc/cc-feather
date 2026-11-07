@@ -107,8 +107,16 @@ Main's record of one Plan's review state in the Automatic flow, at `.feather/dis
 _Avoid_: dispatch log, review log
 
 **Active handoff**:
-An unfinished Feather handoff record for the work under the project's `.feather/handoffs/`. In off, it is how unresolved verdicts and gate notes reach a resumed session. In the Automatic flow, a Plan's review state crosses sessions through its Dispatch record instead, and an Active handoff records progress and names the Dispatch record.
+An unfinished Feather handoff record for the work in the Handoff store. In off, it is how unresolved verdicts and gate notes reach a resumed session. In the Automatic flow, a Plan's review state crosses sessions through its Dispatch record instead, and an Active handoff records progress and names the Dispatch record.
 _Avoid_: handoff file, notes
+
+**Handoff store**:
+The `.feather/handoffs/` directory that holds a project's handoff records, history, sealed archives and history lock. In an untracked linked worktree of a Git repository it is the main worktree's, shared by every checkout of that repository; in the main worktree, a non-Git project, an explicit root and a checkout that tracks its records, it is under the Working checkout. The handoff tool reports it as `root.store`; when it cannot write a shared Handoff store, it never writes the records in the Working checkout in its place.
+_Avoid_: handoff folder, project store
+
+**Working checkout**:
+The checkout a session works in: the Git top level of the directory the handoff tool is given, or that directory itself for a non-Git project or an explicit root. Sources, baselines, tracking detection and a record's environment describe it, never the Handoff store's checkout. The handoff tool reports it as `root.checkout`.
+_Avoid_: project root, current worktree
 
 **Handoff tidy**:
 Organizing the project's existing handoff records, run only when the user explicitly invokes it. It either proposes which work to take up next and which records to merge, from the records alone, or checks the recorded items and progress of the work the user selects, or of every record, against the current project. It only proposes: merges, reclassified items and removed items are written only after the user confirms them. It neither authorizes the work it recommends nor starts handoff maintenance.

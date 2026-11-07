@@ -1134,19 +1134,21 @@ class DelegationDedupeReleaseTests(unittest.TestCase):
         section = self.section(self.text(name), heading)
         return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
 
-    def test_manifest_is_0_30_0(self):
-        self.assertEqual("0.30.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.31.0, handoff worktree store).
 
     def test_updates_sections_start_with_the_dedupe_note_in_both_languages(self):
         previous = RepoTrustSplitReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = HandoffWorktreeStoreReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.30.0 note starts right after the section's opening sentence, its sentences in order, before 0.29.0's.
+            # The 0.30.0 note starts right after the 0.31.0 note, its sentences in order, before 0.29.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -1195,6 +1197,201 @@ class DelegationDedupeReleaseTests(unittest.TestCase):
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
                                                             "Ticket 04:", "Ticket 05:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.31.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(HandoffWorktreeStoreReleaseTests.ENTRY_HEADING))
+
+
+class HandoffWorktreeStoreReleaseTests(unittest.TestCase):
+    """0.31.0 (docs/specs/handoff-worktree-store.md, Acceptance item 12's README share, items 13 and 14; ticket 07):
+    the manifest version is 0.31.0; both READMEs replace the statement that there is no cross-session transaction lock
+    or automatic worktree synchronization with what is shared, what is not, what the history lock covers, the sandbox
+    requirement and how codex-feather sessions behave; the Updates note says the plugin update and a fresh session are
+    enough, describes codex-feather mixed use and how to go back to 0.30.0 with shared-store records still readable;
+    CONTEXT.md defines Handoff store and Working checkout and Active handoff refers to the Handoff store; ADR 0018
+    records the store and lock choices and cites the validation entry's rehearsal; the validation entry records the
+    checks, ticket 03's Windows rehearsal, the tag and the review round."""
+
+    README_HANDOFF = (
+        ("README.md", "## Handoff compatibility\n", (
+            "The checkouts of one Git repository share one Handoff store: a linked worktree whose records are not tracked keeps them in the main worktree's `.feather/handoffs/`, so removing or archiving the worktree no longer deletes them, and a session in any of those checkouts lists the same work and searches one history.",
+            "Sources, baselines and a record's environment still describe the checkout the session works in.",
+            "A checkout that tracks its records, a non-Git project and an explicit root keep their own store, and nothing is synchronized across projects.",
+            "A session in a linked worktree needs write access to the main worktree's store; when the operating system or the session's sandbox denies it, the tool reports `store-unwritable` and writes nothing in the worktree in its place.",
+            "Completion, archive, clear, seal and adopt take a history lock in the store, so sessions sharing it cannot lose each other's completions; writes to a work file take no lock, so keep one writer per work item.",
+            "Records that an earlier version left in another checkout are listed with that checkout, and `adopt` moves the ones you confirm into the current store.",
+            "Until codex-feather adopts the same runtime, Codex sessions keep writing records inside a linked worktree, which a list from a Claude session reports as another checkout's store.",
+            "Existing tracking choices and handoff ignore behavior are preserved."),
+         "There is no cross-session transaction lock or automatic worktree synchronization."),
+        ("README.zh-TW.md", "## 交接相容性\n", (
+            "同一個 Git 儲存庫的各個 checkout 共用一個交接存放處：未追蹤交接紀錄的 linked worktree 會把紀錄存在 main worktree 的 `.feather/handoffs/`，所以移除或封存 worktree 不會再刪掉它們，而在任一個 checkout 中的 session 都列出同樣的工作、搜尋同一份歷史。",
+            "來源、來源基準與紀錄的環境仍描述 session 所在的 checkout。",
+            "追蹤自己紀錄的 checkout、非 Git 專案與明確指定的根目錄保留自己的存放處，跨專案也不做任何同步。",
+            "linked worktree 中的 session 需要能寫入 main worktree 的存放處；作業系統或 session 的 sandbox 拒絕時，工具回報 `store-unwritable`，不會改寫在 worktree 中。",
+            "完成、archive、clear、seal 與 adopt 會在存放處取得歷史鎖，所以共用它的 session 不會互相弄丟完成紀錄；寫入工作檔不取鎖，所以每項工作仍只有一個寫入者。",
+            "較早版本留在其他 checkout 的紀錄會連同那個 checkout 列出，`adopt` 會把你確認的部分移到目前的存放處。",
+            "在 codex-feather 採用同一個 runtime 之前，Codex session 仍把紀錄寫在 linked worktree 內，Claude session 的列表會把它們列為另一個 checkout 的存放處。",
+            "交接工具依原有規則處理 Git 忽略與使用者追蹤選擇。"),
+         "無跨 session 交易鎖或 worktree 自動同步"),
+    )
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.31.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.31.0 keeps the handoff records of a linked worktree in the main worktree's store, adds a history lock with an `unlock` command for a stale one, lists records left in other checkouts and moves the ones you confirm with `adopt`, as [Handoff compatibility](#handoff-compatibility) describes.",
+         "Like 0.30.0, it changes no role definition, installed policy template or the setup tool's rendering of them, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "Until codex-feather adopts the same runtime, Codex sessions keep writing records inside a linked worktree; a Claude session's list reports them under the other checkout's store, and `adopt` moves the ones you confirm.",
+         "To go back to 0.30.0, reinstall the 0.30.0 plugin; no setup update or remove is needed, records written to the main worktree's store stay readable there by 0.30.0 in the main worktree, and a 0.30.0 session in a linked worktree sees only that worktree's own records again."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.31.0 把 linked worktree 的交接紀錄存在 main worktree 的存放處，新增歷史鎖與清除過期鎖的 `unlock` 指令，列出留在其他 checkout 的紀錄，並以 `adopt` 移動你確認的部分，詳見[交接相容性](#交接相容性)。",
+         "這一版同樣沒有改任何角色定義、已安裝的政策範本或 setup 工具對它們的產生方式，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "在 codex-feather 採用同一個 runtime 之前，Codex session 仍把紀錄寫在 linked worktree 內；Claude session 的列表會把它們列在那個 checkout 的存放處下，`adopt` 會移動你確認的部分。",
+         "要回到 0.30.0，重新安裝 0.30.0 的 plugin 即可；不需要做 setup update 或先移除，寫入 main worktree 存放處的紀錄在 main worktree 中仍可由 0.30.0 讀取，而 linked worktree 中的 0.30.0 session 又只會看到該 worktree 自己的紀錄。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    GLOSSARY = {
+        "Handoff store": (
+            "The `.feather/handoffs/` directory that holds a project's handoff records, history, sealed archives and history lock.",
+            "In an untracked linked worktree of a Git repository it is the main worktree's, shared by every checkout of that repository; in the main worktree, a non-Git project, an explicit root and a checkout that tracks its records, it is under the Working checkout.",
+            "The handoff tool reports it as `root.store`; when it cannot write a shared Handoff store, it never writes the records in the Working checkout in its place."),
+        "Working checkout": (
+            "The checkout a session works in: the Git top level of the directory the handoff tool is given, or that directory itself for a non-Git project or an explicit root.",
+            "Sources, baselines, tracking detection and a record's environment describe it, never the Handoff store's checkout.",
+            "The handoff tool reports it as `root.checkout`."),
+        "Active handoff": ("An unfinished Feather handoff record for the work in the Handoff store.",),
+    }
+
+    ADR = "docs/adr/0018-linked-worktrees-share-the-main-worktree-store.md"
+    ADR_SENTENCES = (
+        "# Linked worktrees share the main worktree's Handoff store\n",
+        "- **The main worktree holds the store.**",
+        "- **A history lock.**",
+        "- **The Git common directory**",
+        "- **Per-worktree records with synchronization**",
+        "- **An external single-writer rule instead of a lock**",
+        "the rehearsal recorded under 0.31.0 in [setup validation](../setup-validation.md#0310-handoff-worktree-store) observed that it does.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def test_manifest_is_0_31_0(self):
+        self.assertEqual("0.31.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_readmes_replace_the_worktree_statement_in_both_languages(self):
+        for name, heading, sentences, removed in self.README_HANDOFF:
+            section = self.section(self.text(name), heading)
+            with self.subTest(readme=name, removed=True):
+                self.assertNotIn(removed, self.text(name))
+            # One paragraph, its sentences in order.
+            paragraph = section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+            self.assertNotIn("\n", paragraph)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            for earlier, later in zip(sentences, sentences[1:]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_start_with_the_worktree_store_note_in_both_languages(self):
+        previous = DelegationDedupeReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.31.0 note starts right after the section's opening sentence, its sentences in order, before 0.30.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_state_that_no_setup_update_is_needed_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertNotIn("need the plugin update and then", note)
+                self.assertNotIn("再於每個裝有分派元件的範圍執行", note)
+
+    def test_the_note_links_to_the_handoff_section(self):
+        for name, (heading, _, *sentences), (link, target) in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES,
+                (("(#handoff-compatibility)", "\n## Handoff compatibility\n"), ("(#交接相容性)", "\n## 交接相容性\n"))):
+            with self.subTest(readme=name):
+                self.assertIn(link, self.note(name, heading, sentences))
+                self.assertIn(target, self.text(name))
+
+    def test_glossary_defines_the_store_and_the_checkout(self):
+        text = self.text("CONTEXT.md")
+        for term, sentences in self.GLOSSARY.items():
+            heading = f"\n**{term}**:\n"
+            with self.subTest(term=term):
+                self.assertEqual(text.count(heading), 1)
+            entry = text.split(heading, 1)[1].split("\n_Avoid_:", 1)[0]
+            for sentence in sentences:
+                with self.subTest(term=term, sentence=sentence[:30]):
+                    self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("under the project's `.feather/handoffs/`", text)
+        # The two new terms come right after Active handoff, which stays right after Dispatch record.
+        positions = [text.index(f"\n**{term}**:\n") for term in ("Active handoff", "Handoff store", "Working checkout")]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_adr_0018_records_the_store_and_lock_choices(self):
+        text = self.text(self.ADR)
+        for sentence in self.ADR_SENTENCES:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(text.count(sentence), 1)
+        # It cites the validation entry's rehearsal, not a gitignored ticket.
+        self.assertNotIn(".scratch", text)
+        self.assertIn("\n## 0.31.0 handoff worktree store\n", self.text("docs/setup-validation.md"))
+
+    # The validation entry: what it implements, no setup update with its check and the 0.30.0 read-back, codex-feather,
+    # the validation, ticket 03's rehearsal, no live review rehearsal, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.31.0 handoff worktree store\n"
+    ENTRY = (
+        "Implements [the handoff worktree store spec](specs/handoff-worktree-store.md), committed in 670665c and updated after its security analysis in 4d7f4d9;",
+        "[ADR 0018](adr/0018-linked-worktrees-share-the-main-worktree-store.md)",
+        "**No setup update is required.**",
+        "as `git diff-tree -r --name-only v0.30.0 HEAD -- templates scripts skills/setup skills/delegation` shows by printing nothing;",
+        "To go back to 0.30.0, reinstall the 0.30.0 plugin; no setup update or remove is needed.",
+        "0.30.0's `list` from the main worktree returned `ok` with that work and no issue,",
+        "Mixed use with codex-feather:",
+        "(the 0.30.0 release ran 872 tests with 30 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "Rehearsal in a real linked worktree on Windows (2026-11-06, ticket 03):",
+        "A desktop worktree session on Windows can therefore write the main worktree's store, and the store choice stands.",
+        "No live review rehearsal was run for this release;",
+        "`v0.31.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "All reviews used the installed 0.30.0 roles and procedures from the plugin cache,",
+        "follow the commit carrying this entry and are recorded after it.",
+    )
+
+    def test_validation_entry_records_the_checks_rehearsal_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertIn(self.ENTRY_HEADING, text)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
+                                                            "Ticket 04:", "Ticket 05:", "Ticket 06:", "Ticket 07:")]
         self.assertEqual(tickets, sorted(tickets))
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
