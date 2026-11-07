@@ -71,6 +71,9 @@ def main() -> int:
     commands.add_parser("seal", parents=[root_options], help="JSON {version, ids, destination} on stdin")
     commands.add_parser("unlock", parents=[root_options],
                         help="Remove a stale, unchanged history lock on the user's decision: JSON {version} on stdin")
+    commands.add_parser("adopt", parents=[root_options],
+                        help="Move records the user confirmed from another checkout's store into this store: JSON "
+                             "{source, works?, history?, archives?} on stdin")
     history = commands.add_parser("history", parents=[root_options])
     history.add_argument("--work")
     history.add_argument("--from-date")
@@ -107,6 +110,9 @@ def main() -> int:
         elif args.command == "unlock":
             from .storage import unlock_history
             result = unlock_history(store, input_payload())
+        elif args.command == "adopt":
+            from .adopt import adopt_records
+            result = adopt_records(store, input_payload())
         elif args.command == "history":
             from .history import query_history
             result = query_history(store, work=args.work, date_from=args.from_date,
