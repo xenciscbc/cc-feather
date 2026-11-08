@@ -84,6 +84,20 @@ def select(name: str, text: str) -> str:
     return next((line for line in lines if line.startswith(f"- **{part}.**")), "")
 
 
+# resource-risk-runs ticket 03: the implementer roles that gained the Resources paragraph after v0.28.0.
+RESOURCE_FLOOR_IMPLEMENTERS = ("executor", "security-executor")
+
+
+def without_resources_paragraph(test, text: str) -> str:
+    """The role text with its one Resources paragraph line and the blank line before it removed."""
+    lines = text.split("\n")
+    found = [index for index, line in enumerate(lines) if line.startswith("**Resources.** ")]
+    test.assertEqual(len(found), 1)
+    test.assertEqual(lines[found[0] - 1], "")
+    del lines[found[0] - 1:found[0] + 1]
+    return "\n".join(lines)
+
+
 def current(name: str) -> str:
     return select(name, normalised((ROOT / PATHS[name.partition("#")[0]]).read_text(encoding="utf-8")))
 
@@ -579,8 +593,12 @@ class DelegationTrustsTheRepositoryTests(unittest.TestCase):
                 self.assertNotIn("allowlist", text)
         for role in self.UNCHANGED_ROLES:
             with self.subTest(role=role):
-                self.assertEqual(normalised((AGENTS / f"{role}.md").read_text(encoding="utf-8")),
-                                 tagged_blob(self, f"templates/agents/{role}.md"))
+                text = normalised((AGENTS / f"{role}.md").read_text(encoding="utf-8"))
+                # resource-risk-runs ticket 03 adds the Resources paragraph to the executor and security-executor;
+                # apart from that paragraph and its blank line, both stay as v0.28.0 shipped them.
+                if role in RESOURCE_FLOOR_IMPLEMENTERS:
+                    text = without_resources_paragraph(self, text)
+                self.assertEqual(text, tagged_blob(self, f"templates/agents/{role}.md"))
 
     def test_the_installed_policy_commits_only_the_claims_files(self):
         self.assert_pinned(self.INSTALLED)
@@ -713,7 +731,9 @@ class SetupUpdateReplacesTheTwentyEightInstallationTests(unittest.TestCase):
                     self.assertTrue(shown["role_update_required"])
                     stale = sorted(warning.split()[1] for warning in shown["warnings"]
                                    if warning.startswith("role ") and "older template" in warning)
-                    self.assertEqual(stale, sorted(self.CHANGED))
+                    # resource-risk-runs ticket 03 also changes the executor and security-executor templates since
+                    # v0.28.0, so a 0.28.0 installation shows them stale too.
+                    self.assertEqual(stale, sorted((*self.CHANGED, *RESOURCE_FLOOR_IMPLEMENTERS)))
                     self.assertEqual("delegation guidance is from an older template; run setup update"
                                      in shown["warnings"], mode == "auto")
                     self.apply("update", scope)
