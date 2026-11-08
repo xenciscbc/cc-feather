@@ -1599,9 +1599,10 @@ class DispatchRecordTests(unittest.TestCase):
             "name main states to the user.",
             "It holds what a later session needs: the plan, its base revision and its plan-review READY; for each claim, "
             "its classification, its reading set's hash, its base revision, and each review call's judged commit and "
-            # resource-risk-runs ticket 03: the record also holds each claim's Observed resource risks.
+            # resource-risk-runs ticket 03: the record also holds each claim's Observed resource risks; ticket 04 adds
+            # its approved Execution method.
             "verdict with a one-line summary; each fix claim with its problem and a summary of the fix; each claim's "
-            "Observed resource risks; the branches main created for the work; and the user's decisions with their "
+            "approved Execution method and Observed resource risks; the branches main created for the work; and the user's decisions with their "
             "scope.",
             # Delegation dedupe ticket 02: the reference to step 10 uses the explicit-read form.
             "It holds no counts, and no exploit details or secrets, which follow the Adversarial review procedure's step "

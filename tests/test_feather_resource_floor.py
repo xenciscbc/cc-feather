@@ -51,6 +51,21 @@ OUTCOME = {
     "security-executor": "Report the task partial or blocked for what a returned probe or a stopped run leaves undecided. ",
 }
 REPORT = "Your report names every probe you returned and every run a limit stopped, with the reason."
+# resource-risk-runs ticket 04: the Resource-risk claim sentences follow the opening, with the role's own words for an
+# insufficient Execution method (tests/test_feather_resource_method.py pins their decisions).
+METHOD = (
+    "For a Resource-risk claim, run its risky part only as the approved Execution method in your brief describes and "
+    "only inside the Runner with the brief's limits, and never change it: no raised limit, no larger or different "
+    "experiment. Still judge whether the claim holds, ordinary acceptance checks and counterexample probes included, and "
+    "whether the approved Execution method can establish it. When you judge the method insufficient or wrong, do not "
+    "work around it: {outcome} with your proposed method and the reason. "
+)
+METHOD_OUTCOME = {
+    "verifier": "report INCONCLUSIVE",
+    "adversary": "report INCONCLUSIVE",
+    "executor": "report the task partial or blocked",
+    "security-executor": "report the task partial or blocked",
+}
 FLOOR_ROLES = ("verifier", "adversary", "executor", "security-executor")
 # Where the paragraph sits: the paragraph it follows, by its opening.
 BESIDE = {
@@ -64,7 +79,7 @@ OTHER_ROLES = tuple(role for role in config.ROLES if role not in FLOOR_ROLES)
 
 def paragraph(role: str) -> str:
     opening = OPENING_REVIEW if role in ("verifier", "adversary") else OPENING_IMPLEMENTER
-    return opening + BODY + OUTCOME[role] + REPORT
+    return opening + METHOD.format(outcome=METHOD_OUTCOME[role]) + BODY + OUTCOME[role] + REPORT
 
 
 def normalised(text: str) -> str:
@@ -115,6 +130,7 @@ class RoleFloorTests(unittest.TestCase):
         for role in FLOOR_ROLES:
             text = paragraph(role)
             opening = OPENING_REVIEW if role in ("verifier", "adversary") else OPENING_IMPLEMENTER
+            text = text.replace(METHOD.format(outcome=METHOD_OUTCOME[role]), METHOD)
             bodies.add(text.removeprefix(opening).replace(OUTCOME[role], ""))
         self.assertEqual(len(bodies), 1)
 
@@ -193,9 +209,10 @@ class ReferenceTests(unittest.TestCase):
         text = reference()
         self.assertTrue(text.startswith("# Resource-risk runs\n"))
         for sentence in (
-            "It adds to [review state](review-state.md)'s Execution and never replaces it: nothing here allows a run "
-            "that Execution does not, lifts a restriction the user stated, or makes the Runner an isolated environment "
-            "the user named.",
+            # resource-risk-runs ticket 04 names the approved Execution method as part of "here".
+            "It adds to [review state](review-state.md)'s Execution and never replaces it: nothing here, an approved "
+            "Execution method included, allows a run that Execution does not, lifts a restriction the user stated, or "
+            "makes the Runner an isolated environment the user named.",
             "Before any decision or brief of this reference that depends on a rule review state owns, in off and in "
             "auto, main reads [review state](review-state.md) in full; review state's Reading it says when an earlier "
             "full read still serves.",
@@ -203,7 +220,7 @@ class ReferenceTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:50]):
                 self.assert_whole_sentence(sentence, text)
         self.assertEqual([line for line in text.splitlines() if line.startswith("## ")],
-                         ["## The Runner", "## Main's floor", "## Observed resource risk"])
+                         ["## Execution method", "## The Runner", "## Main's floor", "## Observed resource risk"])
 
     def test_main_gives_the_resolved_runner_path_and_the_limits_in_the_brief(self):
         runner = section(reference(), "The Runner")
@@ -293,10 +310,11 @@ class ReferenceTests(unittest.TestCase):
                 "agreement.",
             ),
             "Telling the user": ("Main tells the user about it in its next reply.",),
+            # resource-risk-runs ticket 04: the carry is stated once, for every execution condition, in Execution
+            # method's Carrying the conditions; this bullet points to it.
             "Carrying it": (
-                "Main carries it as an execution condition into every later brief of that Claim for a role that may "
-                "execute code, reopened calls and later sessions included, and applies it to its own runs for the "
-                "Claim.",
+                "It is one of the Claim's execution conditions, carried into every later brief of that Claim and "
+                "applied to main's own runs for it as Execution method's Carrying the conditions states.",
                 "It stays until the Plan ends.",
             ),
             "At the end of the Plan": (
@@ -323,21 +341,23 @@ class PointerTests(unittest.TestCase):
 
     def test_the_dispatch_record_holds_observed_resource_risks(self):
         record = bullet(self.text("review-state.md"), "Dispatch record")
-        self.assertIn("each fix claim with its problem and a summary of the fix; each claim's Observed resource risks; "
-                      "the branches main created for the work;", record)
+        # resource-risk-runs ticket 04 adds the approved Execution methods.
+        self.assertIn("each fix claim with its problem and a summary of the fix; each claim's approved Execution method "
+                      "and Observed resource risks; the branches main created for the work;", record)
         self.assert_whole_sentence(
-            "What an Observed resource risk names, and when main records it, are as the resource-risk runs reference "
-            f"states: {READ_REFERENCE}", record)
+            "What an approved Execution method and an Observed resource risk name, and when main records them, are as "
+            f"the resource-risk runs reference states: {READ_REFERENCE}", record)
 
     def test_execution_points_to_mains_floor(self):
         self.assert_whole_sentence(
-            "Main's floor for running a test or probe a role returned or reproducing a failure a role reported, and the "
-            "Runner path and limits a brief needs, are main's side of resource-risk runs: " + READ_REFERENCE,
+            "Main's floor for running a test or probe a role returned or reproducing a failure a role reported, the "
+            "Runner path and limits a brief needs, and a claim's execution conditions, its approved Execution method "
+            "included, are main's side of resource-risk runs: " + READ_REFERENCE,
             bullet(self.text("review-state.md"), "Execution"))
 
     def test_the_procedures_point_to_the_reference(self):
-        brief = ("For the Runner path and limits the brief needs and the claim's Observed resource risks it carries, "
-                 + READ_REFERENCE)
+        brief = ("For the Runner path and limits the brief needs and the claim's execution conditions it carries, its "
+                 "approved Execution method and Observed resource risks included, " + READ_REFERENCE)
         pins = {
             ("outcome-verification.md", "2. "): brief,
             ("outcome-verification.md", "4. "): (
@@ -358,8 +378,9 @@ class PointerTests(unittest.TestCase):
         text = normalised((DELEGATION / "SKILL.md").read_text(encoding="utf-8"))
         dispatch = text.split("\n## Dispatch\n", 1)[1].split("\n## ", 1)[0]
         self.assert_whole_sentence(
-            "For the Runner path and limits a brief of a role that may execute code needs, the claim's Observed resource "
-            "risks it carries, and a probe a role returned or a run a limit stopped, read the "
+            "For the Runner path and limits a brief of a role that may execute code needs, the claim's execution "
+            "conditions it carries, its approved Execution method and Observed resource risks included, and a probe a "
+            "role returned or a run a limit stopped, read the "
             f"{SKILL_LINK} and follow it.", dispatch)
 
     def test_the_rules_are_stated_only_in_the_reference(self):
@@ -380,7 +401,8 @@ class PointerTests(unittest.TestCase):
                 with self.subTest(path=path.name, link=link):
                     self.assertEqual((path.parent / link).resolve(), REFERENCE.resolve())
                 found += 1
-        self.assertEqual(found, 7)
+        # resource-risk-runs ticket 04 adds plan review's pointer.
+        self.assertEqual(found, 8)
 
 
 class GlossaryTests(unittest.TestCase):

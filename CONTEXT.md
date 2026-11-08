@@ -140,6 +140,14 @@ _Avoid_: sign-off, override
 
 ## Resource-risk runs
 
+**Resource-risk claim**:
+A Claim whose implementation checks, acceptance checks or verification foreseeably risk exhausting memory, time or the machine. Plan review marks it, with the reason, its estimated peak memory and time and the basis of the estimate, and proposes an Execution method for the risky part. An unmarked Claim is not thereby safe: a missing mark is not a statement that a Claim is safe.
+_Avoid_: heavy claim, risky ticket
+
+**Execution method**:
+The approved way to run a Resource-risk claim's risky part: the experiment, its bounds, the memory and time limits, that it runs inside the Runner, and the source of the budget. Main approves it, bound to the Claim, its reading set, the experiment and the budget, and carries it into every brief of a role that may execute code for the Claim and into its own runs. A role runs the risky part only as approved and never changes it, and reports INCONCLUSIVE, or for an implementation partial or blocked, with its own proposed method when it judges the method insufficient. It never lifts a restriction the user stated.
+_Avoid_: resource plan, run recipe
+
 **Unbounded probe**:
 A new or modified test or probe, whoever wrote it, any part of which, the input generator, the code under test, a reference implementation or control, callbacks, measurement, output collection or descendant processes, has no established bound on total work or retained data, or whose bound allows a peak memory or time that does not fit the run's budget or, without one, the project's resource guidance. An unknown bound counts as none, and a bounded input size, a bounded outer loop or a timeout alone is not a bound. A role does not run one and returns it to main; main runs it only after redesigning it so that every part is bounded within the budget, or inside the Runner with the budget's limits, never as it is and never with a timeout alone.
 _Avoid_: runaway test, heavy test

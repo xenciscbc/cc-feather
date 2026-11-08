@@ -1605,9 +1605,11 @@ class FeatherConfigTests(unittest.TestCase):
     # Repo trust split ticket 01 (0.29.0) removed the allowlist paragraph that analyst, scout and Explore gained after
     # v0.20.0, so their templates are again the ones v0.20.0 shipped: they left the fixture and a test pins them equal
     # to the tag. Reviewer, verifier and adversary still differ from v0.20.0 and show stale detection.
+    # Resource-risk runs ticket 04 adds the resource-risk item to analyst's plan review, so analyst differs from
+    # v0.20.0 again: its tagged text is back in the fixture, copied from `git show v0.20.0:templates/agents/analyst.md`.
     TEMPLATES_0_20_0 = Path(__file__).resolve().parent / "role_templates_0_20_0.json"
-    CHANGED_SINCE_0_20_0 = ("reviewer", "verifier", "adversary")
-    SAME_AS_0_20_0 = ("analyst", "scout", "Explore")
+    CHANGED_SINCE_0_20_0 = ("reviewer", "analyst", "verifier", "adversary")
+    SAME_AS_0_20_0 = ("scout", "Explore")
     # The reference's read-only Git prefix for reading the tag (repository safety's Safe Git invocation).
     GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
                 "-c", "log.showSignature=false", "-c", "mailmap.file=", "-c", "mailmap.blob=",
