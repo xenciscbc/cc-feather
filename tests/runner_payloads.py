@@ -71,6 +71,9 @@ def main(argv: list[str]) -> int:
         out.write(b"FLOOD-END-MARKER\n")
         out.flush()
         return 0
+    if mode == "priority" and sys.platform != "win32":
+        print(f"niceness {os.getpriority(os.PRIO_PROCESS, 0)}", flush=True)
+        return 0
     if mode == "priority":
         import ctypes
         kernel32 = ctypes.WinDLL("kernel32")

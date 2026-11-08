@@ -30,6 +30,16 @@ below-normal CPU priority where the job allows it; failure to lower it is report
 Started inside any job, the Runner refuses: Windows shows only the innermost job's limits, so a job above it could
 limit memory without the Runner knowing.
 
+Linux: the target runs in a transient systemd user scope with the memory limit for every process in it, swap
+disabled, OOMPolicy=continue so the scope and its evidence survive a memory kill, and the scope's own runtime limit
+equal to the time limit, so a Runner killed outright does not leave the target running past it. This needs a running
+systemd user manager with the cgroup v2 memory controller delegated to it, such as WSL2 with systemd enabled. The
+memory limit event comes from the scope's memory.events, never from the target's exit code. The Runner refuses when
+there is no user manager, the memory controller is not delegated, the scope cannot be created or does not hold its
+limits, or the Runner's own cgroup or one above the scope leaves less memory than the limit. A small helper process
+stays in the scope, so its memory counts toward the limit and the peak. The target runs at niceness 10 or more. A
+target ended by a signal has the negative signal number as its exit code.
+
 Git Bash: MSYS rewrites arguments that look like POSIX paths, such as /tmp/x or /c, into Windows paths before the
 Runner sees them, and it can rewrite the target's own arguments the same way. Set MSYS_NO_PATHCONV=1 for the
 invocation (or MSYS2_ARG_CONV_EXCL='*') when an argument must reach the target unchanged, and give the working
@@ -519,12 +529,444 @@ def run_windows(request: dict, fault: str) -> dict:
     return result
 
 
+# ---- Linux backend: a transient systemd user scope -----------------------------------------------------------
+
+CGROUP_ROOT = "/sys/fs/cgroup"
+SMALL_READ = 65536
+
+# The helper runs inside the scope. It reports its cgroup, waits for the Runner's go byte, then starts the target as
+# its child at a lower priority with the output pipe as stdout and stderr, reports the exit code, and stays in the
+# scope so the scope and its memory evidence outlive the target until the Runner has read them. If the Runner goes
+# away, the control pipe reaches end of file and the helper ends every process in the scope.
+LINUX_HELPER = r"""
+import os, select, sys
+report, control, out = (int(value) for value in sys.argv[1:4])
+cwd, command = sys.argv[4], sys.argv[5:]
+def say(text):
+    os.write(report, (text + "\n").encode("utf-8", "replace"))
+def end_scope():
+    try:
+        with open(path + "/cgroup.kill", "w") as handle:
+            handle.write("1")
+    finally:
+        os._exit(0)
+relative = ""
+with open("/proc/self/cgroup", "rb") as handle:
+    for line in handle.read(65536).decode("utf-8", "replace").splitlines():
+        if line.startswith("0::"):
+            relative = line[3:]
+path = "/sys/fs/cgroup" + relative
+say("cgroup " + relative)
+if os.read(control, 1) != b"g":
+    os._exit(0)
+status_read, status_write = os.pipe()
+child = os.fork()
+if child == 0:
+    try:
+        os.close(status_read)
+        os.close(report)
+        os.close(control)
+        try:
+            os.setpriority(os.PRIO_PROCESS, 0, max(10, os.getpriority(os.PRIO_PROCESS, 0)))
+            os.write(status_write, b"priority lowered\n")
+        except OSError as problem:
+            os.write(status_write, ("priority failed " + str(problem) + "\n").encode("utf-8", "replace"))
+        os.chdir(cwd)
+        os.dup2(out, 1)
+        os.dup2(out, 2)
+        os.close(out)
+        os.execvp(command[0], command)
+    except OSError as problem:
+        os.write(status_write, ("launch " + str(problem.errno) + " " + str(problem.strerror) + "\n").encode())
+    os._exit(127)
+os.close(status_write)
+os.close(out)
+status = b""
+while len(status) < 65536:
+    chunk = os.read(status_read, 4096)
+    if not chunk:
+        break
+    status += chunk
+os.close(status_read)
+for line in status.decode("utf-8", "replace").splitlines():
+    say(line)
+while True:
+    if select.select([control], [], [], 0.1)[0]:
+        end_scope()
+    done, wait_status = os.waitpid(child, os.WNOHANG)
+    if done:
+        say("exit " + str(os.waitstatus_to_exitcode(wait_status)))
+        break
+while True:
+    select.select([control], [], [])
+    end_scope()
+"""
+
+
+def read_small(path: str, cap: int = SMALL_READ) -> str | None:
+    """At most cap bytes of a small file, or None when it cannot be read."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return None
+    try:
+        return os.read(fd, cap).decode("utf-8", "replace")
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def small_command(args: list[str], timeout: float = 15, env: dict | None = None) -> tuple[int | None, str]:
+    """Run a short command; keep at most 8 KiB of its combined output; None as the code when it did not finish."""
+    import subprocess
+    read_fd, write_fd = os.pipe()
+    try:
+        process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=write_fd, stderr=write_fd, env=env)
+    except OSError as problem:
+        os.close(read_fd)
+        os.close(write_fd)
+        return None, str(problem)
+    os.close(write_fd)
+    output = Output(read_fd, 8192)
+    output.start()
+    try:
+        code = process.wait(timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(5)
+        code = None
+    output.finish(5)
+    report = output.report()
+    os.close(read_fd)
+    return code, (report["head"] + report["tail"]).strip()
+
+
+def memory_events(cgroup_dir: str) -> dict | None:
+    text = read_small(cgroup_dir + "/memory.events")
+    if text is None:
+        return None
+    events = {}
+    for line in text.splitlines():
+        name, _, value = line.partition(" ")
+        if value.strip().isdigit():
+            events[name] = int(value)
+    return events if "oom_kill" in events else None
+
+
+def enclosing_memory_limit(relative: str, memory_bytes: int, include_self: bool) -> str | None:
+    """The first cgroup on the path to the root whose memory.max or memory.high leaves less than memory_bytes free."""
+    parts = [part for part in relative.split("/") if part]
+    levels = ["/" + "/".join(parts[:count]) for count in range(len(parts), 0, -1)]
+    if not include_self:
+        levels = levels[1:]
+    for level in levels:
+        current = read_small(CGROUP_ROOT + level + "/memory.current")
+        in_use = int(current) if current and current.strip().isdigit() else 0
+        for name in ("memory.max", "memory.high"):
+            value = read_small(CGROUP_ROOT + level + "/" + name)
+            if value is None or not value.strip().isdigit():
+                continue
+            if int(value) - in_use < memory_bytes:
+                return (f"the enclosing cgroup {level} sets {name} to {value.strip()} bytes with {in_use} bytes in "
+                        f"use, which leaves less than the memory limit ({memory_bytes} bytes)")
+    return None
+
+
+def run_linux(request: dict, fault: str) -> dict:
+    import shutil
+    import select
+    import subprocess
+
+    result = base_result(request, "linux-systemd-user-scope")
+    if fault == "containment":
+        return refuse(result, "containment is unavailable: transient scope creation was disabled by " + FAULT_VARIABLE)
+    systemd_run, systemctl = shutil.which("systemd-run"), shutil.which("systemctl")
+    if not systemd_run or not systemctl:
+        return refuse(result, "containment is unavailable: systemd-run or systemctl is not installed, so there is "
+                      "no systemd user manager to create a scope")
+
+    # 1. A running systemd user manager with the cgroup v2 memory controller delegated to it.
+    code, text = small_command([systemctl, "--user", "show", "-p", "SystemState", "-p", "ControlGroup",
+                                "-p", "Version"])
+    manager = dict(line.partition("=")[::2] for line in text.splitlines() if "=" in line) if code == 0 else {}
+    if code != 0 or manager.get("SystemState") not in ("running", "degraded"):
+        return refuse(result, "containment is unavailable: no running systemd user manager answered ("
+                      + (text or f"systemctl exit {code}")[:500] + ")")
+    result["containment"] = {"systemd_version": manager.get("Version"), "unit": None, "cgroup": None}
+    if read_small(CGROUP_ROOT + "/cgroup.controllers") is None:
+        return refuse(result, "containment is unavailable: the cgroup v2 hierarchy is not mounted at " + CGROUP_ROOT)
+    delegated = (read_small(CGROUP_ROOT + manager.get("ControlGroup", "/-") + "/cgroup.subtree_control") or "").split()
+    if "memory" not in delegated:
+        return refuse(result, "containment is unavailable: the memory controller is not delegated to the systemd "
+                      f"user manager (its cgroup enables: {' '.join(delegated) or 'nothing readable'})")
+
+    # 2. The Runner's own cgroup must not be limited below the run, or the Runner itself could be stopped first.
+    own = ""
+    for line in (read_small("/proc/self/cgroup") or "").splitlines():
+        if line.startswith("0::"):
+            own = line[3:]
+    if not own:
+        return refuse(result, "containment is unavailable: the Runner's own cgroup v2 path cannot be read")
+    limit = enclosing_memory_limit(own, request["memory_bytes"], include_self=True)
+    if limit:
+        return refuse(result, "an enclosing limit would make the Runner's limits unreliable: " + limit)
+
+    # 3. Available memory must cover the memory limit.
+    available = None
+    for line in (read_small("/proc/meminfo") or "").splitlines():
+        if line.startswith("MemAvailable:") and line.split()[1].isdigit():
+            available = int(line.split()[1]) * 1024
+    if available is None:
+        return refuse(result, "cannot read available memory from /proc/meminfo")
+    result["available_memory"] = {"physical_bytes": available, "commit_bytes": None}
+    if available < request["memory_bytes"]:
+        return refuse(result, f"available memory ({available} bytes, MemAvailable) is below the memory limit "
+                      f"({request['memory_bytes']} bytes)")
+
+    # 4. The scope: the memory limit for every process in it, no swap, an OOM policy that keeps the scope running so
+    # its memory events survive, and the scope's own runtime limit equal to the time limit, so a Runner killed
+    # outright does not leave the target running past it.
+    unit = f"cc-feather-runner-{os.getpid()}-{time.time_ns()}"
+    result["containment"]["unit"] = unit + ".scope"
+    runtime_us = max(1, int(-(-request["time_seconds"] * 1_000_000 // 1)))
+    report_read, report_write = os.pipe()
+    control_read, control_write = os.pipe()
+    out_read, out_write = os.pipe()
+    setup_read, setup_write = os.pipe()
+    started_at = time.monotonic()
+    try:
+        helper = subprocess.Popen(
+            [systemd_run, "--user", "--scope", "--quiet", "--collect", "--unit", unit,
+             "--description", "cc-feather Runner target: " + " ".join(request["command"])[:200],
+             "-p", f"MemoryMax={request['memory_bytes']}", "-p", "MemorySwapMax=0", "-p", "OOMPolicy=continue",
+             "-p", f"RuntimeMaxSec={runtime_us}us", "-p", "KillSignal=SIGKILL", "--",
+             sys.executable, "-I", "-S", "-B", "-c", LINUX_HELPER, str(report_write), str(control_read),
+             str(out_write), request["cwd"], *request["command"]],
+            stdin=subprocess.DEVNULL, stdout=setup_write, stderr=setup_write,
+            pass_fds=(report_write, control_read, out_write))
+    except OSError as problem:
+        for fd in (report_read, report_write, control_read, control_write, out_read, out_write, setup_read,
+                   setup_write):
+            os.close(fd)
+        return refuse(result, f"containment is unavailable: systemd-run could not start: {problem}")
+    for fd in (report_write, control_read, out_write, setup_write):
+        os.close(fd)
+    setup = Output(setup_read, 8192)
+    setup.start()
+    output = Output(out_read, request["output_bytes"])
+    output.start()
+
+    reports: list[str] = []
+    pending = bytearray()
+    report_bytes = [0]
+
+    def read_reports(wait_seconds: float) -> bool:
+        """Read complete report lines, at most 64 KiB in all; False at end of file."""
+        if not select.select([report_read], [], [], max(0.0, wait_seconds))[0]:
+            return True
+        chunk = os.read(report_read, 4096)
+        if not chunk:
+            return False
+        report_bytes[0] += len(chunk)
+        if report_bytes[0] <= SMALL_READ:
+            pending.extend(chunk)
+            while b"\n" in pending:
+                line, _, rest = bytes(pending).partition(b"\n")
+                pending[:] = rest
+                reports.append(line.decode("utf-8", "replace"))
+        return True
+
+    def report(prefix: str) -> str | None:
+        return next((line[len(prefix):] for line in reports if line.startswith(prefix)), None)
+
+    scope_dir = None
+
+    def end_scope():
+        if scope_dir is not None:
+            try:
+                with open(scope_dir + "/cgroup.kill", "w") as handle:
+                    handle.write("1")
+            except OSError:
+                pass
+
+    def close_down(wait_seconds: float) -> bool:
+        """End every process in the scope and wait until the helper and the scope are gone."""
+        end_scope()
+        os.close(control_write)
+        try:
+            helper.wait(wait_seconds)
+        except subprocess.TimeoutExpired:
+            helper.kill()
+            helper.wait(5)
+        gone_by = time.monotonic() + wait_seconds
+        while scope_dir is not None and os.path.isdir(scope_dir) and time.monotonic() < gone_by:
+            end_scope()
+            time.sleep(0.05)
+        return scope_dir is None or not os.path.isdir(scope_dir)
+
+    def finish_refusal(reason: str) -> dict:
+        close_down(10)
+        setup.finish(5)
+        output.finish(5)
+        os.close(report_read)
+        os.close(setup_read)
+        os.close(out_read)
+        return refuse(result, reason)
+
+    # 5. Confirm the scope before the target exists: the helper is in it and the limits hold.
+    open_report = True
+    created_by = time.monotonic() + 30
+    while report("cgroup ") is None and open_report and time.monotonic() < created_by:
+        open_report = read_reports(0.1)
+        if helper.poll() is not None and not select.select([report_read], [], [], 0)[0]:
+            break
+    relative = report("cgroup ")
+    if relative is None:
+        setup.finish(5)
+        problem = setup.report()
+        return finish_refusal("containment is unavailable: the scope could not be created ("
+                              + ((problem["head"] + problem["tail"]).strip()[:500]
+                                 or f"systemd-run exit {helper.poll()}") + ")")
+    if not relative.endswith("/" + unit + ".scope"):
+        return finish_refusal(f"the Runner's helper is not inside the scope it created (it is in {relative})")
+    scope_dir = CGROUP_ROOT + relative
+    result["containment"]["cgroup"] = relative
+    members = (read_small(scope_dir + "/cgroup.procs") or "").split()
+    applied = (read_small(scope_dir + "/memory.max") or "").strip()
+    swap = (read_small(scope_dir + "/memory.swap.max") or "").strip()
+    group = (read_small(scope_dir + "/memory.oom.group") or "").strip()
+    if str(helper.pid) not in members:
+        return finish_refusal("the Runner's helper is not a member of the scope it created")
+    if applied != str(request["memory_bytes"]):
+        return finish_refusal("the scope does not hold the requested memory limit (memory.max reads "
+                              f"{applied or 'nothing'}); the memory controller may not be delegated")
+    if swap != "0":
+        return finish_refusal(f"swap is not disabled for the scope (memory.swap.max reads {swap or 'nothing'})")
+    if group not in ("0", ""):
+        return finish_refusal("the scope would end all its processes together at the first memory kill")
+    code, text = small_command([systemctl, "--user", "show", unit + ".scope", "-p", "OOMPolicy",
+                                "-p", "RuntimeMaxUSec"])
+    properties = dict(line.partition("=")[::2] for line in text.splitlines() if "=" in line)
+    if code != 0 or properties.get("OOMPolicy") != "continue" or properties.get("RuntimeMaxUSec") in (None, "",
+                                                                                                      "infinity"):
+        return finish_refusal("the scope does not hold the OOM policy and runtime limit the Runner set ("
+                              + text[:300] + ")")
+    limit = enclosing_memory_limit(relative, request["memory_bytes"], include_self=False)
+    if limit:
+        return finish_refusal("an enclosing limit would make the scope's limits unreliable: " + limit)
+    monitoring_problem = None
+    baseline = None
+    if fault == "monitoring":
+        monitoring_problem = "memory-limit monitoring was disabled by " + FAULT_VARIABLE
+    else:
+        baseline = memory_events(scope_dir)
+        if baseline is None:
+            monitoring_problem = "the scope's memory.events cannot be read"
+
+    # 6. Start the target and supervise: read memory events while it runs; end the scope at the time limit.
+    events: list[str] = []
+    evidence_problems: list[str] = []
+
+    def check_memory():
+        if baseline is None or "memory" in events:
+            return
+        now = memory_events(scope_dir)
+        if now is not None and (now.get("oom_kill", 0) > baseline.get("oom_kill", 0)
+                                or now.get("oom", 0) > baseline.get("oom", 0)):
+            events.append("memory")
+
+    STATE["target_may_have_started"] = True
+    os.write(control_write, b"g")
+    deadline = started_at + request["time_seconds"]
+    while report("exit ") is None and report("launch ") is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            events.append("time")
+            break
+        if not open_report:
+            break
+        open_report = read_reports(min(remaining, 0.1))
+        check_memory()
+    end_reported = report("exit ") is not None
+    if not end_reported and "time" not in events and time.monotonic() - started_at >= request["time_seconds"]:
+        events.append("time")  # the scope's own runtime limit ended it first
+    exit_by = time.monotonic() + 5
+    while open_report and report("exit ") is None and report("launch ") is not None and time.monotonic() < exit_by:
+        open_report = read_reports(0.1)
+    check_memory()
+
+    priority = report("priority ")
+    if priority == "lowered":
+        result["priority"] = {"lowered": True, "detail": "niceness at least 10 for the target and its descendants"}
+    elif priority is not None:
+        result["priority"] = {"lowered": False, "detail": "lowering the target's priority " + priority}
+    launch = report("launch ")
+    if launch is not None:
+        number, _, message = launch.partition(" ")
+        result["launch_error"] = f"the target could not start: {message} (errno {number})"
+
+    # 7. End every remaining process. After a normal exit, give descendants a moment to leave on their own.
+    def others() -> list[str]:
+        return [pid for pid in (read_small(scope_dir + "/cgroup.procs") or "").split() if pid != str(helper.pid)]
+
+    if end_reported or launch is not None:
+        for _ in range(10):
+            if not others():
+                break
+            time.sleep(0.1)
+    left = others()
+    result["processes"]["ended_by_runner"] = max(0, len(left) - (0 if end_reported or launch is not None else 1))
+    peak = read_small(scope_dir + "/memory.peak")
+    if peak is not None and peak.strip().isdigit():
+        result["peak_memory_bytes"] = int(peak)
+        result["peak_memory_measured_by"] = ("cgroup v2 memory.peak of the scope: the whole process tree, the "
+                                             "Runner's small helper and page cache charged to the scope")
+    else:
+        evidence_problems.append("the scope's memory.peak cannot be read")
+    check_memory()
+    if not close_down(10):
+        evidence_problems.append("processes in the scope were still running after the Runner ended them")
+    exit_text = report("exit ")
+    if exit_text is not None and exit_text.lstrip("-").isdigit():
+        result["exit_code"] = int(exit_text)
+    elif launch is None and "time" not in events and "memory" not in events:
+        evidence_problems.append("the target's exit code could not be read")
+    if not output.finish(5):
+        evidence_problems.append("the target's output did not close")
+    result["output"] = output.report()
+    setup.finish(1)
+    os.close(report_read)
+    os.close(setup_read)
+    os.close(out_read)
+    result["duration_seconds"] = round(time.monotonic() - started_at, 3)
+
+    # 8. Judge: a limit event decides first; then missing evidence; only then the target's exit code.
+    if monitoring_problem:
+        evidence_problems.append("memory-limit events could not be observed: " + monitoring_problem)
+    if launch is not None and not events:
+        result["outcome"] = "target-failed"
+    elif events:
+        result["outcome"], result["limit_event"] = "contained", events[0]
+    elif evidence_problems:
+        result["outcome"], result["limit_event"] = "evidence-missing", "unknown"
+    elif result["exit_code"] == 0:
+        result["outcome"] = "passed"
+    else:
+        result["outcome"] = "target-failed"
+    if evidence_problems:
+        result["evidence_missing_reason"] = "; ".join(evidence_problems)
+    return result
+
+
 # ---- Entry ---------------------------------------------------------------------------------------------------
 
 def run(request: dict) -> dict:
     fault = os.environ.get(FAULT_VARIABLE, "")
     if sys.platform == "win32":
         return run_windows(request, fault)
+    if sys.platform.startswith("linux"):
+        return run_linux(request, fault)
     result = base_result(request, "none")
     return refuse(result, f"containment is unavailable: this release has no containment backend for {sys.platform}")
 
