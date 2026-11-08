@@ -81,6 +81,41 @@ def main(argv: list[str]) -> int:
     if mode == "marker":
         Path(args[0]).write_text("ran", encoding="utf-8")
         return 0
+    if mode == "in-plain-job":
+        # Put this process into a job that sets no memory, time or process limit (only kill-on-close), then run
+        # the given command inside it with a fixed timeout and relay its output and exit code.
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+        kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+
+        class Basic(ctypes.Structure):
+            _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                        ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                        ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                        ("SchedulingClass", wintypes.DWORD)]
+
+        class Extended(ctypes.Structure):
+            _fields_ = [("Basic", Basic), ("IoInfo", ctypes.c_uint64 * 6), ("ProcessMemoryLimit", ctypes.c_size_t),
+                        ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                        ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+        job = kernel32.CreateJobObjectW(None, None)
+        limits = Extended()
+        limits.Basic.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not job or not kernel32.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)) \
+                or not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
+            print(f"job setup failed (Windows error {ctypes.get_last_error()})", file=sys.stderr)
+            return 65
+        inner = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        sys.stdout.write(inner.stdout)
+        sys.stdout.flush()
+        return inner.returncode
     print(f"unknown mode {mode}", file=sys.stderr)
     return 64
 

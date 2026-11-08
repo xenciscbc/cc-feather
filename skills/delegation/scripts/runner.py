@@ -27,6 +27,8 @@ Only processes inside the Runner's containment are limited; work handed to an al
 Windows: the target is created inside a job object before its first instruction, with a job-wide memory limit; every
 member still running when the run ends is ended, and closing the Runner's handle ends them too. The target runs at
 below-normal CPU priority where the job allows it; failure to lower it is reported and does not refuse the run.
+Started inside any job, the Runner refuses: Windows shows only the innermost job's limits, so a job above it could
+limit memory without the Runner knowing.
 
 Git Bash: MSYS rewrites arguments that look like POSIX paths, such as /tmp/x or /c, into Windows paths before the
 Runner sees them, and it can rewrite the target's own arguments the same way. Set MSYS_NO_PATHCONV=1 for the
@@ -269,24 +271,28 @@ def run_windows(request: dict, fault: str) -> dict:
         return f"{what} failed (Windows error {ctypes.get_last_error()})"
 
     # 1. An enclosing job can impose its own limits, which would stop the target before the Runner's limits do.
+    # Windows shows a process only the limits of its innermost job, never those of the jobs above it, so inside any
+    # job the Runner cannot establish that no enclosing limit applies, and it refuses.
     in_job = w.BOOL()
     if not k32.IsProcessInJob(k32.GetCurrentProcess(), None, ctypes.byref(in_job)):
         return refuse(result, "cannot tell whether an enclosing job limits the Runner: " + failure("IsProcessInJob"))
     if in_job.value:
+        detail = "the limits of any job above it cannot be read"
         outer = ExtendedLimit()
-        if not k32.QueryInformationJobObject(None, extended_limit_class, ctypes.byref(outer), ctypes.sizeof(outer),
-                                             None):
-            return refuse(result, "the Runner is inside an enclosing job whose limits cannot be read: "
-                          + failure("QueryInformationJobObject"))
-        flags = outer.Basic.LimitFlags
-        if flags & limit_job_memory:
-            return refuse(result, "an enclosing job limits memory for all its processes "
-                          f"({outer.JobMemoryLimit} bytes), so its limit could stop the target before the Runner's")
-        if flags & limit_process_memory and outer.ProcessMemoryLimit < request["memory_bytes"]:
-            return refuse(result, "an enclosing job limits each process's memory to "
-                          f"{outer.ProcessMemoryLimit} bytes, below the Runner's memory limit")
-        if flags & (limit_process_time | limit_job_time):
-            return refuse(result, "an enclosing job limits CPU time, so its limit could stop the target first")
+        if k32.QueryInformationJobObject(None, extended_limit_class, ctypes.byref(outer), ctypes.sizeof(outer), None):
+            flags = outer.Basic.LimitFlags
+            if flags & limit_job_memory:
+                detail = (f"it limits memory for all its processes ({outer.JobMemoryLimit} bytes), and the limits "
+                          "of any job above it cannot be read")
+            elif flags & limit_process_memory:
+                detail = (f"it limits each process's memory to {outer.ProcessMemoryLimit} bytes, and the limits of "
+                          "any job above it cannot be read")
+            elif flags & (limit_process_time | limit_job_time):
+                detail = "it limits CPU time, and the limits of any job above it cannot be read"
+        else:
+            detail = "its limits cannot be read: " + failure("QueryInformationJobObject")
+        return refuse(result, "the Runner is inside an enclosing job and cannot establish that no enclosing limit "
+                      f"would stop the target before its own limits do: {detail}")
 
     # 2. Available memory must cover the memory limit.
     status = MemoryStatus()

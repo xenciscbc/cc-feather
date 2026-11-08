@@ -198,6 +198,21 @@ class RunnerWindowsTests(RunnerCase):
         self.assertIn("enclosing job", inner_result["refusal_reason"])
         self.assertFalse(marker.exists())
 
+    def test_refuses_inside_any_enclosing_job_because_jobs_above_it_cannot_be_read(self):
+        # A job with no memory, time or process limit encloses the Runner. Windows shows a process only the limits of
+        # its innermost job, so a job above that one could still limit memory; the Runner refuses rather than trust
+        # limits it cannot establish.
+        marker = self.work / "ran.txt"
+        inner = [sys.executable, "-B", str(RUNNER), "--memory-mib", "64", "--time-seconds", "20", "--output-bytes",
+                 "4096", "--cwd", str(self.work), "--", *payload("marker", str(marker))]
+        completed = subprocess.run(payload("in-plain-job", *inner), capture_output=True, text=True, encoding="utf-8",
+                                   timeout=90)
+        self.assertEqual(completed.returncode, EXIT["refused"], completed.stdout + completed.stderr)
+        inner_result = json.loads(completed.stdout)
+        self.assertEqual(inner_result["outcome"], "refused")
+        self.assertIn("enclosing job", inner_result["refusal_reason"])
+        self.assertFalse(marker.exists())
+
     def test_missing_evidence_is_never_passed(self):
         code, result = self.run_runner(payload("print"), env={FAULT: "monitoring"})
         self.assertOutcome(code, result, "evidence-missing")
