@@ -24,7 +24,8 @@
     "./skills/auto-off",
     "./skills/stop-threshold",
     "./skills/adversarial-review",
-    "./skills/leases"
+    "./skills/leases",
+    "./skills/worktrees"
   ],
   "repository": "https://github.com/xenciscbc/cc-feather.git"
 }

@@ -1,6 +1,6 @@
 ---
 name: leases
-description: "Checkout leases: take, renew, take over, return and list cooperative records of which session uses which checkout (the main worktree or a linked worktree) of a Git repository."
+description: "Checkout leases: take, renew, take over, return and list cooperative records of which session uses which checkout (the main worktree or a linked worktree) of a Git repository, and the main Agent's rules for when to take, renew and return them."
 ---
 
 # Feather Checkout leases
@@ -44,3 +44,51 @@ A held lease on a linked worktree is protected by a Git worktree lock, so `git w
 - List and acquire lock a held lease's linked worktree again with the lease's own reason when it has no lock at all, and report `relocked`. They skip a worktree whose directory is missing or that Git marks prunable: its lease is shown `unknown` with the lease kept, and its lock `unlocked` with `unprotected`.
 - Each lock is shown with its reason as written, its parsed process ID (`pid`, display only; whether the process exists is never probed) and its `holder`: `lease` (the lease's own), `accepted-session`, `cc-feather` (a cc-feather lock that does not name the checkout's lease, reported as a `mismatch`) or `other`.
 - The tool never removes or changes a lock whose reason does not name one of its leases.
+
+## Main Agent rules
+
+These rules apply while the installed guidance or the user asks the main Agent to keep Checkout leases. `cc-feather:setup` installs that guidance as its `leases` component. Only the main Agent takes, renews, takes over and returns leases. Pass `--session` a label naming this session and `--purpose` the current ticket or task, and keep the returned `lease_id` for renew and release.
+
+### Taking a lease
+
+- The main Agent takes a lease on a checkout when it starts implementing the first Claim of a Plan there, at the first change of Unplanned work there, and before it runs a writing test or a review that needs a stable checkout there.
+- Reading a checkout takes no lease. Opening or entering a worktree (`EnterWorktree` by name or path, `claude --worktree`) is not taking its lease, and neither is starting a session in the main worktree's directory.
+- Writing cc-feather's own records under the main worktree's `.feather/` (leases, handoff records, Dispatch records) is not changing a checkout and needs no lease.
+- Merging into a branch inside the main worktree changes it, so the main Agent takes the main worktree's lease for the merge and returns it afterwards; landing by a push or a pull request does not touch the main worktree and needs none.
+- Taking a lease never authorises changing, resetting or removing what the checkout already holds.
+
+### Locks
+
+- A held lease on a linked worktree is protected by its own lock or by the session lock of a worktree the session itself created.
+- Right after creating a worktree itself (`EnterWorktree` by name, or `claude --worktree` with a new name), the main Agent reads that worktree's lock reason from `git worktree list --porcelain -z` and passes exactly that reason with `--accept-session-lock`; without `-z` Git quotes a reason with special characters and the reason no longer matches.
+- A lock found on a worktree the session only entered or reused (`EnterWorktree` by path, `claude --worktree` with an existing name) counts as another holder's: the main Agent never attests it, and acquire returns `locked`.
+- A lockless held lease is locked again with its own lock by `list` and `acquire`.
+- Only the lease's own lock is ever removed: an accepted session lock and every other lock stay. After a takeover, a Claude Code session lock the old lease had accepted stays and counts as another holder's lock.
+
+### Serial and parallel work
+
+- A serial Plan holds one lease in its checkout, and its purpose follows the ticket being worked on: the main Agent renews it with `--purpose` when the ticket changes.
+- Parallel Claims hold one lease per worktree. Once a parallel worktree's work is merged back and the worktree is no longer used, the main Agent returns its lease after parking: `release --park`, with `--continue-in` naming the checkout the work continues in when the branch was merged there rather than into the default branch.
+- Subagents never take, renew or return leases. Delegated work runs under the main Agent's lease, and the main Agent decides which checkout each Assignment uses. A subagent's isolated worktree needs no lease while the subagent runs under Claude Code's agent lock; when it is kept with changes, the main Agent takes a lease on it, with the lease's own lock, until the changes are integrated.
+
+### Renewing and returning
+
+- The main Agent renews its lease at milestones, at blockers, before stopping to wait for the user and at completion, whether or not a handoff is active.
+- It returns a lease when it stops using the checkout; completing a handoff record does not return it. Returning a lease never resets, cleans or switches the checkout.
+- Parking detaches a linked worktree's HEAD only when the worktree is clean (no uncommitted or untracked changes) and its branch is contained in the local default branch, or in the branch of the checkout `--continue-in` names; otherwise the worktree stays as it is, the reason is reported and the lease is still returned. Parking never applies to the main worktree and never deletes a branch or a worktree.
+
+### When a lease cannot be taken
+
+- When acquire returns `held` or `locked`, the main Agent stops and shows the holder, purpose, start time, last reported activity and age, or the lock and its reason, and the user chooses: work in the main worktree, use an idle worktree, open a new worktree, or take over a lease the user judges left behind.
+- No lease is taken over automatically: the main Agent runs `take-over` only on the user's choice, with the `version` the user was shown. Last reported activity is the activity the holder reported, not proof that the holder is still running, and no age makes a lease left behind.
+- On `refused`, `busy` or `unknown` the main Agent acquires nothing, reports the result and does not change that checkout until it holds the lease or the user decides otherwise.
+- A session that finds on renew or release that its lease changed hands (`changed-hands`) stops using that checkout and reports.
+
+### Reusing a parked worktree
+
+- A parked commit can be far behind, so the main Agent starts new work in a reused parked worktree on a new branch from the latest default branch (the remote's default branch when one exists), never from the parked commit itself, unless the user names another base.
+- The listing (`/cc-feather:worktrees`) reports facts and never calls a checkout usable; which idle worktree to use is the user's choice.
+
+### Cooperative limits
+
+A lease is cooperative: it binds only sessions that follow these rules. It does not stop, detect or manage another session's processes, and it does not keep a person or a tool that ignores leases out of a checkout. A Git worktree lock only keeps `git worktree prune`, a plain `git worktree remove` and Claude Code's cleanup away from a leased worktree. One checkout shared between Windows and WSL, or between machines, is not covered.

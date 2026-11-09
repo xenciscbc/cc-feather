@@ -44,6 +44,14 @@ BEGIN = "<!-- cc-feather:begin -->"
 END = "<!-- cc-feather:end -->"
 HANDOFF_BEGIN = "<!-- cc-feather:handoff:begin -->"
 HANDOFF_END = "<!-- cc-feather:handoff:end -->"
+LEASES_BEGIN = "<!-- cc-feather:leases:begin -->"
+LEASES_END = "<!-- cc-feather:leases:end -->"
+# Every setup component. `both` keeps meaning handoff and delegation; leases is installed only when selected by name.
+COMPONENTS = ("handoff", "delegation", "leases")
+BOTH = ("handoff", "delegation")
+# Components that are one marked guidance block from a template, with its markers and template file.
+BLOCK_COMPONENTS = {"handoff": (HANDOFF_BEGIN, HANDOFF_END, "handoff.md"),
+                    "leases": (LEASES_BEGIN, LEASES_END, "leases.md")}
 VERSION = 4
 # Instruction files a project-scope installation may manage, relative to the project.
 GUIDANCE_FILES = ("CLAUDE.md", ".claude/CLAUDE.md", "AGENTS.md", ".claude/AGENTS.md")
@@ -474,7 +482,7 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
             if value["created_guidance"] is not True:
                 raise ConfigError("state component schema mismatch")
             top |= {"created_guidance"}
-        if set(value) != top or not isinstance(value["components"], dict) or not set(value["components"]) <= {"handoff", "delegation"} or not value["components"]:
+        if set(value) != top or not isinstance(value["components"], dict) or not set(value["components"]) <= set(COMPONENTS) or not value["components"]:
             raise ConfigError("state component schema mismatch")
         if value["version"] == VERSION:
             allowed = GUIDANCE_FILES if scope == "project" else ("CLAUDE.md",)
@@ -657,13 +665,25 @@ def _auto_review() -> str:
     return text
 
 
-def _handoff_policy() -> str:
-    path = ROOT / "templates" / "handoff.md"
-    text = _block_template(path)
-    parts = _block_parts(text, HANDOFF_BEGIN, HANDOFF_END)
+def _block_policy(name: str) -> str:
+    begin, end, filename = BLOCK_COMPONENTS[name]
+    text = _block_template(ROOT / "templates" / filename)
+    parts = _block_parts(text, begin, end)
     if parts is None or parts[0].strip() or parts[2].strip() or "{{" in parts[1]:
-        raise ConfigError("handoff template must contain one marked block without placeholders")
+        raise ConfigError(f"{name} template must contain one marked block without placeholders")
     return parts[1]
+
+
+def _handoff_policy() -> str:
+    return _block_policy("handoff")
+
+
+def _leases_policy() -> str:
+    return _block_policy("leases")
+
+
+def _component_policy(name: str) -> str:
+    return _handoff_policy() if name == "handoff" else _leases_policy()
 
 def _overrides(items: list[str]) -> dict[str, dict[str, str]]:
     result: dict[str, dict[str, str]] = {}
@@ -964,11 +984,14 @@ def _conflicting_roles(base: Path, targets: dict[str, Path], owned: dict[str, Pa
 
 
 def _selected(args: argparse.Namespace) -> tuple[str, ...]:
-    return ("handoff", "delegation") if args.component == "both" else (args.component,)
+    return BOTH if args.component == "both" else (args.component,)
 
 
 def _guidance_parts(text: str, name: str) -> tuple[str, str, str] | None:
-    return _block_parts(text, HANDOFF_BEGIN, HANDOFF_END) if name == "handoff" else _block_parts(text)
+    if name in BLOCK_COMPONENTS:
+        begin, end, _ = BLOCK_COMPONENTS[name]
+        return _block_parts(text, begin, end)
+    return _block_parts(text)
 
 
 def _file_line_endings(block: str, text: str) -> str:
@@ -1086,6 +1109,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("delegation is already installed; use review to change its saved review mode")
     if args.component == "both" and args.command in {"update", "remove"} and not records:
         raise ConfigError(f"{args.scope} scope is not installed")
+    if args.component == "both" and args.command in {"update", "remove"} and not any(name in records for name in BOTH):
+        # Both never includes leases, so a scope holding only leases has nothing for it to update or remove.
+        raise ConfigError(f"{args.scope} handoff and delegation components are not installed")
 
     def operates(name: str) -> bool:
         if name not in selected:
@@ -1207,12 +1233,12 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         record = records.get(name)
         if args.command == "remove" and record is None:
             continue
-        if name == "handoff":
+        if name in BLOCK_COMPONENTS:
             if args.command == "remove":
                 text = _drop_block(text, name, record)
                 del records[name]
             else:
-                block = _file_line_endings(_handoff_policy(), text)
+                block = _file_line_endings(_component_policy(name), text)
                 text, added_before, added_after = _put_block(text, name, block, record)
                 records[name] = {"block_hash": _block_digest(block),
                                  "added_before": added_before, "added_after": added_after}
@@ -1288,10 +1314,11 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 "templates": {role: digest(_render(role, choices[role], prefix)) for role in choices}
                              if "delegation" in active_components and args.command in {"install", "update"} else {},
                 "policy": digest(_delegation_block(review_mode, prefix, args.scope, stop_threshold).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
-                "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None}
+                "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None,
+                "leases_policy": digest(_leases_policy().encode("utf-8")) if "leases" in active_components and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
     result = {"status": "preview", "command": args.command, "component": args.component, "scope": args.scope,
-              "plan_id": plan_id, "components": {name: {"installed": name in records} for name in ("handoff", "delegation")},
+              "plan_id": plan_id, "components": {name: {"installed": name in records} for name in COMPONENTS},
               "choices": choices if choices else (delegation["choices"] if delegation else {}),
               "review_mode": review_mode, **_threshold_report(stop_threshold if "delegation" in records else None),
               "guidance": str(guidance), "requested_configuration_only": True,
@@ -1467,7 +1494,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
     stale_roles: list[str] = []
     stale_warnings: list[str] = []
     reported_agents = agents
-    for name in ("handoff", "delegation"):
+    for name in COMPONENTS:
         record = records.get(name)
         issues = []
         try:
@@ -1651,7 +1678,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--review-mode", choices=("auto", "off"))
     parser.add_argument("--stop-threshold", metavar="2-10|default",
                         help="review: save the Stop threshold for the scope, or remove it with default")
-    parser.add_argument("--component", choices=("handoff", "delegation", "both"), help="Component for mutations; default delegation")
+    parser.add_argument("--component", choices=("handoff", "delegation", "leases", "both"),
+                        help="Component for mutations; default delegation. both is handoff and delegation, never leases")
     parser.add_argument("--guidance", choices=("claude", "agents"),
                         help="Project install where AGENTS.md is in effect: create CLAUDE.md importing it, or write into it")
     parser.add_argument("--apply", action="store_true")

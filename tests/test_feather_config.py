@@ -5771,5 +5771,210 @@ class DeviationScopeTests(unittest.TestCase):
                 self.assertEqual(positions, sorted(positions))
 
 
+class LeasesComponentTests(unittest.TestCase):
+    """Checkout leases ticket 06: `leases` is a third independent setup component, off by default."""
+
+    BEGIN = "<!-- cc-feather:leases:begin -->"
+    END = "<!-- cc-feather:leases:end -->"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(os.path.realpath(self.temp.name))
+        self.project = self.root / "project"
+        self.home = self.root / "claude-home"
+        self.project.mkdir()
+        self.home.mkdir()
+        self.guidance = self.project / "CLAUDE.md"
+        self.state = self.project / ".claude" / "cc-feather" / "state.json"
+
+    def call(self, command, *extra, scope="project"):
+        args = [command, "--project", str(self.project), "--scope", scope, "--claude-home", str(self.home), *extra]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = config.main(args)
+        return code, json.loads(output.getvalue())
+
+    def apply(self, command, *extra):
+        code, preview = self.call(command, *extra)
+        self.assertEqual((code, preview["status"]), (0, "preview"), preview)
+        code, result = self.call(command, *extra, "--apply", "--expected-plan", preview["plan_id"])
+        self.assertEqual((code, result["status"]), (0, "applied"), result)
+        return result
+
+    def records(self):
+        return json.loads(self.state.read_bytes())["components"]
+
+    def files(self):
+        return {str(path.relative_to(self.root)): path.read_bytes()
+                for path in sorted(self.root.rglob("*")) if path.is_file() and "backups" not in path.parts}
+
+    def block(self):
+        return config._leases_policy()
+
+    def test_template_holds_one_marked_block(self):
+        text = (config.ROOT / "templates" / "leases.md").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith(self.BEGIN + "\n"), text[:80])
+        self.assertTrue(text.rstrip("\n").endswith(self.END))
+        self.assertEqual(self.block(), text.rstrip("\n"))
+
+    def test_default_check_and_show_report_leases_not_installed(self):
+        for command in ("check", "show"):
+            with self.subTest(command=command):
+                code, result = self.call(command)
+                self.assertEqual(code, 0, result)
+                self.assertEqual(set(result["components"]), {"handoff", "delegation", "leases"})
+                self.assertEqual(result["components"]["leases"], {"installed": False, "status": "ok", "issues": []})
+                self.assertFalse(result["installed"])
+
+    def test_install_both_does_not_install_leases(self):
+        code, preview = self.call("install", "--component", "both")
+        self.assertEqual(code, 0, preview)
+        self.assertFalse(preview["components"]["leases"]["installed"])
+        self.apply("install", "--component", "both")
+        self.assertEqual(set(self.records()), {"handoff", "delegation"})
+        self.assertNotIn(self.BEGIN, self.guidance.read_text(encoding="utf-8"))
+        result = self.call("check")[1]
+        self.assertFalse(result["components"]["leases"]["installed"])
+        self.assertTrue(result["components"]["handoff"]["installed"])
+        self.assertTrue(result["components"]["delegation"]["installed"])
+
+    def test_default_mutation_component_is_still_delegation(self):
+        code, preview = self.call("install")
+        self.assertEqual(code, 0, preview)
+        self.assertEqual(preview["component"], "delegation")
+        self.apply("install")
+        self.assertEqual(set(self.records()), {"delegation"})
+        self.assertNotIn(self.BEGIN, self.guidance.read_text(encoding="utf-8"))
+
+    def test_install_update_remove_leases_leaves_handoff_and_delegation_untouched(self):
+        self.guidance.write_text("User guidance\n", encoding="utf-8")
+        self.apply("install", "--component", "both")
+        text = self.guidance.read_text(encoding="utf-8")
+        others = self.records()
+        roles = {path.name: path.read_bytes() for path in (self.project / ".claude" / "agents").iterdir()}
+        self.apply("install", "--component", "leases")
+        installed = self.guidance.read_text(encoding="utf-8")
+        self.assertEqual(installed, text + self.block() + "\n")
+        records = self.records()
+        self.assertEqual({name: records[name] for name in others}, others)
+        self.assertEqual(set(records), {"handoff", "delegation", "leases"})
+        self.assertEqual(set(records["leases"]), {"block_hash", "added_before", "added_after"})
+        self.assertEqual({path.name: path.read_bytes() for path in (self.project / ".claude" / "agents").iterdir()},
+                         roles)
+        result = self.call("check")[1]
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual({name: entry["installed"] for name, entry in result["components"].items()},
+                         {"handoff": True, "delegation": True, "leases": True})
+        # Update rewrites only the leases block from the current template.
+        changed = self.block().replace("# Feather checkout leases", "# Feather checkout leases, revised")
+        with mock.patch.object(config, "_leases_policy", return_value=changed):
+            self.apply("update", "--component", "leases")
+        self.assertEqual(self.guidance.read_text(encoding="utf-8"), text + changed + "\n")
+        self.assertEqual({name: self.records()[name] for name in others}, others)
+        with mock.patch.object(config, "_leases_policy", return_value=changed):
+            self.apply("remove", "--component", "leases")
+        self.assertEqual(self.guidance.read_text(encoding="utf-8"), text)
+        self.assertEqual(self.records(), others)
+        self.assertEqual({path.name: path.read_bytes() for path in (self.project / ".claude" / "agents").iterdir()},
+                         roles)
+
+    def test_both_operations_leave_an_installed_leases_component_alone(self):
+        self.apply("install", "--component", "leases")
+        lease_record = self.records()["leases"]
+        self.apply("install", "--component", "both")
+        self.apply("update", "--component", "both")
+        self.assertEqual(self.records()["leases"], lease_record)
+        self.apply("remove", "--component", "both")
+        self.assertEqual(self.records(), {"leases": lease_record})
+        self.assertEqual(self.guidance.read_text(encoding="utf-8"), self.block() + "\n")
+
+    def test_leases_only_installation_keeps_installed_flag_and_both_meaning(self):
+        self.apply("install", "--component", "leases")
+        self.assertEqual(set(self.records()), {"leases"})
+        self.assertEqual(self.guidance.read_text(encoding="utf-8"), self.block() + "\n")
+        result = self.call("check")[1]
+        # The top-level flag still says whether the scope holds any managed component.
+        self.assertTrue(result["installed"])
+        self.assertEqual({name: entry["installed"] for name, entry in result["components"].items()},
+                         {"handoff": False, "delegation": False, "leases": True})
+        self.assertEqual(result["review_mode"], "off")
+        # `both` still means handoff and delegation: neither is installed, so update and remove refuse and change nothing.
+        before = self.files()
+        for command in ("update", "remove"):
+            with self.subTest(command=command):
+                code, error = self.call(command, "--component", "both")
+                self.assertEqual(code, 2, error)
+                self.assertIn("handoff and delegation components are not installed", error["error"])
+                self.assertEqual(self.files(), before)
+        self.apply("remove", "--component", "leases")
+        self.assertFalse(self.guidance.exists())
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.call("check")[1]["installed"])
+
+    def test_single_leases_component_must_match_its_installation_state(self):
+        code, error = self.call("update", "--component", "leases")
+        self.assertEqual(code, 2)
+        self.assertIn("project leases component is not installed", error["error"])
+        code, error = self.call("remove", "--component", "leases")
+        self.assertEqual(code, 2)
+        self.apply("install", "--component", "leases")
+        code, error = self.call("install", "--component", "leases")
+        self.assertEqual(code, 2)
+        self.assertIn("project leases component is already installed; use update", error["error"])
+        for command in ("model", "review"):
+            with self.subTest(command=command):
+                code, error = self.call(command, "--component", "leases", "--review-mode", "auto")
+                self.assertEqual(code, 2)
+
+    def test_edited_or_unowned_leases_block_is_a_conflict_of_that_component_only(self):
+        self.apply("install", "--component", "both")
+        self.guidance.write_text(self.guidance.read_text(encoding="utf-8") + self.BEGIN + "\nMine\n" + self.END + "\n",
+                                 encoding="utf-8")
+        result = self.call("check")[1]
+        self.assertEqual(result["components"]["leases"]["status"], "conflict")
+        self.assertIn("unowned leases guidance block already exists", result["components"]["leases"]["issues"][0])
+        self.assertEqual(result["components"]["handoff"]["status"], "ok")
+        self.assertEqual(result["components"]["delegation"]["status"], "ok")
+        code, error = self.call("install", "--component", "leases")
+        self.assertEqual(code, 2)
+        self.assertIn("unowned leases guidance block already exists", error["error"])
+        # Both ignores the leases markers entirely.
+        self.apply("update", "--component", "both")
+
+    def test_edited_installed_leases_block_blocks_its_update_and_removal(self):
+        self.apply("install", "--component", "leases")
+        self.guidance.write_text(self.guidance.read_text(encoding="utf-8").replace("Feather", "Edited", 1),
+                                 encoding="utf-8")
+        self.assertEqual(self.call("check")[1]["components"]["leases"]["status"], "conflict")
+        for command in ("update", "remove"):
+            with self.subTest(command=command):
+                code, error = self.call(command, "--component", "leases")
+                self.assertEqual(code, 2)
+                self.assertIn("managed leases guidance block changed or missing", error["error"])
+
+    def test_state_schema_accepts_leases_and_still_rejects_others(self):
+        self.apply("install", "--component", "leases")
+        state = json.loads(self.state.read_bytes())
+        self.assertEqual(state["version"], config.VERSION)
+        for components in ({**state["components"], "other": state["components"]["leases"]},
+                           {"leases": {**state["components"]["leases"], "choices": {}}}):
+            with self.subTest(components=sorted(components)):
+                self.state.write_text(json.dumps({**state, "components": components}), encoding="utf-8")
+                code, error = self.call("check")
+                self.assertEqual(code, 2)
+                self.assertIn("schema", error["error"])
+
+    def test_user_scope_installs_leases(self):
+        code, preview = self.call("install", "--component", "leases", scope="user")
+        self.assertEqual(code, 0, preview)
+        code, result = self.call("install", "--component", "leases", "--apply", "--expected-plan",
+                                 preview["plan_id"], scope="user")
+        self.assertEqual(code, 0, result)
+        self.assertIn(self.BEGIN, (self.home / "CLAUDE.md").read_text(encoding="utf-8"))
+        self.assertFalse(self.guidance.exists())
+        self.assertTrue(self.call("check", scope="user")[1]["components"]["leases"]["installed"])
+
+
 if __name__ == "__main__":
     unittest.main()
