@@ -10,7 +10,7 @@ from feather_handoff.cli import Parser
 from feather_handoff.storage import HandoffError, creation_denied
 
 from .checkouts import Repository, Unknown
-from . import records
+from . import locks, records
 
 
 def main() -> int:
@@ -29,6 +29,10 @@ def main() -> int:
     acquire.add_argument("--session", required=True, help="A label naming the session that takes the lease")
     acquire.add_argument("--purpose", required=True, help="What the checkout is used for")
     acquire.add_argument("--runtime", default="claude-code", help="The agent runtime (default: claude-code)")
+    acquire.add_argument("--accept-session-lock", metavar="REASON",
+                         help="The Claude Code session lock reason (`claude session <name> (pid N)`) this session "
+                              "observed right after it created the worktree; that exact lock is accepted in place of "
+                              "the lease's own")
     release = commands.add_parser("release", parents=[root_options], help="Return a lease the caller holds")
     release.add_argument("--checkout", help="The checkout's top-level directory (default: the project's root)")
     release.add_argument("--lease-id", required=True, help="The lease_id the caller's acquire returned")
@@ -45,7 +49,11 @@ def main() -> int:
             if args.command == "acquire":
                 if not args.session.strip() or not args.purpose.strip():
                     raise HandoffError("input", "--session and --purpose must not be empty")
-                result = records.acquire(repository, checkout, args.session, args.purpose, args.runtime)
+                attested = args.accept_session_lock
+                if attested is not None and not locks.is_session_lock(attested):
+                    raise HandoffError("input", "--accept-session-lock must be a Claude Code session lock reason, "
+                                       "`claude session <name> (pid N)`")
+                result = records.acquire(repository, checkout, args.session, args.purpose, args.runtime, attested)
             else:
                 result = records.release(repository, checkout, args.lease_id)
     except Unknown as unknown:

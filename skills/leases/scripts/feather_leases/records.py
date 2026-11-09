@@ -1,9 +1,10 @@
 """Lease records and the short critical section that changes them.
 
 A lease is `<key>.json` in the lease location; its critical section is `<key>.lock` beside it, created exclusively
-for the few file operations of one acquire or release, as the handoff history lock is. A critical section already
-held is reported at once with its holder and age; it is never waited on and never broken. The location ignores
-itself with its own `.gitignore` holding `*`, written before any lease or lock."""
+for the few file and Git worktree lock operations of one acquire, release or re-locking, as the handoff history lock
+is. A critical section already held is reported at once with its holder and age; it is never waited on and never
+broken. The location ignores itself with its own `.gitignore` holding `*`, written before any lease or lock."""
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import os
@@ -16,7 +17,8 @@ import time
 from feather_handoff.storage import (HandoffError, Snapshot, _check_lock_path, _listed, _mark_denied, check_path,
                                      create_file, read_file, require_current)
 
-from .checkouts import Checkout, LeaseError, Repository
+from .checkouts import Checkout, LeaseError, Repository, Unknown
+from . import locks
 
 SCHEMA_VERSION = 1
 IGNORE = b"*\n"
@@ -86,6 +88,8 @@ def _valid(value: object, key: str) -> str | None:
                 return f"the lease's {field} has no time zone"
         except ValueError:
             return f"the lease's {field} is not a time"
+    if "accepted_lock" in value and not isinstance(value["accepted_lock"], str):
+        return "the lease's accepted_lock is not text"
     return None
 
 
@@ -115,13 +119,15 @@ def read_lease(repository: Repository, checkout: Checkout) -> tuple[dict, Snapsh
             "activity_age_seconds": age(value["last_activity"])}, snapshot
 
 
-def new_lease(checkout: Checkout, session: str, purpose: str, runtime: str) -> dict:
+def new_lease(checkout: Checkout, session: str, purpose: str, runtime: str, accepted_lock: str | None) -> dict:
+    """A new lease; accepted_lock is the Claude Code session lock it accepted in place of its own lock."""
     moment = stamp()
+    accepted = {} if accepted_lock is None else {"accepted_lock": accepted_lock}
     return {"schema_version": SCHEMA_VERSION, "checkout": {"key": checkout.key, "path": checkout.path},
             "lease_id": secrets.token_hex(16), "session": session, "host": socket.gethostname(),
             "runtime": runtime, "started": moment, "purpose": purpose, "last_activity": moment,
             # The tool is a short-lived subprocess: this PID never shows that the holder is still running.
-            "diagnostic_pid": os.getpid()}
+            "diagnostic_pid": os.getpid(), **accepted}
 
 
 def encode(value: dict) -> bytes:
@@ -243,45 +249,169 @@ def _with_left(result: dict, section: CriticalSection) -> dict:
     return {**result, "critical_section_left": left} if left else result
 
 
-def acquire(repository: Repository, checkout: Checkout, session: str, purpose: str, runtime: str) -> dict:
-    """An exclusive create inside the lease's critical section; a held or unreadable lease acquires nothing."""
+def _relock(repository: Repository, checkout: Checkout, lease_id: str) -> tuple[dict, Checkout]:
+    """Inside the lease's critical section, lock a lockless held lease's worktree again with its own reason.
+
+    Only when the lease still carries lease_id, the worktree still has no lock at all and Git can lock it. Returns
+    (what happened, the checkout as found)."""
+    current = repository.current(checkout)
+    state, _ = read_lease(repository, current)
+    if state["state"] != "held" or state["lease"]["lease_id"] != lease_id or current.locked is not None:
+        return {"relocked": False, "reason": "The lease or the lock changed before it could be locked again."}, current
+    blocked = locks.cannot_lock(current)
+    if blocked is not None:
+        return {"relocked": False, "reason": blocked[1]}, current
+    failure = locks.lock(repository, current, lease_id)
+    if failure is not None:
+        return {"relocked": False, "reason": failure}, repository.current(current)
+    return {"relocked": True}, repository.current(current)
+
+
+def relock(repository: Repository, checkout: Checkout, lease_id: str) -> tuple[dict, Checkout]:
+    """_relock inside its own critical section; one already held is reported at once, never waited on."""
+    section = _section(repository, checkout, "relock")
+    try:
+        with section:
+            outcome, current = _relock(repository, checkout, lease_id)
+    except Busy as busy:
+        return {"relocked": False, "status": "busy", "critical_section": busy.section}, checkout
+    return _with_left(outcome, section), current
+
+
+def _lock_view(checkout: Checkout, state: dict, outcome: dict | None = None) -> dict:
+    """The checkout's lock as described for its lease state, with what a re-locking attempt did."""
+    lease = state.get("lease")
+    view = locks.describe(checkout, lease, state["state"] != "unknown" or lease is not None)
+    if outcome is not None:
+        if outcome.get("relocked"):
+            view["relocked"] = True
+        else:
+            view["relock"] = {key: value for key, value in outcome.items() if key != "relocked"}
+    return view
+
+
+def _locked(checkout: Checkout, outcome: str) -> dict:
+    """A lock other than the lease's own blocks acquisition; the checkout is known to have no lease here."""
+    view = locks.describe(checkout, None, True)
+    return {"status": "locked", "acquired": False, "lock": view,
+            "message": f"The worktree carries a Git worktree lock that is not this lease's, with the reason "
+                       f"{view['reason']!r}. It is handled like a held lease. {outcome}"}
+
+
+def _refused(blocked: tuple[str, str]) -> dict:
+    return {"status": "refused", "acquired": False, "code": blocked[0],
+            "reason": f"{blocked[1]}; it is not acquired. Nothing was changed."}
+
+
+def _withdraw(repository: Repository, checkout: Checkout) -> str | None:
+    """Remove the lease this acquire just created; why that failed, or None."""
+    try:
+        remove_own(lease_path(repository, checkout.key))
+    except (OSError, HandoffError) as error:
+        return f"The new lease could not be withdrawn and is left in place: {error}"
+    return None
+
+
+def _take(repository: Repository, checkout: Checkout, session: str, purpose: str, runtime: str,
+          attested: str | None) -> dict:
+    """Inside the critical section of a checkout without a lease: create the lease and protect it with a lock."""
+    accepted = None
+    if not checkout.main:
+        blocked = locks.cannot_lock(checkout)
+        if blocked is not None:
+            return _refused(blocked)
+        if checkout.locked is not None:
+            if attested is None or checkout.locked != attested or not locks.is_session_lock(checkout.locked):
+                return _locked(checkout, "Nothing was acquired.")
+            accepted = checkout.locked
+    lease = new_lease(checkout, session, purpose, runtime, accepted)
+    try:
+        saved = create_file(lease_path(repository, checkout.key), encode(lease))
+    except HandoffError as error:
+        if error.code != "exists":
+            raise
+        return {"status": "unknown", "acquired": False,
+                "reason": "A lease appeared while it was being acquired; nothing was acquired."}
+    result = {"status": "ok", "acquired": True, "lease": lease, "version": saved.version}
+    held = {"state": "held", "lease": lease}
+    if checkout.main or accepted is not None:
+        return {**result, "lock": _lock_view(checkout, held)}
+    failure = locks.lock(repository, checkout, lease["lease_id"])
+    if failure is None:
+        try:
+            current = repository.current(checkout)
+        except Unknown:
+            current = replace(checkout, locked=locks.own_reason(lease["lease_id"]))
+        return {**result, "lock": _lock_view(current, held)}
+    left = _withdraw(repository, checkout)
+    try:
+        current = repository.current(checkout)
+    except Unknown:
+        current = checkout
+    if current.locked is not None and left is None:
+        # Another holder locked the worktree first: handled like any other lock.
+        return _locked(current, "The new lease was withdrawn; nothing was acquired.")
+    return {"status": "error", "code": "lock-failed", "acquired": False, "withdrawn": left is None,
+            "message": f"The worktree could not be locked: {failure}. "
+                       + ("The new lease was withdrawn; nothing was acquired." if left is None else left)}
+
+
+def acquire(repository: Repository, checkout: Checkout, session: str, purpose: str, runtime: str,
+            attested: str | None = None) -> dict:
+    """An exclusive create inside the lease's critical section; a held or unreadable lease acquires nothing.
+
+    On a linked worktree the new lease is then locked with its own reason, or accepts the Claude Code session lock
+    whose exact reason the caller attested; any other lock blocks it. A held lease found with no lock is locked
+    again. A worktree whose directory is missing or that Git marks prunable is not acquired."""
     repository.require_location()
     state, _ = read_lease(repository, checkout)
     if state["state"] == "unknown":
         return {"status": "unknown", "acquired": False, "reason": state["reason"]}
+    blocked = None if checkout.main else locks.cannot_lock(checkout)
+    if blocked is not None and state["state"] == "absent":
+        return _refused(blocked)
     ensure_location(repository)
     section = _section(repository, checkout, "acquire")
-    result = None
     try:
         with section:
-            state, _ = read_lease(repository, checkout)
+            current = checkout if checkout.main else repository.current(checkout)
+            state, _ = read_lease(repository, current)
             if state["state"] == "absent":
-                lease = new_lease(checkout, session, purpose, runtime)
-                try:
-                    saved = create_file(lease_path(repository, checkout.key), encode(lease))
-                except HandoffError as error:
-                    if error.code != "exists":
-                        raise
-                    state, _ = read_lease(repository, checkout)
-                else:
-                    result = {"status": "ok", "acquired": True, "lease": lease, "version": saved.version}
+                result = _take(repository, current, session, purpose, runtime, attested)
+            elif state["state"] == "unknown":
+                result = {"status": "unknown", "acquired": False, "reason": state["reason"]}
+            else:
+                outcome = None
+                if not current.main and current.locked is None:
+                    outcome, current = _relock(repository, current, state["lease"]["lease_id"])
+                held = {key: state[key] for key in ("lease", "version", "age_seconds", "activity_age_seconds")}
+                result = {"status": "held", "acquired": False, **held, "lock": _lock_view(current, state, outcome),
+                          "message": "The checkout's lease is held; nothing was acquired."}
     except Busy as busy:
         return {"status": "busy", "acquired": False, "critical_section": busy.section}
-    if result is not None:
-        return _with_left(result, section)
-    if state["state"] == "absent":
-        # The exclusive create found a lease that was gone again when reread: report it rather than guess.
-        return _with_left({"status": "unknown", "acquired": False,
-                           "reason": "A lease appeared and disappeared while it was being acquired."}, section)
-    if state["state"] == "unknown":
-        return _with_left({"status": "unknown", "acquired": False, "reason": state["reason"]}, section)
-    held = {key: state[key] for key in ("lease", "version", "age_seconds", "activity_age_seconds")}
-    return _with_left({"status": "held", "acquired": False, **held,
-                       "message": "The checkout's lease is held; nothing was acquired."}, section)
+    return _with_left(result, section)
+
+
+def _unlock_own(repository: Repository, checkout: Checkout, state: dict, lease_id: str) -> dict | None:
+    """Inside the release's critical section: remove the worktree's lock only when its reason names this lease."""
+    if checkout.main:
+        return None
+    current = repository.current(checkout)
+    if current.locked is None:
+        return {"removed": False, "kept": None}
+    if locks.named_lease(current.locked) != lease_id:
+        return {"removed": False, "kept": _lock_view(current, state),
+                "message": "The worktree's lock does not name this lease and stays."}
+    failure = locks.unlock(repository, current)
+    if failure is not None:
+        raise LeaseError("unlock-failed", f"The lease's own lock could not be removed: {failure}. The lease and its "
+                         "lock stay; nothing was released.")
+    return {"removed": True, "reason": current.locked}
 
 
 def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
-    """Remove the lease inside its critical section only when it carries the caller's lease_id."""
+    """Inside its critical section, and only when the lease carries the caller's lease_id: remove the worktree's
+    lock when its reason names this lease, then remove the lease. Every other lock stays."""
     repository.require_location()
     state, _ = read_lease(repository, checkout)
     if state["state"] == "unknown":
@@ -295,11 +425,14 @@ def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
             state, snapshot = read_lease(repository, checkout)
             if state["state"] == "held" and state["lease"]["lease_id"] == lease_id:
                 require_current(snapshot)
+                lock = _unlock_own(repository, checkout, state, lease_id)
                 path = lease_path(repository, checkout.key)
                 remove_own(path)
                 if os.path.lexists(path):
                     raise LeaseError("changed", f"The lease still exists after removal: {path}")
                 result = {"status": "ok", "released": True, "lease": state["lease"]}
+                if lock is not None:
+                    result["lock"] = lock
             elif state["state"] == "unknown":
                 result = {"status": "unknown", "released": False, "reason": state["reason"]}
             else:
@@ -310,10 +443,33 @@ def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
     return _with_left(result, section)
 
 
+def _listed_checkout(repository: Repository, checkout: Checkout) -> dict:
+    state, _ = read_lease(repository, checkout)
+    outcome = None
+    if not checkout.main and state["state"] == "held":
+        if checkout.locked is None and locks.cannot_lock(checkout) is None:
+            try:
+                outcome, checkout = relock(repository, checkout, state["lease"]["lease_id"])
+            except (Unknown, OSError, HandoffError) as error:
+                outcome = {"relocked": False, "reason": f"The lease could not be locked again: {error}"}
+            state, _ = read_lease(repository, checkout)
+        blocked = locks.cannot_lock(checkout)
+        if blocked is not None and state["state"] == "held":
+            # Git can lock such a worktree and the lock would hide that it is gone, so the lease stays unknown.
+            state = {"state": "unknown", "lease": state["lease"],
+                     "reason": f"{blocked[1]}; the lease is kept and the worktree is not locked again."}
+    lock = _lock_view(checkout, state, outcome)
+    if lock["state"] == "unlocked" and state.get("lease") is not None:
+        lock["unprotected"] = ("The held lease has no Git worktree lock and could not be locked again: "
+                               + (lock.get("relock", {}).get("reason") or state.get("reason")
+                                  or "its critical section is held"))
+    return {**checkout.view(), "lease": state, "lock": lock}
+
+
 def listing(repository: Repository) -> dict:
-    checkouts = []
-    for checkout in repository.checkouts():
-        state, _ = read_lease(repository, checkout)
-        checkouts.append({**checkout.view(), "lease": state})
+    """Every registered checkout with its lease and its lock. A held lease on a linked worktree with no lock at all is
+    locked again inside its critical section and reported; one Git cannot lock again (its directory missing or
+    prunable) stays unknown and is shown with no lock."""
+    checkouts = [_listed_checkout(repository, checkout) for checkout in repository.checkouts()]
     complete = all(item["lease"]["state"] != "unknown" for item in checkouts)
     return {"status": "ok", "complete": complete, "checkouts": checkouts}

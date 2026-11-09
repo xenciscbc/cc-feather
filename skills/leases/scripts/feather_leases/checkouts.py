@@ -36,10 +36,15 @@ class Checkout:
     detached: bool
     key: str | None
     key_reason: str | None = None
+    # The Git worktree lock's reason as written ("" for a lock without one), or None when the worktree is unlocked.
+    locked: str | None = None
+    # Why Git marks the worktree prunable, or None; a lock hides this mark, so exists is checked as well.
+    prunable: str | None = None
+    exists: bool = True
 
     def view(self) -> dict:
         return {"path": self.path, "main": self.main, "key": self.key, "head": self.head, "branch": self.branch,
-                "detached": self.detached}
+                "detached": self.detached, "directory_exists": self.exists, "prunable": self.prunable}
 
 
 class Repository:
@@ -128,7 +133,8 @@ class Repository:
             if branch is not None and branch.startswith("refs/heads/"):
                 branch = branch[len("refs/heads/"):]
             checkout = Checkout(path=path, main=index == 0, head=values.get("HEAD"), branch=branch,
-                                detached="detached" in values, key=None)
+                                detached="detached" in values, key=None, locked=values.get("locked"),
+                                prunable=values.get("prunable"), exists=os.path.isdir(path))
             if index == 0:
                 if not same_path(path, str(self.main)):
                     raise Unknown(f"git worktree list names {path} first, not the main worktree {self.main}")
@@ -145,6 +151,13 @@ class Repository:
             result.append(checkout)
         return result
 
+    def current(self, checkout: Checkout) -> Checkout:
+        """The same checkout as Git registers it now, with its lock as it is now; Unknown when it is gone."""
+        for fresh in self.checkouts():
+            if fresh.key is not None and fresh.key == checkout.key:
+                return fresh
+        raise Unknown(f"Git no longer registers the checkout {checkout.path} under the key {checkout.key}")
+
     def find(self, path: str) -> Checkout:
         """The registered checkout whose top-level directory is path."""
         target = os.path.abspath(path)
@@ -153,6 +166,8 @@ class Repository:
                 if os.path.samefile(target, checkout.path):
                     return checkout
             except OSError:
-                continue
+                # A worktree whose directory is missing is still named by its registered path.
+                if not checkout.exists and same_path(target, checkout.path):
+                    return checkout
         raise LeaseError("not-a-checkout", f"{target} is not the top-level directory of a checkout that Git registers "
                          "for this repository")
