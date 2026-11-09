@@ -950,5 +950,19 @@ class EmptyHistoryFramingTest(LocalFixesBase):
                 self.assertEqual([entry["title"] for entry in entries], [name.removesuffix(".md")])
 
 
+class StdinEncodingReferenceTest(unittest.TestCase):
+    """The Create section tells the Agent how to make Python-produced JSON reach the tool as UTF-8."""
+
+    def test_create_section_requires_utf8_python_output(self):
+        text = (ROOT / "skills/handoff/references/tool.md").read_text(encoding="utf-8")
+        create = " ".join(text[text.index("\n## Create\n"):text.index("\n## Update and completion\n")].split())
+        for phrase in ("When Python prints that JSON, piped to the tool or redirected to an input file, always run it "
+                       "with `PYTHONIOENCODING=utf-8`",
+                       "an inherited `PYTHONIOENCODING` overrides `-X utf8` and `PYTHONUTF8=1`",
+                       'opens it with `encoding="utf-8"`'):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, create)
+
+
 if __name__ == "__main__":
     unittest.main()
