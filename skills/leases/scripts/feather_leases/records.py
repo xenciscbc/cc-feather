@@ -11,6 +11,7 @@ from pathlib import Path
 import secrets
 import socket
 import stat
+import time
 
 from feather_handoff.storage import (HandoffError, Snapshot, _check_lock_path, _listed, _mark_denied, check_path,
                                      create_file, read_file, require_current)
@@ -20,6 +21,10 @@ from .checkouts import Checkout, LeaseError, Repository
 SCHEMA_VERSION = 1
 IGNORE = b"*\n"
 TEXT_FIELDS = ("lease_id", "session", "host", "runtime", "started", "purpose", "last_activity")
+# Windows refuses to delete a file another process holds open (ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION), as a
+# concurrent listing, acquire or busy report does for the moment it reads a lease or a lock.
+HELD_OPEN = frozenset({32, 33})
+REMOVAL_PATIENCE = 1.0
 
 
 def now() -> datetime:
@@ -45,6 +50,22 @@ def lease_path(repository: Repository, key: str) -> Path:
 
 def lock_path(repository: Repository, key: str) -> Path:
     return repository.directory / f"{key}.lock"
+
+
+def remove_own(path: Path) -> None:
+    """Delete a file this operation owns, the lease inside its critical section or the section's own lock.
+
+    A reader holding it open only delays the deletion: it is retried for a bounded moment, so a concurrent reader
+    never leaves the file behind. This waits for no other operation's critical section and breaks none."""
+    deadline = time.monotonic() + REMOVAL_PATIENCE
+    while True:
+        try:
+            path.unlink()
+            return
+        except PermissionError as error:
+            if getattr(error, "winerror", None) not in HELD_OPEN or time.monotonic() >= deadline:
+                raise
+        time.sleep(0.02)
 
 
 def _valid(value: object, key: str) -> str | None:
@@ -201,7 +222,7 @@ class CriticalSection:
             info = self.path.lstat()
             if not stat.S_ISREG(info.st_mode) or (self.identity[1] and (info.st_dev, info.st_ino) != self.identity):
                 return f"The critical section's lock was replaced and was left in place: {self.path}"
-            self.path.unlink()
+            remove_own(self.path)
         except (OSError, HandoffError) as error:
             return f"The critical section's lock could not be removed: {error}"
         return None
@@ -275,7 +296,7 @@ def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
             if state["state"] == "held" and state["lease"]["lease_id"] == lease_id:
                 require_current(snapshot)
                 path = lease_path(repository, checkout.key)
-                path.unlink()
+                remove_own(path)
                 if os.path.lexists(path):
                     raise LeaseError("changed", f"The lease still exists after removal: {path}")
                 result = {"status": "ok", "released": True, "lease": state["lease"]}

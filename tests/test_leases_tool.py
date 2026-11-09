@@ -5,13 +5,16 @@ JSON result and exit status are asserted. The fixture and its isolated Git envir
 tests/test_handoff_shared_store.py: a base made with mkdtemp under FEATHER_LINK_TEST_DIR when set, holding main/ with
 one commit and linked worktrees wt1 and wt2 beside it (outside .claude/worktrees/), synthetic data only, removed on
 cleanup. Pre-created leases and critical-section locks are synthetic files written by the tests. The concurrency case
-starts two tool processes a fixed number of times, each with its own timeout."""
+starts two tool processes a fixed number of times, each with its own timeout. The concurrent-reader case, on Windows
+only, holds a lease and its critical section's lock open from the test process for a fraction of a second."""
 from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import time
+import unittest
 
 from tests.test_handoff_shared_store import FIELDS, MARKER, ROOT, SharedBase
 
@@ -21,6 +24,7 @@ SKILL = ROOT / "skills/leases/SKILL.md"
 MAIN_KEY = ".main"
 RACE_ROUNDS = 5
 TIMEOUT = 60
+HOLD = 0.3  # how long the concurrent-reader case holds each file open; well inside the tool's patience
 
 
 class LeaseBase(SharedBase):
@@ -205,6 +209,42 @@ class CriticalSectionTest(LeaseBase):
         self.assert_busy(busy, 25)
         self.assertFalse(busy["released"])
         self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["lease"], acquired["lease"])
+
+    @unittest.skipUnless(os.name == "nt", "only Windows refuses to delete a file another process holds open")
+    def test_a_concurrent_reader_delays_a_release_but_leaves_nothing_behind(self):
+        # Windows refuses to delete a file another process holds open, as a concurrent listing or acquire does for a
+        # moment. The test holds the lease open until the release's critical section exists, so the lease's removal
+        # meets the reader, then holds the section's lock open past that, so the lock's removal meets it too.
+        acquired = self.acquire(self.main, self.wt1)
+        lease, lock = self.leases / "wt1.json", self.leases / "wt1.lock"
+        reader = open(lease, "rb")
+        process = subprocess.Popen(self.command(self.main, "release", "--checkout", str(self.wt1), "--lease-id",
+                                                acquired["lease"]["lease_id"]),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        held_lock = None
+        try:
+            deadline = time.monotonic() + TIMEOUT / 2
+            while held_lock is None and process.poll() is None and time.monotonic() < deadline:
+                try:
+                    held_lock = open(lock, "rb")
+                except OSError:
+                    pass
+            time.sleep(HOLD)
+            reader.close()
+            time.sleep(HOLD)
+        finally:
+            reader.close()
+            if held_lock is not None:
+                held_lock.close()
+        out, err = process.communicate(timeout=TIMEOUT)
+        self.assertIsNotNone(held_lock, "the release's critical section was never observed")
+        self.assertEqual(process.returncode, 0, out + err)
+        released = json.loads(out)
+        self.assertEqual((released["status"], released["released"]), ("ok", True), released)
+        self.assertNotIn("critical_section_left", released)
+        self.assertFalse(lock.exists())
+        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.acquire(self.main, self.wt1)["status"], "ok")
 
 
 class ListingTest(LeaseBase):
