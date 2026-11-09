@@ -134,8 +134,8 @@ def changes(repository: Repository, checkout: Checkout, guard: bool | str) -> di
         if len(field) < 4:
             continue
         status, path = field[:2], field[3:]
-        if status[0] in "RC":
-            index += 1  # the rename's or copy's source path
+        if status[0] in "RC" or status[1] in "RC":
+            index += 1  # the rename's or copy's source path, in the index (X) or the worktree (Y)
         if status == "??":
             untracked.append(path)
         else:
@@ -155,14 +155,12 @@ def _path_character(character: str) -> bool:
 
 
 def _contains(text: str, path: str) -> bool:
-    """Whether text holds path whole: not inside a longer name before it, and followed by a separator, a character
-    that is not part of a path name, or the end (a full stop ends it when the text or a space follows)."""
+    """Whether text holds path whole: followed by a separator, a character that is not part of a path name, or the
+    end (a full stop ends it when the text or a space follows). Whatever precedes the path does not matter."""
     start = 0
     while (found := text.find(path, start)) >= 0:
         start = found + 1
         end = found + len(path)
-        if found and (_path_character(text[found - 1]) or text[found - 1] == "/"):
-            continue
         after = text[end:end + 1]
         if (not after or after == "/" or not _path_character(after)
                 or (after == "." and (end + 1 == len(text) or text[end + 1].isspace()))):

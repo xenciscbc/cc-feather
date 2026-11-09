@@ -83,6 +83,14 @@ class ChangesTest(ListingBase):
         self.assertEqual((main["changes"]["state"], main["changes"]["uncommitted"]), ("known", []), main)
         self.assertTrue(listed["complete"], listed)
 
+    def test_a_rename_in_the_worktree_is_one_change(self):
+        # Porcelain v1 reports a worktree rename in its Y column (an intent-to-add target), followed by the source.
+        (self.wt1 / "a.txt").rename(self.wt1 / "renamed.txt")
+        self.git(self.wt1, "add", "-N", "renamed.txt")
+        changes = self.entry(self.listing(self.main), self.wt1)["changes"]
+        self.assertEqual((changes["uncommitted"], changes["uncommitted_count"]),
+                         ([{"status": " R", "path": "renamed.txt"}], 1), changes)
+
     def test_the_leases_themselves_are_no_change(self):
         self.acquire(self.wt1, self.main)
         self.acquire(self.wt1, self.wt1)
@@ -385,8 +393,11 @@ class JudgeRecordsTest(unittest.TestCase):
         self.assertEqual((parts[0]["state"], parts[1]["state"]), ("known", "unknown"), parts)
 
     def test_the_longest_whole_path_names_the_record(self):
-        cases = {"/repo/main/x": 0, "/repo/main": 0, "/repo/main,": 0, "/repo/mainline": None, "/x/repo/main": None,
-                 "/repo/wt1/src": 1, "(/repo/wt1)": 1, "/repo/wt10": None}
+        # The spec bounds a whole path only on its right; whatever precedes it, such as text written without a space
+        # before the path, does not stop it naming the checkout.
+        cases = {"/repo/main/x": 0, "/repo/main": 0, "/repo/main,": 0, "/repo/mainline": None, "/x/repo/main": 0,
+                 "/repo/wt1/src": 1, "(/repo/wt1)": 1, "/repo/wt10": None, "工作樹/repo/main（main）": 0,
+                 "位於/repo/wt1，分支 x": 1, "file:///repo/main": 0}
         for environment, expected in cases.items():
             with self.subTest(environment=environment):
                 self.assertEqual(leftover.named_checkout(environment, [self.MAIN, self.LINKED]), expected)
