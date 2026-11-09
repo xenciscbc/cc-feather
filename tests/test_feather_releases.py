@@ -1288,8 +1288,7 @@ class HandoffWorktreeStoreReleaseTests(unittest.TestCase):
         section = self.section(self.text(name), heading)
         return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
 
-    def test_manifest_is_0_31_0(self):
-        self.assertEqual("0.31.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.32.0, resource-risk runs).
 
     def test_readmes_replace_the_worktree_statement_in_both_languages(self):
         for name, heading, sentences, removed in self.README_HANDOFF:
@@ -1307,14 +1306,17 @@ class HandoffWorktreeStoreReleaseTests(unittest.TestCase):
 
     def test_updates_sections_start_with_the_worktree_store_note_in_both_languages(self):
         previous = DelegationDedupeReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = ResourceRiskRunsReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.31.0 note starts right after the section's opening sentence, its sentences in order, before 0.30.0's.
+            # The 0.31.0 note starts right after the 0.32.0 note, its sentences in order, before 0.30.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -1388,6 +1390,261 @@ class HandoffWorktreeStoreReleaseTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:40]):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
+                                                            "Ticket 04:", "Ticket 05:", "Ticket 06:", "Ticket 07:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.32.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(ResourceRiskRunsReleaseTests.ENTRY_HEADING))
+
+
+class ResourceRiskRunsReleaseTests(unittest.TestCase):
+    """0.32.0 (docs/specs/resource-risk-runs.md, Acceptance items 10, 11, 13's ADR, 15 and 16; ticket 07): the manifest
+    version is 0.32.0; the Updates note says what changed, that the hard limit covers only commands run through the
+    Runner, advises against a permission rule that allows every Runner invocation, names the changed role definitions so
+    existing installations run `/cc-feather:setup update` and start a fresh session, and says how to go back to 0.31.0,
+    in both languages; both reference documents describe the four layers, the Runner and its boundary; ADR 0019 records
+    the layered decision and its five rejected alternatives; none of them states a concrete budget or language-specific
+    setting; the validation entry records the tickets, the setup update, the test runs, the Runner per environment, the
+    live rehearsal, what the tests cannot show, the tag and the review round."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.32.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.32.0 adds resource-risk runs: plan review marks a claim whose checks or verification foreseeably risk exhausting memory, time or the machine as a Resource-risk claim and proposes an Execution method for its risky part, main approves it with a budget from you, the plan or your guidance, a role runs that part only inside the Runner, a new launcher in the delegation skill that limits the memory of a command's whole process tree, its time and its output, a new or modified test or probe whose bound is unknown or does not fit the budget goes back to main instead of running, and what was returned or stopped is recorded as an Observed resource risk, as the [reference](docs/reference.md#resource-limits) describes.",
+         "cc-feather states no budget, and the hard limit covers only commands run through the Runner, not work handed to an already running service or tools that execute code outside the shell.",
+         "A Runner invocation goes through your normal permission handling; do not add a permission rule that allows every Runner invocation, because such a rule allows any command through the Runner.",
+         "It changes the analyst, executor, security-executor, verifier, reviewer and adversary role definitions, so existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` warns that those roles are from an older template.",
+         "To go back to 0.31.0, reinstall the 0.31.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.31.0 role definitions; no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.32.0 新增資源風險執行：計畫審查把執行檢查或驗證時可預見會耗盡記憶體、時間或機器的 claim 標為 Resource-risk claim，並為有風險的部分提出 Execution method，主 Agent 以來自你、計畫或你的指引的預算核准它，角色只在 Runner 內執行那個部分（Runner 是分派 skill 中新增的啟動器，限制一個指令整個 process tree 的記憶體、它的時間與輸出），界限不明或不符合預算的新的或修改過的測試或 probe 交回主 Agent 而不執行，交回或被停下的部分記為 Observed resource risk，詳見[參考文件](docs/reference.zh-TW.md#資源限制)。",
+         "cc-feather 不規定任何預算，硬性限制只涵蓋透過 Runner 執行的指令，不涵蓋交給已經在執行的服務的工作，也不涵蓋在 shell 之外執行程式碼的工具。",
+         "Runner 的呼叫經過你平常的權限處理；不要新增允許所有 Runner 呼叫的權限規則，因為這種規則等於允許任何指令透過 Runner 執行。",
+         "它改了 analyst、executor、security-executor、verifier、reviewer 與 adversary 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒這些角色來自較舊的範本。",
+         "要回到 0.31.0，重新安裝 0.31.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.31.0 的角色定義；不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # The role definitions this release changes (`git diff --name-only v0.31.0 HEAD -- templates`), and those it does not.
+    CHANGED_ROLES = ("analyst", "executor", "security-executor", "verifier", "reviewer", "adversary")
+    UNCHANGED_ROLES = ("scout", "mech-executor", "Explore")
+    # Out of Scope: concrete budgets and language-specific settings belong in project guidance, not in these documents.
+    NUMBERS = re.compile(r"\d\s*(?:[KMG]i?B|ms|seconds?)\b|GOMEMLIMIT|-parallel\b|\s-p\s", re.I)
+
+    # Both reference documents: the section beside the roles' execution, its four layers, the Runner's boundary with the
+    # two Linux cases from ticket 02's reviews, and the permission advice.
+    REFERENCE = (
+        ("docs/reference.md", "\n### Resource limits\n", "\n### Repository safety\n", (
+            "1. **Plan review marks the risk:**",
+            "A claim it does not mark is not thereby safe.",
+            "2. **Main approves, the Runner contains:**",
+            "3. **A floor for every run:**",
+            "4. **What happened is recorded:**",
+            "the Runner is never an isolated environment you named.",
+            "Its boundary is that only processes inside the Runner's containment are limited:",
+            "Two runs started at the same time each check available memory on their own, so their total is not limited;",
+            "On Linux, a target running as the same user can raise its own scope's memory limit after the Runner's checks, or leave the scope by creating a new one through the systemd user manager, as `systemd-run --user` does.",
+            "On Linux, a Runner started inside another Runner's target gets its own scope outside the outer one, so the outer limit no longer covers it; the inner limit still applies.",
+            "Do not add a rule that allows every Runner invocation: such a rule allows any command through the Runner.",
+            "A rule written for the target alone no longer matches once the target is wrapped in the Runner.",
+            "no hook enforces that a role uses the Runner.")),
+        ("docs/reference.zh-TW.md", "\n### 資源限制\n", "\n### 儲存庫安全\n", (
+            "1. **計畫審查標示風險：**",
+            "沒有被標示的 claim 不因此就是安全的。",
+            "2. **主 Agent 核准，Runner 圍住：**",
+            "3. **每次執行都有底線：**",
+            "4. **記錄發生的事：**",
+            "Runner 也絕不算是你指定的隔離環境。",
+            "它的邊界是只有 Runner 圍住的 process 受到限制：",
+            "同時啟動的兩次執行各自檢查可用記憶體，所以兩者的總和不受限制；",
+            "在 Linux 上，以同一個使用者身分執行的目標，可以在 Runner 檢查之後調高自己 scope 的記憶體限制，或透過 systemd user manager 建立新的 scope 而離開原本的 scope（如同 `systemd-run --user` 所做的）。",
+            "在 Linux 上，在另一個 Runner 的目標內啟動的 Runner 會有自己的 scope，位於外層 scope 之外，所以外層的限制不再涵蓋它；內層的限制仍然有效。",
+            "不要新增允許所有 Runner 呼叫的規則：這種規則等於允許任何指令透過 Runner 執行。",
+            "只為目標指令本身寫的規則，在目標包進 Runner 之後就不再符合。",
+            "沒有任何 hook 強制角色使用 Runner。")),
+    )
+    REFERENCE_LINKS = ("(../skills/delegation/references/resource-risk-runs.md)",
+                       "(adr/0019-resource-risk-is-marked-at-plan-review-and-contained-by-the-runner.md)")
+
+    ADR = "docs/adr/0019-resource-risk-is-marked-at-plan-review-and-contained-by-the-runner.md"
+    # The layered decision, then the five rejected alternatives with their reasons.
+    ADR_DECISION = (
+        "# Resource risk is marked at plan review and contained by the Runner\n",
+        "budgets that come from the user, the Plan or the user's guidance and never from cc-feather",
+        "- **Plan review marks the risk.**",
+        "A missing mark is not a statement that a Claim is safe.",
+        "- **Main approves the method with a budget.**",
+        "It adds to Execution and never replaces it.",
+        "- **The Runner contains the risky part.**",
+        "- **A floor for every run.**",
+        "The floor follows execution, not authorship,",
+        "- **What happened is recorded.**",
+        "[resource-risk reference](../../skills/delegation/references/resource-risk-runs.md)",
+    )
+    ADR_REJECTED = (
+        ("- **Judging risk only at each run**", "The role that misjudged a probe stays the only judge of it,"),
+        ("- **A two-phase paused call**", "It needs a new paused state in review counting;"),
+        ("- **A separate resource-analysis command**", "so the judgement is one item there and adds no verdict of its own,"),
+        ("- **Enforcing Runner use with a hook now**", "it is left to a later, separately gated release."),
+        ("- **A watchdog**", "a watchdog stopped nothing,"),
+    )
+    ADR_CONSEQUENCES = (
+        "Only processes inside the Runner's containment are limited:",
+        "so their total is not limited.",
+        "cc-feather advises against a rule that allows every Runner invocation.",
+        "no hook enforces that a role uses the Runner,",
+        "[setup validation](../setup-validation.md#0320-resource-risk-runs)",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def test_manifest_is_0_32_0(self):
+        self.assertEqual("0.32.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_resource_risk_note_in_both_languages(self):
+        previous = HandoffWorktreeStoreReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.32.0 note starts right after the section's opening sentence, its sentences in order, before 0.31.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # The note asks for setup update after the plugin update and for going back, and never says it is not needed.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                self.assertNotIn(no_update, note)
+                self.assertNotIn("need only the plugin update", note)
+                self.assertNotIn("只要更新 plugin", note)
+
+    def test_the_note_names_every_role_definition_the_release_changes(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            for role in self.CHANGED_ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertIn(role, note)
+            for role in self.UNCHANGED_ROLES:
+                with self.subTest(readme=name, unchanged=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_to_the_reference_section(self):
+        for name, (heading, _, *sentences), (link, document, target) in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES,
+                (("(docs/reference.md#resource-limits)", "docs/reference.md", "\n### Resource limits\n"),
+                 ("(docs/reference.zh-TW.md#資源限制)", "docs/reference.zh-TW.md", "\n### 資源限制\n"))):
+            with self.subTest(readme=name):
+                self.assertIn(link, self.note(name, heading, sentences))
+                self.assertEqual(self.text(document).count(target), 1)
+
+    def test_reference_documents_describe_the_layers_the_runner_and_its_boundary(self):
+        for name, heading, previous, sentences in self.REFERENCE:
+            text = self.text(name)
+            with self.subTest(document=name):
+                self.assertEqual(text.count(heading), 1)
+                # The section sits right after the repository safety section, which describes the roles' execution.
+                self.assertLess(text.index(previous), text.index(heading))
+                self.assertEqual(text.split(previous, 1)[1].count("\n### "), text.split(heading, 1)[1].count("\n### ") + 1)
+            section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+            for sentence in sentences:
+                with self.subTest(document=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            for earlier, later in zip(sentences, sentences[1:]):
+                self.assertLess(section.index(earlier), section.index(later))
+            for link in self.REFERENCE_LINKS:
+                with self.subTest(document=name, link=link):
+                    self.assertIn(link, section)
+
+    def test_adr_0019_records_the_layered_decision_and_the_rejected_alternatives(self):
+        text = self.text(self.ADR)
+        decision, rest = text.split("\n## Considered Options\n", 1)
+        options, consequences = rest.split("\n## Consequences\n", 1)
+        for sentence in self.ADR_DECISION:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(decision.count(sentence), 1)
+        # Exactly the five rejected alternatives, each with its reason in its own item.
+        self.assertEqual(options.count("\n- **"), len(self.ADR_REJECTED))
+        for option, reason in self.ADR_REJECTED:
+            with self.subTest(option=option):
+                item = options.split(option, 1)[1].split("\n- **", 1)[0]
+                self.assertIn(reason, item)
+        for sentence in self.ADR_CONSEQUENCES:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(consequences.count(sentence), 1)
+        self.assertNotIn(".scratch", text)
+        self.assertIn(self.ENTRY_HEADING, self.text("docs/setup-validation.md"))
+
+    def test_no_document_states_a_budget_or_a_language_specific_setting(self):
+        documents = [self.text(self.ADR)]
+        documents += [self.note(name, heading, sentences)
+                      for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES)]
+        documents += [self.text(name).split(heading, 1)[1].split("\n### ", 1)[0] for name, heading, _, _ in self.REFERENCE]
+        for document in documents:
+            with self.subTest(document=document[:40]):
+                self.assertIsNone(self.NUMBERS.search(document))
+
+    # The validation entry: the spec and its tickets with their commits, the setup update and where it was observed, the
+    # test runs, the Runner per environment with its hosts, the rehearsal with its outcome, deviations and the
+    # auto-update, what the tests cannot show, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.32.0 resource-risk runs\n"
+    ENTRY = (
+        "Implements [the resource-risk runs spec](specs/resource-risk-runs.md), added in f9e87cd and revised in 78c82c1",
+        "ticket 01, the Runner core and its Windows backend, in affcca5 and 3539946;",
+        "ticket 02, the Runner's Linux backend, in 94a36b5;",
+        "ticket 03, the floor, returned probes and Observed resource risk, in 59dbd81;",
+        "in 729a588;",
+        "in d07474f;",
+        "ticket 06, the live rehearsal, with no commit;",
+        "[ADR 0019](adr/0019-resource-risk-is-marked-at-plan-review-and-contained-by-the-runner.md)",
+        "**Setup update is required.**",
+        "as `git diff-tree -r --name-only v0.31.0 HEAD -- templates skills/setup scripts` shows.",
+        "To go back to 0.31.0, reinstall the 0.31.0 plugin and run `/cc-feather:setup update` the same way.",
+        "The setup update from 0.31.0 was observed in scratch installations:",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "(the 0.31.0 release ran 1031 tests with 13 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "- Windows, through a job object: Windows 11 Pro 10.0.26100 (build 26100), Python 3.11.9, with the Runner not started inside a job (`IsProcessInJob` false).",
+        "- Linux, through a transient systemd user scope: WSL2 on Windows 11 Pro 10.0.26100, kernel 6.18.54.1-microsoft-standard-WSL2, Ubuntu 24.04.4 LTS, systemd 255 (255.4-1ubuntu8.17), cgroup v2 with `cpu memory pids` delegated to `user@1000.service`, Python 3.12.3.",
+        "Live rehearsal (2026-11-09, ticket 06).",
+        "the cbc-go incident probe was not used or run.",
+        "outcome verification call 2 returned CONFIRMED with no run stopped and no probe returned;",
+        "Nothing was landed,",
+        "68 files, were byte-identical before and after.",
+        "Three deviations were seen, none of which changed an outcome:",
+        "Claude Code's auto-update changed the user's installed cc-feather from 0.30.0 to 0.31.0,",
+        "neither they nor one rehearsal can show that a model always follows the rules.",
+        "`v0.32.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "follow the commit carrying this entry and are recorded after it.",
+    )
+
+    def test_validation_entry_records_the_checks_runner_rehearsal_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
         self.assertNotIn(".scratch", entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",

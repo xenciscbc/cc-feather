@@ -104,6 +104,27 @@ These rules are instructions to the model, not a sandbox: no permission rule, ho
 
 See [ADR 0016](adr/0016-delegation-trusts-the-repository.md).
 
+### Resource limits
+
+A test or probe can exhaust memory, time or the machine, and a timeout limits time, not memory. Four layers handle it, with budgets that come from you, the plan or your guidance, never from cc-feather:
+
+1. **Plan review marks the risk:** for each claim whose checks or verification foreseeably risk exhausting memory, time or the machine, plan review marks it a Resource-risk claim, estimates its peak with the basis and proposes an Execution method for the risky part. A claim it does not mark is not thereby safe.
+2. **Main approves, the Runner contains:** main approves the Execution method with a budget taken, in order, from your own statement in this session, the plan, the project's resource guidance and your resource guidance, and asks you when none states one or the need exceeds a default. A role then runs the risky part only as approved and only inside the Runner, never raises a limit, and reports INCONCLUSIVE with its own proposed method when it judges the approved one insufficient; main decides.
+3. **A floor for every run:** a new or modified test or probe, whoever wrote it, whose bound is unknown or does not fit the budget is an Unbounded probe: it is not run and goes back to main. This holds for unmarked claims, in `off` and for main's own reruns too.
+4. **What happened is recorded:** a returned probe or a run a limit stopped becomes an Observed resource risk on the claim; main tells you, carries it into later briefs of that claim and lists it at the end of the plan.
+
+These conditions add to the Execution rule above and never replace it: an approved Execution method never allows a run that Execution does not, never lifts a restriction you stated, and the Runner is never an isolated environment you named.
+
+The Runner is cc-feather's launcher in the delegation skill. It runs one command with a memory limit for its whole process tree, a time limit and an output limit, reports whether the target passed, failed, was contained by a limit, was refused or left its evidence missing, and refuses to start rather than run without its limits. It has a Windows and a Linux backend; when it refuses a Resource-risk claim's run, the claim stops for you to decide. Its boundary is that only processes inside the Runner's containment are limited:
+
+- Work handed to an already running service, such as a daemon, a container runtime, WSL, a build server, a database or a remote service, and tools that execute code outside the shell, such as an MCP server, are outside it.
+- Two runs started at the same time each check available memory on their own, so their total is not limited; that is a known limitation of this release.
+- On Linux, a target running as the same user can raise its own scope's memory limit after the Runner's checks, or leave the scope by creating a new one through the systemd user manager, as `systemd-run --user` does.
+- On Linux, a Runner started inside another Runner's target gets its own scope outside the outer one, so the outer limit no longer covers it; the inner limit still applies.
+- A Runner invocation goes through your normal permission handling like any other command, and cc-feather adds no permission rule. Do not add a rule that allows every Runner invocation: such a rule allows any command through the Runner. A rule written for the target alone no longer matches once the target is wrapped in the Runner.
+
+These rules are instructions to the model; no hook enforces that a role uses the Runner. They are the [resource-risk reference](../skills/delegation/references/resource-risk-runs.md) and the role definitions. See [ADR 0019](adr/0019-resource-risk-is-marked-at-plan-review-and-contained-by-the-runner.md).
+
 ### Stop threshold
 
 The Stop threshold is how many consecutive automatic calls without a pass stop a step of the automatic flow: one number from 2 to 10 for plan review, code review, outcome verification and Adversarial review alike, 2 by default. It bounds how long the flow keeps trying without you. Tell main a value for the current task or session, which writes nothing, or save one in project or user scope with the configuration tool's `review --stop-threshold` (see [Stop threshold](setup.md#stop-threshold)). Main never changes it on its own and states it and its source whenever a review decision comes up. How the value in effect is resolved, when it is unknown and what a change does are review state's Resolution, Unknown threshold, Changing it and Saved in this conversation; how a value is saved is the [setup Stop threshold procedure](../skills/setup/references/stop-threshold.md).

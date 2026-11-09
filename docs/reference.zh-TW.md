@@ -104,6 +104,27 @@ adversary 的限制是給模型的指示，只有你的權限設定（permission
 
 詳見 [ADR 0016](adr/0016-delegation-trusts-the-repository.md)。
 
+### 資源限制
+
+測試或 probe 可能耗盡記憶體、時間或整台機器，而 timeout 只限制時間，不限制記憶體。這由四層處理，預算來自你、計畫或你寫的指引，絕不來自 cc-feather：
+
+1. **計畫審查標示風險：** 對每個執行檢查或驗證時可預見會耗盡記憶體、時間或機器的 claim，計畫審查把它標為 Resource-risk claim，估計峰值並附上依據，並為有風險的部分提出 Execution method。沒有被標示的 claim 不因此就是安全的。
+2. **主 Agent 核准，Runner 圍住：** 主 Agent 核准 Execution method 時，預算依序取自你在這個 session 自己的陳述、計畫、專案的資源指引與你的資源指引；沒有任何來源說明預算，或需要的超過預設值時，主 Agent 會問你。之後角色只照核准的方式、只在 Runner 內執行有風險的部分，絕不調高限制；它判斷核准的方式不足時，回報 INCONCLUSIVE 並附上自己提出的方式，由主 Agent 決定。
+3. **每次執行都有底線：** 新的或修改過的測試或 probe，不論是誰寫的，只要界限不明或不符合預算，就是 Unbounded probe：不執行，交回主 Agent。沒有被標示的 claim、`off` 模式與主 Agent 自己的重跑也一樣適用。
+4. **記錄發生的事：** 交回的 probe 與被限制停下的執行，會在該 claim 記為 Observed resource risk；主 Agent 會告訴你，帶進該 claim 之後的 brief，並在計畫結束時列出。
+
+這些條件是加在上面 Execution 規則之上，絕不取代它：核准的 Execution method 絕不允許 Execution 不允許的執行，絕不解除你說明的限制，Runner 也絕不算是你指定的隔離環境。
+
+Runner 是分派 skill 中 cc-feather 的啟動器。它執行一個指令，對整個 process tree 加上記憶體限制，並加上時間與輸出限制，回報目標是通過、失敗、被限制圍住、被拒絕執行，還是證據缺漏；無法套用限制時，它拒絕啟動，而不是在沒有限制下執行。它有 Windows 與 Linux 的後端；它拒絕執行某個 Resource-risk claim 時，該 claim 停下由你決定。它的邊界是只有 Runner 圍住的 process 受到限制：
+
+- 交給已經在執行的服務的工作（例如 daemon、container runtime、WSL、build server、資料庫或遠端服務），以及在 shell 之外執行程式碼的工具（例如 MCP server），都在它之外。
+- 同時啟動的兩次執行各自檢查可用記憶體，所以兩者的總和不受限制；這是這一版已知的限制。
+- 在 Linux 上，以同一個使用者身分執行的目標，可以在 Runner 檢查之後調高自己 scope 的記憶體限制，或透過 systemd user manager 建立新的 scope 而離開原本的 scope（如同 `systemd-run --user` 所做的）。
+- 在 Linux 上，在另一個 Runner 的目標內啟動的 Runner 會有自己的 scope，位於外層 scope 之外，所以外層的限制不再涵蓋它；內層的限制仍然有效。
+- Runner 的呼叫和其他指令一樣經過你平常的權限處理，cc-feather 不新增任何權限規則。不要新增允許所有 Runner 呼叫的規則：這種規則等於允許任何指令透過 Runner 執行。只為目標指令本身寫的規則，在目標包進 Runner 之後就不再符合。
+
+這些規則是給模型的指示；沒有任何 hook 強制角色使用 Runner。規則寫在[資源風險參考](../skills/delegation/references/resource-risk-runs.md)與角色定義中。詳見 [ADR 0019](adr/0019-resource-risk-is-marked-at-plan-review-and-contained-by-the-runner.md)。
+
 ### 停止門檻
 
 停止門檻是自動流程的一個步驟連續幾次自動呼叫沒通過就停下：一個 2 到 10 的數字，計畫審查、程式碼審查、結果驗證與對抗式審查都適用同一個值，預設 2。它限制流程不問你能嘗試多久。你可以告訴主 Agent 目前任務或 session 要用的值，這不會寫入任何檔案；也可以用設定工具的 `review --stop-threshold` 儲存在 project 或 user 範圍（見[停止門檻](setup.md#stop-threshold)）。主 Agent 絕不自行更改它，每次要做審查決定時都會說明目前的值與來源。目前的值如何決定、何時算不明，以及變更時會怎樣，寫在審查狀態規則的 Resolution、Unknown threshold、Changing it 與 Saved in this conversation；值如何儲存，寫在[setup 的停止門檻流程](../skills/setup/references/stop-threshold.md)。
