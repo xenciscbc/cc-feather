@@ -158,6 +158,7 @@ _Avoid_: resource incident, memory log
 
 **Runner**:
 cc-feather's launcher in the delegation skill that runs one command with a memory limit for its whole process tree, a time limit and an output limit, and reports one result: passed, target failed, contained by a limit, refused or evidence missing. It refuses to start rather than run without its limits. Only processes inside its containment are limited; work handed to an already running service, or done by a tool outside the shell, is not. A Runner invocation goes through the host's normal permission handling, and the Runner is never the isolated environment the user named.
+_Avoid_: sandbox, watchdog
 
 ## Checkout leases
 
@@ -168,4 +169,3 @@ _Avoid_: worktree lock, occupancy lock, claim
 **Lease holder**:
 The session that holds a Checkout lease. It may hold several, one for each checkout it changes, and decides itself when to take and return each one. Work the session delegates runs under its leases and holds none of its own.
 _Avoid_: lease owner, occupant
-_Avoid_: sandbox, watchdog
