@@ -1,7 +1,8 @@
 """Lease records and the short critical section that changes them.
 
 A lease is `<key>.json` in the lease location; its critical section is `<key>.lock` beside it, created exclusively
-for the few file and Git worktree lock operations of one acquire, release or re-locking, as the handoff history lock
+for the few file and Git worktree lock operations of one acquire, renew, release, take over or re-locking, as the
+handoff history lock
 is. A critical section already held is reported at once with its holder and age; it is never waited on and never
 broken. The location ignores itself with its own `.gitignore` holding `*`, written before any lease or lock."""
 from dataclasses import replace
@@ -15,7 +16,7 @@ import stat
 import time
 
 from feather_handoff.storage import (HandoffError, Snapshot, _check_lock_path, _listed, _mark_denied, check_path,
-                                     create_file, read_file, require_current)
+                                     create_file, read_file, replace_file, require_current)
 
 from .checkouts import Checkout, LeaseError, Repository, Unknown
 from . import locks
@@ -66,6 +67,21 @@ def remove_own(path: Path) -> None:
             return
         except PermissionError as error:
             if getattr(error, "winerror", None) not in HELD_OPEN or time.monotonic() >= deadline:
+                raise
+        time.sleep(0.02)
+
+
+def replace_own(snapshot: Snapshot, data: bytes) -> Snapshot:
+    """Replace the lease inside its critical section with data, only while it is still the snapshot read there.
+
+    As for remove_own, a reader holding the lease open only delays the replacement (Windows reports it as denied
+    access or a sharing violation): it is retried for a bounded moment and then the failure is reported."""
+    deadline = time.monotonic() + REMOVAL_PATIENCE
+    while True:
+        try:
+            return replace_file(snapshot, data)
+        except PermissionError as error:
+            if getattr(error, "winerror", None) not in HELD_OPEN | {5} or time.monotonic() >= deadline:
                 raise
         time.sleep(0.02)
 
@@ -440,6 +456,140 @@ def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
                           "message": "The lease changed hands: it does not carry this lease_id. Nothing was changed."}
     except Busy as busy:
         return {"status": "busy", "released": False, "critical_section": busy.section}
+    return _with_left(result, section)
+
+
+def renew(repository: Repository, checkout: Checkout, lease_id: str, purpose: str | None = None) -> dict:
+    """Inside its critical section, and only when the lease carries the caller's lease_id: record the last reported
+    activity now and, when given, the new purpose. Any other lease, or none, is reported and left; renew never
+    acquires, and it never changes a lock."""
+    repository.require_location()
+    state, _ = read_lease(repository, checkout)
+    if state["state"] == "unknown":
+        return {"status": "unknown", "renewed": False, "reason": state["reason"]}
+    if state["state"] == "absent":
+        return {"status": "changed-hands", "renewed": False, "lease": None,
+                "message": "The checkout has no lease; it changed hands or was returned. Nothing was changed, and "
+                           "renew acquires nothing."}
+    section = _section(repository, checkout, "renew")
+    try:
+        with section:
+            state, snapshot = read_lease(repository, checkout)
+            if state["state"] == "held" and state["lease"]["lease_id"] == lease_id:
+                lease = {**state["lease"], "last_activity": stamp(),
+                         **({} if purpose is None else {"purpose": purpose})}
+                saved = replace_own(snapshot, encode(lease))
+                current = checkout if checkout.main else repository.current(checkout)
+                result = {"status": "ok", "renewed": True, "lease": lease, "version": saved.version,
+                          "lock": _lock_view(current, {"state": "held", "lease": lease})}
+            elif state["state"] == "unknown":
+                result = {"status": "unknown", "renewed": False, "reason": state["reason"]}
+            else:
+                result = {"status": "changed-hands", "renewed": False, "lease": state.get("lease"),
+                          "message": "The lease changed hands: it does not carry this lease_id. Nothing was changed, "
+                                     "and renew acquires nothing; stop using the checkout and report."}
+    except Busy as busy:
+        return {"status": "busy", "renewed": False, "critical_section": busy.section}
+    return _with_left(result, section)
+
+
+def _restore(repository: Repository, checkout: Checkout, lease_id: str) -> str | None:
+    """Lock the worktree again for the old lease after a takeover that removed its lock failed; why not, or None."""
+    try:
+        return locks.lock(repository, checkout, lease_id)
+    except Exception as error:  # the takeover's own failure is the one reported
+        return f"{type(error).__name__}: {error}"
+
+
+def _take_over(repository: Repository, checkout: Checkout, state: dict, snapshot: Snapshot, session: str,
+               purpose: str, runtime: str) -> dict:
+    """Inside the critical section, with the lease the user was shown: write the new lease and move only the old
+    lease's own lock to it. Every other lock stays as it is; a worktree without any lock is locked for the new lease."""
+    old = state["lease"]
+    if not checkout.main:
+        blocked = locks.cannot_lock(checkout)
+        if blocked is not None:
+            return {"status": "refused", "taken_over": False, "code": blocked[0],
+                    "reason": f"{blocked[1]}; the lease is not taken over. Nothing was changed."}
+    lease = new_lease(checkout, session, purpose, runtime, None)
+    held = {"state": "held", "lease": lease}
+    if checkout.main:
+        saved = replace_own(snapshot, encode(lease))
+        return {"status": "ok", "taken_over": True, "lease": lease, "version": saved.version, "previous": old,
+                "lock": _lock_view(checkout, held)}
+    reason = checkout.locked
+    moved = reason is not None and locks.named_lease(reason) == old["lease_id"]
+    if moved:
+        failure = locks.unlock(repository, checkout)
+        if failure is not None:
+            raise LeaseError("unlock-failed", f"The old lease's own lock could not be removed: {failure}. The old "
+                             "lease and its lock stay; nothing was taken over.")
+    try:
+        saved = replace_own(snapshot, encode(lease))
+    except BaseException as error:
+        if moved:
+            left = _restore(repository, checkout, old["lease_id"])
+            if left is not None and isinstance(error, (OSError, HandoffError)):
+                error.args = (f"{error} The old lease's own lock was removed and could not be set again: {left}",)
+        raise
+    result = {"status": "ok", "taken_over": True, "lease": lease, "version": saved.version, "previous": old}
+    if reason is not None and not moved:
+        result["lock"] = {**_lock_view(checkout, held), "kept": True,
+                          "previous_holder": locks.describe(checkout, old, True)["holder"],
+                          "message": "The worktree's lock does not name the old lease and stays as it is; the tool "
+                                     "never changes it, and the new lease does not accept it."}
+        return result
+    failure = locks.lock(repository, checkout, lease["lease_id"])
+    try:
+        current = repository.current(checkout)
+    except Unknown:
+        current = replace(checkout, locked=locks.own_reason(lease["lease_id"]) if failure is None else None)
+    view = _lock_view(current, held)
+    if failure is None:
+        if moved:
+            view["replaced"] = reason
+        else:
+            view["relocked"] = True
+    else:
+        view["lock_failed"] = failure
+        if view["state"] == "unlocked":
+            view["unprotected"] = (f"The new lease has no Git worktree lock: {failure}. Listing or acquiring the "
+                                   "checkout locks it again.")
+    result["lock"] = view
+    return result
+
+
+def take_over(repository: Repository, checkout: Checkout, version: str, session: str, purpose: str,
+              runtime: str) -> dict:
+    """The user's choice to take over a lease they judge left behind, never automatic: inside the critical section,
+    and only while the lease is still the version the user was shown, write a new lease with a new lease_id and
+    start time. A changed or absent lease refuses and returns the current one."""
+    repository.require_location()
+    state, _ = read_lease(repository, checkout)
+    if state["state"] == "unknown":
+        return {"status": "unknown", "taken_over": False, "reason": state["reason"]}
+    gone = {"status": "changed", "taken_over": False, "lease": None,
+            "message": "The checkout has no lease any more; nothing was taken over or acquired."}
+    if state["state"] == "absent":
+        return gone
+    section = _section(repository, checkout, "take-over")
+    try:
+        with section:
+            current = checkout if checkout.main else repository.current(checkout)
+            state, snapshot = read_lease(repository, current)
+            if state["state"] == "unknown":
+                result = {"status": "unknown", "taken_over": False, "reason": state["reason"]}
+            elif state["state"] == "absent":
+                result = gone
+            elif state["version"] != version:
+                shown = {key: state[key] for key in ("lease", "version", "age_seconds", "activity_age_seconds")}
+                result = {"status": "changed", "taken_over": False, **shown, "lock": _lock_view(current, state),
+                          "message": "The lease changed since the version the user was shown; nothing was taken "
+                                     "over. Show the current lease to the user before deciding again."}
+            else:
+                result = _take_over(repository, current, state, snapshot, session, purpose, runtime)
+    except Busy as busy:
+        return {"status": "busy", "taken_over": False, "critical_section": busy.section}
     return _with_left(result, section)
 
 
