@@ -19,7 +19,7 @@ from feather_handoff.storage import (HandoffError, Snapshot, _check_lock_path, _
                                      create_file, read_file, replace_file, require_current)
 
 from .checkouts import Checkout, LeaseError, Repository, Unknown
-from . import leftover, locks
+from . import leftover, locks, park
 
 SCHEMA_VERSION = 1
 IGNORE = b"*\n"
@@ -434,9 +434,32 @@ def _unlock_own(repository: Repository, checkout: Checkout, state: dict, lease_i
     return {"removed": True, "reason": current.locked}
 
 
-def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
-    """Inside its critical section, and only when the lease carries the caller's lease_id: remove the worktree's
-    lock when its reason names this lease, then remove the lease. Every other lock stays."""
+def _park(repository: Repository, checkout: Checkout, continuing: Checkout | None) -> dict:
+    """Inside the release's critical section: park the checkout as Git registers it now, and confirm a detach."""
+    current = checkout if checkout.main else repository.current(checkout)
+    if continuing is not None:
+        try:
+            continuing = repository.current(continuing)
+        except Unknown as error:
+            return park.skipped("continuing-checkout", f"The named continuing checkout is not found: {error}.")
+    outcome = park.park(repository, current, continuing)
+    if outcome["parked"]:
+        try:
+            after = repository.current(current)
+        except Unknown:
+            return outcome  # Git reported the detach as done; the worktree could not be read again to confirm it
+        if not after.detached or after.head != outcome["detached_at"]:
+            return {"parked": False, "condition": "detach-failed", "branch": outcome["branch"],
+                    "reason": f"git checkout --detach reported success, but the worktree's HEAD is now "
+                              f"{after.branch or after.head}; check it before using it."}
+    return outcome
+
+
+def release(repository: Repository, checkout: Checkout, lease_id: str, parking: bool = False,
+            continuing: Checkout | None = None) -> dict:
+    """Inside its critical section, and only when the lease carries the caller's lease_id: park the worktree when
+    asked (see park.py), then remove the worktree's lock when its reason names this lease, then remove the lease.
+    Every other lock stays. A failed parking condition leaves the worktree as it is and still returns the lease."""
     repository.require_location()
     state, _ = read_lease(repository, checkout)
     if state["state"] == "unknown":
@@ -450,14 +473,24 @@ def release(repository: Repository, checkout: Checkout, lease_id: str) -> dict:
             state, snapshot = read_lease(repository, checkout)
             if state["state"] == "held" and state["lease"]["lease_id"] == lease_id:
                 require_current(snapshot)
-                lock = _unlock_own(repository, checkout, state, lease_id)
-                path = lease_path(repository, checkout.key)
-                remove_own(path)
-                if os.path.lexists(path):
-                    raise LeaseError("changed", f"The lease still exists after removal: {path}")
+                parked = _park(repository, checkout, continuing) if parking else None
+                try:
+                    lock = _unlock_own(repository, checkout, state, lease_id)
+                    path = lease_path(repository, checkout.key)
+                    remove_own(path)
+                    if os.path.lexists(path):
+                        raise LeaseError("changed", f"The lease still exists after removal: {path}")
+                except (OSError, HandoffError, Unknown) as error:
+                    if parked is not None and parked["parked"]:
+                        error.args = (f"{error} The worktree was parked: its HEAD is detached at "
+                                      f"{parked['detached_at']}.",)
+                        error.parked = parked
+                    raise
                 result = {"status": "ok", "released": True, "lease": state["lease"]}
                 if lock is not None:
                     result["lock"] = lock
+                if parked is not None:
+                    result["park"] = parked
             elif state["state"] == "unknown":
                 result = {"status": "unknown", "released": False, "reason": state["reason"]}
             else:

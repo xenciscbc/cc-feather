@@ -1,4 +1,5 @@
-"""JSON output around the lease tool's commands: acquire, renew, release, take-over and list.
+"""JSON output around the lease tool's commands: acquire, renew, release (with optional parking), take-over and
+list.
 
 Every handled result prints one JSON object and exits 0: ok, held, locked, refused, changed, changed-hands, busy and
 unknown are answers, not failures. Status error (usage, input, a location that cannot be used or written, an internal
@@ -15,6 +16,8 @@ from .checkouts import Repository, Unknown
 from . import locks, records
 
 VERSION = re.compile(r"[0-9a-f]{64}")
+NOT_PARKED = {"parked": False, "condition": "not-released",
+              "reason": "The lease was not released, so nothing was parked."}
 OUTCOME = {"acquire": "acquired", "renew": "renewed", "release": "released", "take-over": "taken_over"}
 
 
@@ -53,6 +56,11 @@ def main() -> int:
     release = commands.add_parser("release", parents=[root_options], help="Return a lease the caller holds")
     release.add_argument("--checkout", help="The checkout's top-level directory (default: the project's root)")
     release.add_argument("--lease-id", required=True, help="The lease_id the caller's acquire returned")
+    release.add_argument("--park", action="store_true",
+                         help="Before returning the lease, detach a clean linked worktree whose branch the local "
+                              "default branch (or the --continue-in checkout's branch) contains")
+    release.add_argument("--continue-in", metavar="DIR",
+                         help="With --park: the checkout the work continues in, whose branch may contain this one's")
     args = repository = None
     try:
         args = parser.parse_args()
@@ -84,16 +92,25 @@ def main() -> int:
                 result = records.take_over(repository, checkout, args.version, args.session, args.purpose,
                                            args.runtime)
             else:
-                result = records.release(repository, checkout, args.lease_id)
+                if args.continue_in is not None and not args.park:
+                    parser.error("--continue-in needs --park")
+                continuing = None if args.continue_in is None else repository.find(args.continue_in)
+                result = records.release(repository, checkout, args.lease_id, args.park, continuing)
+                if args.park and "park" not in result:
+                    result["park"] = dict(NOT_PARKED)
     except Unknown as unknown:
         result = {"status": "unknown", "reason": str(unknown)}
         if getattr(args, "command", None) == "list":
             result.update(complete=False, checkouts=[])
         elif getattr(args, "command", None) in OUTCOME:
             result[OUTCOME[args.command]] = False
+            if getattr(args, "park", False):
+                result["park"] = getattr(unknown, "parked", None) or dict(NOT_PARKED)
     except (OSError, UnicodeError, ValueError) as error:
         code = "location-unwritable" if creation_denied(error) else getattr(error, "code", "io")
         result = {"status": "error", "code": code, "message": str(error)}
+        if getattr(error, "parked", None) is not None:
+            result["park"] = error.parked
         if code == "location-unwritable":
             result["message"] = (f"The lease location {repository.directory} is not writable: {error}. Nothing was "
                                  "written, here or elsewhere.")
