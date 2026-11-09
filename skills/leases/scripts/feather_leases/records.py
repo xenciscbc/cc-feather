@@ -19,7 +19,7 @@ from feather_handoff.storage import (HandoffError, Snapshot, _check_lock_path, _
                                      create_file, read_file, replace_file, require_current)
 
 from .checkouts import Checkout, LeaseError, Repository, Unknown
-from . import locks
+from . import leftover, locks
 
 SCHEMA_VERSION = 1
 IGNORE = b"*\n"
@@ -396,6 +396,15 @@ def acquire(repository: Repository, checkout: Checkout, session: str, purpose: s
                 result = _take(repository, current, session, purpose, runtime, attested)
             elif state["state"] == "unknown":
                 result = {"status": "unknown", "acquired": False, "reason": state["reason"]}
+            elif not current.main and locks.cannot_lock(current) is not None:
+                # Git can lock such a worktree and the lock would hide that it is gone: the lease is kept as it is.
+                code, reason = locks.cannot_lock(current)
+                held = {key: state[key] for key in ("lease", "version", "age_seconds", "activity_age_seconds")}
+                kept = {"state": "unknown", "lease": state["lease"], "reason": reason}
+                result = {"status": "refused", "acquired": False, "code": code, **held,
+                          "lock": _lock_view(current, kept),
+                          "reason": f"{reason}; it is not acquired, its lease is kept and the worktree is not locked "
+                                    "again. Nothing was changed."}
             else:
                 outcome = None
                 if not current.main and current.locked is None:
@@ -616,10 +625,83 @@ def _listed_checkout(repository: Repository, checkout: Checkout) -> dict:
     return {**checkout.view(), "lease": state, "lock": lock}
 
 
+def _remove_orphan(repository: Repository, key: str) -> dict:
+    """Inside the lease's critical section, remove the lease of key while Git still registers no checkout under it
+    and it is still a lease of this tool's schema read there."""
+    section = CriticalSection(lock_path(repository, key), "remove-orphan", key)
+    try:
+        with section:
+            if any(checkout.key in (key, None) for checkout in repository.checkouts()):
+                result = {"key": key, "removed": False,
+                          "reason": "Git registers a checkout under this key again, or a checkout's key is unknown."}
+            else:
+                path = lease_path(repository, key)
+                snapshot = read_file(path)
+                try:
+                    value = json.loads(snapshot.data.decode("utf-8"))
+                    problem = _valid(value, key)
+                except (UnicodeError, ValueError, RecursionError) as error:
+                    value, problem = None, f"the lease is not valid UTF-8 JSON: {type(error).__name__}"
+                if problem is not None:
+                    result = {"key": key, "removed": False, "path": str(path),
+                              "reason": f"The lease could not be read and is kept: {problem}"}
+                else:
+                    require_current(snapshot)
+                    remove_own(path)
+                    result = {"key": key, "removed": True, "path": str(path), "lease": value}
+    except Busy as busy:
+        return {"key": key, "removed": False, "status": "busy", "critical_section": busy.section}
+    except FileNotFoundError:
+        return {"key": key, "removed": False, "reason": "The lease was already gone."}
+    except (OSError, HandoffError, Unknown) as error:
+        return {"key": key, "removed": False, "reason": f"The lease could not be removed and is kept: {error}"}
+    return _with_left(result, section)
+
+
+def remove_orphans(repository: Repository) -> dict:
+    """Remove each lease whose checkout `git worktree list` no longer reports, each in its own critical section, and
+    report every one found. While any checkout's key is unknown, a lease cannot be shown to be an orphan and none is
+    removed."""
+    if repository.location_problem is not None:
+        return {"state": "unknown", "reason": repository.location_problem, "leases": []}
+    try:
+        with os.scandir(repository.directory) as entries:
+            keys = sorted(entry.name[:-len(".json")] for entry in entries
+                          if entry.name.endswith(".json") and entry.is_file(follow_symlinks=False))
+    except FileNotFoundError:
+        return {"state": "known", "leases": []}
+    except OSError as error:
+        return {"state": "unknown", "reason": f"The lease location could not be read: {error}", "leases": []}
+    try:
+        checkouts = repository.checkouts()
+    except Unknown as error:
+        return {"state": "unknown", "reason": str(error), "leases": []}
+    registered = {checkout.key for checkout in checkouts}
+    orphans = [key for key in keys if key and key not in registered]
+    if not orphans:
+        return {"state": "known", "leases": []}
+    unestablished = next((checkout for checkout in checkouts if checkout.key is None), None)
+    if unestablished is not None:
+        return {"state": "unknown", "leases": [],
+                "reason": f"The key of the checkout {unestablished.path} is unknown ({unestablished.key_reason}), so "
+                          f"no lease can be shown to be an orphan; none was removed: {', '.join(orphans)}"}
+    return {"state": "known", "leases": [_remove_orphan(repository, key) for key in orphans]}
+
+
 def listing(repository: Repository) -> dict:
-    """Every registered checkout with its lease and its lock. A held lease on a linked worktree with no lock at all is
-    locked again inside its critical section and reported; one Git cannot lock again (its directory missing or
-    prunable) stays unknown and is shown with no lock."""
-    checkouts = [_listed_checkout(repository, checkout) for checkout in repository.checkouts()]
-    complete = all(item["lease"]["state"] != "unknown" for item in checkouts)
-    return {"status": "ok", "complete": complete, "checkouts": checkouts}
+    """Every registered checkout with its lease, its lock and the work left in it. A held lease on a linked worktree
+    with no lock at all is locked again inside its critical section and reported; one Git cannot lock again (its
+    directory missing or prunable) stays unknown and is shown with no lock. Orphan leases are removed first."""
+    orphans = remove_orphans(repository)
+    registered = repository.checkouts()
+    checkouts = [_listed_checkout(repository, checkout) for checkout in registered]
+    guard = leftover.object_guard(repository)
+    base = leftover.default_branch(repository, guard)
+    records = leftover.handoff_records(repository, registered)
+    for item, checkout, handoff in zip(checkouts, registered, records):
+        item.update(changes=leftover.changes(repository, checkout, guard),
+                    commits=leftover.commits(repository, checkout, base, guard), handoff_records=handoff)
+    complete = (all(item[part]["state"] != "unknown" for item in checkouts
+                    for part in ("lease", "changes", "commits", "handoff_records"))
+                and orphans["state"] == "known" and all(lease["removed"] for lease in orphans["leases"]))
+    return {"status": "ok", "complete": complete, "default_branch": base, "orphans": orphans, "checkouts": checkouts}

@@ -71,6 +71,7 @@ def main() -> int:
                     raise HandoffError("input", "--accept-session-lock must be a Claude Code session lock reason, "
                                        "`claude session <name> (pid N)`")
                 result = records.acquire(repository, checkout, args.session, args.purpose, args.runtime, attested)
+                result["orphans"] = records.remove_orphans(repository)
             elif args.command == "renew":
                 if args.purpose is not None and not args.purpose.strip():
                     raise HandoffError("input", "--purpose must not be empty")
