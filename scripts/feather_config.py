@@ -64,6 +64,13 @@ STOP_THRESHOLD_RANGE = range(2, 11)
 USER_STOP_THRESHOLD = "The Stop threshold for automatic review is {k}."
 # Project guidance loads after user guidance, so a project value says it overrides, like PROJECT_REVIEW_OFF.
 PROJECT_STOP_THRESHOLD = "The Stop threshold in this project is {k}; this overrides broader Feather guidance."
+# Saved Related-test acceptance: on in either scope, or off in project scope to override a user on. Unset renders
+# nothing, so guidance without one stays byte-identical to earlier releases. The rule itself lives only in
+# templates/related-tests.md; these sentences only say whether it applies.
+RELATED_TESTS_VALUES = {"project": ("on", "off"), "user": ("on",)}
+USER_RELATED_TESTS_ON = "Related-test acceptance is on."
+PROJECT_RELATED_TESTS_ON = "Related-test acceptance is on in this project; this overrides broader Feather guidance."
+PROJECT_RELATED_TESTS_OFF = "Related-test acceptance is off in this project; this overrides broader Feather guidance."
 # Commands allowed where project scope is the user configuration: inspection and removal of an earlier install.
 ALIASED_PROJECT_COMMANDS = {"check", "show", "session", "remove"}
 # YAML plain scalars starting with these may mean something other than their text.
@@ -505,6 +512,9 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
             if value["version"] == VERSION and isinstance(record, dict) and "stop_threshold" in record:
                 # Optional: present only while a Stop threshold is saved.
                 expected |= {"stop_threshold"}
+            if value["version"] == VERSION and isinstance(record, dict) and "related_tests" in record:
+                # Optional: present only while Related-test acceptance is saved.
+                expected |= {"related_tests"}
         if not isinstance(record, dict) or (value["version"] >= 3 and set(record) != expected):
             raise ConfigError(f"invalid {name} state schema")
         if not isinstance(record["added_before"], bool) or not isinstance(record["added_after"], bool):
@@ -522,6 +532,8 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
                 raise ConfigError("invalid saved review mode")
             if "stop_threshold" in record and not _valid_stop_threshold(record["stop_threshold"]):
                 raise ConfigError("invalid saved stop threshold")
+            if "related_tests" in record and not _valid_related_tests(record["related_tests"], scope):
+                raise ConfigError("invalid saved related-test acceptance")
             if (not isinstance(record["choices"], dict) or not isinstance(record["hashes"], dict)
                     or set(record["hashes"]) != set(record["choices"])
                     or not set(ROLES) - set(ADDED_ROLES) - _external(record) <= set(record["choices"])
@@ -608,7 +620,8 @@ def _block_template(path: Path) -> str:
     return text
 
 
-def _policy(review_mode: str, prefix: str = "", *, scope: str = "user", stop_threshold: int | None = None) -> str:
+def _policy(review_mode: str, prefix: str = "", *, scope: str = "user", stop_threshold: int | None = None,
+            related_tests: str | None = None) -> str:
     path = ROOT / "templates" / "CLAUDE.md"
     text = _block_template(path)
     parts = _block_parts(text)
@@ -624,6 +637,12 @@ def _policy(review_mode: str, prefix: str = "", *, scope: str = "user", stop_thr
     # A saved Stop threshold is its own paragraph after the review rules, in both modes, so a later auto uses it.
     if stop_threshold is not None:
         auto += (PROJECT_STOP_THRESHOLD if scope == "project" else USER_STOP_THRESHOLD).format(k=stop_threshold) + "\n\n"
+    # Saved Related-test acceptance follows, in both modes: on carries the whole rule, a project off one sentence.
+    if related_tests == "on":
+        opening = PROJECT_RELATED_TESTS_ON if scope == "project" else USER_RELATED_TESTS_ON
+        auto += opening + " " + _related_tests_rule() + "\n\n"
+    elif related_tests == "off":
+        auto += PROJECT_RELATED_TESTS_OFF + "\n\n"
     names = ""
     if prefix:
         listed = ", ".join(f"{role} = {_role_name(role, prefix)}" for role in ROLES if role != "Explore")
@@ -650,11 +669,41 @@ def _threshold_report(saved: int | None) -> dict[str, Any]:
     return {"stop_threshold": STOP_THRESHOLD_DEFAULT if saved is None else saved, "stop_threshold_set": saved is not None}
 
 
-def _delegation_block(review_mode: str, prefix: str, scope: str, stop_threshold: int | None) -> str:
-    """The delegation block for these choices; without a saved Stop threshold, exactly the plain policy rendering."""
-    if stop_threshold is None:
-        return _policy(review_mode, prefix, scope=scope)
-    return _policy(review_mode, prefix, scope=scope, stop_threshold=stop_threshold)
+def _valid_related_tests(value: object, scope: str) -> bool:
+    # User-scope off equals the default and is never saved, so a saved one is malformed.
+    return isinstance(value, str) and value in RELATED_TESTS_VALUES[scope]
+
+
+def _parse_related_tests(value: str, scope: str) -> str | None:
+    """A requested Related-test acceptance: the value to save, or None for nothing saved."""
+    if value not in ("on", "off", "default"):
+        raise ConfigError("--related-tests must be on, off or default")
+    return value if value in RELATED_TESTS_VALUES[scope] else None
+
+
+def _related_tests_report(saved: str | None) -> dict[str, Any]:
+    """How show, check and previews report a scope's Related-test acceptance: the saved value, or off while unset."""
+    return {"related_tests": "off" if saved is None else saved, "related_tests_set": saved is not None}
+
+
+def _delegation_block(review_mode: str, prefix: str, scope: str, stop_threshold: int | None,
+                      related_tests: str | None = None) -> str:
+    """The delegation block for these choices; without saved settings, exactly the plain policy rendering."""
+    saved: dict[str, Any] = {}
+    if stop_threshold is not None:
+        saved["stop_threshold"] = stop_threshold
+    if related_tests is not None:
+        saved["related_tests"] = related_tests
+    return _policy(review_mode, prefix, scope=scope, **saved)
+
+
+def _related_tests_rule() -> str:
+    """The Related-test acceptance rule: one paragraph, written only in its template."""
+    path = ROOT / "templates" / "related-tests.md"
+    text = _block_template(path).strip()
+    if not text or "{{" in text or "\n\n" in text or "<!--" in text:
+        raise ConfigError("related-test acceptance template must be one paragraph without placeholders or markers")
+    return text
 
 
 def _auto_review() -> str:
@@ -877,18 +926,20 @@ def _edit_role_fields(data: bytes, old: dict[str, str], new: dict[str, str], pat
 
 
 def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: str = "user",
-                       old_threshold: int | None = None, new_threshold: int | None = None) -> str:
+                       old_threshold: int | None = None, new_threshold: int | None = None,
+                       old_related: str | None = None, new_related: str | None = None) -> str:
     # Blocks rendered from a CRLF checkout keep CRLF; compare as LF and write back the file's endings.
     current = block.replace("\r\n", "\n")
     # A project that was off before the off line existed has the user-scope rendering.
-    if current in (_delegation_block(old, prefix, scope, old_threshold),
-                   _delegation_block(old, prefix, "user", old_threshold)):
-        result = _delegation_block(new, prefix, scope, new_threshold)
+    if current in (_delegation_block(old, prefix, scope, old_threshold, old_related),
+                   _delegation_block(old, prefix, "user", old_threshold, old_related)):
+        result = _delegation_block(new, prefix, scope, new_threshold, new_related)
     else:
         # Guidance from earlier templates keeps its rules and switches them with a mode line; it has no place
-        # for a Stop threshold sentence, so changing the saved value needs setup update first.
+        # for a Stop threshold sentence or the Related-test acceptance rule, so changing either saved setting
+        # needs setup update first.
         line = f"Automatic plan review mode: {old}"
-        if current.count(line) != 1 or old_threshold != new_threshold:
+        if current.count(line) != 1 or old_threshold != new_threshold or old_related != new_related:
             raise ConfigError("installed guidance is from an older template; run setup update first")
         result = current.replace(line, f"Automatic plan review mode: {new}", 1)
     return result.replace("\n", "\r\n") if "\r\n" in block else result
@@ -903,7 +954,7 @@ def _older_template(block: str, record: dict[str, Any], scope: str) -> bool:
     """
     mode, prefix = record["review_mode"], record.get("role_prefix", "")
     try:
-        current = _delegation_block(mode, prefix, scope, record.get("stop_threshold"))
+        current = _delegation_block(mode, prefix, scope, record.get("stop_threshold"), record.get("related_tests"))
     except ConfigError:
         return False
     return block.replace("\r\n", "\n") != current
@@ -1073,8 +1124,14 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     if args.stop_threshold is not None and args.command != "review":
         raise ConfigError("--stop-threshold is supported only by review")
     requested_threshold = _parse_stop_threshold(args.stop_threshold) if args.stop_threshold is not None else None
-    if args.command == "review" and args.review_mode is None and args.stop_threshold is None:
-        raise ConfigError("review requires --review-mode auto|off, --stop-threshold 2-10|default, or both")
+    if args.related_tests is not None and args.command != "review":
+        raise ConfigError("--related-tests is supported only by review")
+    requested_related = (_parse_related_tests(args.related_tests, args.scope)
+                         if args.related_tests is not None else None)
+    if (args.command == "review" and args.review_mode is None and args.stop_threshold is None
+            and args.related_tests is None):
+        raise ConfigError("review requires --review-mode auto|off, --stop-threshold 2-10|default, "
+                          "--related-tests on|off|default, or a combination of them")
     if args.command not in {"install", "review"} and args.review_mode is not None:
         raise ConfigError("--review-mode is supported only by install or review")
     if args.review_mode is not None and "delegation" not in selected:
@@ -1229,6 +1286,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     review_mode = args.review_mode or (delegation["review_mode"] if delegation else "off")
     saved_threshold = delegation.get("stop_threshold") if delegation else None
     stop_threshold = requested_threshold if args.stop_threshold is not None else saved_threshold
+    saved_related = delegation.get("related_tests") if delegation else None
+    related_tests = requested_related if args.related_tests is not None else saved_related
     for name in active_components:
         record = records.get(name)
         if args.command == "remove" and record is None:
@@ -1264,11 +1323,13 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         parts = _guidance_parts(text, name)
         if args.command == "review":
             block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix, scope=args.scope,
-                                       old_threshold=saved_threshold, new_threshold=stop_threshold)
+                                       old_threshold=saved_threshold, new_threshold=stop_threshold,
+                                       old_related=saved_related, new_related=related_tests)
         elif args.command == "model":
             block = parts[1]
         else:
-            block = _file_line_endings(_delegation_block(review_mode, prefix, args.scope, stop_threshold), text)
+            block = _file_line_endings(_delegation_block(review_mode, prefix, args.scope, stop_threshold,
+                                                         related_tests), text)
         text, added_before, added_after = _put_block(text, name, block, record)
         records[name] = {"choices": choices, "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
                          "block_hash": _block_digest(block), "review_mode": review_mode,
@@ -1277,6 +1338,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         if stop_threshold is not None:
             # Present only while set, so a scope without one keeps the record earlier releases write.
             records[name]["stop_threshold"] = stop_threshold
+        if related_tests is not None:
+            # Present only while saved, like the Stop threshold.
+            records[name]["related_tests"] = related_tests
     created_imports = list(target["imports"])
     created_guidance = state is not None and state.get("created_guidance") is True
     guidance_warnings = []
@@ -1313,7 +1377,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 "changes": [{"path": c["path"], "after_sha256": c["after_sha256"]} for c in changes],
                 "templates": {role: digest(_render(role, choices[role], prefix)) for role in choices}
                              if "delegation" in active_components and args.command in {"install", "update"} else {},
-                "policy": digest(_delegation_block(review_mode, prefix, args.scope, stop_threshold).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
+                "policy": digest(_delegation_block(review_mode, prefix, args.scope, stop_threshold,
+                                                   related_tests).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
                 "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None,
                 "leases_policy": digest(_leases_policy().encode("utf-8")) if "leases" in active_components and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
@@ -1321,6 +1386,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
               "plan_id": plan_id, "components": {name: {"installed": name in records} for name in COMPONENTS},
               "choices": choices if choices else (delegation["choices"] if delegation else {}),
               "review_mode": review_mode, **_threshold_report(stop_threshold if "delegation" in records else None),
+              **_related_tests_report(related_tests if "delegation" in records else None),
               "guidance": str(guidance), "requested_configuration_only": True,
               "changes": changes,
               "warnings": (_warnings(args) + list(_AGENT_WARNINGS) if "delegation" in selected else []) + guidance_warnings}
@@ -1583,6 +1649,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             "requested_configuration_only": True,
             "review_mode": delegation["review_mode"] if delegation else "off",
             **_threshold_report(delegation.get("stop_threshold") if delegation else None),
+            **_related_tests_report(delegation.get("related_tests") if delegation else None),
             "paths": {"config_root": str(base / "cc-feather"), "state": str(state_path),
                       "guidance": str(guidance), "agents": {role: str(path) for role, path in reported_agents.items()}},
             "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
@@ -1678,6 +1745,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--review-mode", choices=("auto", "off"))
     parser.add_argument("--stop-threshold", metavar="2-10|default",
                         help="review: save the Stop threshold for the scope, or remove it with default")
+    parser.add_argument("--related-tests", metavar="on|off|default",
+                        help="review: save Related-test acceptance for the scope, or remove it with default")
     parser.add_argument("--component", choices=("handoff", "delegation", "leases", "both"),
                         help="Component for mutations; default delegation. both is handoff and delegation, never leases")
     parser.add_argument("--guidance", choices=("claude", "agents"),
@@ -1698,12 +1767,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "session":
             if args.stop_threshold is not None:
                 raise ConfigError("--stop-threshold is supported only by review")
+            if args.related_tests is not None:
+                raise ConfigError("--related-tests is supported only by review")
             if args.apply or args.expected_plan or args.review_mode or args.guidance or args.component != "delegation":
                 raise ConfigError("session is read-only and delegation-only")
             result = _session(args)
         elif args.command in {"check", "show"}:
             if args.stop_threshold is not None:
                 raise ConfigError("--stop-threshold is supported only by review")
+            if args.related_tests is not None:
+                raise ConfigError("--related-tests is supported only by review")
             if args.apply or args.expected_plan or args.set or args.review_mode or args.guidance:
                 raise ConfigError("check and show are read-only and accept no mutation options")
             result = _inspect(args)
