@@ -30,7 +30,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:handoff-save [工作]` | 保存指定工作；省略時保存目前工作 |
 | `/cc-feather:handoff-resume [工作]` | 接續指定工作或唯一未完成的工作；有多項時詢問 |
 | `/cc-feather:handoff-tidy [工作名稱或 all]` | 整理既有的交接紀錄，只能由你執行。不帶參數時詢問模式：Proposal（只讀紀錄，建議下一項工作，並指出可合併、過時或不完整的紀錄）、Full check（先說明成本並等你確認，再拿每筆紀錄對照目前專案）或 Selected check（核對你指定的工作），你也可以用自己的話描述想做什麼；帶工作名稱直接做 Selected check，帶 `all` 做 Full check。檢查唯讀，不執行專案程式碼。它只提出建議：合併、搬移項目與更新進度都在你確認後才寫入，也不會授權它建議的工作或開始交接維護 |
-| `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝 |
+| `/cc-feather:setup` | 先查狀態，分別或一起管理 handoff 自動維護規則、agent 分派規則與角色安裝，以及選用的 Checkout lease 規則 |
 | `/cc-feather:delegation` | 按需載入主 Agent 的派工、審查、驗收與復原流程 |
 | `/cc-feather:delegation-preview [計畫、ticket 或工作]` | 預覽工作會如何分派，不實際派工；見[分派預覽](#分派預覽) |
 | `/cc-feather:adversarial-review <攻擊範圍> [路徑或 commit 範圍] [可拋棄目標]` | 執行你要求的對抗式審查，兩種模式都可用；見[安全關鍵工作](#安全關鍵工作) |
@@ -38,6 +38,8 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；主 Agent 之後可不經詢問，在通過前 commit 這類工作、推送到它為此工作建立的 branch 並開 pull request，但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |
 | `/cc-feather:auto-off` | 關閉自動審查 |
 | `/cc-feather:stop-threshold <2–10 或 default> [範圍]` | 設定自動審查的[停止門檻](#停止門檻)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
+| `/cc-feather:leases` | 取得、續期、接手、歸還與列出 Checkout lease；主 Agent 維護 lease 時載入。見 [Checkout lease](#checkout-lease) |
+| `/cc-feather:worktrees` | 列出這個儲存庫的每個 checkout，以及它的 Checkout lease、Git worktree lock 與留在其中的工作；只能由你執行。它不是唯讀：持有中的 lease 所在 worktree 沒有 lock 時會重新上鎖，並移除 Git 已不再登記其 checkout 的 lease |
 
 交接指令在 plugin 安裝後即可使用。Setup 可只裝 handoff 自動維護規則、只裝 agent 分派（規則＋角色），或兩者都裝。例如：
 
@@ -51,13 +53,14 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 ## Setup：先查狀態，再選擇項目
 
-直接輸入 `/cc-feather:setup`，會先查目前專案及使用者範圍的安裝狀態，列出兩項是否已安裝、是否衝突或需要遷移，再詢問要安裝、更新、移除或只查看哪一項，以及操作範圍。若已指定範圍，只檢查該範圍；已說清楚的選擇不會重問。
+直接輸入 `/cc-feather:setup`，會先查目前專案及使用者範圍的安裝狀態，列出各項是否已安裝、是否衝突或需要遷移，再詢問要安裝、更新、移除或只查看哪一項，以及操作範圍。若已指定範圍，只檢查該範圍；已說清楚的選擇不會重問。
 
 | 可選項目 | 安裝內容 | 移除後 |
 | --- | --- | --- |
 | handoff | 指示檔中獨立的自動維護規則 | 只移除提醒；交接紀錄與 plugin 的 handoff 指令仍保留 |
 | agent 分派（delegation） | 獨立分派規則＋九個原生 agent；自動計畫審查預設關閉 | 移除完整的受管理角色及分派規則，保留 handoff 規則 |
-| 兩者（both） | 上述兩項 | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
+| leases | 指示檔中的 Checkout lease 規則；只有你指名選擇時才安裝 | 只移除規則；lease 紀錄與 Git worktree lock 仍保留 |
+| 兩者（both） | handoff 與 agent 分派；不含 leases | 依所選操作一起處理，仍保留交接資料與其他使用者設定 |
 
 可直接指定，不必走逐項詢問：
 
@@ -65,6 +68,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 /cc-feather:setup 在目前專案只安裝 handoff 自動維護規則
 /cc-feather:setup 在目前專案只安裝 agent 分派規則與角色
 /cc-feather:setup 在目前專案兩者都安裝
+/cc-feather:setup 在使用者範圍安裝 Checkout lease 規則
 /cc-feather:setup 只更新目前專案的 handoff 規則
 /cc-feather:setup 只移除目前專案的 agent 分派，保留 handoff
 /cc-feather:setup 查看使用者範圍的安裝狀態
@@ -72,7 +76,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 「兩者都安裝」只補上尚未安裝的項目；「更新兩者」只更新已安裝項目；「移除兩者」只移除已安裝項目。已存在或不存在的另一項不會因此被重設。
 
-兩項在該範圍的指示檔中各有獨立的管理區塊，安裝狀態在各範圍的 `cc-feather/state.json` 分項保存。handoff 規則不會自行建立新紀錄：仍需使用者要求建立或接續後，才在里程碑、受阻與完成時維護同一份紀錄。只查看／列出不啟用維護。
+各項在該範圍的指示檔中各有獨立的管理區塊，安裝狀態在各範圍的 `cc-feather/state.json` 分項保存。handoff 規則不會自行建立新紀錄：仍需使用者要求建立或接續後，才在里程碑、受阻與完成時維護同一份紀錄。只查看／列出不啟用維護。
 
 舊版將兩種規則放在同一區塊；升級會檢查擁有權並拆分，保留模型與審查設定。只移除分派不能順便刪掉原有 handoff 提醒；既有檔案被修改或名稱衝突時，先保留並交由使用者決定。
 
@@ -277,9 +281,24 @@ cc-feather 寧可讓審查有界、可預期，也不追求什麼都檢查。下
 
 同一個 Git 儲存庫的各個 checkout 共用一個交接存放處：未追蹤交接紀錄的 linked worktree 會把紀錄存在 main worktree 的 `.feather/handoffs/`，所以移除或封存 worktree 不會再刪掉它們，而在任一個 checkout 中的 session 都列出同樣的工作、搜尋同一份歷史。來源、來源基準與紀錄的環境仍描述 session 所在的 checkout。追蹤自己紀錄的 checkout、非 Git 專案與明確指定的根目錄保留自己的存放處，跨專案也不做任何同步。linked worktree 中的 session 需要能寫入 main worktree 的存放處；作業系統或 session 的 sandbox 拒絕時，工具回報 `store-unwritable`，不會改寫在 worktree 中。完成、archive、clear、seal 與 adopt 會在存放處取得歷史鎖，所以共用它的 session 不會互相弄丟完成紀錄；寫入工作檔不取鎖，所以每項工作仍只有一個寫入者。較早版本留在其他 checkout 的紀錄會連同那個 checkout 列出，`adopt` 會把你確認的部分移到目前的存放處。在 codex-feather 採用同一個 runtime 之前，Codex session 仍把紀錄寫在 linked worktree 內，Claude session 的列表會把它們列為另一個 checkout 的存放處。交接工具依原有規則處理 Git 忽略與使用者追蹤選擇。
 
+## Checkout lease
+
+```text
+/cc-feather:setup 在使用者範圍安裝 Checkout lease 規則
+/cc-feather:worktrees
+```
+
+Checkout lease 是一份合作式紀錄，表示某個 session 正在使用 Git 儲存庫的某一個 checkout（main worktree 或 linked worktree）來修改它。它只聲明使用與開始時間，從不證明持有者仍在執行；取得 lease 也從不授權變更、重設或移除該 checkout 原有的內容。安裝 `leases` setup 元件後，主 Agent 在變更 checkout 之前取得 lease，在里程碑、受阻、停下來等你之前與完成時續期，不再使用該 checkout 時歸還；子 agent 從不取得 lease，而是在主 Agent 的 lease 下工作。lease 由其他 session 持有，或 worktree 上有其他 lock 時，主 Agent 會停下，列出持有者、目的、開始時間、最後回報的活動與經過時間，由你選擇：在 main worktree 工作、使用閒置的 worktree、開新的 worktree，或接手你判斷已被遺留的 lease。lease 從不自動接手，也沒有任何經過時間會讓 lease 算作被遺留。平行的 worktree 工作合併完成、不再使用時，主 Agent 會先停放（park）再歸還它的 lease：乾淨且 branch 已包含在預設 branch（或工作接續所在的 branch）中的 worktree 會 detach 它的 HEAD；停放從不刪除 branch 或 worktree。`/cc-feather:worktrees` 列出每個 checkout 的 lease、lock、未提交與未追蹤的變更、相對預設 branch 領先與落後的 commit，以及提到它的交接紀錄；它只回報事實，從不說某個 checkout 是空閒的。規則寫在 [leases skill](skills/leases/SKILL.md)。
+
+`leases` 元件只有你指名選擇時才安裝，`both` 從不包含它。project 範圍的規則區塊位於該 checkout 的 CLAUDE.md，而在 linked worktree 中啟動的 session 只載入該 worktree 自己的 CLAUDE.md，所以只有區塊已被追蹤、已 commit，並且（對 Claude Code 以遠端預設 branch 為基礎建立的 worktree）已 push 時，那個 session 才看得到 lease 規則。要讓每個 session 都遵守，請在使用者範圍安裝 `leases`，或 commit 並 push project 的 CLAUDE.md 區塊。handoff 與 agent 分派元件的 project 範圍區塊也是如此。
+
+lease 存在 main worktree 下的 `.feather/leases/`，每個 checkout 一個 `<key>.json`，以 Git 對每個 worktree 的管理識別為 key，main worktree 用 `.main`；這個目錄會忽略自己。linked worktree 上持有中的 lease 另由原因為 `cc-feather lease <lease_id>` 的 Git worktree lock 保護，所以 `git worktree prune`、一般的 `git worktree remove` 與 Claude Code 的清理都不會動到那個 worktree，不讀 lease 的工具也看得出它正在使用；Git 無法鎖定 main worktree。在 session 自己剛建立的 worktree 中，它觀察到的 Claude Code session lock 會取代 lease 自己的 lock 而被接受。這依賴 Claude Code 的清理會略過已鎖定的 worktree，而且從不解除不是它設定的 lock。互動式 Claude Code session 結束時會解除自己的 session lock，而 headless 的 `-p` 執行會留下它，所以互動式 session 結束時仍持有的 lease 會沒有 lock，直到下一次列出或取得時以 lease 自己的 lock 重新鎖定。其他工具要讀取的紀錄欄位見 [setup 文件](docs/setup.md#checkout-leases)。
+
+lease 是合作式的：它只約束遵守規則的 session。它不會停止、偵測或管理其他 session 的 process，也不會把忽略 lease 的人或工具（包括 codex-feather 的 session）擋在 checkout 之外。Windows 與 WSL 之間、或不同機器之間共用同一個 checkout 不在涵蓋範圍內。
+
 ## 更新、移除與驗證
 
-Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。0.32.0 新增資源風險執行：計畫審查把執行檢查或驗證時可預見會耗盡記憶體、時間或機器的 claim 標為 Resource-risk claim，並為有風險的部分提出 Execution method，主 Agent 以來自你、計畫或你的指引的預算核准它，角色只在 Runner 內執行那個部分（Runner 是分派 skill 中新增的啟動器，限制一個指令整個 process tree 的記憶體、它的時間與輸出），界限不明或不符合預算的新的或修改過的測試或 probe 交回主 Agent 而不執行，交回或被停下的部分記為 Observed resource risk，詳見[參考文件](docs/reference.zh-TW.md#資源限制)。cc-feather 不規定任何預算，硬性限制只涵蓋透過 Runner 執行的指令，不涵蓋交給已經在執行的服務的工作，也不涵蓋在 shell 之外執行程式碼的工具。Runner 的呼叫經過你平常的權限處理；不要新增允許所有 Runner 呼叫的權限規則，因為這種規則等於允許任何指令透過 Runner 執行。它改了 analyst、executor、security-executor、verifier、reviewer 與 adversary 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒這些角色來自較舊的範本。要回到 0.31.0，重新安裝 0.31.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.31.0 的角色定義；不需要先移除。0.31.0 把 linked worktree 的交接紀錄存在 main worktree 的存放處，新增歷史鎖與清除過期鎖的 `unlock` 指令，列出留在其他 checkout 的紀錄，並以 `adopt` 移動你確認的部分，詳見[交接相容性](#交接相容性)。這一版同樣沒有改任何角色定義、已安裝的政策範本或 setup 工具對它們的產生方式，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。在 codex-feather 採用同一個 runtime 之前，Codex session 仍把紀錄寫在 linked worktree 內；Claude session 的列表會把它們列在那個 checkout 的存放處下，`adopt` 會移動你確認的部分。要回到 0.30.0，重新安裝 0.30.0 的 plugin 即可；不需要做 setup update 或先移除，寫入 main worktree 存放處的紀錄在 main worktree 中仍可由 0.30.0 讀取，而 linked worktree 中的 0.30.0 session 又只會看到該 worktree 自己的紀錄。0.30.0 把每條分派規則只寫在負責它的檔案中，其他適用的地方改為指向它，主 Agent 在依賴 review state 的決定之前會完整讀過它；[參考文件](docs/reference.zh-TW.md)改為說明每條規則的用途並連到寫明它的流程，沒有任何規則改變。以連結所及的所有檔案計算，每個入口少載入約 9 KB；以主 Agent 被指示讀取的檔案計算，每個入口都載入更多，其中預覽、Stop threshold 指令與 claim 實作的 brief 增加最多，因為它們現在要完整讀 review state；兩種計算都記錄在[結果檔](docs/specs/delegation-dedupe-results.md#loading-cost)。它沒有改任何角色定義、已安裝的政策範本或 setup 工具對它們的產生方式，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.29.0，重新安裝 0.29.0 的 plugin 即可；不需要做 setup update 或先移除。0.29.0 讓分派信任儲存庫：主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取它，審查只保留讓結果正確的檢查（`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案），而且除非你在這個 session 中限制，審查會執行儲存庫的程式碼；要不要信任一個儲存庫由你決定，剩下的風險列在[儲存庫安全](#儲存庫安全)。說明變更來自別人已經不會阻止審查執行它，所以要阻止，請在你自己的訊息中說程式碼不得執行。它改了 reviewer、verifier、adversary、analyst、scout 與 Explore 的角色定義以及已安裝的分派政策，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒這些角色（以及 `auto` 下的分派指引）來自較舊的範本。要回到 0.28.0，重新安裝 0.28.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.28.0 的角色定義與政策；不需要先移除。0.28.0 要求主 Agent 依問題提出或採用一項要求或修正之前，先簡短說明這個情況在一般使用中或適用的威脅模型下何時會發生、最壞而可信的後果，以及既有規則是否已經涵蓋，並優先沿用或修正既有規則；這項權衡不改變什麼會擋下。它改了已安裝的分派政策，讓主 Agent 在提出或採用這類要求或修正之前也會載入分派 skill，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒分派指引來自較舊的範本。要回到 0.27.1，重新安裝 0.27.1 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.27.1 的政策；不需要先移除。0.27.1 修正 `/cc-feather:handoff-tidy` 的兩條寫入規則：一次確認要寫入同一份紀錄多次時（例如兩項合併進同一個目標），現在能全部寫完，每次寫入都以前一次寫入存下的內容為基礎，不會蓋掉前一次加入的內容；這個指令完成的紀錄若封存失敗，會依交接 skill 的規則重試。它只改了這個指令的文字，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.27.0，重新安裝 0.27.0 的 plugin 即可；不需要做 setup update 或先移除。0.27.0 新增 `/cc-feather:handoff-tidy`：只能由你執行的指令，從交接紀錄建議下一項工作，指出可合併、過時或不完整的紀錄，或不執行專案程式碼，拿指定或全部工作的紀錄項目對照目前專案，並只寫入你確認的部分。它沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.26.0，重新安裝 0.26.0 的 plugin 即可；不需要做 setup update 或先移除，這個指令寫入的紀錄仍是一般的交接紀錄。0.26.0 改了 `auto` 下計畫的審查方式：每個 claim 完成時就審查並保留它的通過結果，最終檢查會重跑每個 claim 的主要驗收，並以修正用的 claim 修正失敗，對抗式審查只在最終 commit 執行一次並記錄它的發現，派工紀錄讓審查狀態跨 session 延續，主 Agent 只在最後問你一次。它只改了分派 skill 的流程，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session，新 session 就會使用新的流程；不需要做 `/cc-feather:setup update`。要回到 0.25.0，重新安裝 0.25.0 的 plugin 即可；不需要做 setup update 或先移除，較早的版本會忽略留在 `.feather/dispatch/` 下的派工紀錄。從 0.25.0 起，審查不再詢問就會執行儲存庫的程式碼，而審查別人的變更時，需要由你說明它來自別人。詳見[儲存庫安全](#儲存庫安全)。此外，較早版本的安裝在更新前仍保留舊的指引格式，check 也會提醒分派指引來自較舊的範本。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
+Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。0.33.0 新增 Checkout lease：存在 main worktree 下 `.feather/leases/` 的合作式紀錄，表示某個 session 正在使用 Git 儲存庫的某一個 checkout 來修改它，在 linked worktree 上另由 Git worktree lock 保護；選用的 `leases` setup 元件告訴主 Agent 何時取得、續期與歸還 lease；`/cc-feather:worktrees` 列出每個 checkout 的 lease、lock 與留在其中的工作，詳見 [Checkout lease](#checkout-lease)。lease 只約束遵守規則的 session，它的 lock 依賴 Claude Code 的清理會略過已鎖定的 worktree。它沒有改任何角色定義或 handoff 與分派的政策範本，setup 工具只新增 `leases` 元件，而 `both` 從不包含它，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要使用 lease，請安裝 `leases` 元件；project 範圍的區塊只透過 linked worktree 自己的 CLAUDE.md 才能到達在那裡啟動的 session，所以要讓每個 session 都遵守規則，請在使用者範圍安裝，或 commit 並 push project 的 CLAUDE.md 區塊，handoff 與分派元件也是如此。要回到 0.32.0，先在每個裝有 `leases` 元件的範圍執行 `/cc-feather:setup remove` 移除它，因為 0.32.0 的 setup 工具會以 `state component schema mismatch` 拒絕這樣的範圍且不做任何變更，再重新安裝 0.32.0 的 plugin。重新安裝之前請歸還仍持有的 lease，因為 0.32.0 沒有 lease 工具，被遺留的 lease 會保留它的 Git worktree lock，直到 `git worktree unlock` 移除它。0.32.0 新增資源風險執行：計畫審查把執行檢查或驗證時可預見會耗盡記憶體、時間或機器的 claim 標為 Resource-risk claim，並為有風險的部分提出 Execution method，主 Agent 以來自你、計畫或你的指引的預算核准它，角色只在 Runner 內執行那個部分（Runner 是分派 skill 中新增的啟動器，限制一個指令整個 process tree 的記憶體、它的時間與輸出），界限不明或不符合預算的新的或修改過的測試或 probe 交回主 Agent 而不執行，交回或被停下的部分記為 Observed resource risk，詳見[參考文件](docs/reference.zh-TW.md#資源限制)。cc-feather 不規定任何預算，硬性限制只涵蓋透過 Runner 執行的指令，不涵蓋交給已經在執行的服務的工作，也不涵蓋在 shell 之外執行程式碼的工具。Runner 的呼叫經過你平常的權限處理；不要新增允許所有 Runner 呼叫的權限規則，因為這種規則等於允許任何指令透過 Runner 執行。它改了 analyst、executor、security-executor、verifier、reviewer 與 adversary 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒這些角色來自較舊的範本。要回到 0.31.0，重新安裝 0.31.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.31.0 的角色定義；不需要先移除。0.31.0 把 linked worktree 的交接紀錄存在 main worktree 的存放處，新增歷史鎖與清除過期鎖的 `unlock` 指令，列出留在其他 checkout 的紀錄，並以 `adopt` 移動你確認的部分，詳見[交接相容性](#交接相容性)。這一版同樣沒有改任何角色定義、已安裝的政策範本或 setup 工具對它們的產生方式，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。在 codex-feather 採用同一個 runtime 之前，Codex session 仍把紀錄寫在 linked worktree 內；Claude session 的列表會把它們列在那個 checkout 的存放處下，`adopt` 會移動你確認的部分。要回到 0.30.0，重新安裝 0.30.0 的 plugin 即可；不需要做 setup update 或先移除，寫入 main worktree 存放處的紀錄在 main worktree 中仍可由 0.30.0 讀取，而 linked worktree 中的 0.30.0 session 又只會看到該 worktree 自己的紀錄。0.30.0 把每條分派規則只寫在負責它的檔案中，其他適用的地方改為指向它，主 Agent 在依賴 review state 的決定之前會完整讀過它；[參考文件](docs/reference.zh-TW.md)改為說明每條規則的用途並連到寫明它的流程，沒有任何規則改變。以連結所及的所有檔案計算，每個入口少載入約 9 KB；以主 Agent 被指示讀取的檔案計算，每個入口都載入更多，其中預覽、Stop threshold 指令與 claim 實作的 brief 增加最多，因為它們現在要完整讀 review state；兩種計算都記錄在[結果檔](docs/specs/delegation-dedupe-results.md#loading-cost)。它沒有改任何角色定義、已安裝的政策範本或 setup 工具對它們的產生方式，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.29.0，重新安裝 0.29.0 的 plugin 即可；不需要做 setup update 或先移除。0.29.0 讓分派信任儲存庫：主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取它，審查只保留讓結果正確的檢查（`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案），而且除非你在這個 session 中限制，審查會執行儲存庫的程式碼；要不要信任一個儲存庫由你決定，剩下的風險列在[儲存庫安全](#儲存庫安全)。說明變更來自別人已經不會阻止審查執行它，所以要阻止，請在你自己的訊息中說程式碼不得執行。它改了 reviewer、verifier、adversary、analyst、scout 與 Explore 的角色定義以及已安裝的分派政策，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒這些角色（以及 `auto` 下的分派指引）來自較舊的範本。要回到 0.28.0，重新安裝 0.28.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.28.0 的角色定義與政策；不需要先移除。0.28.0 要求主 Agent 依問題提出或採用一項要求或修正之前，先簡短說明這個情況在一般使用中或適用的威脅模型下何時會發生、最壞而可信的後果，以及既有規則是否已經涵蓋，並優先沿用或修正既有規則；這項權衡不改變什麼會擋下。它改了已安裝的分派政策，讓主 Agent 在提出或採用這類要求或修正之前也會載入分派 skill，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒分派指引來自較舊的範本。要回到 0.27.1，重新安裝 0.27.1 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.27.1 的政策；不需要先移除。0.27.1 修正 `/cc-feather:handoff-tidy` 的兩條寫入規則：一次確認要寫入同一份紀錄多次時（例如兩項合併進同一個目標），現在能全部寫完，每次寫入都以前一次寫入存下的內容為基礎，不會蓋掉前一次加入的內容；這個指令完成的紀錄若封存失敗，會依交接 skill 的規則重試。它只改了這個指令的文字，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.27.0，重新安裝 0.27.0 的 plugin 即可；不需要做 setup update 或先移除。0.27.0 新增 `/cc-feather:handoff-tidy`：只能由你執行的指令，從交接紀錄建議下一項工作，指出可合併、過時或不完整的紀錄，或不執行專案程式碼，拿指定或全部工作的紀錄項目對照目前專案，並只寫入你確認的部分。它沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。要回到 0.26.0，重新安裝 0.26.0 的 plugin 即可；不需要做 setup update 或先移除，這個指令寫入的紀錄仍是一般的交接紀錄。0.26.0 改了 `auto` 下計畫的審查方式：每個 claim 完成時就審查並保留它的通過結果，最終檢查會重跑每個 claim 的主要驗收，並以修正用的 claim 修正失敗，對抗式審查只在最終 commit 執行一次並記錄它的發現，派工紀錄讓審查狀態跨 session 延續，主 Agent 只在最後問你一次。它只改了分派 skill 的流程，沒有改任何已安裝的角色定義或政策，所以既有安裝只要更新 plugin 再開新 session，新 session 就會使用新的流程；不需要做 `/cc-feather:setup update`。要回到 0.25.0，重新安裝 0.25.0 的 plugin 即可；不需要做 setup update 或先移除，較早的版本會忽略留在 `.feather/dispatch/` 下的派工紀錄。從 0.25.0 起，審查不再詢問就會執行儲存庫的程式碼，而審查別人的變更時，需要由你說明它來自別人。詳見[儲存庫安全](#儲存庫安全)。此外，較早版本的安裝在更新前仍保留舊的指引格式，check 也會提醒分派指引來自較舊的範本。移除 plugin 不會自動刪除外部角色／政策，請先移除想清理的 setup scope。使用者修改過的管理檔會保留為衝突，交接紀錄不刪除。
 
 ```text
 /cc-feather:setup 更新目前專案已安裝的角色與指引，保留模型與審查模式

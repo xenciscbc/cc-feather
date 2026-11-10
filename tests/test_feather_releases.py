@@ -1511,19 +1511,21 @@ class ResourceRiskRunsReleaseTests(unittest.TestCase):
         section = self.section(self.text(name), heading)
         return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
 
-    def test_manifest_is_0_32_0(self):
-        self.assertEqual("0.32.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.33.0, checkout leases).
 
     def test_updates_sections_start_with_the_resource_risk_note_in_both_languages(self):
         previous = HandoffWorktreeStoreReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = CheckoutLeasesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.32.0 note starts right after the section's opening sentence, its sentences in order, before 0.31.0's.
+            # The 0.32.0 note starts right after the 0.33.0 note, its sentences in order, before 0.31.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -1645,6 +1647,281 @@ class ResourceRiskRunsReleaseTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:40]):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("No setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
+                                                            "Ticket 04:", "Ticket 05:", "Ticket 06:", "Ticket 07:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.33.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(CheckoutLeasesReleaseTests.ENTRY_HEADING))
+
+
+class CheckoutLeasesReleaseTests(unittest.TestCase):
+    """0.33.0 (docs/specs/checkout-leases.md, Further Notes' release and Out of Scope; ticket 07): the manifest version is
+    0.33.0; the Updates note says what Checkout leases are, that a lease is cooperative and its lock relies on Claude
+    Code's cleanup skipping locked worktrees, that existing installations need no setup update, how the rules reach a
+    session started in a linked worktree, and how to go back to 0.32.0 by removing the `leases` component first, in both
+    languages; both READMEs, the setup documentation and the compatibility notes describe leases, the `leases` component,
+    the lease format and location for other tools, the cooperative limits and the reliance on Claude Code's cleanup; the
+    validation entry records the tickets, the setup determination and downgrade check, the test runs, the rehearsal
+    with its Execution method, the interactive session and its finding, the tag and the review round."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.33.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         "Plugin updates refresh the package; run setup update for the selected components to refresh external deployments, then start a fresh session, because roles and guidance are loaded when a session starts. ",
+         "0.33.0 adds Checkout leases: a cooperative record in `.feather/leases/` under the main worktree that one session is using one checkout of a Git repository to change it, protected on a linked worktree by a Git worktree lock, the opt-in `leases` setup component that tells main when to take, renew and return a lease, and `/cc-feather:worktrees`, which lists every checkout with its lease, lock and the work left in it, as [Checkout leases](#checkout-leases) describes.",
+         "A lease binds only sessions that follow the rules, and its lock relies on Claude Code's cleanup skipping locked worktrees.",
+         "It changes no role definition and no handoff or delegation policy template, and the setup tool only gains the `leases` component, which `both` never includes, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "To keep leases, install the `leases` component; a project-scope block reaches a session started in a linked worktree only through that worktree's own CLAUDE.md, so install it in user scope, or commit and push the project CLAUDE.md block, to make every session follow the rules, and the same holds for the handoff and delegation components.",
+         "To go back to 0.32.0, first run `/cc-feather:setup remove` for the `leases` component in every scope where it is installed, because the 0.32.0 setup tool refuses such a scope with `state component schema mismatch` and changes nothing, then reinstall the 0.32.0 plugin.",
+         "Return any lease still held before reinstalling, since 0.32.0 has no lease tool and a lease left behind keeps its Git worktree lock until `git worktree unlock` removes it."),
+        ("## 更新、移除與驗證\n",
+         "Plugin 更新只更新套件，需另跑 setup update 更新選定的已部署項目，完成後開新 session，因為角色與指引在 session 開始時載入。",
+         "0.33.0 新增 Checkout lease：存在 main worktree 下 `.feather/leases/` 的合作式紀錄，表示某個 session 正在使用 Git 儲存庫的某一個 checkout 來修改它，在 linked worktree 上另由 Git worktree lock 保護；選用的 `leases` setup 元件告訴主 Agent 何時取得、續期與歸還 lease；`/cc-feather:worktrees` 列出每個 checkout 的 lease、lock 與留在其中的工作，詳見 [Checkout lease](#checkout-lease)。",
+         "lease 只約束遵守規則的 session，它的 lock 依賴 Claude Code 的清理會略過已鎖定的 worktree。",
+         "它沒有改任何角色定義或 handoff 與分派的政策範本，setup 工具只新增 `leases` 元件，而 `both` 從不包含它，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "要使用 lease，請安裝 `leases` 元件；project 範圍的區塊只透過 linked worktree 自己的 CLAUDE.md 才能到達在那裡啟動的 session，所以要讓每個 session 都遵守規則，請在使用者範圍安裝，或 commit 並 push project 的 CLAUDE.md 區塊，handoff 與分派元件也是如此。",
+         "要回到 0.32.0，先在每個裝有 `leases` 元件的範圍執行 `/cc-feather:setup remove` 移除它，因為 0.32.0 的 setup 工具會以 `state component schema mismatch` 拒絕這樣的範圍且不做任何變更，再重新安裝 0.32.0 的 plugin。",
+         "重新安裝之前請歸還仍持有的 lease，因為 0.32.0 沒有 lease 工具，被遺留的 lease 會保留它的 Git worktree lock，直到 `git worktree unlock` 移除它。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    # Both READMEs: the section between Handoff compatibility and Updates, its statements in order.
+    README_SECTIONS = (
+        ("README.md", "\n## Checkout leases\n", "\n## Handoff compatibility\n", "\n## Updates and validation\n", (
+            "A Checkout lease is a cooperative record that one session is using one checkout of a Git repository, the main worktree or a linked worktree, to change it.",
+            "It states a claim of use and when it began, never proof that its holder is still running, and taking one never authorises changing, resetting or removing what the checkout already holds.",
+            "With the `leases` setup component installed, main takes a lease before it changes a checkout,",
+            "No lease is taken over automatically, and no age makes a lease left behind.",
+            "parking never deletes a branch or a worktree.",
+            "it reports facts and never calls a checkout free.",
+            "The `leases` component is installed only when you select it by name, and `both` never includes it.",
+            "A project-scope rule block lives in that checkout's CLAUDE.md, and a session started in a linked worktree loads only that worktree's own CLAUDE.md, so it sees the lease rules only when the block is tracked, committed and, for worktrees Claude Code bases on the remote's default branch, pushed.",
+            "To make every session follow them, install `leases` in user scope, or commit and push the project CLAUDE.md block.",
+            "The same holds for the handoff and delegation components' project-scope blocks.",
+            "Leases live in `.feather/leases/` under the main worktree, one `<key>.json` per checkout, keyed by Git's per-worktree administration identity, with `.main` for the main worktree;",
+            "with the reason `cc-feather lease <lease_id>`, so `git worktree prune`, a plain `git worktree remove` and Claude Code's cleanup leave the worktree alone,",
+            "This relies on Claude Code's cleanup skipping locked worktrees and never releasing a lock it did not set.",
+            "An interactive Claude Code session releases its own session lock on exit, while a headless `-p` run leaves it, so a lease still held when an interactive session exits is unlocked until the next listing or acquire locks it again with the lease's own lock.",
+            "[setup documentation](docs/setup.md#checkout-leases)",
+            "A lease is cooperative: it binds only sessions that follow the rules.",
+            "It does not stop, detect or manage another session's processes, and it does not keep a person or a tool that ignores leases, a codex-feather session included, out of a checkout.",
+            "One checkout shared between Windows and WSL, or between machines, is not covered.")),
+        ("README.zh-TW.md", "\n## Checkout lease\n", "\n## 交接相容性\n", "\n## 更新、移除與驗證\n", (
+            "Checkout lease 是一份合作式紀錄，表示某個 session 正在使用 Git 儲存庫的某一個 checkout（main worktree 或 linked worktree）來修改它。",
+            "它只聲明使用與開始時間，從不證明持有者仍在執行；取得 lease 也從不授權變更、重設或移除該 checkout 原有的內容。",
+            "安裝 `leases` setup 元件後，主 Agent 在變更 checkout 之前取得 lease，",
+            "lease 從不自動接手，也沒有任何經過時間會讓 lease 算作被遺留。",
+            "停放從不刪除 branch 或 worktree。",
+            "它只回報事實，從不說某個 checkout 是空閒的。",
+            "`leases` 元件只有你指名選擇時才安裝，`both` 從不包含它。",
+            "project 範圍的規則區塊位於該 checkout 的 CLAUDE.md，而在 linked worktree 中啟動的 session 只載入該 worktree 自己的 CLAUDE.md，所以只有區塊已被追蹤、已 commit，並且（對 Claude Code 以遠端預設 branch 為基礎建立的 worktree）已 push 時，那個 session 才看得到 lease 規則。",
+            "要讓每個 session 都遵守，請在使用者範圍安裝 `leases`，或 commit 並 push project 的 CLAUDE.md 區塊。",
+            "handoff 與 agent 分派元件的 project 範圍區塊也是如此。",
+            "lease 存在 main worktree 下的 `.feather/leases/`，每個 checkout 一個 `<key>.json`，以 Git 對每個 worktree 的管理識別為 key，main worktree 用 `.main`；",
+            "原因為 `cc-feather lease <lease_id>` 的 Git worktree lock 保護，所以 `git worktree prune`、一般的 `git worktree remove` 與 Claude Code 的清理都不會動到那個 worktree，",
+            "這依賴 Claude Code 的清理會略過已鎖定的 worktree，而且從不解除不是它設定的 lock。",
+            "互動式 Claude Code session 結束時會解除自己的 session lock，而 headless 的 `-p` 執行會留下它，所以互動式 session 結束時仍持有的 lease 會沒有 lock，直到下一次列出或取得時以 lease 自己的 lock 重新鎖定。",
+            "[setup 文件](docs/setup.md#checkout-leases)",
+            "lease 是合作式的：它只約束遵守規則的 session。",
+            "它不會停止、偵測或管理其他 session 的 process，也不會把忽略 lease 的人或工具（包括 codex-feather 的 session）擋在 checkout 之外。",
+            "Windows 與 WSL 之間、或不同機器之間共用同一個 checkout 不在涵蓋範圍內。")),
+    )
+    # Both READMEs list the two new skills and the `leases` component, and `both` no longer reads as every component.
+    README_LISTINGS = {
+        "README.md": (
+            "- `/cc-feather:leases`: take, renew, take over, return and list Checkout leases; main loads it when it keeps leases. See [Checkout leases](#checkout-leases).\n",
+            "- `/cc-feather:worktrees`: list every checkout of this repository with its Checkout lease, Git worktree lock and the work left in it; only you can run it.",
+            "| leases | The Checkout lease rules in the instruction file; not installed unless you select it by name | Removes the rules only; lease records and Git worktree locks remain |\n",
+            "| both | Handoff and delegation; never leases |"),
+        "README.zh-TW.md": (
+            "| `/cc-feather:leases` | 取得、續期、接手、歸還與列出 Checkout lease；主 Agent 維護 lease 時載入。見 [Checkout lease](#checkout-lease) |\n",
+            "| `/cc-feather:worktrees` | 列出這個儲存庫的每個 checkout，以及它的 Checkout lease、Git worktree lock 與留在其中的工作；只能由你執行。",
+            "| leases | 指示檔中的 Checkout lease 規則；只有你指名選擇時才安裝 | 只移除規則；lease 紀錄與 Git worktree lock 仍保留 |\n",
+            "| 兩者（both） | handoff 與 agent 分派；不含 leases |"),
+    }
+
+    # The setup documentation's section: the setup determination, going back, the reach of the rules, the format and
+    # location for other tools, the cooperative limits and the reliance on Claude Code's cleanup, in order.
+    SETUP_HEADING = "\n## Checkout leases\n"
+    SETUP = (
+        "Updating from 0.32.0 needs no setup update:",
+        "so an existing installation checks with no warning and shows `leases` as not installed.",
+        "To go back to 0.32.0, run `remove --component leases` in every scope where it is installed before reinstalling the 0.32.0 plugin: the 0.32.0 setup tool refuses a scope whose state records `leases` with `state component schema mismatch`, exit 2, and changes nothing, for check and update alike.",
+        "Reach of the rules: a project-scope block lives in that checkout's instruction file, and a session started in a linked worktree loads only that worktree's own CLAUDE.md.",
+        "It therefore sees the lease rules only when the block is tracked, committed and, for worktrees Claude Code bases on the remote's default branch, pushed.",
+        "To make every session follow them, install `leases` in user scope, or commit and push the project CLAUDE.md block.",
+        "The same holds for the handoff and delegation components' project-scope blocks.",
+        "Format and location for other tools: leases live in `.feather/leases/` under the main worktree, whatever a checkout's handoff tracking choice or explicit root,",
+        "A lease is a UTF-8 JSON object with `schema_version` (1), `checkout` (`key`, and `path` for display only), `lease_id` (different on every acquisition), `session`, `host`, `runtime`, `started` and `last_activity` (zoned times), `purpose`, `diagnostic_pid` (the short-lived tool process's, never a sign that the holder is alive) and, when a Claude Code session lock was accepted, `accepted_lock`.",
+        "`<key>.lock` beside the lease, created exclusively and never waited on or broken.",
+        "The directory ignores itself with its own `.gitignore` holding `*`.",
+        "A held lease on a linked worktree is mirrored by a Git worktree lock with the reason `cc-feather lease <lease_id>`,",
+        "The tool never removes or changes a lock whose reason does not name one of its leases.",
+        "codex-feather does not follow the protocol; the format only stays usable by it.",
+        "Cooperative limits: a lease binds only sessions that follow the rules.",
+        "A Git worktree lock only keeps `git worktree prune`, a plain `git worktree remove` and Claude Code's cleanup away from a leased worktree.",
+        "One checkout shared between Windows and WSL, or between machines, is not covered.",
+        "Reliance on Claude Code: the lock protects a leased worktree from Claude Code's periodic cleanup only because that cleanup skips locked worktrees and never releases a lock it did not set, as Claude Code's documentation stated on 2026-11-09.",
+        "A headless `-p` run leaves its session lock after it ends, while an interactive session releases it on exit, so a lease still held when an interactive session exits is unlocked until the next `list` or `acquire` locks it again with the lease's own lock.",
+        "[setup validation](setup-validation.md#0330-checkout-leases)",
+    )
+
+    COMPATIBILITY_HEADING = "\n## Checkout leases (0.33.0)\n"
+    COMPATIBILITY = (
+        "No file of the handoff runtime changes and the upstream manifest is unchanged;",
+        "its listing reads handoff records only through the handoff tool's own read-only `list`,",
+        "Leases are a new format, not part of codex-feather's contract:",
+        "codex-feather does not follow the lease protocol, and making it do so is out of scope; the format only stays usable by it.",
+        "A Codex session therefore neither takes nor respects a lease,",
+        "that protection relies on Claude Code's cleanup skipping locked worktrees and never releasing a lock it did not set.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_33_0(self):
+        self.assertEqual("0.33.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_checkout_leases_note_in_both_languages(self):
+        previous = ResourceRiskRunsReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            for sentence in sentences:
+                with self.subTest(readme=name, sentence=sentence[:30]):
+                    self.assertEqual(section.count(sentence), 1)
+            # The 0.33.0 note starts right after the section's opening sentence, its sentences in order, before 0.32.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
+                    self.assertLess(section.index(earlier), section.index(later))
+
+    def test_updates_sections_need_no_setup_update_and_remove_leases_to_go_back(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # No setup update after the plugin update; going back needs the leases component removed first.
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`/cc-feather:setup remove`"), 1)
+                self.assertIn("`state component schema mismatch`", note)
+                self.assertLess(note.index("`/cc-feather:setup remove`"), note.index("0.32.0 的 plugin" if name.endswith("zh-TW.md") else "reinstall the 0.32.0 plugin"))
+
+    def test_readmes_describe_checkout_leases_in_both_languages(self):
+        for name, heading, before, after, sentences in self.README_SECTIONS:
+            text = self.text(name)
+            with self.subTest(readme=name):
+                self.assertEqual(text.count(heading), 1)
+                # The section sits after Handoff compatibility and right before Updates.
+                self.assertLess(text.index(before), text.index(heading))
+                self.assertLess(text.index(heading), text.index(after))
+                self.assertNotIn("\n## ", text[text.index(heading) + len(heading):text.index(after)])
+            self.assert_in_order(self.section(text, heading), sentences, name)
+            self.assertIn("[leases skill](skills/leases/SKILL.md)", self.section(text, heading))
+        for name, listings in self.README_LISTINGS.items():
+            text = self.text(name)
+            for listing in listings:
+                with self.subTest(readme=name, listing=listing[:40]):
+                    self.assertEqual(text.count(listing), 1)
+        # Both README links reach the setup documentation's section and the validation entry it links.
+        self.assertEqual(self.text("docs/setup.md").count(self.SETUP_HEADING), 1)
+
+    def test_setup_document_describes_leases_for_users_and_other_tools(self):
+        text = self.text("docs/setup.md")
+        self.assertEqual(text.count(self.SETUP_HEADING), 1)
+        section = self.section(text, self.SETUP_HEADING)
+        self.assert_in_order(section, self.SETUP, "docs/setup.md")
+        self.assertIn("[leases skill](../skills/leases/SKILL.md)", section)
+        self.assertNotIn("Setup update is required", section)
+
+    def test_compatibility_notes_describe_leases(self):
+        text = self.text("docs/compatibility.md")
+        self.assertEqual(text.count(self.COMPATIBILITY_HEADING), 1)
+        section = self.section(text, self.COMPATIBILITY_HEADING)
+        self.assert_in_order(section, self.COMPATIBILITY, "docs/compatibility.md")
+        self.assertIn("[setup documentation](setup.md#checkout-leases)", section)
+        # The section is the file's last, added rather than rewriting an earlier one.
+        self.assertTrue(text.rstrip("\n").endswith(section.rstrip("\n")))
+
+    # The validation entry: the spec and its tickets with their commits, the setup determination with its evidence and
+    # the downgrade check, the test runs, the rehearsal with its Execution method and scenarios, the interactive session
+    # and its finding, the user scope left unchanged, what the tests cannot show, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.33.0 checkout leases\n"
+    ENTRY = (
+        "Implements [the Checkout leases spec](specs/checkout-leases.md), added in ce50929 and revised in 0034bb0, 2bf0f96, 39084ce and 529c71e after plan review calls 1 to 4,",
+        "ticket 01, acquire, release and list, in eb5e054 and 7221f88;",
+        "ticket 02, the Git worktree lock that protects a held lease, in 2a6cc9f;",
+        "ticket 03, renew and take over, in c762732;",
+        "in 8ee6a53 and 717e91a;",
+        "ticket 05, parking a merged worktree, in 9642d79;",
+        "in d26bd22;",
+        "[ADR 0020](adr/0020-checkout-leases-are-cooperative-records-mirrored-by-git-worktree-locks.md)",
+        "**No setup update is required.**",
+        "`git diff-tree -r --name-only v0.32.0 HEAD -- templates skills/setup scripts` lists `scripts/feather_config.py`, `skills/setup/SKILL.md` and the new `templates/leases.md`:",
+        "so existing installations need only the plugin update and a fresh session.",
+        "this release's `check` reported both installed, no warning, `role_update_required: false` and `leases` not installed, and its `update --component both` preview listed no change.",
+        "v0.32.0's `check` and `update --component delegation` each refused with `state component schema mismatch`, exit 2, and every file of the project stayed byte-identical;",
+        "To go back to 0.32.0, run `/cc-feather:setup remove` for the `leases` component in every scope where it is installed and return any lease still held, then reinstall the 0.32.0 plugin.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "each ran 1268 tests at the commit carrying this entry, all passing with 29 skips and the same count in both forms",
+        "(the 0.32.0 release ran 1117 tests with 29 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "Live rehearsal (2026-11-10, ticket 07). The candidate commit d26bd22 was exported with `git archive` and loaded only through `--plugin-dir`",
+        "The candidate's setup installed only the `leases` component in the clone's project scope;",
+        "This ticket is a Resource-risk claim.",
+        "inside the cc-feather Runner with `--memory-mib 1536 --time-seconds 1200`, at most two sessions at once and 2 hours of rehearsal in total, the budget from the user's own statement on 2026-11-10 choosing plan review's suggestion.",
+        "No run was contained, refused or stopped by a limit, so there is no Observed resource risk.",
+        "One session, s2-C, was killed on purpose by the scenario, 40 s after its lease appeared, which is not a limit stop.",
+        "- Two sessions on one worktree:",
+        "- A killed session and a takeover:",
+        "- A merged parallel worktree:",
+        "a liveness reading the rules disclaim",
+        "Interactive session (2026-11-10, run by the user, Claude Code 2.1.321):",
+        "locked it at creation with `claude session lease-probe (pid N)`, the format the 2026-11-09 headless probes saw.",
+        "After exit the worktree had no lock at all: an interactive session releases its own session lock on exit, while the headless runs left theirs.",
+        "This difference breaks no spec rule:",
+        "`EnterWorktree` by name was not run interactively,",
+        "Finding, documented in the setup documentation and both READMEs: a project-scope rule block lives in that checkout's CLAUDE.md, and a session started in a linked worktree loads only that worktree's own CLAUDE.md,",
+        "The same holds for the handoff and delegation components' project-scope blocks.",
+        "76 files, were byte-identical before and after the rehearsal, and the installed cc-feather stayed 0.32.0.",
+        "Claude Code had auto-updated from 2.1.319, which the 2026-11-09 probes used, to 2.1.321.",
+        "neither they nor one rehearsal can show that a model always follows the rules.",
+        "Claude Code's periodic cleanup was not observed skipping a locked worktree;",
+        "`v0.33.0` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "No claim is Security-critical,",
+        "and READY on call 5 at 529c71e.",
+        "with a Deviation the user authorised on 2026-11-09,",
+        "the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
+    )
+
+    def test_validation_entry_records_the_release_rehearsal_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
         self.assertNotIn(".scratch", entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
