@@ -139,6 +139,18 @@ Runner 是分派 skill 中 cc-feather 的啟動器。它執行一個指令，對
 
 變更停止門檻絕不會改變次數。次數低於新值的步驟可以繼續，次數達到新值的步驟會停下，主 Agent 會列出因此繼續或停下的步驟。較高的值讓流程不問你就能繼續嘗試更久，代價見上方的成本，而且增加得比 K 快。
 
+### 相關測試驗收
+
+相關測試驗收（Related-test acceptance）改變主 Agent 在 spec、ticket 或計畫中撰寫 Claim 驗收的方式：開啟時，驗收列出與變更相關的測試模組，而不是完整測試；計畫的整體驗收仍是完整測試，由最終檢查執行。預設關閉。你可以告訴主 Agent 這個 session 要用的選擇，這不會寫入任何檔案；也可以用設定工具的 `review --related-tests` 儲存在 project 或 user 範圍（見[相關測試驗收](setup.md#related-test-acceptance)）。規則本身只寫在設定工具渲染進分派指引的[範本](../templates/related-tests.md)中；選擇如何套用、儲存與決定，寫在[setup 的相關測試驗收流程](../skills/setup/references/related-tests.md)。
+
+```text
+/cc-feather:related-tests on
+/cc-feather:related-tests off project
+/cc-feather:related-tests default user
+```
+
+用 `/cc-feather:related-tests` 設定，或用自己的話請主 Agent 設定，效果相同。不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。session 選擇不會帶到新的或恢復的 session，也不會寫進交接，而且 context 壓縮可能讓它遺失。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。它只改變主 Agent 撰寫驗收的方式，不改變任何審查或最終檢查的執行方式；變更只適用於之後撰寫的驗收，不改動已寫好的驗收。詳見[指令說明](../skills/related-tests/SKILL.md)。
+
 ### 分派預覽
 
 ```text

@@ -23,6 +23,7 @@
     "./skills/auto-on",
     "./skills/auto-off",
     "./skills/stop-threshold",
+    "./skills/related-tests",
     "./skills/adversarial-review",
     "./skills/leases",
     "./skills/worktrees"

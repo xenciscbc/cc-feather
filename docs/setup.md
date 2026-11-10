@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages fifteen skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy, delegation policy plus agents, or both, and the opt-in Checkout lease rules. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages sixteen skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy, delegation policy plus agents, or both, and the opt-in Checkout lease rules. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 
@@ -116,6 +116,8 @@ Related-test acceptance is a delegation setting that changes how main writes a C
 ```text
 python -B scripts/feather_config.py review --project /absolute/project --scope project --related-tests on
 ```
+
+`/cc-feather:related-tests <on|off|default> [session|project|user]` is the command for it, and a natural-language request follows the same procedure (`skills/setup/references/related-tests.md`). Without a scope, or with `session`, it sets the session choice, writes no file and runs no tool. `project` and `user` run the preview and apply above in an existing delegation installation of that scope, without a routine confirmation, then read show and report the saved choice and owning path; they do not install missing roles and never choose user scope unasked. A value other than `on`, `off` or `default`, or an unknown or conflicting scope, is refused or clarified before anything is applied or written. Because a session choice, or a choice saved during the conversation, is not in the guidance the session loaded, the procedure has main read and follow the rule from `templates/related-tests.md` while the setting in effect is on.
 
 A scope saved `on` carries the whole rule in its managed delegation block, after the automatic review paragraph and after a saved Stop threshold sentence, in auto and in off; project scope says it is on in this project and that this overrides broader Feather guidance. A project saved `off` states in one sentence in the same place that Related-test acceptance is off in this project and that this overrides broader Feather guidance. The rule is written once, in `templates/related-tests.md`, which the configuration tool renders; this document describes it without restating it. That guidance text is how main learns a saved choice: main writes acceptance while writing a spec, tickets or a plan, when the delegation skill is not necessarily loaded, so the loaded guidance carries the whole rule. A scope without a saved setting has no such text, so its guidance and state stay byte-identical to what 0.33.0 writes. Delegation guidance from a template older than the one the tool can edit is not changed: `--related-tests` asks for setup update first.
 

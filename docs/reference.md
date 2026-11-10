@@ -139,6 +139,18 @@ The Stop threshold is how many consecutive automatic calls without a pass stop a
 
 Changing the Stop threshold never changes a count. A step whose count is below the new value can resume and one whose count reaches it stops, and main lists the steps that resumed or stopped. A higher value lets the flow keep trying longer without asking you, at the cost under Cost above, which grows faster than K.
 
+### Related-test acceptance
+
+Related-test acceptance changes how main writes a Claim's acceptance in a spec, ticket or plan: with it on, the acceptance names the test modules related to the change instead of the full test suite, and the Plan's overall acceptance keeps the full suite, which the final check runs. It is off by default. Tell main a choice for the session, which writes nothing, or save one in project or user scope with the configuration tool's `review --related-tests` (see [Related-test acceptance](setup.md#related-test-acceptance)). The rule itself is written once, in the [template](../templates/related-tests.md) the configuration tool renders into the delegation guidance; how a choice is applied, saved and resolved is the [setup Related-test acceptance procedure](../skills/setup/references/related-tests.md).
+
+```text
+/cc-feather:related-tests on
+/cc-feather:related-tests off project
+/cc-feather:related-tests default user
+```
+
+`/cc-feather:related-tests` sets it, or asking main in your own words does the same. Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` saves it in an existing delegation installation of that scope, and it never installs delegation. A session choice does not carry into a new or resumed session and is not written into a handoff, and context compaction may drop it. Main uses your session choice, then the project's saved choice, then the user's, then off, so a project's `off` overrides a user's `on`; main never changes it on its own. It changes how main writes acceptance, not how any review or the final check runs, and a change applies to acceptance main writes from then on, not to acceptance already written. See [the command](../skills/related-tests/SKILL.md).
+
 ### Delegation preview
 
 ```text

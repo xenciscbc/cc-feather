@@ -36,6 +36,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work. Main may then, without asking, commit such work before its passes, push it to branches it created for the work and open pull requests; landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.
 - `/cc-feather:auto-off`: disable automatic review.
 - `/cc-feather:stop-threshold <2–10|default> [session|project|user]`: set the [Stop threshold](#stop-threshold) of automatic review for this session, or save it in project or user scope.
+- `/cc-feather:related-tests <on|off|default> [session|project|user]`: turn [Related-test acceptance](#related-test-acceptance) on or off for this session, or save it in project or user scope.
 - `/cc-feather:leases`: take, renew, take over, return and list Checkout leases; main loads it when it keeps leases. See [Checkout leases](#checkout-leases).
 - `/cc-feather:worktrees`: list every checkout of this repository with its Checkout lease, Git worktree lock and the work left in it; only you can run it. It is not read-only: it locks a held lease's worktree again when it has no lock, and removes leases whose checkout Git no longer registers.
 
@@ -221,6 +222,18 @@ The Stop threshold is how many consecutive automatic calls without a pass stop a
 ```
 
 Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` saves it in an existing delegation installation of that scope. Main uses your task or session choice, then the project's saved value, then the user's, then 2, and never changes it on its own. Changing it never changes a count. A higher value lets the flow keep trying longer without asking you, at a cost that grows faster than the value. See [Stop threshold](docs/reference.md#stop-threshold) in the reference.
+
+### Related-test acceptance
+
+Related-test acceptance changes how main writes a Claim's acceptance in a spec, ticket or plan: with it on, the acceptance names the test modules related to the change instead of the full test suite, and the Plan's overall acceptance keeps the full suite, which the final check runs. It is off by default.
+
+```text
+/cc-feather:related-tests on
+/cc-feather:related-tests off project
+/cc-feather:related-tests default user
+```
+
+Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` saves it in an existing delegation installation of that scope, and it never installs delegation. Main uses your session choice, then the project's saved choice, then the user's, then off, so a project's `off` overrides a user's `on`; main never changes it on its own. It changes how main writes acceptance, not how any review or the final check runs, and a change applies to acceptance main writes from then on, not to acceptance already written. See [Related-test acceptance](docs/reference.md#related-test-acceptance) in the reference.
 
 ### Delegation preview
 

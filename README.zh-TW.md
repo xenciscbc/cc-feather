@@ -38,6 +38,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；主 Agent 之後可不經詢問，在通過前 commit 這類工作、推送到它為此工作建立的 branch 並開 pull request，但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |
 | `/cc-feather:auto-off` | 關閉自動審查 |
 | `/cc-feather:stop-threshold <2–10 或 default> [範圍]` | 設定自動審查的[停止門檻](#停止門檻)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
+| `/cc-feather:related-tests <on、off 或 default> [範圍]` | 開啟或關閉[相關測試驗收](#相關測試驗收)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
 | `/cc-feather:leases` | 取得、續期、接手、歸還與列出 Checkout lease；主 Agent 維護 lease 時載入。見 [Checkout lease](#checkout-lease) |
 | `/cc-feather:worktrees` | 列出這個儲存庫的每個 checkout，以及它的 Checkout lease、Git worktree lock 與留在其中的工作；只能由你執行。它不是唯讀：持有中的 lease 所在 worktree 沒有 lock 時會重新上鎖，並移除 Git 已不再登記其 checkout 的 lease |
 
@@ -227,6 +228,18 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 ```
 
 不帶範圍（或用 `session`）只用於這個 session，不寫入任何檔案；`project` 或 `user` 會存進該範圍既有的分派安裝。主 Agent 依序採用你在這個任務或 session 的選擇、專案儲存的值、使用者儲存的值，最後才是 2，絕不自行更改。變更門檻絕不會改變次數。門檻越高，流程不問你就能重試越久，成本也比門檻增加得更快。詳見參考文件的[停止門檻](docs/reference.zh-TW.md#停止門檻)。
+
+### 相關測試驗收
+
+相關測試驗收（Related-test acceptance）改變主 Agent 在 spec、ticket 或計畫中撰寫 Claim 驗收的方式：開啟時，驗收列出與變更相關的測試模組，而不是完整測試；計畫的整體驗收仍是完整測試，由最終檢查執行。預設關閉。
+
+```text
+/cc-feather:related-tests on
+/cc-feather:related-tests off project
+/cc-feather:related-tests default user
+```
+
+不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。它只改變主 Agent 撰寫驗收的方式，不改變任何審查或最終檢查的執行方式；變更只適用於之後撰寫的驗收，不改動已寫好的驗收。詳見參考文件的[相關測試驗收](docs/reference.zh-TW.md#相關測試驗收)。
 
 ### 分派預覽
 

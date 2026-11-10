@@ -130,7 +130,7 @@ class WorktreesCommandTests(unittest.TestCase):
         skills = json.loads(read(".claude-plugin", "plugin.json"))["skills"]
         self.assertIn("./skills/worktrees", skills)
         self.assertEqual(skills.index("./skills/worktrees"), skills.index("./skills/leases") + 1)
-        self.assertIn("The plugin packages fifteen skills.", read("docs", "setup.md"))
+        self.assertIn("The plugin packages sixteen skills.", read("docs", "setup.md"))
 
 
 class LeasesSetupBlockTests(unittest.TestCase):
