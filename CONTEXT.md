@@ -56,6 +56,10 @@ _Avoid_: auto review, review switch
 The number of consecutive automatic calls without a pass that stops one step of the Automatic flow for a Plan or Claim, after which the step waits for the user's explicit request. The same number applies to every step; the default is 2. In the Automatic flow, the final check, which is not a counted step, also stops for the user when it fails at that many different commits in a row.
 _Avoid_: budget, retry limit
 
+**Related-test acceptance**:
+An optional delegation setting, off by default, under which main names in each Claim's acceptance it writes the tests related to the change instead of the full test suite, while the Plan's overall acceptance, or the only Claim of a Plan without one, keeps the full suite for the final check. It is chosen for a session, or saved for a project or the user as part of the managed delegation guidance, where a project's choice overrides the user's; only a scope with delegation installed can save it. It never changes acceptance the user wrote, existing specs and tickets, a fix Claim's acceptance or how the final check runs.
+_Avoid_: partial tests, quick tests, test scope
+
 **Automatic flow**:
 The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work. Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; this is the only review timing in auto. When a Claim that depends on another starts, and what stops with a stopped Claim, are review state's Dependent claims.
 _Avoid_: three-layer protection, pipeline
