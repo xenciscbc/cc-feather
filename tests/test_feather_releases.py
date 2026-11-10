@@ -1799,19 +1799,21 @@ class CheckoutLeasesReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_33_0(self):
-        self.assertEqual("0.33.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.34.0, related-test acceptance).
 
     def test_updates_sections_start_with_the_checkout_leases_note_in_both_languages(self):
         previous = ResourceRiskRunsReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = RelatedTestAcceptanceReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
             for sentence in sentences:
                 with self.subTest(readme=name, sentence=sentence[:30]):
                     self.assertEqual(section.count(sentence), 1)
-            # The 0.33.0 note starts right after the section's opening sentence, its sentences in order, before 0.32.0's.
+            # The 0.33.0 note starts right after the 0.34.0 note, its sentences in order, before 0.32.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
                 for earlier, later in zip(sentences, sentences[1:] + [previous_first]):
                     self.assertLess(section.index(earlier), section.index(later))
 
@@ -1926,6 +1928,131 @@ class CheckoutLeasesReleaseTests(unittest.TestCase):
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:",
                                                             "Ticket 04:", "Ticket 05:", "Ticket 06:", "Ticket 07:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.34.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(RelatedTestAcceptanceReleaseTests.ENTRY_HEADING))
+
+
+class RelatedTestAcceptanceReleaseTests(unittest.TestCase):
+    """0.34.0 (docs/specs/related-test-acceptance.md, Implementation Decisions' Release and State schema; ticket 03): the
+    manifest version is 0.34.0; the Updates note, the setup documentation and the validation entry say that existing
+    installations need only the plugin update and a fresh session, that a 0.33.x or older configuration tool rejects a
+    scope with a saved setting so a downgrade first sets it back to `default` there, and that a session choice needs
+    nothing, the README note in both languages; the validation entry records the tickets, the setup determination with
+    its upgrade and downgrade check, the test runs, the reviewing version, the tag and the review round."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.34.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.34.0 adds Related-test acceptance, a delegation setting that, when on, has main name the test modules related to a change in a Claim's acceptance instead of the full test suite, while the Plan's overall acceptance keeps the full suite, which the final check runs, and `/cc-feather:related-tests`, which sets it, as [Related-test acceptance](#related-test-acceptance) describes.",
+         "It changes no role definition and no handoff, delegation or leases policy template, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed, and a scope's guidance and state stay byte-identical until the setting is saved in it.",
+         "A 0.33.x or older configuration tool rejects a scope with a saved setting with `invalid delegation state schema` and changes nothing, so to go back to 0.33.0, first set it back to `default` there with `/cc-feather:related-tests default project` or `/cc-feather:related-tests default user` in every scope where you saved it, then reinstall the 0.33.0 plugin; a session choice needs nothing."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.34.0 新增相關測試驗收：一項 agent 分派設定，開啟時主 Agent 在 Claim 的驗收中列出與變更相關的測試模組，而不是完整測試，計畫的整體驗收仍是完整測試，由最終檢查執行；另新增設定它的 `/cc-feather:related-tests`，詳見[相關測試驗收](#相關測試驗收)。",
+         "它沒有改任何角色定義或 handoff、分派與 leases 的政策範本，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`，而且某個範圍在儲存這項設定之前，指引與狀態都保持逐位元組相同。",
+         "0.33.x 或更舊的設定工具會以 `invalid delegation state schema` 拒絕已儲存這項設定的範圍且不做任何變更，所以要回到 0.33.0，先在每個儲存過它的範圍以 `/cc-feather:related-tests default project` 或 `/cc-feather:related-tests default user` 把它設回 `default`，再重新安裝 0.33.0 的 plugin；session 的選擇不需要任何處理。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    # The setup documentation's Related-test acceptance section: the update, the downgrade and the session choice, in order.
+    SETUP_HEADING = "\n## Related-test acceptance\n"
+    SETUP = (
+        "Updating from 0.33.0 needs no setup update: 0.34.0 changes no role definition template and no handoff, delegation or leases policy template, so existing installations need only the plugin update and a fresh session, and a scope's guidance and state stay byte-identical until the setting is saved in it.",
+        "A 0.33.x or older configuration tool rejects a scope with a saved setting, so a downgrade first sets it back to `default` there.",
+        "That is `review --related-tests default` in every scope that saved the setting, run before the older plugin is reinstalled; a scope without a saved setting needs nothing, and a session choice, which writes nothing, needs nothing either.",
+    )
+
+    # The validation entry: the spec and its tickets with their commits, the setup determination with its evidence and
+    # the upgrade and downgrade check, the test runs, the reviewing version, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.34.0 related-test acceptance\n"
+    ENTRY = (
+        "Implements [the Related-test acceptance spec](specs/related-test-acceptance.md), added in 4820a9c and revised in e7c902e, 93b709c and 2ca8376 after plan review calls 1 to 3,",
+        "ticket 01, the saved setting, in 30943ed;",
+        "ticket 02, the `/cc-feather:related-tests` command and its shared procedure, in b11ce43;",
+        "ticket 03, this release, in the commit carrying this entry.",
+        "**No setup update is required.**",
+        "`git diff-tree -r --name-only v0.33.0 HEAD -- templates skills/setup scripts` lists `scripts/feather_config.py`, `skills/setup/SKILL.md`, the new `skills/setup/references/related-tests.md` and the new `templates/related-tests.md`:",
+        "no role definition template, `templates/CLAUDE.md`, `templates/handoff.md`, `templates/review-auto.md` or `templates/leases.md` changed, so existing installations need only the plugin update and a fresh session.",
+        "with v0.33.0's setup tool exported by `git archive v0.33.0`",
+        "the 22 guidance, state and role files of both scopes stayed byte-identical;",
+        "v0.33.0's `check`, `show` and `update --component delegation` each refused with `invalid delegation state schema`, exit 2,",
+        "and v0.33.0's `check` read both scopes again with status `ok` and no warning.",
+        "A 0.33.x or older configuration tool therefore rejects a scope with a saved setting, so a downgrade first sets it back to `default` there:",
+        "a scope without a saved setting, and a session choice, which writes nothing, need nothing.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "(the 0.33.0 release ran 1268 tests with 29 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
+        "with the installed cc-feather 0.33.0's roles and procedures, not this release's candidate.",
+        "`v0.34.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 03 are accepted and only after the user's go-ahead.",
+        "No claim is Security-critical,",
+        "and READY on call 4 at 2ca8376.",
+        "the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_34_0(self):
+        self.assertEqual("0.34.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_related_test_acceptance_note_in_both_languages(self):
+        previous = CheckoutLeasesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.34.0 note starts right after the section's opening sentence, its sentences in order, before 0.33.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_and_set_the_setting_back_to_go_back(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # No setup update after the plugin update; going back needs the setting set back to `default` first.
+                self.assertEqual(note.count(no_update.rstrip("。.")), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+                self.assertLess(note.index("`/cc-feather:related-tests default project`"),
+                                note.index("0.33.0 的 plugin" if name.endswith("zh-TW.md") else "reinstall the 0.33.0 plugin"))
+
+    def test_setup_document_states_the_update_and_the_downgrade(self):
+        text = self.text("docs/setup.md")
+        self.assertEqual(text.count(self.SETUP_HEADING), 1)
+        self.assert_in_order(self.section(text, self.SETUP_HEADING), self.SETUP, "docs/setup.md")
+
+    def test_validation_entry_records_the_release_check_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:")]
         self.assertEqual(tickets, sorted(tickets))
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
