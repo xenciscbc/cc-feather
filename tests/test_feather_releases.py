@@ -2014,16 +2014,18 @@ class RelatedTestAcceptanceReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_34_0(self):
-        self.assertEqual("0.34.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.35.0, resource-risk confirmation).
 
     def test_updates_sections_start_with_the_related_test_acceptance_note_in_both_languages(self):
         previous = CheckoutLeasesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = ResourceRiskConfirmationReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.34.0 note starts right after the section's opening sentence, its sentences in order, before 0.33.0's.
+            # The 0.34.0 note starts right after the 0.35.0 note, its sentences in order, before 0.33.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_and_set_the_setting_back_to_go_back(self):
@@ -2053,6 +2055,205 @@ class RelatedTestAcceptanceReleaseTests(unittest.TestCase):
         self.assertNotIn(".scratch", entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.35.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(ResourceRiskConfirmationReleaseTests.ENTRY_HEADING))
+
+
+class ResourceRiskConfirmationReleaseTests(unittest.TestCase):
+    """0.35.0 (docs/specs/resource-risk-confirmation.md, Implementation Decisions' Documents and Release, Further Notes'
+    Limits and Fewer stops with a default budget, Out of Scope; ticket 02): the manifest version is 0.35.0; both
+    reference documents describe the confirmation in their resource-limits section, paired in both languages; the
+    Updates note and the setup documentation say that the analyst role definition changed, so existing installations
+    need setup update, and how to go back to 0.34.0, the README note in both languages; the validation entry records the
+    tickets, the `git diff-tree` determination with its upgrade and downgrade check, the test runs, the reviewing
+    version, what the tests cannot show, the tag and the review round, and is the file's last."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.35.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.35.0 makes plan review's resource-risk mark a proposal that you adopt or drop: after a plan's plan review returns READY and before its first claim is implemented, main asks you once which proposed marks to adopt, showing each one's reason and estimate with its own recommendation, and asks any budget question an adopted claim needs in the same question, so a chain of claims does not stop later for a mark or a budget, as the [reference](docs/reference.md#resource-limits) describes.",
+         "Only a claim you adopt is a Resource-risk claim; a claim you drop is an ordinary claim, still covered by the Unbounded probe floor, and a plan with no proposed mark gets no new question.",
+         "It changes the analyst role definition, so existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` warns that analyst is from an older template.",
+         "To go back to 0.34.0, reinstall the 0.34.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.34.0 analyst role definition; no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.35.0 讓計畫審查的資源風險標示成為由你採用或捨棄的提議：計畫的計畫審查回傳 READY 之後、它的第一個 claim 實作之前，主 Agent 只問你一次要採用哪些提議的標示，列出每項的理由與估計並附上自己的建議，採用的 claim 需要的預算問題也併入同一個問題，所以一連串的 claim 之後不會再為了標示或預算停下，詳見[參考文件](docs/reference.zh-TW.md#資源限制)。",
+         "只有你採用的 claim 才是 Resource-risk claim；你捨棄的 claim 是一般的 claim，仍受 Unbounded probe 底線涵蓋，沒有任何提議標示的計畫不會多出新的問題。",
+         "它改了 analyst 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒 analyst 來自較舊的範本。",
+         "要回到 0.34.0，重新安裝 0.34.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.34.0 的 analyst 角色定義；不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # The role definitions this release changes (`git diff-tree -r --name-only v0.34.0 HEAD -- templates`), and those it
+    # does not.
+    CHANGED_ROLES = ("analyst",)
+    UNCHANGED_ROLES = ("scout", "mech-executor", "executor", "security-executor", "verifier", "reviewer", "adversary",
+                       "Explore")
+
+    # Both reference documents' resource-limits section: the proposal, the one ask, the dropped claim, where it applies,
+    # the approval and budget question at the same ask, the floor and the end-of-plan list, paired and in order.
+    REFERENCE = (
+        ("docs/reference.md", "\n### Resource limits\n", (
+            "plan review proposes it as a Resource-risk claim, estimates its peak with the basis and proposes an Execution method for the risky part.",
+            "The mark is a proposal that you adopt or drop: after the plan's plan review returns READY and before its first claim is implemented, main asks you once about the plan's proposals, in one question that shows each one's reason and estimate with main's recommendation, and only a claim you adopt is a Resource-risk claim.",
+            "A claim you drop is an ordinary claim, still covered by the floor below, and plan review proposes it again only with evidence your decision did not consider.",
+            "This holds in `auto` and after a plan review you request in `off`; a plan with no proposed mark gets no question.",
+            "For the claims you adopt, main approves their Execution methods at that same question, and a budget question it needs joins that question, so a chain of claims does not stop later for an approval or a budget; a default budget in your guidance that covers the claim leaves the budget question out.",
+            "This holds for unmarked and dropped claims, in `off` and for main's own reruns too.",
+            "carries it into later briefs of that claim and lists it at the end of the plan, next to each proposal you dropped with your reason.")),
+        ("docs/reference.zh-TW.md", "\n### 資源限制\n", (
+            "計畫審查提議把它標為 Resource-risk claim，估計峰值並附上依據，並為有風險的部分提出 Execution method。",
+            "這個標示是由你採用或捨棄的提議：計畫的計畫審查回傳 READY 之後、它的第一個 claim 實作之前，主 Agent 就計畫的提議只問你一次，在一個問題中列出每項提議的理由與估計，並附上主 Agent 的建議；只有你採用的 claim 才是 Resource-risk claim。",
+            "你捨棄的 claim 是一般的 claim，仍受下面的底線涵蓋，計畫審查只有在有你的決定沒有考慮到的證據時，才會再次提議它。",
+            "這在 `auto` 下適用，在 `off` 下你要求的計畫審查之後也適用；沒有任何提議標示的計畫不會多出問題。",
+            "對你採用的 claim，主 Agent 在同一個問題中核准它們的 Execution method，需要的預算問題也併入那個問題，所以一連串的 claim 之後不會再為了核准或預算停下；你的指引中涵蓋該 claim 的預設預算會讓那個問題省去預算問題。",
+            "沒有被標示或被捨棄的 claim、`off` 模式與主 Agent 自己的重跑也一樣適用。",
+            "帶進該 claim 之後的 brief，並在計畫結束時列出，旁邊附上你捨棄的每項提議與你的理由。")),
+    )
+    # The sentences these replace, which said that plan review's mark binds by itself.
+    REPLACED_REFERENCE = (
+        ("docs/reference.md", "plan review marks it a Resource-risk claim,"),
+        ("docs/reference.zh-TW.md", "計畫審查把它標為 Resource-risk claim，"),
+    )
+
+    # The setup documentation's added-roles section: the upgrade, then the way back, after 0.21.0's.
+    SETUP_HEADING = "\n## Added roles and incompatible role sets\n"
+    SETUP = (
+        RepositorySafetyReleaseTests.SETUP[-1],
+        "Upgrading to 0.35.0 needs setup update in every scope where delegation is installed, then a fresh session: it changes the analyst role template, and until the update `check` and `show` report analyst from an older template, and `model`, `review` and session export refuse.",
+        "To go back to 0.34.0 from 0.35.0, no remove is needed: 0.34.0 reads the state 0.35.0 writes, and its own setup update re-renders its role templates, so run setup update with 0.34.0 in every scope where delegation is installed, then start a fresh session.",
+    )
+
+    # The validation entry: the spec and its tickets with their commits, the setup determination with its evidence and
+    # the upgrade and downgrade check, the test runs, the reviewing version, what the tests cannot show, the tag and the
+    # review round.
+    ENTRY_HEADING = "\n## 0.35.0 resource-risk confirmation\n"
+    ENTRY = (
+        "Implements [the Resource-risk confirmation spec](specs/resource-risk-confirmation.md), written on 2026-11-11 and added in a8788ba after plan review call 1, with the changes the user authorised;",
+        "[ADR 0019](adr/0019-resource-risk-is-marked-at-plan-review-and-contained-by-the-runner.md)",
+        "ticket 01, the rule, the glossary entry and ADR 0019's amendment note, in cfa35fe;",
+        "ticket 02, the documents and this release, in the commit carrying this entry.",
+        "**Setup update is required.**",
+        "`git diff-tree -r --name-only v0.34.0 HEAD -- templates skills/setup scripts` lists only `templates/agents/analyst.md`:",
+        "Existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session;",
+        "To go back to 0.34.0, reinstall the 0.34.0 plugin and run `/cc-feather:setup update` the same way, then start a fresh session; no remove is needed.",
+        "with v0.34.0's setup tool exported by `git archive v0.34.0`",
+        "Its `update --component both` changed only `analyst.md` and `state.json` in each scope,",
+        "and the 22 guidance, state and role files of both scopes were byte-identical to the v0.34.0 installation.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "each ran 1329 tests on this release's working tree before its commit, all passing with 29 skips",
+        "(the 0.34.0 release ran 1298 tests with 29 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "The spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
+        "with the installed cc-feather 0.34.0's roles and procedures, not this release's candidate.",
+        "No live session ran with the 0.35.0 rule:",
+        "the tests show the text, not that a model always follows it.",
+        "A dropped Claim runs without the Runner requirement, so a risk that plan review saw correctly and the user dropped is caught only by the floor, which covers new or modified tests and probes, not unchanged checks the Plan lists.",
+        "a setup command or saved setting for a default budget remains possible follow-up work.",
+        "`v0.35.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 and 02 are accepted and only after the user's go-ahead.",
+        "No claim is Security-critical,",
+        "No claim is a Resource-risk claim: plan review proposed none.",
+        "and READY on call 2 at a8788ba.",
+        "the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_35_0(self):
+        self.assertEqual("0.35.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_confirmation_note_in_both_languages(self):
+        previous = RelatedTestAcceptanceReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.35.0 note starts right after the section's opening sentence, its sentences in order, before 0.34.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # The note asks for setup update after the plugin update and for going back, and never says it is not needed.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                self.assertNotIn(no_update, note)
+                self.assertNotIn("need only the plugin update", note)
+                self.assertNotIn("只要更新 plugin", note)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_names_only_the_role_definition_the_release_changes(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            for role in self.CHANGED_ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertIn(role, note)
+            for role in self.UNCHANGED_ROLES:
+                with self.subTest(readme=name, unchanged=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_to_the_reference_section_and_states_no_budget(self):
+        for name, (heading, _, *sentences), (link, document, target) in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES,
+                (("(docs/reference.md#resource-limits)", "docs/reference.md", "\n### Resource limits\n"),
+                 ("(docs/reference.zh-TW.md#資源限制)", "docs/reference.zh-TW.md", "\n### 資源限制\n"))):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertIn(link, note)
+                self.assertEqual(self.text(document).count(target), 1)
+                self.assertIsNone(ResourceRiskRunsReleaseTests.NUMBERS.search(note))
+
+    def test_reference_documents_describe_the_confirmation_in_both_languages(self):
+        for name, heading, sentences in self.REFERENCE:
+            text = self.text(name)
+            self.assertEqual(text.count(heading), 1)
+            section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+            self.assert_in_order(section, sentences, name)
+            # The section still links to the reference that states the rule, and states no budget.
+            with self.subTest(document=name):
+                self.assertIn("(../skills/delegation/references/resource-risk-runs.md)", section)
+                self.assertIsNone(ResourceRiskRunsReleaseTests.NUMBERS.search(section))
+        for name, sentence in self.REPLACED_REFERENCE:
+            with self.subTest(replaced=name):
+                self.assertNotIn(sentence, self.text(name))
+
+    def test_setup_document_states_the_upgrade_and_the_way_back(self):
+        text = self.text("docs/setup.md")
+        self.assertEqual(text.count(self.SETUP_HEADING), 1)
+        self.assert_in_order(self.section(text, self.SETUP_HEADING), self.SETUP, "docs/setup.md")
+
+    def test_validation_entry_records_the_release_check_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:")]
         self.assertEqual(tickets, sorted(tickets))
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))

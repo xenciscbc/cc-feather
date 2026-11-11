@@ -108,10 +108,10 @@ adversary 的限制是給模型的指示，只有你的權限設定（permission
 
 測試或 probe 可能耗盡記憶體、時間或整台機器，而 timeout 只限制時間，不限制記憶體。這由四層處理，預算來自你、計畫或你寫的指引，絕不來自 cc-feather：
 
-1. **計畫審查標示風險：** 對每個執行檢查或驗證時可預見會耗盡記憶體、時間或機器的 claim，計畫審查把它標為 Resource-risk claim，估計峰值並附上依據，並為有風險的部分提出 Execution method。沒有被標示的 claim 不因此就是安全的。
-2. **主 Agent 核准，Runner 圍住：** 主 Agent 核准 Execution method 時，預算依序取自你在這個 session 自己的陳述、計畫、專案的資源指引與你的資源指引；沒有任何來源說明預算，或需要的超過預設值時，主 Agent 會問你。之後角色只照核准的方式、只在 Runner 內執行有風險的部分，絕不調高限制；它判斷核准的方式不足時，回報 INCONCLUSIVE 並附上自己提出的方式，由主 Agent 決定。
-3. **每次執行都有底線：** 新的或修改過的測試或 probe，不論是誰寫的，只要界限不明或不符合預算，就是 Unbounded probe：不執行，交回主 Agent。沒有被標示的 claim、`off` 模式與主 Agent 自己的重跑也一樣適用。
-4. **記錄發生的事：** 交回的 probe 與被限制停下的執行，會在該 claim 記為 Observed resource risk；主 Agent 會告訴你，帶進該 claim 之後的 brief，並在計畫結束時列出。
+1. **計畫審查標示風險：** 對每個執行檢查或驗證時可預見會耗盡記憶體、時間或機器的 claim，計畫審查提議把它標為 Resource-risk claim，估計峰值並附上依據，並為有風險的部分提出 Execution method。沒有被標示的 claim 不因此就是安全的。這個標示是由你採用或捨棄的提議：計畫的計畫審查回傳 READY 之後、它的第一個 claim 實作之前，主 Agent 就計畫的提議只問你一次，在一個問題中列出每項提議的理由與估計，並附上主 Agent 的建議；只有你採用的 claim 才是 Resource-risk claim。你捨棄的 claim 是一般的 claim，仍受下面的底線涵蓋，計畫審查只有在有你的決定沒有考慮到的證據時，才會再次提議它。這在 `auto` 下適用，在 `off` 下你要求的計畫審查之後也適用；沒有任何提議標示的計畫不會多出問題。
+2. **主 Agent 核准，Runner 圍住：** 主 Agent 核准 Execution method 時，預算依序取自你在這個 session 自己的陳述、計畫、專案的資源指引與你的資源指引；沒有任何來源說明預算，或需要的超過預設值時，主 Agent 會問你。對你採用的 claim，主 Agent 在同一個問題中核准它們的 Execution method，需要的預算問題也併入那個問題，所以一連串的 claim 之後不會再為了核准或預算停下；你的指引中涵蓋該 claim 的預設預算會讓那個問題省去預算問題。之後角色只照核准的方式、只在 Runner 內執行有風險的部分，絕不調高限制；它判斷核准的方式不足時，回報 INCONCLUSIVE 並附上自己提出的方式，由主 Agent 決定。
+3. **每次執行都有底線：** 新的或修改過的測試或 probe，不論是誰寫的，只要界限不明或不符合預算，就是 Unbounded probe：不執行，交回主 Agent。沒有被標示或被捨棄的 claim、`off` 模式與主 Agent 自己的重跑也一樣適用。
+4. **記錄發生的事：** 交回的 probe 與被限制停下的執行，會在該 claim 記為 Observed resource risk；主 Agent 會告訴你，帶進該 claim 之後的 brief，並在計畫結束時列出，旁邊附上你捨棄的每項提議與你的理由。
 
 這些條件是加在上面 Execution 規則之上，絕不取代它：核准的 Execution method 絕不允許 Execution 不允許的執行，絕不解除你說明的限制，Runner 也絕不算是你指定的隔離環境。
 
