@@ -145,7 +145,7 @@ _Avoid_: sign-off, override
 ## Resource-risk runs
 
 **Resource-risk claim**:
-A Claim whose implementation checks, acceptance checks or verification foreseeably risk exhausting memory, time or the machine. Plan review marks it, with the reason, its estimated peak memory and time and the basis of the estimate, and proposes an Execution method for the risky part. An unmarked Claim is not thereby safe: a missing mark is not a statement that a Claim is safe.
+A Claim whose implementation checks, acceptance checks or verification foreseeably risk exhausting memory, time or the machine. Plan review proposes the mark, with the reason, its estimated peak memory and time and the basis of the estimate, and proposes an Execution method for the risky part; the Claim is a Resource-risk claim only once the user adopts the proposal. A dropped proposal leaves an ordinary Claim, still covered by the Unbounded probe floor. An unmarked Claim is not thereby safe: a missing mark is not a statement that a Claim is safe.
 _Avoid_: heavy claim, risky ticket
 
 **Execution method**:

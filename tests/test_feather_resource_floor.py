@@ -220,7 +220,9 @@ class ReferenceTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:50]):
                 self.assert_whole_sentence(sentence, text)
         self.assertEqual([line for line in text.splitlines() if line.startswith("## ")],
-                         ["## Execution method", "## The Runner", "## Main's floor", "## Observed resource risk"])
+                         # resource-risk-confirmation ticket 01 adds Proposed marks before Execution method.
+                         ["## Proposed marks", "## Execution method", "## The Runner", "## Main's floor",
+                          "## Observed resource risk"])
 
     def test_main_gives_the_resolved_runner_path_and_the_limits_in_the_brief(self):
         runner = section(reference(), "The Runner")
@@ -401,8 +403,9 @@ class PointerTests(unittest.TestCase):
                 with self.subTest(path=path.name, link=link):
                     self.assertEqual((path.parent / link).resolve(), REFERENCE.resolve())
                 found += 1
-        # resource-risk-runs ticket 04 adds plan review's pointer.
-        self.assertEqual(found, 8)
+        # resource-risk-runs ticket 04 adds plan review's pointer; resource-risk-confirmation ticket 01 adds plan
+        # review's step 2 and step 5 pointers and the Dispatch record's pointer for decisions on proposed marks.
+        self.assertEqual(found, 11)
 
 
 class GlossaryTests(unittest.TestCase):

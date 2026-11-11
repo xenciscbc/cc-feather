@@ -12,6 +12,8 @@ The user decided (2026-11-08, after a design discussion and Codex second opinion
 
 Main's side is the [resource-risk reference](../../skills/delegation/references/resource-risk-runs.md), the plan-review item is in the analyst definition, the role's rule is in the verifier, adversary, executor and security-executor definitions, and the terms are in [CONTEXT.md](../../CONTEXT.md).
 
+(Amended in 0.35.0 by the [Resource-risk confirmation spec](../specs/resource-risk-confirmation.md): plan review's mark is a proposal that the user adopts or drops, asked once per Plan after its plan review returns READY and before its first Claim is implemented; only an adopted Claim is a Resource-risk claim, and a dropped one is an ordinary Claim still covered by the floor.)
+
 ## Considered Options
 
 - **Judging risk only at each run**: the design of 2026-11-07. The role that misjudged a probe stays the only judge of it, and a risk visible in the Plan is not caught before anything runs.

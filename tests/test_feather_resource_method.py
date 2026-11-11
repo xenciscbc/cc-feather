@@ -43,8 +43,9 @@ class PlanReviewItemTests(unittest.TestCase):
             "walks, reference implementations without step limits, exhaustive or combinatorial generation, heavy "
             "parallel builds or race detectors, or whole-repository scanners; these are examples, and the list is not "
             "exhaustive.",
-            "For a claim where it does, mark it a Resource-risk claim with the reason, estimate its peak memory and time "
-            "with the basis of the estimate, and propose an Execution method for the risky part: the experiment, its "
+            # resource-risk-confirmation ticket 01: the mark is a proposal (tests/test_feather_resource_confirmation.py).
+            "For a claim where it does, propose it as a Resource-risk claim with the reason, estimate its peak memory and "
+            "time with the basis of the estimate, and propose an Execution method for the risky part: the experiment, its "
             "bounds and the memory and time limits it needs.",
             "A missing mark is not a statement that a claim is safe.",
             "This item adds no verdict of its own: a missing or weak Execution method is a finding like any other.",
@@ -71,10 +72,11 @@ class PlanReviewItemTests(unittest.TestCase):
         self.assertTrue(paragraphs[1].startswith("This procedure governs main's orchestration."))
         pointer = paragraphs[2]
         for sentence in (
-            "Analyst's role definition also governs the resource-risk item, which marks a Resource-risk claim and "
-            "proposes its Execution method.",
+            "Analyst's role definition also governs the resource-risk item, which proposes a Resource-risk claim and "
+            "its Execution method.",
             "The item runs wherever plan review runs, so in off an explicit plan-review request also judges it.",
-            f"For main's approval of a proposed Execution method, {READ_REFERENCE}",
+            "For the user's decision on a proposed mark and main's approval of a proposed Execution method, "
+            f"{READ_REFERENCE}",
         ):
             with self.subTest(sentence=sentence[:50]):
                 self.assert_whole_sentence(sentence, pointer)
@@ -98,10 +100,11 @@ class ApprovalTests(unittest.TestCase):
             with self.subTest(label=label, sentence=sentence[:50]):
                 self.assert_whole_sentence(sentence, text)
 
-    def test_the_section_opens_with_plan_reviews_mark(self):
+    def test_the_section_opens_with_the_proposed_method(self):
+        # resource-risk-confirmation ticket 01 moves plan review's proposal to Proposed marks.
         self.assertTrue(method_section().lstrip("\n").startswith(
-            "Plan review marks a Resource-risk claim and proposes an Execution method for its risky part, as analyst's "
-            "role definition states.\n"))
+            "A Resource-risk claim's Execution method is the one plan review proposed for its risky part, approved by "
+            "main as this section states.\n"))
 
     def test_main_approves_the_method(self):
         self.assert_bullet(
@@ -286,7 +289,8 @@ class GlossaryTests(unittest.TestCase):
 
     def test_the_entries_carry_their_decisions(self):
         pins = {
-            "Resource-risk claim": ("Plan review marks it", "An unmarked Claim is not thereby safe",
+            # resource-risk-confirmation ticket 01: plan review proposes the mark and the user adopts it.
+            "Resource-risk claim": ("Plan review proposes the mark", "An unmarked Claim is not thereby safe",
                                     "the basis of the estimate", "proposes an Execution method for the risky part"),
             "Execution method": ("that it runs inside the Runner", "the source of the budget",
                                  "bound to the Claim, its reading set, the experiment and the budget",
