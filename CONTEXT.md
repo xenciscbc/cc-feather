@@ -164,6 +164,12 @@ _Avoid_: resource incident, memory log
 cc-feather's launcher in the delegation skill that runs one command with a memory limit for its whole process tree, a time limit and an output limit, and reports one result: passed, target failed, contained by a limit, refused or evidence missing. It refuses to start rather than run without its limits. Only processes inside its containment are limited; work handed to an already running service, or done by a tool outside the shell, is not. A Runner invocation goes through the host's normal permission handling, and the Runner is never the isolated environment the user named.
 _Avoid_: sandbox, watchdog
 
+## Design checks
+
+**Over-design**:
+Code, rules or design kept for cases that neither normal use nor the applicable threat model meets: defending against states only the project's own code could produce, compatibility with formats or tokens that were never released or no longer exist anywhere, configuration or extension points with a single user, and several defenses guarding the same case. A check at a trust boundary is not Over-design even when it looks like guarding against internal mistakes. Whether an old format still exists outside the repository is a fact only the user can confirm.
+_Avoid_: overengineering, gold-plating, defensive bloat
+
 ## Checkout leases
 
 **Checkout lease**:
