@@ -24,6 +24,7 @@
     "./skills/auto-off",
     "./skills/stop-threshold",
     "./skills/related-tests",
+    "./skills/test-speedup",
     "./skills/adversarial-review",
     "./skills/leases",
     "./skills/worktrees"

@@ -37,6 +37,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:auto-off`: disable automatic review.
 - `/cc-feather:stop-threshold <2–10|default> [session|project|user]`: set the [Stop threshold](#stop-threshold) of automatic review for this session, or save it in project or user scope.
 - `/cc-feather:related-tests <on|off|default> [session|project|user]`: turn [Related-test acceptance](#related-test-acceptance) on or off for this session, or save it in project or user scope.
+- `/cc-feather:test-speedup [test paths or scope]`: report ways to make the tests, or the part you name, faster without weakening what they verify; only you can run it, and it changes no file. It analyses statically first, lists existing tests that could exhaust memory or time, and measures only after you agree; see the [reference](docs/reference.md#design-and-test-checks).
 - `/cc-feather:leases`: take, renew, take over, return and list Checkout leases; main loads it when it keeps leases. See [Checkout leases](#checkout-leases).
 - `/cc-feather:worktrees`: list every checkout of this repository with its Checkout lease, Git worktree lock and the work left in it; only you can run it. It is not read-only: it locks a held lease's worktree again when it has no lock, and removes leases whose checkout Git no longer registers.
 

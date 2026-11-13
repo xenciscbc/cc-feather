@@ -163,6 +163,14 @@ Before implementing, see how main would split one or more plans or tickets, or a
 
 The preview is read-only: main produces it alone, dispatches no subagent, starts no review, uses no review budget and writes no file. It runs only through this command; asking in conversation does not trigger it. It shows the settings already in effect, including a session `auto-on`/`auto-off`; to try another model or effort, change it with `/cc-feather:model` and preview again. The preview guides dispatch only in the session that made it: when implementation follows there, main dispatches according to it and reports each difference with its reason. A preview from another session is a reference; dispatch there may differ from it without being reported. Model and effort values are configured, not confirmed at execution. The command ships with the plugin, so after a plugin update it needs only a fresh session, not a setup update. See [the preview procedure](../skills/delegation/references/preview.md).
 
+## Design and test checks
+
+Two commands only you can run report weight that has built up in a project. Each only reports and changes no file, and what you pick from its report becomes a plan through the normal flow.
+
+### Test speed-ups
+
+`/cc-feather:test-speedup` checks the tests you name, or the project's tests, with their test configuration but not CI pipeline configuration. It analyses statically first and runs nothing: each speed-up names the test or assertion that keeps verifying what it touches, speed-ups are ordered by expected gain, and weakening an assertion, adding a skip or loosening a timeout is never offered. Removing a test is offered only in a section of its own, with the covering test as evidence, for you to decide one by one. Another section lists existing tests that meet the Unbounded probe criteria, as information that holds nothing back. Then main offers to measure, stating the command, the scope and the tests it leaves out, and runs nothing until you agree; tests with resource risk are left out unless you include them, and then run inside the Runner. With delegation installed, analyst does the reading. See [the command](../skills/test-speedup/SKILL.md).
+
 ## Version history
 
 Update notes for releases before the current one; the current release's notes are in the README's [Updates and validation](../README.md#updates-and-validation).

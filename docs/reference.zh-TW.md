@@ -163,6 +163,14 @@ Runner 是分派 skill 中 cc-feather 的啟動器。它執行一個指令，對
 
 預覽是唯讀的：由主 Agent 自己產生，不派出任何子 Agent、不啟動審查、不佔審查次數、不寫入任何檔案。只能透過這個指令執行，在對話中提出要求不會觸發。它顯示目前已生效的設定，包含 session 的 `auto-on`／`auto-off`；想試別的 model 或 effort，請先用 `/cc-feather:model` 設定再重新預覽。預覽只在產生它的 session 中作為派工依據：在該 session 接著實作時，主 Agent 依預覽派工，並逐項回報差異與原因。其他 session 產生的預覽只供參考；在那裡派工可以與它不同，不會當作差異回報。model 與 effort 顯示的是設定值，不代表已確認的實際執行。這個指令隨 plugin 提供，plugin 更新後只要開新 session，不需要執行 setup update。詳見[預覽流程](../skills/delegation/references/preview.md)。
 
+## 設計與測試檢查
+
+兩個只能由你執行的指令，會回報專案裡累積下來的負擔。它們只出報告、不改任何檔案；你從報告中挑選的項目，再照一般流程成為計畫。
+
+### 測試加速
+
+`/cc-feather:test-speedup` 檢查你指定的測試，或整個專案的測試，連同測試設定，但不含 CI pipeline 設定。它先做靜態分析，不執行任何東西：每條加速建議都指出由哪個測試或斷言繼續驗證它動到的行為，依預期效益排序，而且從不建議削弱斷言、加上 skip 或放寬 timeout。刪除測試只列在獨立的一節，附上涵蓋相同行為的測試作為證據，由你逐條決定。另一節列出符合 Unbounded probe 判準的既有測試，只供參考，不擋任何事。之後主 Agent 才提議量測，說明指令、範圍與排除的測試，經你同意才執行；有資源風險的測試預設排除，你決定納入時改在 Runner 內執行。裝有分派元件時，由 analyst 負責閱讀分析。見[指令](../skills/test-speedup/SKILL.md)。
+
 ## 版本紀錄
 
 目前版本之前各版的更新說明；目前版本的說明見 README 的[更新、移除與驗證](../README.zh-TW.md#更新移除與驗證)。

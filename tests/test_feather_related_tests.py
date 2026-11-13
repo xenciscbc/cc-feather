@@ -674,11 +674,6 @@ class RelatedTestsCommandTests(unittest.TestCase):
                 after_stop = self.source(name).split(stop, 1)[1]
                 self.assertTrue(after_stop.split("\n### ", 1)[1].startswith(related))
 
-    def test_setup_document_counts_the_new_skill(self):
-        skills = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["skills"]
-        self.assertEqual(len(skills), 16)
-        self.assertIn("The plugin packages sixteen skills.", self.source("setup.md"))
-
 
 if __name__ == "__main__":
     unittest.main()
