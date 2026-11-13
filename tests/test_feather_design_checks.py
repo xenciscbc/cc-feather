@@ -4,6 +4,7 @@ after the user agrees; its manifest position, README listings, reference section
 /cc-feather:overdesign-check command, which reports Over-design in a target with each item weighed by the delegation
 skill's rule, keeps trust-boundary checks and asks the user about old formats without evidence; the CONTEXT.md
 Over-design entry, an unchanged Unbounded probe entry, and the weighing pointed to but restated by neither command.
+Ticket 03: neither command is named by an installed policy template or role definition.
 """
 
 from __future__ import annotations
@@ -333,6 +334,19 @@ class OverdesignCheckCommandTests(unittest.TestCase):
             section = text.split(start, 1)[1].split("\n## ", 1)[0]
             with self.subTest(reference=name):
                 self.assertLess(section.index(speedups), section.index(self.REFERENCE_SECTIONS[name]))
+
+
+class NotInstalledTests(unittest.TestCase):
+    """Ticket 03: the commands ship with the plugin; no installed policy template or role definition names them."""
+
+    def test_no_template_or_role_definition_mentions_either_command(self):
+        for path in sorted((config.ROOT / "templates").rglob("*")):
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8")
+            for command in ("test-speedup", "overdesign-check"):
+                with self.subTest(template=path.relative_to(config.ROOT).as_posix(), command=command):
+                    self.assertNotIn(command, text)
 
 
 if __name__ == "__main__":

@@ -2180,16 +2180,18 @@ class ResourceRiskConfirmationReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_35_0(self):
-        self.assertEqual("0.35.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.36.0, design and test checks).
 
     def test_updates_sections_start_with_the_confirmation_note_in_both_languages(self):
         previous = RelatedTestAcceptanceReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = DesignAndTestChecksReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.35.0 note starts right after the section's opening sentence, its sentences in order, before 0.34.0's.
+            # The 0.35.0 note starts right after the 0.36.0 note, its sentences in order, before 0.34.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_require_setup_update_in_both_languages(self):
@@ -2254,6 +2256,113 @@ class ResourceRiskConfirmationReleaseTests(unittest.TestCase):
         self.assertNotIn(".scratch", entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.36.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(DesignAndTestChecksReleaseTests.ENTRY_HEADING))
+
+
+class DesignAndTestChecksReleaseTests(unittest.TestCase):
+    """0.36.0 (docs/specs/design-and-test-checks.md, Implementation Decisions' Release and Not affected; ticket 03): the
+    manifest version is 0.36.0; the Updates note, in both languages, says what the release adds, that existing
+    installations need no setup update and how to go back to 0.35.0; the validation entry records the tickets, the
+    `git diff-tree` determination, the test runs, the reviewing version, what the tests cannot show, the tag and the
+    review round, and is the file's last."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.36.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.36.0 adds two commands only you can run, each of which only reports and changes no file: `/cc-feather:test-speedup`, which finds ways to make the tests faster without weakening what they verify, analysing statically first and measuring only after you agree, and `/cc-feather:overdesign-check`, which finds Over-design in the proposal just discussed or in a target you name, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "It changes no installed guidance, policy template, role definition or setup procedure, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "To go back to 0.35.0, reinstall the 0.35.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.36.0 新增兩個只能由你執行的指令，都只出報告、不改任何檔案：`/cc-feather:test-speedup` 找出讓測試變快又不削弱驗證內容的方法，先做靜態分析，經你同意才量測；`/cc-feather:overdesign-check` 找出剛才討論的提案或你指定對象中的過度設計，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "它沒有改任何已安裝的指引、政策範本、角色定義或 setup 程序，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "要回到 0.35.0，重新安裝 0.35.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    # The validation entry: the spec and its tickets with their commits, the setup determination with its evidence, the
+    # way back, the test runs, the reviewing version, what the tests cannot show, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.36.0 design and test checks\n"
+    ENTRY = (
+        "Implements [the Design and test checks spec](specs/design-and-test-checks.md), written on 2026-11-13 and added in 74ec349.",
+        "ticket 01, `/cc-feather:test-speedup`, in ee5469f;",
+        "ticket 02, `/cc-feather:overdesign-check`, in c37def6;",
+        "ticket 03, this release, in the commit carrying this entry.",
+        "**No setup update is required.**",
+        "`git diff-tree -r --name-only v0.35.0 HEAD -- templates skills/setup scripts` lists nothing:",
+        "existing installations need only the plugin update and a fresh session.",
+        "To go back to 0.35.0, reinstall the 0.35.0 plugin; no setup update or remove is needed.",
+        "The setup document's count of packaged skills, now eighteen, is packaging documentation, not a setup procedure change.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "(the 0.35.0 release ran 1329 tests with 29 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "The spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
+        "with the installed cc-feather 0.35.0's roles and procedures, not this release's candidate.",
+        "No live session ran either command:",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.36.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 03 are accepted and only after the user's go-ahead.",
+        "No claim is Security-critical,",
+        "No claim is a Resource-risk claim: plan review proposed none.",
+        "and READY on call 2 at 74ec349.",
+        "the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_36_0(self):
+        self.assertEqual("0.36.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_design_checks_note_in_both_languages(self):
+        previous = ResourceRiskConfirmationReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.36.0 note starts right after the section's opening sentence, its sentences in order, before 0.35.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_validation_entry_records_the_release_check_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:")]
         self.assertEqual(tickets, sorted(tickets))
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
