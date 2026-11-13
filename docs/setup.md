@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages seventeen skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy, delegation policy plus agents, or both, and the opt-in Checkout lease rules. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages eighteen skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy, delegation policy plus agents, or both, and the opt-in Checkout lease rules. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 

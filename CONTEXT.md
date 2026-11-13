@@ -167,7 +167,7 @@ _Avoid_: sandbox, watchdog
 ## Design checks
 
 **Over-design**:
-Code, rules or design kept for cases that neither normal use nor the applicable threat model meets: defending against states only the project's own code could produce, compatibility with formats or tokens that were never released or no longer exist anywhere, configuration or extension points with a single user, and several defenses guarding the same case. A check at a trust boundary is not Over-design even when it looks like guarding against internal mistakes. Whether an old format still exists outside the repository is a fact only the user can confirm.
+Code, rules or design kept for cases that neither normal use nor the applicable threat model meets: defending against states only the project's own code could produce, compatibility with formats or tokens that were never released or no longer exist anywhere, configuration or extension points with a single user, and several defences guarding the same case. A check at a trust boundary is not Over-design even when it looks like guarding against internal mistakes. Whether an old format still exists outside the repository is a fact only the user can confirm.
 _Avoid_: overengineering, gold-plating, defensive bloat
 
 ## Checkout leases

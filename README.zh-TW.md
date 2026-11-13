@@ -40,6 +40,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:stop-threshold <2–10 或 default> [範圍]` | 設定自動審查的[停止門檻](#停止門檻)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
 | `/cc-feather:related-tests <on、off 或 default> [範圍]` | 開啟或關閉[相關測試驗收](#相關測試驗收)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
 | `/cc-feather:test-speedup [測試路徑或範圍]` | 找出讓測試（或你指定的部分）變快、又不削弱驗證內容的方法；只能由你執行，不改任何檔案。先做靜態分析，列出可能耗盡記憶體或時間的既有測試，經你同意才量測；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |
+| `/cc-feather:overdesign-check [檔案、目錄、spec、diff 範圍或規則文字]` | 檢查剛才討論的提案，或你指定的對象，是否有過度設計：防範只有專案自己的程式碼才會造成的狀態、為已不存在的格式或 token 保留相容、只有一個使用者的設定，以及重疊的防禦。只能由你執行，不改任何檔案；每一項都附權衡與建議，舊格式相容只有在有證據時才判定為不需要，否則會問你；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |
 | `/cc-feather:leases` | 取得、續期、接手、歸還與列出 Checkout lease；主 Agent 維護 lease 時載入。見 [Checkout lease](#checkout-lease) |
 | `/cc-feather:worktrees` | 列出這個儲存庫的每個 checkout，以及它的 Checkout lease、Git worktree lock 與留在其中的工作；只能由你執行。它不是唯讀：持有中的 lease 所在 worktree 沒有 lock 時會重新上鎖，並移除 Git 已不再登記其 checkout 的 lease |
 

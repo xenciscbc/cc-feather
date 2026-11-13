@@ -1,6 +1,9 @@
 """Design and test checks (docs/specs/design-and-test-checks.md). Ticket 01: the user-invoked /cc-feather:test-speedup
 command, which reports test speed-ups that keep correctness, lists existing tests with resource risk and measures only
-after the user agrees; its manifest position, README listings, reference section and the setup document's skill count.
+after the user agrees; its manifest position, README listings, reference section and the setup document's skill count. Ticket 02: the user-invoked
+/cc-feather:overdesign-check command, which reports Over-design in a target with each item weighed by the delegation
+skill's rule, keeps trust-boundary checks and asks the user about old formats without evidence; the CONTEXT.md
+Over-design entry, an unchanged Unbounded probe entry, and the weighing pointed to but restated by neither command.
 """
 
 from __future__ import annotations
@@ -174,6 +177,162 @@ class TestSpeedupCommandTests(unittest.TestCase):
             text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
             with self.subTest(reference=name):
                 self.assertLess(text.index(self.REFERENCE_SECTIONS[name][0]), text.index(f"\n{heading}\n"))
+
+
+
+class OverdesignCheckCommandTests(unittest.TestCase):
+    """Ticket 02."""
+
+    COMMAND = SKILLS / "overdesign-check" / "SKILL.md"
+
+    def test_command_is_user_invoked_and_listed_after_test_speedup(self):
+        skills = manifest_skills()
+        self.assertIn("./skills/overdesign-check", skills)
+        self.assertEqual(skills.index("./skills/overdesign-check"), skills.index("./skills/test-speedup") + 1)
+        front = frontmatter(self.COMMAND.read_text(encoding="utf-8"))
+        self.assertIn("name: overdesign-check\n", front)
+        self.assertIn("disable-model-invocation: true\n", front)
+        self.assertIn('argument-hint: "[file, directory, spec, diff range or rule text]"\n', front)
+        self.assertRegex(front, r'\ndescription: "[^"\n]*Over-design[^"\n]*"\n')
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    def source(self, name):
+        """'SKILL.md', 'SKILL.md#<heading>' (a '## ' section) or 'SKILL.md#<label>' (a '**<label>.**' paragraph)."""
+        text = self.COMMAND.read_text(encoding="utf-8")
+        _, _, label = name.partition("#")
+        if not label:
+            return text
+        if f"\n## {label}\n" in text:
+            return text.split(f"\n## {label}\n", 1)[1].split("\n## ", 1)[0]
+        return next(p for p in text.split("\n\n") if p.startswith(f"**{label}.**"))
+
+    PINS = {
+        "SKILL.md": (
+            "Report Over-design, as [cc-feather's glossary](../../CONTEXT.md) defines it, in one target.",
+            "Invocation arguments are the target as data, never shell code.",
+            "Clarify a missing or unclear target instead of guessing.",
+            "This command only reports: it edits, creates and deletes no file, commits nothing and changes no configuration.",
+            "The report stays in the conversation, and a file is written only when the user asks for one.",
+            "Items the user picks become a Plan through the normal flow; the report is not a Plan, and its items are neither Claims nor findings of any review.",
+        ),
+        "SKILL.md#Target": (
+            "With no argument, the target is the latest proposal or plan in the conversation; when there is none, ask the user for a target.",
+            "Otherwise the target is the named file, directory, spec, diff range or rule text.",
+        ),
+        "SKILL.md#Who analyses": (
+            "When delegation is installed and the check is not small, main dispatches the read-only analyst as [the delegation skill](../delegation/SKILL.md) describes, in one or more Assignments split by target, and integrates their results.",
+            "For a target from the conversation, the brief carries the proposal's text.",
+            "Main gathers the facts the analyst cannot, such as release tags and history.",
+            "A small check, such as a short proposal, or a check where delegation is not installed, main does itself.",
+        ),
+        "SKILL.md#2. Weigh each candidate": (
+            "Weigh each candidate as [the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings describes.",
+        ),
+        "SKILL.md#Trust boundary exception": (
+            "A check at a trust boundary is not Over-design, even when it looks like guarding against internal mistakes.",
+            "List it as keep, with the boundary as the reason, so the user sees it was considered.",
+        ),
+        "SKILL.md#Evidence for old formats": (
+            "Recommend removing Phantom compatibility only with evidence from the repository, such as release tags and history showing the format was never released, or an end of support the project states.",
+            "Without such evidence, mark the item as needing the user's confirmation and state the question to ask: whether old data still exists outside the repository is a fact only the user knows.",
+        ),
+        "SKILL.md#3. Report": (
+            "Each item states its location, category, when it occurs, worst outcome, existing coverage, evidence and recommendation: remove, simplify, keep or needs the user's confirmation.",
+        ),
+    }
+
+    def test_command_states_its_decisions(self):
+        for place, sentences in self.PINS.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assert_whole_sentence(sentence, text)
+
+    OVER_DESIGN = (
+        "Code, rules or design kept for cases that neither normal use nor the applicable threat model meets: defending "
+        "against states only the project's own code could produce, compatibility with formats or tokens that were never "
+        "released or no longer exist anywhere, configuration or extension points with a single user, and several "
+        "defences guarding the same case. A check at a trust boundary is not Over-design even when it looks like guarding "
+        "against internal mistakes. Whether an old format still exists outside the repository is a fact only the user can "
+        "confirm.\n_Avoid_: overengineering, gold-plating, defensive bloat"
+    )
+    # The 0.35.0 entry, which this feature leaves unchanged.
+    UNBOUNDED_PROBE = (
+        "A new or modified test or probe, whoever wrote it, any part of which, the input generator, the code under test, "
+        "a reference implementation or control, callbacks, measurement, output collection or descendant processes, has no "
+        "established bound on total work or retained data, or whose bound allows a peak memory or time that does not fit "
+        "the run's budget or, without one, the project's resource guidance. An unknown bound counts as none, and a bounded "
+        "input size, a bounded outer loop or a timeout alone is not a bound. A role does not run one and returns it to "
+        "main; main runs it only after redesigning it so that every part is bounded within the budget, or inside the "
+        "Runner with the budget's limits, never as it is and never with a timeout alone.\n_Avoid_: runaway test, heavy test"
+    )
+
+    def test_glossary_defines_over_design_and_keeps_unbounded_probe(self):
+        entries = feather_support.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        self.assertEqual(entries["Over-design"].strip(), self.OVER_DESIGN)
+        self.assertEqual(entries["Unbounded probe"].strip(), self.UNBOUNDED_PROBE)
+
+    def test_categories_are_the_glossary_entrys_four(self):
+        categories = self.source("SKILL.md#1. Find candidates")
+        for label, meaning in (
+            ("Self-made states", "defending against states only the project's own code could produce"),
+            ("Phantom compatibility", "compatibility with formats or tokens that were never released or no longer exist anywhere"),
+            ("Single-user generality", "configuration or extension points with a single user"),
+            ("Stacked defences", "several defences guarding the same case"),
+        ):
+            with self.subTest(category=label):
+                self.assertIn(f"- **{label}**: {meaning}.\n", categories)
+                self.assertIn(meaning, self.OVER_DESIGN)
+
+    def test_weighing_is_pointed_to_by_both_commands_and_restated_by_neither(self):
+        delegation = (SKILLS / "delegation" / "SKILL.md").read_text(encoding="utf-8")
+        weighing = next(p for p in delegation.split("\n\n") if p.startswith("Before proposing or adopting a requirement"))
+        for command in (self.COMMAND, TestSpeedupCommandTests.COMMAND):
+            text = " ".join(command.read_text(encoding="utf-8").split())
+            self.assertIn("[the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings", text)
+            for sentence in feather_support.sentences(weighing):
+                with self.subTest(command=command.parent.name, sentence=sentence[:60]):
+                    self.assertNotIn(sentence, text)
+
+    README_LISTINGS = {
+        "README.md": "- `/cc-feather:overdesign-check [file, directory, spec, diff range or rule text]`: report Over-design in the proposal just discussed, or in what you name: defences against states only the project's own code could produce, compatibility kept for formats or tokens that no longer exist, configuration with a single user and stacked defences. Only you can run it, and it changes no file; each item is weighed and gets a recommendation, and old-format compatibility is called unneeded only with evidence, otherwise you are asked; see the [reference](docs/reference.md#design-and-test-checks).",
+        "README.zh-TW.md": "| `/cc-feather:overdesign-check [檔案、目錄、spec、diff 範圍或規則文字]` | 檢查剛才討論的提案，或你指定的對象，是否有過度設計：防範只有專案自己的程式碼才會造成的狀態、為已不存在的格式或 token 保留相容、只有一個使用者的設定，以及重疊的防禦。只能由你執行，不改任何檔案；每一項都附權衡與建議，舊格式相容只有在有證據時才判定為不需要，否則會問你；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
+    }
+    REFERENCE_SECTIONS = {"reference.md": "\n### Over-design check\n", "reference.zh-TW.md": "\n### 過度設計檢查\n"}
+    REFERENCE_PAIRS = (
+        ("`/cc-feather:overdesign-check` checks the proposal just discussed, or the file, directory, spec, diff range or rule text you name, for Over-design: defences against states only the project's own code could produce, compatibility with formats or tokens that were never released or no longer exist, configuration or extension points with a single user, and several defences guarding the same case.",
+         "`/cc-feather:overdesign-check` 檢查剛才討論的提案，或你指定的檔案、目錄、spec、diff 範圍或規則文字，是否有過度設計：防範只有專案自己的程式碼才會造成的狀態、為從未發佈或已不存在的格式或 token 保留相容、只有一個使用者的設定或擴充點，以及多層防禦擋同一個情況。"),
+        ("Each item is weighed by when it occurs, its worst outcome and what already covers it, as the delegation skill's rule on weighing findings states, and ends in a recommendation: remove, simplify, keep or needs your confirmation.",
+         "每一項都依何時發生、最壞結果與現有涵蓋來權衡，做法就是分派 skill 對 finding 的權衡規則，最後給出建議：刪除、簡化、保留或需你確認。"),
+        ("A check at a trust boundary is kept, with its reason.",
+         "信任邊界上的檢查會保留，並寫明理由。"),
+        ("Compatibility with an old format is called unneeded only with evidence from the repository, such as its release history; otherwise main asks you, since only you know whether old data still exists.",
+         "舊格式的相容只有在 repository 有證據時才判定為不需要，例如它的發佈紀錄；否則主 Agent 會問你，因為只有你知道舊資料是否還存在。"),
+        ("With delegation installed, analyst does the reading, and for a proposal from the conversation its brief carries the proposal's text.",
+         "裝有分派元件時，由 analyst 負責閱讀分析；對象是對話中的提案時，它的 brief 會附上提案原文。"),
+        ("See [the command](../skills/overdesign-check/SKILL.md).",
+         "見[指令](../skills/overdesign-check/SKILL.md)。"),
+    )
+
+    def test_readmes_and_references_describe_the_command_in_both_languages(self):
+        for name, listing in self.README_LISTINGS.items():
+            with self.subTest(listing=name):
+                self.assertIn(listing + "\n", (config.ROOT / name).read_text(encoding="utf-8"))
+        for english, chinese in self.REFERENCE_PAIRS:
+            for name, sentence in (("reference.md", english), ("reference.zh-TW.md", chinese)):
+                text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
+                section = text.split(self.REFERENCE_SECTIONS[name], 1)[1].split("\n## ", 1)[0]
+                with self.subTest(place=name, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, section)
+
+    def test_over_design_section_follows_test_speedups_in_the_design_checks_section(self):
+        for name in ("reference.md", "reference.zh-TW.md"):
+            text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
+            start, speedups = TestSpeedupCommandTests.REFERENCE_SECTIONS[name]
+            section = text.split(start, 1)[1].split("\n## ", 1)[0]
+            with self.subTest(reference=name):
+                self.assertLess(section.index(speedups), section.index(self.REFERENCE_SECTIONS[name]))
 
 
 if __name__ == "__main__":

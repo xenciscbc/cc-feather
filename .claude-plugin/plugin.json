@@ -25,6 +25,7 @@
     "./skills/stop-threshold",
     "./skills/related-tests",
     "./skills/test-speedup",
+    "./skills/overdesign-check",
     "./skills/adversarial-review",
     "./skills/leases",
     "./skills/worktrees"
