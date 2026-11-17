@@ -404,8 +404,9 @@ class PointerTests(unittest.TestCase):
                     self.assertEqual((path.parent / link).resolve(), REFERENCE.resolve())
                 found += 1
         # resource-risk-runs ticket 04 adds plan review's pointer; resource-risk-confirmation ticket 01 adds plan
-        # review's step 2 and step 5 pointers and the Dispatch record's pointer for decisions on proposed marks.
-        self.assertEqual(found, 11)
+        # review's step 2 and step 5 pointers and the Dispatch record's pointer for decisions on proposed marks; final
+        # check reuse and Auto land ticket 02 adds review state's Final check scope pointer to the scope question.
+        self.assertEqual(found, 12)
 
 
 class GlossaryTests(unittest.TestCase):

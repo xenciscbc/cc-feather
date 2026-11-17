@@ -19,7 +19,16 @@ review also updates, in test_feather_retained_passes, the command's Gated and Se
 sentences of S2 and the decision's list sentence, and in test_feather_security_review, GATE's Gated and
 Security-critical sentence.
 
-Ticket 02 brings the Final check scope into review state and adds its pins to this module."""
+Ticket 02 (security invariant S2) adds FinalCheckScopeTests: in auto, the final check runs the Plan's overall acceptance
+only at Final check scope `full` and reruns every Claim's primary acceptance at both scopes, itself, with no role's
+earlier run standing in; a run at the chosen scope passes or fails like any other; a release or tag runs `full`; the
+scope is set only by the user's own answer in this conversation, or the dispatch record's entry of it, and is `full`
+without one, with an unclear one or when none is asked; a final check that did not run at the Plan's scope needs accept
+and land; plan review recommends a scope with its reason, adding no verdict and no blocker; the ask after READY carries
+the scope question and stays step 5's one exception; off keeps the final check's earlier rules. The existing pins it
+replaces, updated where they are: in test_feather_resource_confirmation, the Proposed marks Where it applies and The
+ask sentences and the plan-review step 5 one-exception sentence; in test_feather_resource_floor, the count of links to
+the resource-risk runs reference."""
 
 from __future__ import annotations
 
@@ -41,13 +50,19 @@ PATHS = {
     "README.zh-TW.md": "README.zh-TW.md",
     "reference.md": "docs/reference.md",
     "reference.zh-TW.md": "docs/reference.zh-TW.md",
+    "resource-risk-runs.md": "skills/delegation/references/resource-risk-runs.md",
+    "plan-review.md": "skills/delegation/references/plan-review.md",
+    "analyst.md": "templates/agents/analyst.md",
 }
 SETUP_PARAGRAPH = "In auto, main records each final check run in the plan's dispatch record"
+SETUP_SCOPE_PARAGRAPH = "In auto, the final check runs at the plan's final check scope."
 
 
 def place_text(text: str, path: str, label: str) -> str:
     """'<file>#<label>' is a '- **<label>' bullet, a glossary entry in CONTEXT.md, the At the final commit paragraph of
-    the Adversarial review procedure, or the setup document's paragraph on recorded final check runs."""
+    the Adversarial review procedure, the setup document's paragraph on recorded final check runs ('recorded runs') or
+    on the Final check scope ('scope'), the plan-review procedure's step 5 ('step 5') or the analyst's plan-review item
+    ('Plan review mode')."""
     if not label:
         return text
     if path == "CONTEXT.md":
@@ -56,6 +71,12 @@ def place_text(text: str, path: str, label: str) -> str:
         return next(line for line in text.splitlines() if line.startswith("**At the final commit.**"))
     if label == "recorded runs":
         return next(line for line in text.splitlines() if line.startswith(SETUP_PARAGRAPH))
+    if label == "scope":
+        return next(line for line in text.splitlines() if line.startswith(SETUP_SCOPE_PARAGRAPH))
+    if label == "step 5":
+        return next(line for line in text.splitlines() if line.startswith("5. "))
+    if label == "Plan review mode":
+        return next(line for line in text.splitlines() if line.startswith("- Plan review:"))
     # The bullet's text after its bold label, so that a Chinese sentence right after the label starts the text.
     return next(line for line in text.splitlines() if line.startswith(f"- **{label}")).split("**", 2)[2].strip()
 
@@ -460,6 +481,299 @@ class RecordedFinalCheckTests(unittest.TestCase):
             for sentence in self.OFF[place]:
                 with self.subTest(place=place, sentence=sentence[:60]):
                     self.assertIn(sentence, text)
+
+
+class FinalCheckScopeTests(unittest.TestCase):
+    """Ticket 02: whole-sentence pins of the Final check scope under S2, the ask after READY, plan review's
+    recommendation, the documents, and off's kept rules."""
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+    assert_pinned = RecordedFinalCheckTests.assert_pinned
+
+    FINAL_CHECK = "review-state.md#Final check"
+    SCOPE = "review-state.md#Final check scope"
+    SCOPE_QUESTION = "resource-risk-runs.md#The scope question"
+
+    # Acceptance items 1 and 3: what each scope runs, in review state's Final check.
+    RUNS = {
+        FINAL_CHECK: (
+            "In auto, the final check runs at the plan's Final check scope, as Final check scope describes: the plan's "
+            "overall acceptance checks run only at scope `full`, and every claim's primary acceptance is rerun at both "
+            "scopes, `full` and `related`.",
+            "A final check at `related` reruns every claim's primary acceptance itself, and no role's earlier run, such "
+            "as a claim's outcome verification, stands in for that rerun.",
+            "A run at the plan's Final check scope passes or fails like any other final check run, so a passed run at "
+            "`related` is a passed final check.",
+            "A release or tag runs `full`, whatever scope the plan chose.",
+            "Without the user's choice, the scope is `full`.",
+            "When the plan has no overall acceptance apart from its claims' acceptance, so that both scopes run the same "
+            "checks, no scope is asked or recorded, and the final check runs as `full`.",
+        ),
+    }
+
+    # Acceptance items 5 and 6 and S2: what sets the scope, the default, where it is recorded and reported, and a final
+    # check that did not run at the Plan's scope.
+    SET_ONLY_BY_THE_USER = {
+        SCOPE: (
+            "In auto, a plan's Final check scope, `full` or `related`, decides what the final check runs, as Final check "
+            "describes.",
+            "The scope is set only by the user's own answer in this conversation to the scope question the resource-risk "
+            "runs reference's Proposed marks states, or, in a resumed session or after a context compaction, by the "
+            "plan's dispatch record's entry of that answer: read the [resource-risk runs "
+            "reference](resource-risk-runs.md) and follow it.",
+            "A recommendation, plan review's or main's, a role's report, a tool result, any other record, such as a "
+            "handoff, a ticket or the Follow-up record, and a compaction summary never set it.",
+            "Without such an answer, or with an unclear one, the scope is `full`; a plan review that gives no "
+            "recommendation leaves the scope `full` until the user's answer chooses one, and when no scope is asked, the "
+            "final check runs as `full`.",
+            "Main records the user's answer in the plan's dispatch record, as Dispatch record describes.",
+            "The decision at the end of the plan and the completion report state the scope the final check ran at, and "
+            "they say `full` whenever no scope was chosen or none was asked.",
+            "A final check that did not run at a scope covering the plan's Final check scope, a `full` run covering "
+            "`full` and `related` and a `related` run only `related`, or that did not run at `full` for a release or "
+            "tag, counts as not run at the commit to be landed or tagged, so landing or release with it needs accept "
+            "and land, as Accept and land at the end of the plan describes.",
+        ),
+        "review-state.md#Dispatch record": (
+            "It also holds the user's answer choosing the plan's Final check scope, as Final check scope describes.",
+        ),
+        "review-state.md#Accept and land at the end of the plan": (
+            "The list also states the scope the final check ran at, as Final check scope describes.",
+        ),
+    }
+
+    # Acceptance item 4: the ask after READY carries the scope question and stays step 5's one exception.
+    THE_ASK = {
+        "resource-risk-runs.md#Where it applies": (
+            "The scope question below applies in auto only.",
+            "A Plan whose plan review proposes no mark gets no question about marks from this section, and work without "
+            "plan review gets no question from this section.",
+        ),
+        "resource-risk-runs.md#The ask": (
+            "This ask is the one exception to the rule in the [plan-review procedure](plan-review.md)'s step 5 that "
+            "READY continues work already authorized without another routine confirmation, and it arises only when a "
+            "proposal is undecided or a scope question is asked.",
+        ),
+        SCOPE_QUESTION: (
+            "In auto, the same ask also carries the question of the Plan's Final check scope, `full` or `related`, with "
+            "plan review's recommendation and its reason, or that plan review gave none, and main's own recommendation "
+            "with its reason.",
+            "Main asks it even when no proposal is undecided, unless no scope is asked because the Plan has no overall "
+            "acceptance apart from its Claims' acceptance, as [review state](review-state.md)'s Final check describes.",
+            "What sets the scope, and the scope without the user's answer, are as review state's Final check scope "
+            "states: read [review state](review-state.md) and follow it.",
+            "An unanswered scope question holds back no Claim.",
+        ),
+        "resource-risk-runs.md#A later plan review": (
+            "A later plan review after a Deviation asks the scope question again only when its scope recommendation "
+            "differs from the one the user last answered, and then asks it together with the user's approval that "
+            "review already needs, or, when it needs none, before the final check runs; the user's new answer replaces "
+            "the earlier one.",
+        ),
+        "resource-risk-runs.md#Not a review event": (
+            "The user's choice of the Final check scope is no review event either: it is none of the kinds review "
+            "state's User decisions names, changes no count or verdict and is not a Deviation.",
+        ),
+        "plan-review.md#step 5": (
+            "The one exception is the ask after READY for the user's decision on proposed resource-risk marks and, in "
+            "auto, on the plan's Final check scope, which main asks even when no proposal is undecided unless no scope "
+            "is asked, as the resource-risk runs reference's Proposed marks states: read the [resource-risk runs "
+            "reference](resource-risk-runs.md) and follow it.",
+            "A later plan review after a Deviation asks the scope question again only when its recommendation changes, "
+            "and the user's choice of the scope is no review event and changes no count or verdict.",
+        ),
+    }
+
+    # Acceptance item 2: the analyst's plan-review item recommends a scope with its reason, adding no verdict or blocker.
+    RECOMMENDATION = {
+        "analyst.md#Plan review mode": (
+            "Recommend a Final check scope for the plan, `full` (the plan's overall acceptance and a rerun of each "
+            "claim's primary acceptance) or `related` (the rerun of each claim's primary acceptance alone), with the "
+            "reason, for example whether the claims' primary acceptance reaches every file the plan changes and what "
+            "the overall acceptance adds; when the plan has no overall acceptance apart from its claims' acceptance, say "
+            "that no scope needs choosing.",
+            "The recommendation adds no verdict and is not a blocker: only the user's own choice sets the scope.",
+        ),
+    }
+
+    # Acceptance item 7: off keeps the final check's earlier rules; these two sentences read so at v0.36.0 too.
+    OFF_KEPT = (
+        "Before landing or release, main runs the plan's overall acceptance checks, such as the full test suite, at the "
+        "commit to be landed or tagged, within the Execution rules above.",
+        "In off, the final check keeps its earlier rules, without the reruns, fix claims and stop above: a failure "
+        "reopens the claims it affects under the existing rules, and its output goes with it to the reopened claims' "
+        "reviews as evidence; landing and release wait for their passes again.",
+    )
+    OFF = {
+        FINAL_CHECK: OFF_KEPT,
+        SCOPE: (
+            "In off, a plan has no Final check scope: no scope is asked or recorded, and the final check runs the "
+            "plan's overall acceptance checks under off's rules, as Final check describes.",
+        ),
+    }
+
+    # Acceptance item 9: the setup document and both reference documents.
+    DOCUMENTS = {
+        "setup.md#scope": (
+            "In auto, the final check runs at the plan's final check scope.",
+            "`full` runs the plan's overall acceptance and reruns every claim's primary acceptance; `related` reruns "
+            "every claim's primary acceptance alone, so a plan can land without its overall acceptance, such as the "
+            "full suite.",
+            "Plan review recommends a scope with its reason, and after READY main asks the user once, in the same "
+            "question resource-risk proposals use, with plan review's recommendation and its own; the question is asked "
+            "even when no proposal is undecided, but not when the plan has no overall acceptance apart from its claims' "
+            "acceptance, since both scopes would then run the same checks.",
+            "Only the user's own answer in the conversation sets the scope, and main records it in the plan's dispatch "
+            "record.",
+            "Without that answer, with an unclear one, or when no scope is asked, the scope is `full`, and a release or "
+            "tag always runs `full`.",
+            "In `off`, there is no scope, and the final check runs the plan's overall acceptance as before.",
+        ),
+        "reference.md#Final check": (
+            "In auto, the final check runs at the plan's final check scope: `full` runs the plan's overall acceptance "
+            "and reruns every claim's primary acceptance, and `related` reruns every claim's primary acceptance alone, "
+            "so a plan whose claims' related tests cover what it changes can land without the full suite.",
+            "Only your own answer in the conversation sets the scope, and main records it in the plan's dispatch record; "
+            "without your answer, with an unclear one, or when no scope is asked, the scope is `full`, and a release or "
+            "tag always runs `full`.",
+            "A run at the chosen scope passes or fails like any other final check, a final check that did not run at the "
+            "chosen scope needs your accept-and-land decision, and the decision at the end of the plan and the "
+            "completion report state the scope the final check ran at.",
+            "In `off`, there is no scope, and the final check runs the plan's overall acceptance as before.",
+            "The scope's rule is review state's Final check scope.",
+        ),
+        "reference.zh-TW.md#最終檢查": (
+            "在 auto 下，最終檢查依計畫的最終檢查範圍執行：`full` 執行計畫的整體驗收並重跑每個 claim 的主要驗收，`related` 只重跑"
+            "每個 claim 的主要驗收，所以各 claim 的相關測試已涵蓋計畫所改內容時，計畫可以不跑完整測試就進入預設 branch。",
+            "只有你在對話中自己的回答能設定範圍，主 Agent 會把它記在計畫的派工紀錄中；沒有你的回答、回答不清楚，或沒有詢問範圍時，"
+            "範圍是 `full`，release 或 tag 一律執行 `full`。",
+            "依所選範圍執行的結果與其他最終檢查一樣算通過或失敗，沒有依所選範圍執行的最終檢查需要你決定接受並合併，計畫結束時的決定"
+            "與完成報告會寫出最終檢查執行時的範圍。",
+            "在 `off` 下沒有範圍，最終檢查照舊執行計畫的整體驗收。",
+            "範圍的規則是審查狀態規則的 Final check scope。",
+        ),
+    }
+
+    # The README pair: each English sentence with its Chinese counterpart, in the same bullet of each README.
+    README_PAIRS = (
+        ("Final check scope", "最終檢查範圍",
+         "in auto, plan review recommends `full` or `related` for the plan with its reason, and main asks you once, in "
+         "the same question after READY as resource-risk proposals, with plan review's recommendation and its own.",
+         "在 auto 下，計畫審查會為計畫建議 `full` 或 `related` 並說明理由，主 Agent 會在 READY 之後、與資源風險提議同一次的"
+         "提問中問你一次，附上計畫審查的建議與它自己的建議。"),
+        ("Final check scope", "最終檢查範圍",
+         "Only your own answer sets it; without one the scope is `full`, a release always runs `full`, and when both "
+         "scopes would run the same checks you are not asked.",
+         "只有你自己的回答能設定範圍；沒有回答時範圍是 `full`，release 一律執行 `full`，兩種範圍會跑相同檢查時則不會問你。"),
+        ("Final check scope", "最終檢查範圍",
+         "The decision at the end of the plan and the completion report state the scope the final check ran at.",
+         "計畫結束時的決定與完成報告會寫出最終檢查執行時的範圍。"),
+        ("The final check reruns primary acceptance", "最終檢查重跑主要驗收",
+         "At final check scope `related`, which you choose per plan, the plan's overall checks are not run there "
+         "either, so a plan can land without the full suite.",
+         "最終檢查範圍為 `related` 時（由你逐個計畫選擇），計畫的整體檢查也不會在那裡執行，所以計畫可能沒跑完整測試就合併。"),
+    )
+
+    def new_pins(self):
+        return (self.RUNS, self.SET_ONLY_BY_THE_USER, self.THE_ASK, self.RECOMMENDATION, self.DOCUMENTS,
+                {self.SCOPE: self.OFF[self.SCOPE]})
+
+    def test_each_scope_reruns_every_claims_primary_acceptance_and_full_adds_the_overall_acceptance(self):
+        self.assert_pinned(self.RUNS)
+
+    def test_only_the_users_answer_sets_the_scope_and_full_is_the_default(self):
+        self.assert_pinned(self.SET_ONLY_BY_THE_USER)
+
+    def test_the_ask_after_ready_carries_the_scope_question(self):
+        self.assert_pinned(self.THE_ASK)
+
+    def test_plan_review_recommends_a_scope_without_a_verdict(self):
+        self.assert_pinned(self.RECOMMENDATION)
+        # The rendered role carries the recommendation once, beside the resource-risk item's own no-verdict sentence.
+        for prefix in ("", config.ROLE_PREFIX):
+            rendered = config._render("analyst", {"model": "sonnet", "effort": "high"}, prefix).decode("utf-8")
+            for sentence in ("Recommend a Final check scope for the plan",
+                             "The recommendation adds no verdict and is not a blocker",
+                             "This item adds no verdict of its own"):
+                with self.subTest(prefix=prefix, sentence=sentence[:40]):
+                    self.assertEqual(rendered.count(sentence), 1)
+
+    def test_off_keeps_the_final_checks_earlier_rules(self):
+        # Fails if off loses the overall acceptance run or its earlier failure rules, or if the scope or its question
+        # stops being scoped to auto.
+        self.assert_pinned(self.OFF)
+        self.assertTrue(source(self.SCOPE).startswith("In auto, "))
+        self.assertTrue(source(self.SCOPE_QUESTION).startswith("In auto, "))
+        self.assertIn("The scope question below applies in auto only.", source("resource-risk-runs.md#Where it applies"))
+        self.assertNotRegex(source(self.FINAL_CHECK), r"(?:^|(?<=\s))The final check runs at the plan's Final check "
+                                                      r"scope")
+
+    def test_the_off_rules_read_as_they_did_at_v0_36_0(self):
+        text = place_text(tagged("review-state.md"), "review-state.md", "Final check")
+        for sentence in self.OFF_KEPT:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, text)
+
+    def test_the_documents_describe_the_scope_and_how_the_user_chooses_it(self):
+        self.assert_pinned(self.DOCUMENTS)
+
+    def test_both_readmes_describe_the_scope_in_paired_sentences(self):
+        english = (config.ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
+        for label, label_zh, sentence, sentence_zh in self.README_PAIRS:
+            with self.subTest(sentence=sentence[:40]):
+                self.assert_whole_sentence(sentence, place_text(english, "README.md", label))
+                self.assert_whole_sentence(sentence_zh, place_text(chinese, "README.zh-TW.md", label_zh))
+
+    def test_the_scope_bullets_follow_the_rules_they_extend(self):
+        text = source("review-state.md")
+        validity = text.split("\n## Validity and completion\n", 1)[1].split("\n## ", 1)[0]
+        bullets = [line.split("**")[1] for line in validity.splitlines() if line.startswith("- **")]
+        self.assertEqual(bullets[bullets.index("Recorded final check runs.") + 1], "Final check scope.")
+        marks = source("resource-risk-runs.md").split("\n## Proposed marks\n", 1)[1].split("\n## ", 1)[0]
+        bullets = [line.split("**")[1] for line in marks.splitlines() if line.startswith("- **")]
+        self.assertEqual(bullets[bullets.index("The ask.") + 1], "The scope question.")
+
+    def test_no_sentence_lets_anything_but_the_users_answer_set_the_scope(self):
+        # S2, attacked statically: no shipped rule says a recommendation, report, tool result, record or compaction
+        # summary sets, chooses or narrows the scope, no `none` scope exists, and `related` never skips or replaces a
+        # claim's primary acceptance.
+        pattern = re.compile(r"(?:recommendation|report|tool result|record|compaction summary|handoff|ticket)[^.;:]*"
+                             r"\b(?:sets?|chooses?|decides?|narrows?) the (?:Final check |final check |plan's )?scope",
+                             re.I)
+        for path in ("review-state.md", "resource-risk-runs.md", "plan-review.md", "analyst.md", "CONTEXT.md"):
+            text = source(path)
+            with self.subTest(path=path):
+                self.assertIsNone(pattern.search(text))
+                self.assertNotIn("`none`", text)
+                self.assertNotRegex(text, r"`related`[^.]*\b(?:skips?|without|instead of) (?:a|every|each) claim's "
+                                          r"primary acceptance")
+
+    def test_the_scope_rules_are_written_once(self):
+        # ADR 0017: what sets the scope and its default are review state's; the ask is the reference's.
+        owners = {"never set it": "review-state.md",
+                  "until the user's answer chooses one": "review-state.md",
+                  "say `full` whenever no scope was chosen": "review-state.md",
+                  "An unanswered scope question holds back no Claim": "resource-risk-runs.md",
+                  "the user's new answer replaces the earlier one": "resource-risk-runs.md"}
+        for path in ("review-state.md", "resource-risk-runs.md", "plan-review.md", "analyst.md"):
+            text = source(path)
+            for phrase, owner in owners.items():
+                with self.subTest(path=path, phrase=phrase[:40]):
+                    self.assertEqual(text.count(phrase), 1 if path == owner else 0)
+
+    def test_every_new_pin_fails_on_the_v0_36_0_text(self):
+        for pins in self.new_pins():
+            for place, sentences in pins.items():
+                path, _, label = place.partition("#")
+                text = tagged(path)
+                try:
+                    text = place_text(text, path, label)
+                except (KeyError, StopIteration):
+                    continue
+                for sentence in sentences:
+                    with self.subTest(place=place, sentence=sentence[:60]):
+                        self.assertNotIn(sentence, text)
 
 
 if __name__ == "__main__":

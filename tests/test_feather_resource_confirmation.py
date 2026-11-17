@@ -93,8 +93,10 @@ class ProposedMarksTests(unittest.TestCase):
         self.assert_bullet(
             "Where it applies",
             "This section applies in auto and after an explicit plan review in off.",
-            "A Plan whose plan review proposes no mark, and work without plan review, get no question from this "
-            "section.")
+            # Final check reuse and Auto land ticket 02 replaces this pin: a Plan without a proposed mark still gets the
+            # scope question in auto.
+            "A Plan whose plan review proposes no mark gets no question about marks from this section, and work without "
+            "plan review gets no question from this section.")
 
     def test_which_proposals(self):
         self.assert_bullet(
@@ -118,6 +120,7 @@ class ProposedMarksTests(unittest.TestCase):
             "Main never adopts or drops a proposal itself; only the user's answer decides.")
 
     def test_the_ask(self):
+        # Final check reuse and Auto land ticket 02 replaces the last pin: the ask also arises for the scope question.
         self.assert_bullet(
             "The ask",
             "After the call that returns READY for the Plan and before main implements the Plan's first Claim, main "
@@ -129,7 +132,7 @@ class ProposedMarksTests(unittest.TestCase):
             "user for a proposed Claim, and its answer applies to the Claims the user adopts.",
             "This ask is the one exception to the rule in the [plan-review procedure](plan-review.md)'s step 5 that "
             "READY continues work already authorized without another routine confirmation, and it arises only when a "
-            "proposal is undecided.")
+            "proposal is undecided or a scope question is asked.")
 
     def test_the_budget_question_points_to_the_budget_rule(self):
         # The order and conditions stay in Execution method's The budget.
@@ -229,8 +232,11 @@ class PointerTests(unittest.TestCase):
         return lines[0]
 
     def test_plan_review_names_the_ask_as_step_5s_one_exception(self):
+        # Final check reuse and Auto land ticket 02 replaces this pin: the one exception's ask also carries the scope.
         self.assert_whole_sentence(
-            "The one exception is the user's decision on proposed resource-risk marks, " + PROPOSED_MARKS, self.step(5))
+            "The one exception is the ask after READY for the user's decision on proposed resource-risk marks and, in "
+            "auto, on the plan's Final check scope, which main asks even when no proposal is undecided unless no scope "
+            "is asked, " + PROPOSED_MARKS, self.step(5))
         self.assertTrue(self.step(5).startswith(
             "5. With READY, continue work already authorized without another routine confirmation. The one exception"))
 
