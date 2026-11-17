@@ -1162,9 +1162,14 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
         ),
         "command#Gated and Security-critical": (
             "Both must meet the procedure's prerequisites, in off a valid APPROVED and a valid CONFIRMED at the same "
+            # Final check reuse ticket 01's code review (S1): after a recorded pass, only an automatic call dispatched
+            # after it meets the auto prerequisite; the off wording is unchanged.
             "commit with a clean workspace and in auto the final check passed at the commit to be landed with the "
-            "workspace equal to it, and their HELD counts like any pass of that step, so an explicit HELD clears a stop "
-            "and, in off, resolves the handoff's missing Adversarial review.",
+            "workspace equal to it, where after a recorded pass, as [review "
+            "state](../delegation/references/review-state.md)'s Recorded final check runs describes, only an automatic "
+            "call that the plan's dispatch record shows dispatched after that pass meets them, and their HELD counts like "
+            "any pass of that step, so an explicit HELD clears a stop and, in off, resolves the handoff's missing "
+            "Adversarial review.",
             "In auto, the claim's commit is the commit to be landed, and the brief also names the plan's base revision.",
         ),
         "command#Before the passes": (
@@ -1172,7 +1177,10 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "commit to be landed, with the workspace equal to it, runs as an explicit call against the commit the user "
             "names, or HEAD when the user names none, with the workspace equal to that commit, and counts as not run, as "
             "review state's What an explicit call runs and the procedure's At the final commit describe; only a call made "
-            "after then gives the claim's result.",
+            # Final check reuse ticket 01's code review: the condition is necessary only; the procedure states the rest.
+            "after then gives the claim's result, and that is a necessary condition only: for the rest, read the "
+            "[adversarial-review procedure](../delegation/references/adversarial-review.md)'s At the final commit and "
+            "follow it.",
         ),
         "command#results": (
             "In auto, a result from an earlier or another commit than the commit to be landed counts as not run, a BROKEN "
@@ -2099,7 +2107,9 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "In auto, main builds the list from the plan's dispatch record and its own observations in this session, "
             "never from another record in the working tree, such as a handoff, a ticket or the Follow-up record, and "
             "reports any difference between the list and such a record.",
-            "The list states the final check's state at the commit to be landed, as Final check describes; for each "
+            # Final check reuse ticket 01's code review: a reused recorded pass is stated with its run's time.
+            "The list states the final check's state at the commit to be landed, as Final check describes, and a reused "
+            "recorded pass with its run's time, as Recorded final check runs describes; for each "
             "claim, the commit its passes judged, each pass, each missing pass and each unresolved Blocking finding "
             "listed under it; for each Security-critical claim, its Adversarial review result at the commit to be "
             "landed, that is a BROKEN "

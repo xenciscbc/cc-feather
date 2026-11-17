@@ -14,7 +14,10 @@ test_feather_config, FOLLOW_UP_SENTENCES' whole Resumed sessions bullet and ACCE
 gated pass judged bullet; in test_feather_retained_passes, the Clearing a stop, What an explicit call runs and What a
 gated pass judged sentences of S2, the Resumed sessions sentence of ACROSS_SESSIONS and the CONTEXT.md Dispatch record
 entry's two sentences; in test_feather_delegation_dedupe, ONCE's R6.7 phrase and REPLACEMENTS' H13; in
-test_feather_security_review, the Clearing a stop sentence of the stopped-Adversarial-review scenario.
+test_feather_security_review, the Clearing a stop sentence of the stopped-Adversarial-review scenario. This ticket's code
+review also updates, in test_feather_retained_passes, the command's Gated and Security-critical and Before the passes
+sentences of S2 and the decision's list sentence, and in test_feather_security_review, GATE's Gated and
+Security-critical sentence.
 
 Ticket 02 brings the Final check scope into review state and adds its pins to this module."""
 
@@ -31,6 +34,7 @@ TAG = "v0.36.0"
 PATHS = {
     "review-state.md": "skills/delegation/references/review-state.md",
     "adversarial-review.md": "skills/delegation/references/adversarial-review.md",
+    "adversarial-review SKILL.md": "skills/adversarial-review/SKILL.md",
     "CONTEXT.md": "CONTEXT.md",
     "setup.md": "docs/setup.md",
     "README.md": "README.md",
@@ -163,6 +167,30 @@ class RecordedFinalCheckTests(unittest.TestCase):
             "counts as not run even after the claim's valid APPROVED and CONFIRMED: read the [Adversarial review "
             "procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
+        # Code review finding B1 (S1): the command's auto prerequisite admits, after a recorded pass, only an automatic
+        # call dispatched after it, so an explicit HELD then clears no stop; the off wording is unchanged.
+        "adversarial-review SKILL.md#Gated and Security-critical": (
+            "Both must meet the procedure's prerequisites, in off a valid APPROVED and a valid CONFIRMED at the same "
+            "commit with a clean workspace and in auto the final check passed at the commit to be landed with the "
+            "workspace equal to it, where after a recorded pass, as [review "
+            "state](../delegation/references/review-state.md)'s Recorded final check runs describes, only an automatic "
+            "call that the plan's dispatch record shows dispatched after that pass meets them, and their HELD counts "
+            "like any pass of that step, so an explicit HELD clears a stop and, in off, resolves the handoff's missing "
+            "Adversarial review.",
+            "In auto, an explicit call after a recorded pass therefore counts as not run and clears no stop: read the "
+            "[adversarial-review procedure](../delegation/references/adversarial-review.md)'s At the final commit and "
+            "follow it.",
+        ),
+        # Code review (non-blocking): the early-call bullet's condition is necessary only, and points to the procedure.
+        "adversarial-review SKILL.md#Before the passes": (
+            "A call in auto for a Security-critical claim the gate covers made before the final check passed at the "
+            "commit to be landed, with the workspace equal to it, runs as an explicit call against the commit the user "
+            "names, or HEAD when the user names none, with the workspace equal to that commit, and counts as not run, "
+            "as review state's What an explicit call runs and the procedure's At the final commit describe; only a call "
+            "made after then gives the claim's result, and that is a necessary condition only: for the rest, read the "
+            "[adversarial-review procedure](../delegation/references/adversarial-review.md)'s At the final commit and "
+            "follow it.",
+        ),
     }
 
     # Acceptance item 3: a reused pass is named, with the run's time, in the decision and the completion report.
@@ -170,6 +198,18 @@ class RecordedFinalCheckTests(unittest.TestCase):
         RUNS: (
             "When main reuses a recorded pass, the decision at the end of the plan and the completion report say that "
             "the pass is reused, with the run's time.",
+        ),
+        # Code review (non-blocking): the decision's list points to the rule above rather than restating it.
+        "review-state.md#Accept and land at the end of the plan": (
+            "The list states the final check's state at the commit to be landed, as Final check describes, and a "
+            "reused recorded pass with its run's time, as Recorded final check runs describes; for each claim, the "
+            "commit its passes judged, each pass, each missing pass and each unresolved Blocking finding listed under "
+            "it; for each Security-critical claim, its Adversarial review result at the commit to be landed, that is a "
+            "BROKEN with its findings as the adversary stated them, or by the one-line summary the dispatch record "
+            "holds for findings reported in an earlier session, an INCONCLUSIVE with its gaps, or not run; each fix "
+            "claim that is Security-critical, with its problem, a summary of the fix and that it had no Adversarial "
+            "review; the work's Follow-up record, which the list names without relying on it; and what this flow does "
+            "not check, as the next sentence states.",
         ),
     }
 
