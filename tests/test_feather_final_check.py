@@ -25,10 +25,12 @@ earlier run standing in; a run at the chosen scope passes or fails like any othe
 scope is set only by the user's own answer in this conversation, or the dispatch record's entry of it, and is `full`
 without one, with an unclear one or when none is asked; a final check that did not run at the Plan's scope needs accept
 and land; plan review recommends a scope with its reason, adding no verdict and no blocker; the ask after READY carries
-the scope question and stays step 5's one exception; off keeps the final check's earlier rules. The existing pins it
-replaces, updated where they are: in test_feather_resource_confirmation, the Proposed marks Where it applies and The
-ask sentences and the plan-review step 5 one-exception sentence; in test_feather_resource_floor, the count of links to
-the resource-risk runs reference."""
+the scope question and stays step 5's one exception; off keeps the final check's earlier rules; the glossary defines
+Final check scope and notes it in Related-test acceptance, and the setup document, both READMEs (paired) and both
+reference documents describe the scope and that only the user's answer to the scope question sets it. The existing
+pins it replaces, updated where they are: in test_feather_resource_confirmation, the Proposed marks Where it applies and
+The ask sentences and the plan-review step 5 one-exception sentence; in test_feather_resource_floor, the count of links
+to the resource-risk runs reference."""
 
 from __future__ import annotations
 
@@ -627,28 +629,46 @@ class FinalCheckScopeTests(unittest.TestCase):
             "record.",
             "Without that answer, with an unclear one, or when no scope is asked, the scope is `full`, and a release or "
             "tag always runs `full`.",
+            "A run at the chosen scope passes or fails like any other final check; one that did not run at the chosen "
+            "scope needs the user's accept-and-land decision.",
+            "The decision at the end of the plan and the completion report state the scope the final check ran at.",
+            "Choosing the scope is not a review event, and a later plan review after a deviation asks again only when "
+            "its recommendation changes.",
             "In `off`, there is no scope, and the final check runs the plan's overall acceptance as before.",
         ),
         "reference.md#Final check": (
             "In auto, the final check runs at the plan's final check scope: `full` runs the plan's overall acceptance "
             "and reruns every claim's primary acceptance, and `related` reruns every claim's primary acceptance alone, "
             "so a plan whose claims' related tests cover what it changes can land without the full suite.",
-            "Only your own answer in the conversation sets the scope, and main records it in the plan's dispatch record; "
-            "without your answer, with an unclear one, or when no scope is asked, the scope is `full`, and a release or "
-            "tag always runs `full`.",
+            "Plan review recommends a scope with its reason, and after READY main asks you once, in the same question as "
+            "resource-risk proposals, with plan review's recommendation and its own; it asks even when no proposal is "
+            "undecided, but not when the plan has no overall acceptance apart from its claims' acceptance, since both "
+            "scopes would then run the same checks.",
+            # Code review (non-blocking): only the answer to the scope question main asks after READY sets the scope,
+            # as review state's Final check scope states.
+            "Only your own answer in the conversation to the scope question main asks after READY sets the scope, a "
+            "choice you state without that question does not set it, and main records your answer in the plan's "
+            "dispatch record; without your answer, with an unclear one, or when no scope is asked, the scope is `full`, "
+            "and a release or tag always runs `full`.",
             "A run at the chosen scope passes or fails like any other final check, a final check that did not run at the "
             "chosen scope needs your accept-and-land decision, and the decision at the end of the plan and the "
             "completion report state the scope the final check ran at.",
+            "Choosing the scope is not a review event, and a later plan review after a deviation asks again only when its "
+            "recommendation changes.",
             "In `off`, there is no scope, and the final check runs the plan's overall acceptance as before.",
             "The scope's rule is review state's Final check scope.",
         ),
         "reference.zh-TW.md#最終檢查": (
             "在 auto 下，最終檢查依計畫的最終檢查範圍執行：`full` 執行計畫的整體驗收並重跑每個 claim 的主要驗收，`related` 只重跑"
             "每個 claim 的主要驗收，所以各 claim 的相關測試已涵蓋計畫所改內容時，計畫可以不跑完整測試就進入預設 branch。",
-            "只有你在對話中自己的回答能設定範圍，主 Agent 會把它記在計畫的派工紀錄中；沒有你的回答、回答不清楚，或沒有詢問範圍時，"
-            "範圍是 `full`，release 或 tag 一律執行 `full`。",
+            "計畫審查會建議一個範圍並說明理由，主 Agent 在 READY 之後、與資源風險提議同一次的提問中問你一次，附上計畫審查的建議與它"
+            "自己的建議；即使沒有未決定的提議也會問，但計畫除了各 claim 的驗收之外沒有整體驗收時不會問，因為兩種範圍會跑相同的檢查。",
+            "只有你在對話中自己對主 Agent 在 READY 之後所問範圍問題的回答能設定範圍，沒有這個提問時你表示的選擇不會設定範圍，主 "
+            "Agent 會把你的回答記在計畫的派工紀錄中；沒有你的回答、回答不清楚，或沒有詢問範圍時，範圍是 `full`，release 或 tag "
+            "一律執行 `full`。",
             "依所選範圍執行的結果與其他最終檢查一樣算通過或失敗，沒有依所選範圍執行的最終檢查需要你決定接受並合併，計畫結束時的決定"
             "與完成報告會寫出最終檢查執行時的範圍。",
+            "選擇範圍不是審查事件，偏離後的計畫審查只在建議改變時才再問一次。",
             "在 `off` 下沒有範圍，最終檢查照舊執行計畫的整體驗收。",
             "範圍的規則是審查狀態規則的 Final check scope。",
         ),
@@ -656,15 +676,24 @@ class FinalCheckScopeTests(unittest.TestCase):
 
     # The README pair: each English sentence with its Chinese counterpart, in the same bullet of each README.
     README_PAIRS = (
+        ("Final check and landing", "最終檢查與合併",
+         "Before landing, main runs every claim's primary acceptance at the commit to be landed, and the plan's overall "
+         "acceptance checks too unless you chose final check scope `related`, and fixes a failure in the claim that "
+         "caused it or in a fix claim.",
+         "合併前，主 Agent 會在要合併的 commit 上重跑每個 claim 的主要驗收，除非你選了最終檢查範圍 `related`，否則也會跑計畫"
+         "的整體驗收；失敗時由造成失敗的 claim 或一個修正用的 claim 修正。"),
         ("Final check scope", "最終檢查範圍",
          "in auto, plan review recommends `full` or `related` for the plan with its reason, and main asks you once, in "
          "the same question after READY as resource-risk proposals, with plan review's recommendation and its own.",
          "在 auto 下，計畫審查會為計畫建議 `full` 或 `related` 並說明理由，主 Agent 會在 READY 之後、與資源風險提議同一次的"
          "提問中問你一次，附上計畫審查的建議與它自己的建議。"),
+        # Code review (non-blocking): only the answer to the scope question main asks after READY sets the scope.
         ("Final check scope", "最終檢查範圍",
-         "Only your own answer sets it; without one the scope is `full`, a release always runs `full`, and when both "
-         "scopes would run the same checks you are not asked.",
-         "只有你自己的回答能設定範圍；沒有回答時範圍是 `full`，release 一律執行 `full`，兩種範圍會跑相同檢查時則不會問你。"),
+         "Only your own answer to the scope question main asks after READY sets it, and a choice you state without that "
+         "question does not; without one the scope is `full`, a release always runs `full`, and when both scopes would "
+         "run the same checks you are not asked.",
+         "只有你自己對主 Agent 在 READY 之後所問範圍問題的回答能設定範圍，沒有這個提問時你表示的選擇不會設定範圍；沒有回答時範圍是 "
+         "`full`，release 一律執行 `full`，兩種範圍會跑相同檢查時則不會問你。"),
         ("Final check scope", "最終檢查範圍",
          "The decision at the end of the plan and the completion report state the scope the final check ran at.",
          "計畫結束時的決定與完成報告會寫出最終檢查執行時的範圍。"),
@@ -674,9 +703,37 @@ class FinalCheckScopeTests(unittest.TestCase):
          "最終檢查範圍為 `related` 時（由你逐個計畫選擇），計畫的整體檢查也不會在那裡執行，所以計畫可能沒跑完整測試就合併。"),
     )
 
+    # Acceptance item 8: the glossary defines Final check scope and notes it in Related-test acceptance.
+    CONTEXT = {
+        "CONTEXT.md#Final check scope": (
+            "What the final check runs for a Plan in the Automatic flow: `full`, the Plan's overall acceptance and a rerun "
+            "of every Claim's primary acceptance, or `related`, the rerun of every Claim's primary acceptance alone.",
+            "Plan review recommends one with its reason; the user chooses it once, after the Plan's READY and before its "
+            "first Claim is implemented, and main records the choice in the Plan's Dispatch record.",
+            "Without a choice it is `full`, and a release always runs `full`.",
+            "A final check run at the chosen scope passes or fails like any other: `related` is not a missing check and "
+            "needs no Accept and land.",
+            "Choosing it is not a review event and changes no count or verdict.",
+        ),
+        "CONTEXT.md#Related-test acceptance": (
+            "An optional delegation setting, off by default, under which main names in each Claim's acceptance it writes "
+            "the tests related to the change instead of the full test suite, while the Plan's overall acceptance keeps "
+            "the full suite for the final check at Final check scope `full`: main adds one that names it to a Plan of "
+            "several Claims that has none, and the only Claim of a Plan without one keeps the full suite itself.",
+        ),
+    }
+
+    def readme_pins(self):
+        """README_PAIRS as pins of each README's bullet, so that the v0.36.0 check covers them."""
+        pins = {}
+        for label, label_zh, sentence, sentence_zh in self.README_PAIRS:
+            pins.setdefault(f"README.md#{label}", []).append(sentence)
+            pins.setdefault(f"README.zh-TW.md#{label_zh}", []).append(sentence_zh)
+        return pins
+
     def new_pins(self):
-        return (self.RUNS, self.SET_ONLY_BY_THE_USER, self.THE_ASK, self.RECOMMENDATION, self.DOCUMENTS,
-                {self.SCOPE: self.OFF[self.SCOPE]})
+        return (self.RUNS, self.SET_ONLY_BY_THE_USER, self.THE_ASK, self.RECOMMENDATION, self.DOCUMENTS, self.CONTEXT,
+                self.readme_pins(), {self.SCOPE: self.OFF[self.SCOPE]})
 
     def test_each_scope_reruns_every_claims_primary_acceptance_and_full_adds_the_overall_acceptance(self):
         self.assert_pinned(self.RUNS)
@@ -716,6 +773,9 @@ class FinalCheckScopeTests(unittest.TestCase):
 
     def test_the_documents_describe_the_scope_and_how_the_user_chooses_it(self):
         self.assert_pinned(self.DOCUMENTS)
+
+    def test_the_glossary_defines_the_scope_and_notes_it_in_related_test_acceptance(self):
+        self.assert_pinned(self.CONTEXT)
 
     def test_both_readmes_describe_the_scope_in_paired_sentences(self):
         english = (config.ROOT / "README.md").read_text(encoding="utf-8")
