@@ -591,12 +591,16 @@ class CompletionCriteriaTests(unittest.TestCase):
             "landing and in any accept-and-land decision.",
             "Once it has failed at a commit, that commit's state is failed, and a later pass at the same commit lets "
             "landing proceed only through an accept-and-land decision that names the failure.",
-            "Its state comes only from main's own run in this session at that commit, never passed from a record or an "
-            "earlier session, and after a context compaction main runs it again.",
-            "When main cannot establish from this session that the commit has not failed, it treats the commit as failed, "
-            "and a decision states that state as \"failed (presumed: not established as unfailed in this session)\", with "
-            "the reason and this session's outputs.",
-            "A record can only make the state failed, never passed.",
+            # Final check reuse ticket 01 (S1): the session-only state and the record that can only fail a commit hold
+            # in off; auto takes a recorded run only as Recorded final check runs describes, which
+            # tests/test_feather_final_check.py pins.
+            "In off, its state comes only from main's own run in this session at that commit, never passed from a record "
+            "or an earlier session, and after a context compaction main runs it again.",
+            "When main cannot establish from this session, or in auto from the plan's dispatch record as Recorded final "
+            "check runs describes, that the commit has not failed, it treats the commit as failed, and a decision states "
+            "that state as \"failed (presumed: not established as unfailed in this session)\", with the reason and this "
+            "session's outputs.",
+            "In off, a record can only make the state failed, never passed.",
             # Retained passes ticket 03 (Acceptance items 7 and 15): a failure reopens claims in off only; in auto it
             # is fixed by its claim or a fix claim, as tests/test_feather_retained_passes.py pins.
             "In off, the final check keeps its earlier rules, without the reruns, fix claims and stop above: a failure "

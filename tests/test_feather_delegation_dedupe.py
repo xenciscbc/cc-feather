@@ -661,7 +661,9 @@ ONCE = {
     "R5.6 taken as written": ("review-state.md", "Main takes the dispatch record as written", 1),
     "R5.7 off writes none": ("review-state.md", "Off mode writes", 1),
     "R6.5 how long a verdict restricts": ("review-state.md", "until a later call passes it or the user cancels the work", 1),
-    "R6.7 only from this session": ("review-state.md", "the Stop threshold in effect and the final check's state", 1),
+    # Final check reuse ticket 01 (S1): in auto the final check's state may come from a recorded run, so only the Stop
+    # threshold in effect is stated as coming only from this session.
+    "R6.7 only from this session": ("review-state.md", "the Stop threshold in effect comes only from this session", 1),
     "R6.10 Unknown state": ("review-state.md", "treat the step as stopped and ask the user", 1),
     "R6.11 never a count of zero": ("review-state.md", "count of zero", 1),
     "R7.4 a precondition failure": ("review-state.md", "precondition failure, not a call", 1),
@@ -938,10 +940,9 @@ REPLACEMENTS = {
     "H12": ("review-state.md#Accept and land at the end of the plan",
             "When nothing listed needs it, the question is only the user's authority to land, which landing needs as "
             "Repository authority describes, and nothing is recorded as accept and land."),
+    # Final check reuse ticket 01 (S1): the final check's state follows Recorded final check runs in auto.
     "H13": ("review-state.md#Resumed sessions",
-            "Counts still restart in each session, and the Stop threshold in effect and the final check's state come only "
-            "from this session, so main runs the final check again in the new session before landing, as Final check "
-            "describes."),
+            "Counts still restart in each session, and the Stop threshold in effect comes only from this session."),
     "D1": ("review-state.md#Reading set",
            "A Security-critical claim's security invariants and test targets are those written in the claim's own text "
            "(for a claim of a plan that is neither a spec nor tickets of a spec, its own part of that plan), the parts it "

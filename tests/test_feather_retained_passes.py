@@ -1127,8 +1127,11 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "A BROKEN's findings stay listed until a HELD at the commit to be landed replaces them.",
         ),
         "review-state.md#What a gated pass judged": (
+            # Final check reuse ticket 01 (S1): after a recorded pass, only an automatic call recorded after it.
             "In auto, an Adversarial review gives the claim's result only when it is made after the final check passed at "
-            "the commit to be landed, with the workspace equal to it, and judges that commit; the claim's APPROVED and "
+            "the commit to be landed, with the workspace equal to it, and judges that commit, and after a recorded pass, as "
+            "Recorded final check runs describes, only when it is an automatic call that the plan's dispatch record shows "
+            "dispatched after that pass; the claim's APPROVED and "
             "CONFIRMED are a record of the commits they judged, and a result from an earlier or another commit, or an "
             "explicit call made before then, counts as not run: read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
@@ -1140,12 +1143,16 @@ class AdversarialReviewAtTheFinalCommitTests(unittest.TestCase):
             "read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "review-state.md#Clearing a stop": (
+            # Final check reuse ticket 01 (S1): an explicit HELD after a recorded pass counts as not run too.
             "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the "
-            "workspace equal to it, does not clear a stop either, since it counts as not run: read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
+            "workspace equal to it, or obtained after a recorded pass, as Recorded final check runs describes, does not "
+            "clear a stop either, since it counts as not run: read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "review-state.md#What an explicit call runs": (
+            # Final check reuse ticket 01 (S1): an explicit call after a recorded pass counts as not run too.
             "In auto, an explicit Adversarial review made before the final check passed at the commit to be landed, with "
-            "the workspace equal to it, counts as not run even after the claim's valid APPROVED and CONFIRMED: "
+            "the workspace equal to it, or made after a recorded pass, as Recorded final check runs describes, counts as "
+            "not run even after the claim's valid APPROVED and CONFIRMED: "
             "read the [Adversarial review procedure](adversarial-review.md)'s At the final commit and follow it.",
         ),
         "command#classifying": (
@@ -1642,10 +1649,9 @@ class DispatchRecordTests(unittest.TestCase):
             "dispatch record, as Dispatch record describes, and they count as if received in this session: a claim is "
             "not reviewed again for having passed in an earlier session, and implemented work whose READY the record "
             "holds does not ask again under Implemented before plan review.",
-            # Delegation dedupe ticket 02, H13.
-            "Counts still restart in each session, and the Stop threshold in effect and the final "
-            "check's state come only from this session, so main runs the final check again in the new session before "
-            "landing, as Final check describes.",
+            # Delegation dedupe ticket 02, H13. Final check reuse ticket 01 (S1): the final check's state follows
+            # Recorded final check runs in auto, as tests/test_feather_final_check.py pins.
+            "Counts still restart in each session, and the Stop threshold in effect comes only from this session.",
             "Where the dispatch record lacks what main needs, Unknown state applies.",
             "For a plan in auto, this replaces the rules above that passing verdicts do not cross sessions and that an "
             "unresolved verdict reaches a resumed session only through an active handoff, and the rule that the list "
@@ -1784,14 +1790,19 @@ class DispatchRecordTests(unittest.TestCase):
         "CONTEXT.md#Dispatch record": (
             "Main's record of one Plan's review state in the Automatic flow, at `.feather/dispatch/<name>.md` in the "
             "project, named after the Plan.",
+            # Final check reuse ticket 01 (S1): the entry holds the final check runs and the Adversarial review calls'
+            # time and source, and states the reuse condition in place of the final check's state coming only from
+            # this session.
             "It holds the Plan, its base revision and READY; each Claim's classification, reading set hash and base "
             "revision, and each review call's judged commit and verdict with a one-line summary; each fix Claim with its "
-            "problem and a summary of the fix; the branches main created for the work; and the user's decisions with "
-            "their scope; never counts, exploit details or secrets.",
+            "problem and a summary of the fix; each final check run with its commit, scope, each Claim's reading set "
+            "hash, result with a one-line summary and time; each Adversarial review call's time and source; the "
+            "branches main created for the work; and the user's decisions with their scope; never counts, exploit "
+            "details or secrets.",
             "Main writes it only between review calls and keeps it out of Git, never staging or committing it.",
             "A resumed session, and main after a context compaction, take the Plan's READY, reading sets, passes, "
-            "Adversarial review results and the user's decisions from it as if received in this session, while counts, "
-            "the Stop threshold in effect and the final check's state still come only from this session.",
+            "Adversarial review results and the user's decisions from it as if received in this session, while counts "
+            "and the Stop threshold in effect still come only from this session.",
             "Main takes it as written, so an edit to it changes what main believes.",
             "Off mode writes none.",
         ),

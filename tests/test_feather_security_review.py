@@ -1881,7 +1881,8 @@ class AdversarialReviewRetriesTests(unittest.TestCase):
           # Retained passes ticket 04 (Acceptance items 8 and 15, S2): step 1's early-call rule names off, and in auto the early HELD
           # counts as not run.
           ("adversarial-review.md#1", "In off, an explicit call the user requests for a claim that does not yet have a valid APPROVED and a valid CONFIRMED at the same commit still runs, against the commit the user names, or HEAD when the user names none, with the workspace equal to that commit, but it does not count as the step's pass."),
-          ("review-state.md#Clearing a stop", "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the workspace equal to it, does not clear a stop either, since it counts as not run:")),
+          # Final check reuse ticket 01 (S1): an explicit HELD after a recorded pass counts as not run too.
+          ("review-state.md#Clearing a stop", "In auto, an explicit HELD obtained before the final check passed at the commit to be landed, with the workspace equal to it, or obtained after a recorded pass, as Recorded final check runs describes, does not clear a stop either, since it counts as not run:")),
          ()),
         ("Adversarial review stops with a tracked handoff active",
          "the pending-acceptance note records the open findings only as a summary unless the user agrees",
