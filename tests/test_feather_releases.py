@@ -2267,7 +2267,7 @@ class DesignAndTestChecksReleaseTests(unittest.TestCase):
     manifest version is 0.36.0; the Updates note, in both languages, says what the release adds, that existing
     installations need no setup update and how to go back to 0.35.0; the validation entry records the tickets, the
     `git diff-tree` determination, the test runs, the reviewing version, what the tests cannot show, the tag and the
-    review round, and is the file's last."""
+    review round."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.36.0 note in order.
     UPDATES = (
@@ -2332,16 +2332,18 @@ class DesignAndTestChecksReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_36_0(self):
-        self.assertEqual("0.36.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.37.0, final check reuse and Auto land).
 
     def test_updates_sections_start_with_the_design_checks_note_in_both_languages(self):
         previous = ResourceRiskConfirmationReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = FinalCheckReuseAndAutoLandReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.36.0 note starts right after the section's opening sentence, its sentences in order, before 0.35.0's.
+            # The 0.36.0 note starts right after the 0.37.0 note, its sentences in order, before 0.35.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -2363,6 +2365,179 @@ class DesignAndTestChecksReleaseTests(unittest.TestCase):
         self.assertNotIn(".scratch", entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.37.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(FinalCheckReuseAndAutoLandReleaseTests.ENTRY_HEADING))
+
+
+class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
+    """0.37.0 (docs/specs/final-check-reuse-and-auto-land.md, Implementation Decisions' Release; ticket 04): the manifest
+    version is 0.37.0; the Updates note, in both languages, says what the release adds with links to the reference and
+    the Auto land section; the Updates note, the setup documentation and the validation entry say that the analyst role
+    definition changed so existing installations need setup update, that a 0.36.x or older configuration tool rejects a
+    scope with a saved Auto land setting so a downgrade first sets it back to `default` there, and that a session choice
+    needs nothing; the validation entry records the tickets, the `git diff-tree` determination with its upgrade and
+    downgrade check, the test runs, the reviewing version, what the tests cannot show, the tag and the review round, and
+    is the file's last."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.37.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.37.0 reuses a final check pass recorded in the plan's dispatch record across sessions and context compaction while nothing has changed, lets you choose the final check scope, `full` or `related`, once for each plan in the question after READY, on plan review's recommendation, and adds Auto land, an optional setting, off by default, under which main lands a plan in auto without asking when nothing in the decision at the end of the plan needs your accept-and-land decision, only by a fast-forward push of the commit the final check and the reviews judged, never releasing or tagging, and `/cc-feather:auto-land`, which sets it, as [Automatic review](docs/reference.md#automatic-review) and [Auto land](#auto-land) describe.",
+         "It changes the analyst role definition, for plan review's final check scope recommendation, so existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` warns that analyst is from an older template.",
+         "A 0.36.x or older configuration tool rejects a scope with a saved Auto land setting with `invalid delegation state schema` and changes nothing, so to go back to 0.36.0, first set it back to `default` there with `/cc-feather:auto-land default project` or `/cc-feather:auto-land default user` in every scope where you saved it, then reinstall the 0.36.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session, so that it restores the 0.36.0 analyst role definition; a session choice needs nothing, and no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.37.0 會在沒有任何變更時，跨 session 與 context 壓縮沿用計畫分派紀錄中記錄的最終檢查通過結果；讓你依計畫審查的建議，在 READY 之後的提問中為每個計畫選一次最終檢查範圍 `full` 或 `related`；並新增自動合併：一項選用設定，預設關閉，開啟時，在 auto 下計畫最後的決定裡沒有任何項目需要你決定接受並合併時，主 Agent 不再詢問，只以 fast-forward 推送最終檢查與審查判斷過的 commit 來合併計畫，絕不 release 或建立 tag；另新增設定它的 `/cc-feather:auto-land`，詳見[自動審查](docs/reference.zh-TW.md#自動審查)與[自動合併](#自動合併)。",
+         "它為了計畫審查的最終檢查範圍建議改了 analyst 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會提醒 analyst 來自較舊的範本。",
+         "0.36.x 或更舊的設定工具會以 `invalid delegation state schema` 拒絕已儲存自動合併設定的範圍且不做任何變更，所以要回到 0.36.0，先在每個儲存過它的範圍以 `/cc-feather:auto-land default project` 或 `/cc-feather:auto-land default user` 把它設回 `default`，再重新安裝 0.36.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session，讓它還原 0.36.0 的 analyst 角色定義；session 的選擇不需要任何處理，也不需要先移除。"),
+    )
+    # The role definitions this release changes (`git diff-tree -r --name-only v0.36.0 HEAD -- templates`), and those it
+    # does not.
+    CHANGED_ROLES = ("analyst",)
+    UNCHANGED_ROLES = ("scout", "mech-executor", "executor", "security-executor", "verifier", "reviewer", "adversary",
+                       "Explore")
+    # Each link in the note, with the document and heading it reaches, paired in both languages.
+    LINKS = (
+        (("(docs/reference.md#automatic-review)", "docs/reference.md", "\n## Automatic review\n"),
+         ("(#auto-land)", "README.md", "\n### Auto land\n")),
+        (("(docs/reference.zh-TW.md#自動審查)", "docs/reference.zh-TW.md", "\n## 自動審查\n"),
+         ("(#自動合併)", "README.zh-TW.md", "\n### 自動合併\n")),
+    )
+
+    # The setup documentation: the update, the downgrade and the session choice in the Auto land section, then the
+    # upgrade and the way back in the added-roles section after 0.35.0's, each in order.
+    SETUP = (
+        ("\n## Auto land\n", (
+            "Updating from 0.36.0 needs setup update in every scope where delegation is installed, then a fresh session, because 0.37.0 changes the analyst role template.",
+            "A 0.36.x or older configuration tool rejects a scope with a saved Auto land setting, so a downgrade first sets it back to `default` there.",
+            "That is `review --auto-land default` in every scope that saved the setting, run before the older plugin is reinstalled; a scope without a saved setting needs nothing, and a session choice, which writes nothing, needs nothing either.")),
+        ("\n## Added roles and incompatible role sets\n", (
+            ResourceRiskConfirmationReleaseTests.SETUP[-1],
+            "Upgrading to 0.37.0 needs setup update in every scope where delegation is installed, then a fresh session: it changes the analyst role template, and until the update `check` and `show` report analyst from an older template.",
+            "To go back to 0.36.0 from 0.37.0, no remove is needed: first set a saved Auto land setting back to `default` with 0.37.0 in every scope that saved it, because 0.36.0 rejects a state that records it; 0.36.0 then reads the state 0.37.0 writes, and its own setup update re-renders its role templates, so run setup update with 0.36.0 in every scope where delegation is installed, then start a fresh session.")),
+    )
+
+    # The validation entry: the spec and its tickets with their commits, the setup determination with its evidence and
+    # the upgrade and downgrade check, the test runs, the reviewing version, what the tests cannot show, the tag and the
+    # review round.
+    ENTRY_HEADING = "\n## 0.37.0 final check reuse and Auto land\n"
+    ENTRY = (
+        "Implements [the Final check reuse and Auto land spec](specs/final-check-reuse-and-auto-land.md), written on 2026-11-17 and added in e3d83ce,",
+        "[ADR 0021](adr/0021-final-check-passes-are-recorded-and-clean-plans-may-land-themselves.md)",
+        "ticket 01, recorded final check passes, in 3447e69 and 7742e9b;",
+        "ticket 02, the Final check scope, in c7a3b2f and a00951f;",
+        "ticket 03, the Auto land setting and `/cc-feather:auto-land`, in ac10499;",
+        "ticket 04, this release, in the commit carrying this entry.",
+        "**Setup update is required.**",
+        "`git diff-tree -r --name-only v0.36.0 HEAD -- templates skills/setup scripts` lists `scripts/feather_config.py`, `skills/setup/SKILL.md`, the new `skills/setup/references/auto-land.md`, `templates/agents/analyst.md` and the new `templates/auto-land.md`:",
+        "Existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session;",
+        "with v0.36.0's setup tool exported by `git archive v0.36.0`",
+        "Its `update --component both` changed only `analyst.md` and `state.json` in each scope,",
+        "v0.36.0's `check`, `show` and `update --component delegation` each refused with `invalid delegation state schema`, exit 2,",
+        "and the 22 files of both scopes were byte-identical to the v0.36.0 installation.",
+        "A 0.36.x or older configuration tool therefore rejects a scope with a saved Auto land setting, so a downgrade first sets it back to `default` there:",
+        "a scope without a saved setting, and a session choice, which writes nothing, need nothing.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "(the 0.36.0 release ran 1345 tests with 29 skips).",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
+        "with the installed cc-feather 0.36.0's roles and procedures, not this release's candidate.",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.37.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 04 are accepted and only after the user's go-ahead.",
+        "Tickets 01 to 03 are Security-critical,",
+        "No claim is a Resource-risk claim: plan review proposed none.",
+        "and READY on call 2 at defea35.",
+        "the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_37_0(self):
+        self.assertEqual("0.37.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_auto_land_note_in_both_languages(self):
+        previous = DesignAndTestChecksReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.37.0 note starts right after the section's opening sentence, its sentences in order, before 0.36.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_require_setup_update_and_set_auto_land_back_to_go_back(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # Setup update after the plugin update and again when going back, never said to be unnecessary.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                for no_update in RetainedPassesReleaseTests.NO_SETUP_UPDATE:
+                    self.assertNotIn(no_update, note)
+                self.assertNotIn("need only the plugin update", note)
+                self.assertNotIn("只要更新 plugin", note)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+                # Going back sets a saved Auto land setting back to `default` before the older plugin is reinstalled.
+                self.assertIn("`invalid delegation state schema`", note)
+                self.assertLess(note.index("`/cc-feather:auto-land default project`"),
+                                note.index("0.36.0 的 plugin" if name.endswith("zh-TW.md") else "reinstall the 0.36.0 plugin"))
+
+    def test_the_note_names_only_the_role_definition_the_release_changes(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            for role in self.CHANGED_ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertIn(role, note)
+            for role in self.UNCHANGED_ROLES:
+                with self.subTest(readme=name, unchanged=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), links in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            for link, document, target in links:
+                with self.subTest(readme=name, link=link):
+                    self.assertIn(link, note)
+                    self.assertEqual(self.text(document).count(target), 1)
+
+    def test_setup_document_states_the_update_and_the_downgrade(self):
+        text = self.text("docs/setup.md")
+        for heading, sentences in self.SETUP:
+            self.assertEqual(text.count(heading), 1)
+            self.assert_in_order(self.section(text, heading), sentences, heading.strip())
+
+    def test_validation_entry_records_the_release_check_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in
+                   ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:", "Ticket 04:")]
         self.assertEqual(tickets, sorted(tickets))
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
