@@ -71,6 +71,12 @@ RELATED_TESTS_VALUES = {"project": ("on", "off"), "user": ("on",)}
 USER_RELATED_TESTS_ON = "Related-test acceptance is on."
 PROJECT_RELATED_TESTS_ON = "Related-test acceptance is on in this project; this overrides broader Feather guidance."
 PROJECT_RELATED_TESTS_OFF = "Related-test acceptance is off in this project; this overrides broader Feather guidance."
+# Saved Auto land: like Related-test acceptance, on in either scope or off in project scope, and nothing while unset.
+# What it authorises lives only in templates/auto-land.md; these sentences only say whether it applies.
+AUTO_LAND_VALUES = {"project": ("on", "off"), "user": ("on",)}
+USER_AUTO_LAND_ON = "Auto land is on."
+PROJECT_AUTO_LAND_ON = "Auto land is on in this project; this overrides broader Feather guidance."
+PROJECT_AUTO_LAND_OFF = "Auto land is off in this project; this overrides broader Feather guidance."
 # Commands allowed where project scope is the user configuration: inspection and removal of an earlier install.
 ALIASED_PROJECT_COMMANDS = {"check", "show", "session", "remove"}
 # YAML plain scalars starting with these may mean something other than their text.
@@ -515,6 +521,9 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
             if value["version"] == VERSION and isinstance(record, dict) and "related_tests" in record:
                 # Optional: present only while Related-test acceptance is saved.
                 expected |= {"related_tests"}
+            if value["version"] == VERSION and isinstance(record, dict) and "auto_land" in record:
+                # Optional: present only while Auto land is saved.
+                expected |= {"auto_land"}
         if not isinstance(record, dict) or (value["version"] >= 3 and set(record) != expected):
             raise ConfigError(f"invalid {name} state schema")
         if not isinstance(record["added_before"], bool) or not isinstance(record["added_after"], bool):
@@ -534,6 +543,8 @@ def _load_state(path: Path, scope: str, defaults: dict[str, dict[str, str]]) -> 
                 raise ConfigError("invalid saved stop threshold")
             if "related_tests" in record and not _valid_related_tests(record["related_tests"], scope):
                 raise ConfigError("invalid saved related-test acceptance")
+            if "auto_land" in record and not _valid_auto_land(record["auto_land"], scope):
+                raise ConfigError("invalid saved auto land")
             if (not isinstance(record["choices"], dict) or not isinstance(record["hashes"], dict)
                     or set(record["hashes"]) != set(record["choices"])
                     or not set(ROLES) - set(ADDED_ROLES) - _external(record) <= set(record["choices"])
@@ -621,7 +632,7 @@ def _block_template(path: Path) -> str:
 
 
 def _policy(review_mode: str, prefix: str = "", *, scope: str = "user", stop_threshold: int | None = None,
-            related_tests: str | None = None) -> str:
+            related_tests: str | None = None, auto_land: str | None = None) -> str:
     path = ROOT / "templates" / "CLAUDE.md"
     text = _block_template(path)
     parts = _block_parts(text)
@@ -643,6 +654,12 @@ def _policy(review_mode: str, prefix: str = "", *, scope: str = "user", stop_thr
         auto += opening + " " + _related_tests_rule() + "\n\n"
     elif related_tests == "off":
         auto += PROJECT_RELATED_TESTS_OFF + "\n\n"
+    # Saved Auto land is the last paragraph, in both modes; its text says that it applies in auto only.
+    if auto_land == "on":
+        opening = PROJECT_AUTO_LAND_ON if scope == "project" else USER_AUTO_LAND_ON
+        auto += opening + " " + _auto_land_rule() + "\n\n"
+    elif auto_land == "off":
+        auto += PROJECT_AUTO_LAND_OFF + "\n\n"
     names = ""
     if prefix:
         listed = ", ".join(f"{role} = {_role_name(role, prefix)}" for role in ROLES if role != "Explore")
@@ -686,15 +703,43 @@ def _related_tests_report(saved: str | None) -> dict[str, Any]:
     return {"related_tests": "off" if saved is None else saved, "related_tests_set": saved is not None}
 
 
+def _valid_auto_land(value: object, scope: str) -> bool:
+    # User-scope off equals the default and is never saved, so a saved one is malformed.
+    return isinstance(value, str) and value in AUTO_LAND_VALUES[scope]
+
+
+def _parse_auto_land(value: str, scope: str) -> str | None:
+    """A requested Auto land: the value to save, or None for nothing saved."""
+    if value not in ("on", "off", "default"):
+        raise ConfigError("--auto-land must be on, off or default")
+    return value if value in AUTO_LAND_VALUES[scope] else None
+
+
+def _auto_land_report(saved: str | None) -> dict[str, Any]:
+    """How show, check and previews report a scope's Auto land: the saved value, or off while unset."""
+    return {"auto_land": "off" if saved is None else saved, "auto_land_set": saved is not None}
+
+
 def _delegation_block(review_mode: str, prefix: str, scope: str, stop_threshold: int | None,
-                      related_tests: str | None = None) -> str:
+                      related_tests: str | None = None, auto_land: str | None = None) -> str:
     """The delegation block for these choices; without saved settings, exactly the plain policy rendering."""
     saved: dict[str, Any] = {}
     if stop_threshold is not None:
         saved["stop_threshold"] = stop_threshold
     if related_tests is not None:
         saved["related_tests"] = related_tests
+    if auto_land is not None:
+        saved["auto_land"] = auto_land
     return _policy(review_mode, prefix, scope=scope, **saved)
+
+
+def _auto_land_rule() -> str:
+    """What a saved Auto land authorises: one paragraph, written only in its template."""
+    path = ROOT / "templates" / "auto-land.md"
+    text = _block_template(path).strip()
+    if not text or "{{" in text or "\n\n" in text or "<!--" in text:
+        raise ConfigError("auto land template must be one paragraph without placeholders or markers")
+    return text
 
 
 def _related_tests_rule() -> str:
@@ -927,19 +972,21 @@ def _edit_role_fields(data: bytes, old: dict[str, str], new: dict[str, str], pat
 
 def _edit_review_block(block: str, old: str, new: str, prefix: str, *, scope: str = "user",
                        old_threshold: int | None = None, new_threshold: int | None = None,
-                       old_related: str | None = None, new_related: str | None = None) -> str:
+                       old_related: str | None = None, new_related: str | None = None,
+                       old_auto_land: str | None = None, new_auto_land: str | None = None) -> str:
     # Blocks rendered from a CRLF checkout keep CRLF; compare as LF and write back the file's endings.
     current = block.replace("\r\n", "\n")
     # A project that was off before the off line existed has the user-scope rendering.
-    if current in (_delegation_block(old, prefix, scope, old_threshold, old_related),
-                   _delegation_block(old, prefix, "user", old_threshold, old_related)):
-        result = _delegation_block(new, prefix, scope, new_threshold, new_related)
+    if current in (_delegation_block(old, prefix, scope, old_threshold, old_related, old_auto_land),
+                   _delegation_block(old, prefix, "user", old_threshold, old_related, old_auto_land)):
+        result = _delegation_block(new, prefix, scope, new_threshold, new_related, new_auto_land)
     else:
         # Guidance from earlier templates keeps its rules and switches them with a mode line; it has no place
-        # for a Stop threshold sentence or the Related-test acceptance rule, so changing either saved setting
-        # needs setup update first.
+        # for a Stop threshold sentence, the Related-test acceptance rule or the Auto land paragraph, so
+        # changing any of these saved settings needs setup update first.
         line = f"Automatic plan review mode: {old}"
-        if current.count(line) != 1 or old_threshold != new_threshold or old_related != new_related:
+        if (current.count(line) != 1 or old_threshold != new_threshold or old_related != new_related
+                or old_auto_land != new_auto_land):
             raise ConfigError("installed guidance is from an older template; run setup update first")
         result = current.replace(line, f"Automatic plan review mode: {new}", 1)
     return result.replace("\n", "\r\n") if "\r\n" in block else result
@@ -954,7 +1001,8 @@ def _older_template(block: str, record: dict[str, Any], scope: str) -> bool:
     """
     mode, prefix = record["review_mode"], record.get("role_prefix", "")
     try:
-        current = _delegation_block(mode, prefix, scope, record.get("stop_threshold"), record.get("related_tests"))
+        current = _delegation_block(mode, prefix, scope, record.get("stop_threshold"), record.get("related_tests"),
+                                    record.get("auto_land"))
     except ConfigError:
         return False
     return block.replace("\r\n", "\n") != current
@@ -1128,10 +1176,13 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         raise ConfigError("--related-tests is supported only by review")
     requested_related = (_parse_related_tests(args.related_tests, args.scope)
                          if args.related_tests is not None else None)
+    if args.auto_land is not None and args.command != "review":
+        raise ConfigError("--auto-land is supported only by review")
+    requested_auto_land = _parse_auto_land(args.auto_land, args.scope) if args.auto_land is not None else None
     if (args.command == "review" and args.review_mode is None and args.stop_threshold is None
-            and args.related_tests is None):
+            and args.related_tests is None and args.auto_land is None):
         raise ConfigError("review requires --review-mode auto|off, --stop-threshold 2-10|default, "
-                          "--related-tests on|off|default, or a combination of them")
+                          "--related-tests on|off|default, --auto-land on|off|default, or a combination of them")
     if args.command not in {"install", "review"} and args.review_mode is not None:
         raise ConfigError("--review-mode is supported only by install or review")
     if args.review_mode is not None and "delegation" not in selected:
@@ -1288,6 +1339,8 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
     stop_threshold = requested_threshold if args.stop_threshold is not None else saved_threshold
     saved_related = delegation.get("related_tests") if delegation else None
     related_tests = requested_related if args.related_tests is not None else saved_related
+    saved_auto_land = delegation.get("auto_land") if delegation else None
+    auto_land = requested_auto_land if args.auto_land is not None else saved_auto_land
     for name in active_components:
         record = records.get(name)
         if args.command == "remove" and record is None:
@@ -1324,12 +1377,13 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         if args.command == "review":
             block = _edit_review_block(parts[1], record["review_mode"], review_mode, prefix, scope=args.scope,
                                        old_threshold=saved_threshold, new_threshold=stop_threshold,
-                                       old_related=saved_related, new_related=related_tests)
+                                       old_related=saved_related, new_related=related_tests,
+                                       old_auto_land=saved_auto_land, new_auto_land=auto_land)
         elif args.command == "model":
             block = parts[1]
         else:
             block = _file_line_endings(_delegation_block(review_mode, prefix, args.scope, stop_threshold,
-                                                         related_tests), text)
+                                                         related_tests, auto_land), text)
         text, added_before, added_after = _put_block(text, name, block, record)
         records[name] = {"choices": choices, "hashes": {role: digest(after[str(path)]) for role, path in agents.items()},
                          "block_hash": _block_digest(block), "review_mode": review_mode,
@@ -1341,6 +1395,9 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
         if related_tests is not None:
             # Present only while saved, like the Stop threshold.
             records[name]["related_tests"] = related_tests
+        if auto_land is not None:
+            # Present only while saved, like Related-test acceptance.
+            records[name]["auto_land"] = auto_land
     created_imports = list(target["imports"])
     created_guidance = state is not None and state.get("created_guidance") is True
     guidance_warnings = []
@@ -1378,7 +1435,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
                 "templates": {role: digest(_render(role, choices[role], prefix)) for role in choices}
                              if "delegation" in active_components and args.command in {"install", "update"} else {},
                 "policy": digest(_delegation_block(review_mode, prefix, args.scope, stop_threshold,
-                                                   related_tests).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
+                                                   related_tests, auto_land).encode("utf-8")) if "delegation" in active_components and args.command in {"install", "update"} else None,
                 "handoff_policy": digest(_handoff_policy().encode("utf-8")) if "handoff" in active_components and args.command in {"install", "update"} else None,
                 "leases_policy": digest(_leases_policy().encode("utf-8")) if "leases" in active_components and args.command in {"install", "update"} else None}
     plan_id = digest(canonical(identity))
@@ -1387,6 +1444,7 @@ def _plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, bytes | N
               "choices": choices if choices else (delegation["choices"] if delegation else {}),
               "review_mode": review_mode, **_threshold_report(stop_threshold if "delegation" in records else None),
               **_related_tests_report(related_tests if "delegation" in records else None),
+              **_auto_land_report(auto_land if "delegation" in records else None),
               "guidance": str(guidance), "requested_configuration_only": True,
               "changes": changes,
               "warnings": (_warnings(args) + list(_AGENT_WARNINGS) if "delegation" in selected else []) + guidance_warnings}
@@ -1650,6 +1708,7 @@ def _inspect(args: argparse.Namespace) -> dict[str, Any]:
             "review_mode": delegation["review_mode"] if delegation else "off",
             **_threshold_report(delegation.get("stop_threshold") if delegation else None),
             **_related_tests_report(delegation.get("related_tests") if delegation else None),
+            **_auto_land_report(delegation.get("auto_land") if delegation else None),
             "paths": {"config_root": str(base / "cc-feather"), "state": str(state_path),
                       "guidance": str(guidance), "agents": {role: str(path) for role, path in reported_agents.items()}},
             "choices": delegation["choices"] if delegation else {r: {"model": defaults[r]["model"], "effort": defaults[r]["effort"]} for r in ROLES},
@@ -1747,6 +1806,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="review: save the Stop threshold for the scope, or remove it with default")
     parser.add_argument("--related-tests", metavar="on|off|default",
                         help="review: save Related-test acceptance for the scope, or remove it with default")
+    parser.add_argument("--auto-land", metavar="on|off|default",
+                        help="review: save Auto land for the scope, or remove it with default")
     parser.add_argument("--component", choices=("handoff", "delegation", "leases", "both"),
                         help="Component for mutations; default delegation. both is handoff and delegation, never leases")
     parser.add_argument("--guidance", choices=("claude", "agents"),
@@ -1769,6 +1830,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise ConfigError("--stop-threshold is supported only by review")
             if args.related_tests is not None:
                 raise ConfigError("--related-tests is supported only by review")
+            if args.auto_land is not None:
+                raise ConfigError("--auto-land is supported only by review")
             if args.apply or args.expected_plan or args.review_mode or args.guidance or args.component != "delegation":
                 raise ConfigError("session is read-only and delegation-only")
             result = _session(args)
@@ -1777,6 +1840,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise ConfigError("--stop-threshold is supported only by review")
             if args.related_tests is not None:
                 raise ConfigError("--related-tests is supported only by review")
+            if args.auto_land is not None:
+                raise ConfigError("--auto-land is supported only by review")
             if args.apply or args.expected_plan or args.set or args.review_mode or args.guidance:
                 raise ConfigError("check and show are read-only and accept no mutation options")
             result = _inspect(args)

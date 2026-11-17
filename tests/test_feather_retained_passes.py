@@ -2172,9 +2172,11 @@ class DecisionAtTheEndTests(unittest.TestCase):
     # Acceptance item 13: in auto, a ticket is set to a done value only after the decision.
     TICKETS = {
         "review-state.md#Ticket status": (
+            # Replaced by Auto land (final-check-reuse-and-auto-land 03): an automatic landing also sets tickets done.
             "In auto, main sets the ticket of a claim of plan-driven work to a done value only after the user's decision "
-            "at the end of the plan, as Accept and land at the end of the plan describes, even when the claim has "
-            "passed; until then main records the claim's pass state in the plan's dispatch record.",
+            "at the end of the plan, as Accept and land at the end of the plan describes, or after main landed the plan "
+            "under Auto land, as Auto land describes, even when the claim has passed; until then main records the "
+            "claim's pass state in the plan's dispatch record.",
         ),
     }
 
@@ -2250,13 +2252,17 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "The list states the final check, each Claim's passes, missing passes and unresolved Blocking findings, each "
             "Adversarial review result, each Security-critical fix Claim with its problem and fix, the Follow-up record "
             "and what the flow does not check.",
+            # Replaced by Auto land (final-check-reuse-and-auto-land 03): Auto land gives that authority in advance.
             "Landing as it stands is recorded as Accept and land only for the Claims that need it; when nothing listed "
-            "needs it, the question is only the user's authority to land.",
+            "needs it, the question is only the user's authority to land, which Auto land gives in advance, so that "
+            "with Auto land in effect main lands without asking.",
         ),
         "CONTEXT.md#Acceptance gate": (
+            # Replaced by Auto land (final-check-reuse-and-auto-land 03).
             "In the Automatic flow, a Plan's Claims are landed only after the user's decision at the end of the Plan, "
-            "which records Accept and land only for the Claims that need it, and their tickets are set to a done value "
-            "only after that decision.",
+            "which records Accept and land only for the Claims that need it, or, when nothing needs Accept and land, by "
+            "main without asking while Auto land is in effect, and their tickets are set to a done value only after "
+            "that decision or that landing.",
         ),
     }
 

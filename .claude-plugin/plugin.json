@@ -26,6 +26,7 @@
     "./skills/related-tests",
     "./skills/test-speedup",
     "./skills/overdesign-check",
+    "./skills/auto-land",
     "./skills/adversarial-review",
     "./skills/leases",
     "./skills/worktrees"

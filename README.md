@@ -37,6 +37,7 @@ For a local checkout, add its absolute path as the marketplace instead. For deve
 - `/cc-feather:auto-off`: disable automatic review.
 - `/cc-feather:stop-threshold <2–10|default> [session|project|user]`: set the [Stop threshold](#stop-threshold) of automatic review for this session, or save it in project or user scope.
 - `/cc-feather:related-tests <on|off|default> [session|project|user]`: turn [Related-test acceptance](#related-test-acceptance) on or off for this session, or save it in project or user scope.
+- `/cc-feather:auto-land <on|off|default> [session|project|user]`: turn [Auto land](#auto-land) on or off for this session, or save it in project or user scope.
 - `/cc-feather:test-speedup [test paths or scope]`: report ways to make the tests, or the part you name, faster without weakening what they verify; only you can run it, and it changes no file. It analyses statically first, lists existing tests that could exhaust memory or time, and measures only after you agree; see the [reference](docs/reference.md#design-and-test-checks).
 - `/cc-feather:overdesign-check [file, directory, spec, diff range or rule text]`: report Over-design in the proposal just discussed, or in what you name: defences against states only the project's own code could produce, compatibility kept for formats or tokens that no longer exist, configuration with a single user and stacked defences. Only you can run it, and it changes no file; each item is weighed and gets a recommendation, and old-format compatibility is called unneeded only with evidence, otherwise you are asked; see the [reference](docs/reference.md#design-and-test-checks).
 - `/cc-feather:leases`: take, renew, take over, return and list Checkout leases; main loads it when it keeps leases. See [Checkout leases](#checkout-leases).
@@ -237,6 +238,18 @@ Related-test acceptance changes how main writes a Claim's acceptance in a spec, 
 ```
 
 Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` saves it in an existing delegation installation of that scope, and it never installs delegation. Main uses your session choice, then the project's saved choice, then the user's, then off, so a project's `off` overrides a user's `on`; main never changes it on its own. It changes how main writes acceptance, not how any review or the final check runs, and a change applies to acceptance main writes from then on, not to acceptance already written. See [Related-test acceptance](docs/reference.md#related-test-acceptance) in the reference.
+
+### Auto land
+
+Auto land is your standing authority, given in advance, for main to land a plan in auto without asking when nothing in the decision at the end of the plan needs your accept-and-land decision. It is off by default.
+
+```text
+/cc-feather:auto-land on
+/cc-feather:auto-land off project
+/cc-feather:auto-land default user
+```
+
+Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` saves it in an existing delegation installation of that scope, and it never installs delegation. Main uses your session choice, then the project's saved choice, then the user's, then off, so a project's `off` overrides a user's `on`; main never changes it on its own. Main lands under it only by pushing the commit the final check and the reviews judged to the default branch as a fast-forward, and stops to ask when that push cannot be made; release and tagging stay yours, and an instruction not to push holds it. A project-scope `on` is usually committed with the project's instruction file, so every clone that loads it lands with its own push rights. See [Auto land](docs/reference.md#auto-land) in the reference.
 
 ### Delegation preview
 

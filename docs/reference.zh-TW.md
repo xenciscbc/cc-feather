@@ -151,6 +151,18 @@ Runner 是分派 skill 中 cc-feather 的啟動器。它執行一個指令，對
 
 用 `/cc-feather:related-tests` 設定，或用自己的話請主 Agent 設定，效果相同。不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。session 選擇不會帶到新的或恢復的 session，也不會寫進交接，而且 context 壓縮可能讓它遺失。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。它只改變主 Agent 撰寫驗收的方式，不改變任何審查或最終檢查的執行方式；變更只適用於之後撰寫的驗收，不改動已寫好的驗收。詳見[指令說明](../skills/related-tests/SKILL.md)。
 
+### 自動合併
+
+自動合併（Auto land）是你事先給主 Agent 的常設授權：在 auto 下，計畫最後的決定裡沒有任何項目需要你決定接受並合併時，主 Agent 不再詢問，直接合併計畫。預設關閉。你可以告訴主 Agent 這個 session 要用的選擇，這不會寫入任何檔案；也可以用設定工具的 `review --auto-land` 儲存在 project 或 user 範圍（見[自動合併](setup.md#auto-land)）。它授權的內容只寫在設定工具渲染進分派指引的[範本](../templates/auto-land.md)中；選擇如何套用、儲存與決定，寫在[setup 的自動合併流程](../skills/setup/references/auto-land.md)，主 Agent 何時、如何依它合併，則是審查狀態規則的 Auto land。
+
+```text
+/cc-feather:auto-land on
+/cc-feather:auto-land off project
+/cc-feather:auto-land default user
+```
+
+用 `/cc-feather:auto-land` 設定，或用自己的話請主 Agent 設定，效果相同。不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。session 選擇不會帶到新的或恢復的 session，也不會寫進交接，而且 session 的 `on` 絕不會從 context 壓縮摘要中恢復。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。合併前，主 Agent 會用設定工具的 `show` 確認儲存的選擇，其他任何文字都不會開啟自動合併。主 Agent 只在 auto 下、計畫最後的決定裡沒有任何項目需要接受並合併、且沒有未知狀態時才依它合併，而且只會在推送當下向遠端查出預設 branch、確認要合併的每個 commit 都屬於這份計畫後，把最終檢查與審查判斷過的 commit 的完整 SHA 以 fast-forward 推送過去，不 force、不推送 tag 或 submodule；之後再確認遠端 branch 等於那個 SHA。無法 fast-forward、branch 受保護或任何拒絕，都會讓主 Agent 停下來問你；主 Agent 絕不 rebase、merge、透過代管服務合併 pull request 或重試。它只涵蓋那一次推送，絕不包含 release、tag 或之後推送狀態變更；你不推送的指示會擋住它，主 Agent 會把這個指示記在計畫的 dispatch 紀錄中，恢復的 session 也會遵守。自動合併之後，主 Agent 會把計畫的 ticket 標為完成並附上註記，寫明合併的 commit，完成進行中的交接，並回報合併的 commit、最終檢查的範圍與結果、每個 claim 的通過情形、被捨棄的資源風險提案與後續紀錄；它不會刪除 branch。在 `off` 下，自動合併沒有作用。專案範圍的 `on` 通常會隨專案的指示檔一起 commit，所以每個載入它的 clone 都會用自己的推送權限合併；在主 Agent 記錄之前就被 context 壓縮丟掉的不推送指示，不會被恢復。詳見[指令說明](../skills/auto-land/SKILL.md)。
+
 ### 分派預覽
 
 ```text

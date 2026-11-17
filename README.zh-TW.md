@@ -39,6 +39,7 @@ claude plugin update cc-feather@cc-feather
 | `/cc-feather:auto-off` | 關閉自動審查 |
 | `/cc-feather:stop-threshold <2–10 或 default> [範圍]` | 設定自動審查的[停止門檻](#停止門檻)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
 | `/cc-feather:related-tests <on、off 或 default> [範圍]` | 開啟或關閉[相關測試驗收](#相關測試驗收)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
+| `/cc-feather:auto-land <on、off 或 default> [範圍]` | 開啟或關閉[自動合併](#自動合併)：只用於這個 session（不帶範圍或 `session`），或儲存在 `project` 或 `user` 範圍 |
 | `/cc-feather:test-speedup [測試路徑或範圍]` | 找出讓測試（或你指定的部分）變快、又不削弱驗證內容的方法；只能由你執行，不改任何檔案。先做靜態分析，列出可能耗盡記憶體或時間的既有測試，經你同意才量測；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |
 | `/cc-feather:overdesign-check [檔案、目錄、spec、diff 範圍或規則文字]` | 檢查剛才討論的提案，或你指定的對象，是否有過度設計：防範只有專案自己的程式碼才會造成的狀態、為已不存在的格式或 token 保留相容、只有一個使用者的設定，以及重疊的防禦。只能由你執行，不改任何檔案；每一項都附權衡與建議，舊格式相容只有在有證據時才判定為不需要，否則會問你；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |
 | `/cc-feather:leases` | 取得、續期、接手、歸還與列出 Checkout lease；主 Agent 維護 lease 時載入。見 [Checkout lease](#checkout-lease) |
@@ -243,6 +244,18 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 ```
 
 不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。它只改變主 Agent 撰寫驗收的方式，不改變任何審查或最終檢查的執行方式；變更只適用於之後撰寫的驗收，不改動已寫好的驗收。詳見參考文件的[相關測試驗收](docs/reference.zh-TW.md#相關測試驗收)。
+
+### 自動合併
+
+自動合併（Auto land）是你事先給主 Agent 的常設授權：在 auto 下，計畫最後的決定裡沒有任何項目需要你決定接受並合併時，主 Agent 不再詢問，直接合併計畫。預設關閉。
+
+```text
+/cc-feather:auto-land on
+/cc-feather:auto-land off project
+/cc-feather:auto-land default user
+```
+
+不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。主 Agent 只會把最終檢查與審查判斷過的 commit 以 fast-forward 推送到預設 branch 來合併，無法這樣推送時就停下來問你；release 與 tag 仍由你決定，不推送的指示會擋住它。專案範圍的 `on` 通常會隨專案的指示檔一起 commit，所以每個載入它的 clone 都會用自己的推送權限合併。詳見參考文件的[自動合併](docs/reference.zh-TW.md#自動合併)。
 
 ### 分派預覽
 
