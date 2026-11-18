@@ -2431,8 +2431,11 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
         "[ADR 0021](adr/0021-final-check-passes-are-recorded-and-clean-plans-may-land-themselves.md)",
         "ticket 01, recorded final check passes, in 3447e69 and 7742e9b;",
         "ticket 02, the Final check scope, in c7a3b2f and a00951f;",
-        "ticket 03, the Auto land setting and `/cc-feather:auto-land`, in ac10499;",
-        "ticket 04, this release, in the commit carrying this entry.",
+        "ticket 03, the Auto land setting and `/cc-feather:auto-land`, in ac10499 and its fix f9d9448;",
+        "ticket 04, this release, in 30bedf7 and the commit carrying this entry.",
+        # Ticket 04's item after ticket 03's fix for the recorded session `off` (user decision 2026-11-18).
+        "After the final check had passed at 30bedf7, the user decided on 2026-11-18 that a session choice turning Auto land off is recorded in the Plan's Dispatch record like an instruction not to push, so a resumed session and main after a context compaction keep it for that Plan;",
+        "spec commits 753ce8b, 9c24758, 122dee2 and 7cc6505 changed S3, the Auto land setting bullet and Limits, and ticket 03's fix f9d9448 implements the change.",
         "**Setup update is required.**",
         "`git diff-tree -r --name-only v0.36.0 HEAD -- templates skills/setup scripts` lists `scripts/feather_config.py`, `skills/setup/SKILL.md`, the new `skills/setup/references/auto-land.md`, `templates/agents/analyst.md` and the new `templates/auto-land.md`:",
         "Existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session;",
@@ -2441,9 +2444,14 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
         "v0.36.0's `check`, `show` and `update --component delegation` each refused with `invalid delegation state schema`, exit 2,",
         "and the 22 files of both scopes were byte-identical to the v0.36.0 installation.",
         "A 0.36.x or older configuration tool therefore rejects a scope with a saved Auto land setting, so a downgrade first sets it back to `default` there:",
-        "a scope without a saved setting, and a session choice, which writes nothing, need nothing.",
+        # Replaced after ticket 03's fix (2026-11-18): a session `off` is recorded in a Plan's Dispatch record, so the
+        # entry says a session choice writes no configuration file, not that it writes nothing.
+        "a scope without a saved setting needs nothing, and a session choice, which writes no configuration file, needs nothing either.",
+        "`git diff 30bedf7 f9d9448 -- templates scripts` is empty,",
         "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
         "(the 0.36.0 release ran 1345 tests with 29 skips).",
+        "After ticket 03's fix the counts were taken again at f9d9448 with this entry's update in the working tree, with `FEATHER_LINK_TEST_DIR` set under `J:\\gotmp\\` for every run:",
+        "both `discover` forms each ran 1413 tests, all passing with 29 skips and the same count in both forms, and ticket 04's acceptance ran 938 tests with 18 skips, all passing;",
         "`.claude-plugin/marketplace.json` carries no version,",
         "the spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
         "with the installed cc-feather 0.36.0's roles and procedures, not this release's candidate.",
@@ -2453,8 +2461,16 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
         "Tickets 01 to 03 are Security-critical,",
         "No claim is a Resource-risk claim: plan review proposed none.",
         "and READY on call 2 at defea35.",
+        "a narrowed security analysis of the recorded hold ran on 2026-11-18 at 753ce8b and proposed F1 to F7, adopted with the user's approval",
+        "plan review returned REVISE on call 3 at 9c24758",
+        "REVISE on call 4 at 122dee2",
+        "and READY on call 5 at 7cc6505.",
+        "For the fix f9d9448, code review APPROVED on call 2, over 30bedf7..f9d9448, and outcome verification CONFIRMED on call 2, at f9d9448.",
         "the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
     )
+    # Wording the entry no longer carries after ticket 03's fix: a session `off` is recorded, so a session choice is
+    # not said to write nothing.
+    STALE = ("which writes nothing",)
 
     @staticmethod
     def text(name):
@@ -2537,6 +2553,9 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("No setup update is required", entry)
         self.assertNotIn(".scratch", entry)
+        for stale in self.STALE:
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in
                    ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:", "Ticket 04:")]
