@@ -52,7 +52,9 @@ tag; a release on `related` needs a passed `related` run at that commit and waiv
 or tag runs `full`" where it was pinned, updated where the pins are (the RELEASE_* constants): review state's Final
 check, Recorded final check runs and Final check scope, the glossary's Final check scope and Dispatch record entries, the
 setup document, both reference documents and the README pair; PendingScopeQuestionTests' release-rule test now checks
-the replacement."""
+the replacement. Its code review (B1) also replaces, where they are pinned, Recorded final check runs' sentence on the
+scope recorded and Final check scope's sentence on the scope reported (RELEASE_RECORDED_SCOPE and
+RELEASE_REPORTED_SCOPE): a run at `related` on the release answer is recorded and reported as `related`."""
 
 from __future__ import annotations
 
@@ -102,6 +104,19 @@ RELEASE_NOT_RUN = (
     "describes: landing needs a scope covering the plan's Final check scope, a `full` run covering `full` and "
     "`related` and a `related` run only `related`, and a release or tag needs `full`, or `related` when the user's "
     "recorded answer to the release question for that commit chose it."
+)
+# Code review call 1 of ticket 03 (B1, S1.1 and S2.7): a run at `related` on the release answer is recorded and
+# reported as `related`, never as `full`, so that its record cannot pass a later landing that needs `full`.
+RELEASE_RECORDED_SCOPE = (
+    "The scope recorded is the scope the run used: the plan's Final check scope, except that a run at `related` on the "
+    "user's recorded answer to the release question for that commit is recorded as `related`, never as `full`, "
+    "whatever the plan's scope; a run without a chosen scope is recorded as `full` only when neither the plan's scope "
+    "nor a release answer chose `related` for it, so that it ran `full`."
+)
+RELEASE_REPORTED_SCOPE = (
+    "The decision at the end of the plan and the completion report state the scope the final check ran at: a run at "
+    "`related` on the user's recorded answer to the release question for that commit is reported as `related`, never "
+    "as `full`, whatever the plan's scope, and otherwise they say `full` whenever no scope was chosen or none was asked."
 )
 RELEASE_CONTEXT_SCOPE = (
     "A release or tag runs `full` at the commit to be tagged unless the user, asked for that commit, chooses "
@@ -245,8 +260,9 @@ class RecordedFinalCheckTests(unittest.TestCase):
         RUNS: (
             "In auto, main records every final check run in the plan's dispatch record: the commit it ran at, its "
             "scope, each claim's reading-set hash, passed or failed with a one-line summary, and the time the run ended.",
-            "The scope is the plan's Final check scope the run used, and a run without a chosen scope is recorded as "
-            "`full`.",
+            # Replaced by final-check-scope-fixes ticket 03's code review (B1): the scope the run used, `related` on the
+            # release answer.
+            RELEASE_RECORDED_SCOPE,
             "Main writes a run's entry between calls, as Dispatch record describes, after the reads that follow the run "
             "and before it acts on the run's result.",
             "A recorded pass is a pass main takes from the dispatch record rather than from its own run in this session, "
@@ -655,8 +671,9 @@ class FinalCheckScopeTests(unittest.TestCase):
             "Main writes the answer in the plan's dispatch record, as Dispatch record describes, at the next point "
             "between review calls, and in any case before a final check runs at that scope, before it relies on a "
             "recorded pass, before the decision at the end of the plan and before landing.",
-            "The decision at the end of the plan and the completion report state the scope the final check ran at, and "
-            "they say `full` whenever no scope was chosen or none was asked.",
+            # Replaced by final-check-scope-fixes ticket 03's code review (B1): a run at `related` on the release answer
+            # is reported as `related`.
+            RELEASE_REPORTED_SCOPE,
             # Replaced by final-check-scope-fixes ticket 03 (S2.7): the scope each operation needs, a release or tag's
             # being `full` or the `related` its answer chose.
             RELEASE_NOT_RUN,
@@ -1498,8 +1515,8 @@ class ReleaseScopeTests(unittest.TestCase):
     # check.
     REPLACED = {
         FINAL_CHECK: (RELEASE_FINAL_CHECK,),
-        RUNS: (RELEASE_RECORDED_PASS,),
-        SCOPE: (RELEASE_NOT_RUN,),
+        RUNS: (RELEASE_RECORDED_PASS, RELEASE_RECORDED_SCOPE),
+        SCOPE: (RELEASE_NOT_RUN, RELEASE_REPORTED_SCOPE),
         "CONTEXT.md#Final check scope": (RELEASE_CONTEXT_SCOPE,),
         "CONTEXT.md#Dispatch record": (RELEASE_CONTEXT_RECORDED,),
         "setup.md#recorded runs": (RELEASE_SETUP_RECORDED,),
@@ -1538,6 +1555,18 @@ class ReleaseScopeTests(unittest.TestCase):
     def test_a_release_needs_full_or_the_related_its_answer_chose(self):
         self.assert_pinned({self.FINAL_CHECK: (RELEASE_FINAL_CHECK,), self.RUNS: (RELEASE_RECORDED_PASS,),
                             self.SCOPE: (RELEASE_NOT_RUN,)})
+
+    def test_a_run_on_the_release_answer_is_recorded_and_reported_as_related(self):
+        # B1 (S1.1 and S2.7): a release run at `related` on the release answer, whatever the plan's scope, is recorded
+        # and reported as `related`, so that a resumed session never reads it as a `full` pass that lets the commit land.
+        self.assert_pinned({self.RUNS: (RELEASE_RECORDED_SCOPE,), self.SCOPE: (RELEASE_REPORTED_SCOPE,)})
+        for place, old in (
+                (self.RUNS, "The scope is the plan's Final check scope the run used, and a run without a chosen scope "
+                            "is recorded as `full`."),
+                (self.SCOPE, "The decision at the end of the plan and the completion report state the scope the final "
+                             "check ran at, and they say `full` whenever no scope was chosen or none was asked.")):
+            with self.subTest(place=place, old=old[:40]):
+                self.assertFalse(is_whole_sentence(old, source(place)))
 
     def test_the_glossary_states_the_release_choice_and_the_release_questions(self):
         self.assert_pinned(self.CONTEXT)
