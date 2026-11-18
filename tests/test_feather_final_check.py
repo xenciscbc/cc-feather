@@ -36,7 +36,13 @@ Final check scope fixes ticket 01 (docs/specs/final-check-scope-fixes.md) adds P
 where they are, the FinalCheckScopeTests pins of the sentences it replaces: review state's Final check scope and
 Dispatch record, the resource-risk reference's A later plan review, plan review's step 5, the setup document, both
 reference documents, the README pair and the glossary's Final check scope entry; in test_feather_auto_land, review
-state's Auto land and the Auto land procedure's sentences on the user's own words and tool results."""
+state's Auto land and the Auto land procedure's sentences on the user's own words and tool results.
+
+Final check scope fixes ticket 02 adds CoveredPrimaryAcceptanceTests (S1.3, S2.1, S2.7, S4): at `full`, a Claim's
+primary acceptance counts as rerun command by command within the overall acceptance's own run only under the same tool
+and conditions, the Claim's execution conditions included, with output showing each named unit ran and passed, and
+otherwise runs separately. The pin it replaces, updated where it is: in test_feather_retained_passes, the decision's
+list of what the flow does not check."""
 
 from __future__ import annotations
 
@@ -1048,6 +1054,240 @@ class PendingScopeQuestionTests(unittest.TestCase):
                             self.assertIn(sentence, text)
                         else:
                             self.assertNotIn(sentence, text)
+
+
+class CoveredPrimaryAcceptanceTests(unittest.TestCase):
+    """Final check scope fixes ticket 02 (docs/specs/final-check-scope-fixes.md, S1.3, S2.1, S2.7 and S4): in auto, at
+    `full`, a Claim's primary acceptance counts as rerun command by command within the overall acceptance's own run at
+    the commit to be landed or tagged only when that run used the same tool and the same conditions, the Claim's
+    execution conditions included, differing only in that the command names part of what the run selects, and its output
+    shows each named test unit ran and passed; any other command runs separately. `related`, other acceptance items,
+    checks that cannot be rerun and a fix Claim's acceptance are unchanged; the recorded run names each covered Claim's
+    replaced and overall commands, and the decision and the completion report list the covered Claims; the limits join
+    what the flow does not check; off keeps its rules."""
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+    assert_pinned = RecordedFinalCheckTests.assert_pinned
+
+    FINAL_CHECK = FinalCheckScopeTests.FINAL_CHECK
+    RUNS = RecordedFinalCheckTests.RUNS
+    DECISION = "review-state.md#Accept and land at the end of the plan"
+    V0_37_0 = PendingScopeQuestionTests.V0_37_0
+
+    # S4 and S2.1: coverage command by command, its conditions, and the separate run otherwise.
+    COVERAGE_RULE = (
+        "In auto, at `full`, a claim's primary acceptance counts as rerun command by command: for each command main "
+        "would run for it, it counts as run within the overall acceptance's own run at the commit to be landed or "
+        "tagged when that run used the same tool with the same conditions that decide which tests run and how they run "
+        "(options, configuration, environment variables, working directory, import or module form), differing only in "
+        "that the command names part of what that run selects, and the run's output shows that each test unit the "
+        "command names, such as a package, module or file, ran and passed."
+    )
+    EXECUTION_CONDITIONS = (
+        "A claim's execution conditions, its approved Execution method and its Observed resource risks, are among those "
+        "conditions, so a command of a claim that has them counts as covered only when the overall run also met them."
+    )
+    SEPARATELY = ("A command for which main cannot establish this from the commands and the run's output runs "
+                  "separately.")
+    UNCHANGED = (
+        "This coverage applies only at `full`, so at `related` every claim's primary acceptance still runs itself; a fix "
+        "claim's acceptance follows the same rule, and acceptance items other than the primary acceptance and checks "
+        "that cannot be rerun are as this bullet states below."
+    )
+    COVERAGE = {FINAL_CHECK: (COVERAGE_RULE, EXECUTION_CONDITIONS, SEPARATELY, UNCHANGED)}
+
+    # S1.3 and acceptance item 5: the recorded run names each covered Claim's commands; the decision and the report
+    # list the covered Claims.
+    RECORDED = {
+        RUNS: (
+            "The entry also names, for each claim whose primary acceptance the overall acceptance's run covered, as Final "
+            "check describes, each command of that primary acceptance the run replaced and the overall command.",
+            "The decision at the end of the plan and the completion report list the claims whose primary acceptance the "
+            "overall acceptance's run covered.",
+        ),
+        "review-state.md#Dispatch record": (
+            "Each final check run it holds names, for each claim whose primary acceptance the overall acceptance's run "
+            "covered, each command that run replaced and the overall command, as Recorded final check runs describes.",
+        ),
+        DECISION: (
+            "It also names the claims whose primary acceptance the overall acceptance's run covered, as Recorded final "
+            "check runs describes.",
+        ),
+    }
+
+    # Acceptance item 6: the limits join what the flow does not check (pinned as the whole list in
+    # test_feather_retained_passes).
+    NOT_CHECKED = ("whether the overall acceptance's run covered a claim's primary acceptance is judged from the "
+                   "commands and the run's output, which repository code controls, and a test that passes only "
+                   "alongside the rest of the overall run is not detected")
+
+    # Acceptance item 8: the glossary (spec Further Notes "Glossary").
+    CONTEXT = {
+        "CONTEXT.md#Final check scope": (
+            "At `full`, a Claim's primary acceptance that the overall acceptance's own run visibly executed, with the "
+            "same tool and the same conditions, is not run a second time.",
+        ),
+        "CONTEXT.md#Dispatch record": (
+            "Each final check run also names the Claims whose primary acceptance its overall acceptance run covered.",
+        ),
+    }
+
+    # Acceptance item 9: the setup document and both reference documents.
+    DOCUMENTS = {
+        "setup.md#scope": (
+            "At `full`, a command of a claim's primary acceptance does not run a second time when the overall "
+            "acceptance's own run at the same commit visibly ran it: the same tool with the same conditions that decide "
+            "which tests run and how, such as options, configuration, environment variables, working directory, import "
+            "or module form and the claim's execution conditions, differing only in that the command names part of what "
+            "the overall run selects, and the run's output showing that each test unit the command names ran and "
+            "passed; a command for which main cannot establish this runs separately, and at `related` every claim's "
+            "primary acceptance runs itself.",
+            "The plan's dispatch record names, for each covered claim, the command the overall run replaced and the "
+            "overall command, and the decision at the end of the plan and the completion report list the covered "
+            "claims.",
+            "Coverage is judged from the commands and the run's output, which repository code controls, and a test that "
+            "passes only alongside the rest of the overall run is not detected.",
+        ),
+        "reference.md#Final check": (
+            "At `full`, a command of a claim's primary acceptance does not run a second time when the overall "
+            "acceptance's own run at the same commit visibly ran it: the same tool with the same conditions that decide "
+            "which tests run and how, such as options, configuration, environment variables, working directory, import "
+            "or module form and the claim's execution conditions, differing only in that the command names part of what "
+            "the overall run selects, and the run's output showing that each test unit the command names ran and "
+            "passed; a command for which main cannot establish this runs separately, and at `related` every claim's "
+            "primary acceptance runs itself.",
+            "The plan's dispatch record names, for each covered claim, the command the overall run replaced and the "
+            "overall command, and the decision at the end of the plan and the completion report list the covered "
+            "claims.",
+            "Coverage is judged from the commands and the run's output, which repository code controls, and a test that "
+            "passes only alongside the rest of the overall run is not detected.",
+        ),
+        "reference.zh-TW.md#最終檢查": (
+            "在 `full` 下，claim 主要驗收的某個指令，若整體驗收在同一個 commit 上自己的執行明確跑過它，就不再跑第二次：同一個工具，"
+            "決定跑哪些測試與如何跑的條件也相同，例如選項、設定、環境變數、工作目錄、import 或 module 形式，以及該 claim 的執行條件，"
+            "差別只在這個指令指定的是整體執行所選範圍的一部分，且執行的輸出顯示這個指令指定的每個測試單位都有執行並通過；主 Agent "
+            "無法確立這一點的指令會另外執行，而在 `related` 下每個 claim 的主要驗收都自己執行。",
+            "計畫的派工紀錄會為每個被涵蓋的 claim 寫出整體執行取代的指令與整體指令，計畫結束時的決定與完成報告會列出被涵蓋的 claim。",
+            "是否涵蓋是依指令與執行的輸出判斷，而輸出由儲存庫程式碼掌控，只在與整體執行的其他部分一起跑時才通過的測試也偵測不到。",
+        ),
+    }
+
+    # The README pair: each English sentence with its Chinese counterpart, in the same bullet of each README.
+    README_PAIRS = (
+        ("Final check scope", "最終檢查範圍",
+         "At `full`, a command of a claim's primary acceptance that the overall acceptance's own run visibly ran, with "
+         "the same tool and the same conditions, is not run a second time; a command main cannot establish as covered "
+         "runs separately, and the decision at the end of the plan and the completion report list the covered claims.",
+         "在 `full` 下，claim 主要驗收中整體驗收自己的執行已明確跑過、且工具與條件都相同的指令，不會再跑第二次；主 Agent 無法確立"
+         "已涵蓋的指令會另外執行，計畫結束時的決定與完成報告會列出被涵蓋的 claim。"),
+        ("Final check scope", "最終檢查範圍",
+         "Coverage is judged from the commands and the run's output, which the repository's code controls.",
+         "是否涵蓋是依指令與執行的輸出判斷，而輸出由儲存庫的程式碼掌控。"),
+    )
+
+    # Acceptance item 2: the rule names no language or test runner. A document may give one only as a marked example.
+    RUNNERS = re.compile(r"\b(?:pytest|unittest|go test|jest|vitest|mocha|cargo|npm|pnpm|Python|JavaScript|TypeScript|"
+                         r"Go|Java|Rust)\b")
+
+    def readme_pins(self):
+        pins = {}
+        for label, label_zh, sentence, sentence_zh in self.README_PAIRS:
+            pins.setdefault(f"README.md#{label}", []).append(sentence)
+            pins.setdefault(f"README.zh-TW.md#{label_zh}", []).append(sentence_zh)
+        return pins
+
+    def new_pins(self):
+        return (self.COVERAGE, self.RECORDED, self.CONTEXT, self.DOCUMENTS, self.readme_pins())
+
+    def test_full_counts_a_primary_acceptance_as_rerun_command_by_command_only_under_s4(self):
+        self.assert_pinned(self.COVERAGE)
+        # The coverage sentences follow the rule that every claim's primary acceptance is rerun at both scopes, which
+        # S2.1 keeps, and the `related` sentence that no earlier run stands in for that rerun.
+        text = source(self.FINAL_CHECK)
+        for kept in ("every claim's primary acceptance is rerun at both scopes, `full` and `related`.",
+                     "A final check at `related` reruns every claim's primary acceptance itself, and no role's earlier "
+                     "run, such as a claim's outcome verification, stands in for that rerun."):
+            with self.subTest(kept=kept[:40]):
+                self.assertIn(kept, text)
+                self.assertLess(text.index(kept), text.index(self.COVERAGE_RULE))
+
+    def test_execution_conditions_are_among_the_same_conditions(self):
+        self.assert_pinned({self.FINAL_CHECK: (self.EXECUTION_CONDITIONS,)})
+        # The resource-risk reference's own rule, which the coverage keeps: conditions apply to the final check's rerun.
+        self.assertIn("Main applies them to its own runs for the Claim, such as reruns, reproductions and the final "
+                      "check's rerun of its primary acceptance.", source("resource-risk-runs.md"))
+
+    def test_coverage_is_written_once_and_never_applies_at_related(self):
+        # The rule is review state's Final check, and no shipped rule lets coverage, a role's run or a record stand in
+        # for a primary acceptance at `related`.
+        for path in ("review-state.md", "resource-risk-runs.md", "plan-review.md", "adversarial-review.md",
+                     "CONTEXT.md"):
+            text = source(path)
+            with self.subTest(path=path):
+                self.assertEqual(text.count("counts as rerun command by command"),
+                                 1 if path == "review-state.md" else 0)
+                self.assertNotRegex(text, r"`related`[^.]*\bcounts? as (?:run within|covered|rerun command)")
+        self.assertIn("counts as rerun command by command", source(self.FINAL_CHECK))
+
+    def test_the_recorded_run_names_the_covered_claims_and_the_decision_lists_them(self):
+        self.assert_pinned(self.RECORDED)
+
+    def test_the_limits_join_what_the_flow_does_not_check(self):
+        text = source(self.DECISION)
+        self.assertEqual(text.count("What this flow does not check is:"), 1)
+        not_checked = text.split("What this flow does not check is:", 1)[1].split(". ", 1)[0]
+        self.assertIn(self.NOT_CHECKED, not_checked)
+
+    def test_the_rule_names_no_language_or_test_runner(self):
+        for sentence in (*self.COVERAGE[self.FINAL_CHECK], *self.RECORDED[self.RUNS], self.NOT_CHECKED,
+                         *self.CONTEXT["CONTEXT.md#Final check scope"], *self.DOCUMENTS["setup.md#scope"],
+                         *self.DOCUMENTS["reference.md#Final check"], *(pair[2] for pair in self.README_PAIRS)):
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIsNone(self.RUNNERS.search(sentence))
+        for place in (self.FINAL_CHECK, self.RUNS, self.DECISION, "CONTEXT.md#Final check scope", "setup.md#scope",
+                      "reference.md#Final check"):
+            with self.subTest(place=place):
+                self.assertIsNone(self.RUNNERS.search(source(place)))
+
+    def test_off_keeps_its_rules(self):
+        # Fails if off loses its final check or its earlier failure rules, or if the coverage stops being scoped to
+        # auto at `full`.
+        self.assert_pinned(FinalCheckScopeTests.OFF)
+        self.assertTrue(self.COVERAGE_RULE.startswith("In auto, at `full`, "))
+        text = source(self.FINAL_CHECK)
+        self.assertNotRegex(text, r"(?:^|(?<=\. ))(?:At `full`, )?A claim's primary acceptance counts as rerun")
+        self.assertLess(text.index(self.COVERAGE_RULE),
+                        text.index("In off, the final check keeps its earlier rules, without the reruns"))
+
+    def test_the_glossary_states_the_coverage_and_the_covered_claims(self):
+        self.assert_pinned(self.CONTEXT)
+
+    def test_the_documents_describe_the_coverage_at_full(self):
+        self.assert_pinned(self.DOCUMENTS)
+
+    def test_both_readmes_describe_the_coverage_in_paired_sentences(self):
+        english = (config.ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
+        for label, label_zh, sentence, sentence_zh in self.README_PAIRS:
+            with self.subTest(sentence=sentence[:40]):
+                self.assert_whole_sentence(sentence, place_text(english, "README.md", label))
+                self.assert_whole_sentence(sentence_zh, place_text(chinese, "README.zh-TW.md", label_zh))
+
+    def test_every_new_pin_fails_on_the_v0_37_0_text(self):
+        for pins in self.new_pins():
+            for place, sentences in pins.items():
+                path, _, label = place.partition("#")
+                result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{self.V0_37_0}:{PATHS[path]}"],
+                                        capture_output=True, check=False, timeout=60)
+                if result.returncode != 0:
+                    self.skipTest(f"{self.V0_37_0} is not available")
+                try:
+                    text = place_text(result.stdout.decode("utf-8"), path, label)
+                except (KeyError, StopIteration):
+                    continue
+                for sentence in sentences:
+                    with self.subTest(place=place, sentence=sentence[:60]):
+                        self.assertNotIn(sentence, text)
 
 
 if __name__ == "__main__":

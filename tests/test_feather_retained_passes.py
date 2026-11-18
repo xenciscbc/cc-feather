@@ -2154,7 +2154,9 @@ class DecisionAtTheEndTests(unittest.TestCase):
         ),
     }
 
-    # Acceptance item 14, stated as one list.
+    # Acceptance item 14, stated as one list. Replaced by final-check-scope-fixes ticket 02: the list adds that coverage
+    # of a claim's primary acceptance by the overall run is judged from output repository code controls, and that a test
+    # passing only alongside the rest of the overall run is not detected.
     NOT_CHECKED = {
         LABEL: (
             "What this flow does not check is: a later claim's reviewer reads only its own reading set and may not know "
@@ -2163,8 +2165,10 @@ class DecisionAtTheEndTests(unittest.TestCase):
             "rerun at the final commit; an acceptance check that cannot be rerun, such as a manual check, is not "
             "repeated at the final commit; the commit an Adversarial review attacks was not judged as a whole by the "
             "claim's own code review and outcome verification; Adversarial review findings are not fixed in the plan; a "
-            "Security-critical fix claim gets no Adversarial review; and main takes the dispatch record as written, so "
-            "an edit to it changes what main believes.",
+            "Security-critical fix claim gets no Adversarial review; whether the overall acceptance's run covered a "
+            "claim's primary acceptance is judged from the commands and the run's output, which repository code "
+            "controls, and a test that passes only alongside the rest of the overall run is not detected; and main "
+            "takes the dispatch record as written, so an edit to it changes what main believes.",
             "A re-review chosen at the decision can recover part of this.",
         ),
     }
