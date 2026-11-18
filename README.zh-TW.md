@@ -184,7 +184,7 @@ Setup 先查現有狀態，再補問未指定的操作、項目與範圍；寫�
 
 **分派假設儲存庫是受信任的，審查會在這台機器上執行它的程式碼。說明變更從哪裡來（例如它是別人的 pull request、branch 或 patch）已經不會阻止這件事：要阻止，請在你自己的訊息中說程式碼不得執行，或指出哪些不得執行。cc-feather 不提供在你信任儲存庫之前檢查它的功能，所以要不要信任一個儲存庫（例如下載或複製別人的儲存庫之後）由你決定。**
 
-主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫；沒有任何審查能隔離或偵測有惡意的儲存庫內容。審查只保留讓結果正確的檢查：`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案。你說明的限制在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終檢查），直到你自己的訊息解除它；儲存庫中的任何內容、工具輸出或紀錄都不能提出或解除限制。這些規則是給模型的指示，不是 sandbox；它們寫在分派流程中，[參考文件](docs/reference.zh-TW.md#儲存庫安全)加以說明。詳見 [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)。
+主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫；沒有任何審查能隔離或偵測有惡意的儲存庫內容。審查只保留讓結果正確的檢查：`HEAD` 是該次呼叫判斷的 commit，claim 依賴的內容在呼叫前後都沒有未提交或未追蹤的變動，commit 只包含 claim 的檔案。你說明的限制（在你自己的訊息中，或在你對主 Agent 提問的回答中）在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終檢查），直到你自己的訊息或你的回答解除它；儲存庫中的任何內容、你的回答以外的工具輸出或紀錄都不能提出或解除限制。這些規則是給模型的指示，不是 sandbox；它們寫在分派流程中，[參考文件](docs/reference.zh-TW.md#儲存庫安全)加以說明。詳見 [ADR 0016](docs/adr/0016-delegation-trusts-the-repository.md)。
 
 剩下的是你要承擔的風險：
 
@@ -255,7 +255,7 @@ project 範圍會寫進既有的 CLAUDE.md，沒有的話寫進 `.claude/CLAUDE.
 /cc-feather:auto-land default user
 ```
 
-不帶範圍（或加 `session`）時用於這個 session，不寫入任何設定檔；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。session 的 `off` 也會擋住這個對話中的每個計畫：主 Agent 會把它記在每個這類計畫的 dispatch 紀錄中，之後對那個計畫而言，它排在你的 session 選擇之後、儲存的選擇之前，在恢復的 session 中與 context 壓縮之後也一樣。只有你在這個對話中親口說的話能解除它：session 的 `on` 或 `default`、明確解除，或儲存 `on`；儲存 `off` 或 `default` 不會解除它，而且主 Agent 每次說明目前的設定時，都會指出來源是記錄下來的 `off`，以及它記錄的時間與解除方式。主 Agent 只會把最終檢查與審查判斷過的 commit 以 fast-forward 推送到預設 branch 來合併，無法這樣推送時就停下來問你；release 與 tag 仍由你決定，不推送的指示會擋住它。專案範圍的 `on` 通常會隨專案的指示檔一起 commit，所以每個載入它的 clone 都會用自己的推送權限合併。詳見參考文件的[自動合併](docs/reference.zh-TW.md#自動合併)。
+不帶範圍（或加 `session`）時用於這個 session，不寫入任何設定檔；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。session 的 `off` 也會擋住這個對話中的每個計畫：主 Agent 會把它記在每個這類計畫的 dispatch 紀錄中，之後對那個計畫而言，它排在你的 session 選擇之後、儲存的選擇之前，在恢復的 session 中與 context 壓縮之後也一樣。只有你在這個對話中親口說的話（包括你對主 Agent 提問的回答）能解除它：session 的 `on` 或 `default`、明確解除，或儲存 `on`；儲存 `off` 或 `default` 不會解除它，而且主 Agent 每次說明目前的設定時，都會指出來源是記錄下來的 `off`，以及它記錄的時間與解除方式。主 Agent 只會把最終檢查與審查判斷過的 commit 以 fast-forward 推送到預設 branch 來合併，無法這樣推送時就停下來問你；release 與 tag 仍由你決定，不推送的指示會擋住它。專案範圍的 `on` 通常會隨專案的指示檔一起 commit，所以每個載入它的 clone 都會用自己的推送權限合併。詳見參考文件的[自動合併](docs/reference.zh-TW.md#自動合併)。
 
 ### 分派預覽
 

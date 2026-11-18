@@ -895,12 +895,14 @@ RESTORED = {
         "explicit call runs describes. An explicit verification request applies in either mode (read the "
         "[plan-review procedure](plan-review.md)'s review mode resolution and follow it) and does not require code "
         "review first."),
-    # AR:11 at f4671bd; inventory R18.11 (owner AR:11).
+    # AR:11 at f4671bd; inventory R18.11 (owner AR:11). User's answer for restrictions ticket 01: the environment is
+    # named by the user's own message or the user's answer.
     "static analysis and INCONCLUSIVE without an isolated environment": (
         "adversarial-review.md#3",
         "Dynamic probing follows [review state](review-state.md)'s Execution. When a restriction covers the call, "
-        "dynamic probing runs only in an isolated environment the user's own message names; without one, the role "
-        "analyses statically and reports INCONCLUSIVE for what needs execution."),
+        "dynamic probing runs only in an isolated environment that the user's own message, or the user's answer as "
+        "[review state](review-state.md)'s Final check scope defines it, names; without one, the role analyses "
+        "statically and reports INCONCLUSIVE for what needs execution."),
 }
 # How a named part of an owner other than review state is found in that owner's text.
 NAMED_PARTS = {

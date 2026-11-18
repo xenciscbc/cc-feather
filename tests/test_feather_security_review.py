@@ -659,7 +659,9 @@ class AdversarialReviewTests(unittest.TestCase):
             "A missing role or fresh context found before dispatch is a precondition failure, not a call.",
         ),
         "review-state.md#Execution": (
-            "main, reviewer, verifier and adversary execute repository code on this machine unless a restriction the user stated in this session covers the call; a covered call runs what needs execution only in an isolated environment the user's own message in this session names, and otherwise reports it INCONCLUSIVE.",
+            # User's answer for restrictions ticket 01 (R1.1): the user's own message or the user's answer names the
+            # isolated environment.
+            "main, reviewer, verifier and adversary execute repository code on this machine unless a restriction the user stated in this session covers the call; a covered call runs what needs execution only in an isolated environment that the user's own message in this session, or the user's answer received in this session, names, and otherwise reports it INCONCLUSIVE.",
             "Saying only where a change comes from, such as that it is another person's pull request, branch or patch, is not a restriction.",
         ),
         "setup.md": (
@@ -1401,8 +1403,9 @@ class DecisionRecordAndDocumentsTests(unittest.TestCase):
         # Repository safety C1 item 5: dynamic probing follows the rule for running repository code (D5).
         # Repo trust default ticket 02 (Acceptance 8): it runs on this machine unless the user's own statements stop it.
         # Repo trust split ticket 01 (Acceptance 5): only a restriction the user stated stops it; an origin does not.
-        ("Dynamic probing follows the Execution rule of [review state](../skills/delegation/references/review-state.md): it runs on this machine unless you have stated, in this session, a restriction that covers it, and then only in an isolated environment your own message names; without one the attack stays static.",
-         "動態探測依[審查狀態規則](../skills/delegation/references/review-state.md)中的 Execution 規則：除非你在這個 session 說過涵蓋它的限制，否則它在這台機器上進行；有這種限制時，只在你自己的訊息指定的隔離環境中進行，沒有的話只做靜態攻擊。"),
+        # User's answer for restrictions ticket 01: your own message or your answer to main's question names the environment.
+        ("Dynamic probing follows the Execution rule of [review state](../skills/delegation/references/review-state.md): it runs on this machine unless you have stated, in this session, a restriction that covers it, and then only in an isolated environment your own message or your answer to one of main's questions names; without one the attack stays static.",
+         "動態探測依[審查狀態規則](../skills/delegation/references/review-state.md)中的 Execution 規則：除非你在這個 session 說過涵蓋它的限制，否則它在這台機器上進行；有這種限制時，只在你自己的訊息或你對主 Agent 提問的回答指定的隔離環境中進行，沒有的話只做靜態攻擊。"),
         ("Saying only where a change comes from is not a restriction.", "只說明變更來自哪裡並不算限制。"),
     )
     # The command's listing line, which stays in each README.

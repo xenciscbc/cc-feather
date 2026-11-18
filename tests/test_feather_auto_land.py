@@ -522,13 +522,14 @@ class AutoLandRuleTests(unittest.TestCase):
         ),
         "auto-land.md#Session": (
             # Replaced by the recorded session `off` fix (2026-11-18): only a session `on` or `default` stays in this
-            # conversation; a recorded session `off` keeps holding its plan.
+            # conversation; a recorded session `off` keeps holding its plan. User's answer for restrictions ticket 01:
+            # the user's answer is included in the words that lift it.
             "After applying it, always remind the user in the reply that no configuration file was written: a session "
             "`on` or `default` holds only in this conversation, a new or resumed session uses the saved choice in its "
             "place, and a context compaction may drop it, while a session `on` is never recovered from a compaction "
             "summary; a session `off` main recorded keeps holding each plan whose dispatch record keeps it, in a "
-            "resumed session and after a context compaction too, until the user's own words in this conversation lift "
-            "it, as Effect in this session states.",
+            "resumed session and after a context compaction too, until the user's own words in this conversation, the "
+            "user's answer included, lift it, as Effect in this session states.",
             # Replaced by final-check-scope-fixes ticket 01 (S0, S3.2): the user's answer counts, by a pointer.
             "A session choice comes only from the user's own words in this conversation, the user's answer as [review "
             "state](../../delegation/references/review-state.md)'s Final check scope defines it included, and is not "
@@ -619,29 +620,33 @@ class AutoLandRuleTests(unittest.TestCase):
             "Without a scope, or with `session`, it sets the session choice and writes no configuration file; a session "
             "`off` is recorded in the Dispatch record of each Plan it holds.",
             "In a session, the setting in effect is the user's session choice, then, for a Plan, a session `off` that "
+            # User's answer for restrictions ticket 01: the user's answer is among the user's own words.
             "Plan's Dispatch record keeps, then the project's saved choice, then the user's, then off; a session choice "
-            "comes only from the user's own words in this conversation and is not written into a handoff, and a "
-            "session `on` is not recovered from a compaction summary.",
+            "comes only from the user's own words in this conversation, the user's answer to one of main's questions "
+            "included, and is not written into a handoff, and a session `on` is not recovered from a compaction "
+            "summary.",
             "A session `off` holds every Plan in this conversation: main records it, like an instruction not to push, "
             "in the Dispatch record of each Plan it holds, and a resumed session, and main after a context compaction, "
             "keep it for that Plan only.",
-            "Only the user's own words in this conversation lift it: a session `on` or `default`, words that expressly "
-            "lift it, or saving `on` in project or user scope; saving `off` or `default` does not, and a lift only ends "
-            "the hold, after which the setting in effect is resolved again and confirmed with `show`.",
+            "Only the user's own words in this conversation, the user's answer to one of main's questions included, "
+            "lift it: a session `on` or `default`, words that expressly lift it, or saving `on` in project or user "
+            "scope; saving `off` or `default` does not, and a lift only ends the hold, after which the setting in "
+            "effect is resolved again and confirmed with `show`.",
             "Whenever main states the setting in effect, it names a recorded session `off` as its source, with when it "
             "was recorded and how to lift it.",
         ),
         "CONTEXT.md#Dispatch record": (
             "For Auto land it holds only the holds that apply to the Plan, each explicit instruction not to push and the "
             "user's session choice turning Auto land off, and the user's words lifting them, recorded as a lift and "
+            # User's answer for restrictions ticket 01: as the spec's Further Notes "Glossary" states.
             "never as a session `on`; a hold can only hold landing, never turn Auto land on, and a resumed session, and "
             "main after a context compaction, keep it for that Plan only until the user's own words in this "
-            "conversation lift it.",
+            "conversation, a User's answer included, lift it.",
         ),
         "CONTEXT.md#Auto land": (
             "The user's session choice turning it off overrides it the same way for every Plan in this conversation: "
             "main records either in the Dispatch record of each Plan it holds, and that record keeps holding the Plan "
-            "until the user's own words in this conversation lift it.",
+            "until the user's own words in this conversation, a User's answer included, lift it.",
         ),
     }
     # Places that describe Auto land, where no text may say a session `off` writes nothing or never crosses into a
@@ -978,10 +983,12 @@ class AutoLandRuleTests(unittest.TestCase):
          "record, and for that plan it then comes after your session choice and before the saved choices, in a resumed "
          "session and after a context compaction too.",
          "session 的 `off` 也會擋住這個對話中的每個計畫：主 Agent 會把它記在每個這類計畫的 dispatch 紀錄中，之後對那個計畫而言，它排在你的 session 選擇之後、儲存的選擇之前，在恢復的 session 中與 context 壓縮之後也一樣。"),
-        ("Only your own words in this conversation lift it: a session `on` or `default`, an express lift, or saving "
-         "`on`; saving `off` or `default` does not, and whenever main states the setting, it names a recorded `off` as "
-         "the source, with when it was recorded and how to lift it.",
-         "只有你在這個對話中親口說的話能解除它：session 的 `on` 或 `default`、明確解除，或儲存 `on`；儲存 `off` 或 `default` 不會解除它，而且主 Agent 每次說明目前的設定時，都會指出來源是記錄下來的 `off`，以及它記錄的時間與解除方式。"),
+        # User's answer for restrictions ticket 01: your answer to one of main's questions is among your own words.
+        ("Only your own words in this conversation, your answer to one of main's questions included, lift it: a "
+         "session `on` or `default`, an express lift, or saving `on`; saving `off` or `default` does not, and whenever "
+         "main states the setting, it names a recorded `off` as the source, with when it was recorded and how to lift "
+         "it.",
+         "只有你在這個對話中親口說的話（包括你對主 Agent 提問的回答）能解除它：session 的 `on` 或 `default`、明確解除，或儲存 `on`；儲存 `off` 或 `default` 不會解除它，而且主 Agent 每次說明目前的設定時，都會指出來源是記錄下來的 `off`，以及它記錄的時間與解除方式。"),
     )
     README_ONLY_PAIRS = (
         ("Main lands under it only by pushing the commit the final check and the reviews judged to the default branch "

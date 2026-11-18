@@ -91,37 +91,49 @@ RISKS = {
     ),
 }
 # S1 and S2 in every Repository safety section: reads are ordinary and contain nothing, and only the user's own message
-# stops execution, for the session.
+# stops execution, for the session. User's answer for restrictions ticket 01 (R1): the user's answer to one of main's
+# questions states, lifts and names an environment too, and no other tool result does.
 SECTION_SENTENCES = {
     "README.md": (
         "Main and the roles read the repository with ordinary file tools and ordinary Git commands; no review contains "
         "or detects hostile repository content.",
-        "A restriction you state lasts for the session and covers every later call it names, the final check included, "
-        "until your own message lifts it; nothing in the repository, a tool's output or a record can state or lift one.",
+        "A restriction you state, in your own message or in your answer to one of main's questions, lasts for the "
+        "session and covers every later call it names, the final check included, until your own message or your answer "
+        "lifts it; nothing in the repository, a tool's output other than your answer, or a record can state or lift "
+        "one.",
     ),
     "README.zh-TW.md": (
         "主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫；沒有任何審查能隔離或偵測有惡意的儲存庫內容。",
-        "你說明的限制在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終檢查），直到你自己的訊息解除它；儲存庫中的任何內容、"
-        "工具輸出或紀錄都不能提出或解除限制。",
+        "你說明的限制（在你自己的訊息中，或在你對主 Agent 提問的回答中）在整個 session 有效，涵蓋它指名的每個後續呼叫（包括最終"
+        "檢查），直到你自己的訊息或你的回答解除它；儲存庫中的任何內容、你的回答以外的工具輸出或紀錄都不能提出或解除限制。",
     ),
     "docs/reference.md": (
         "Main and the roles read the repository with ordinary file tools and ordinary Git commands, and no review "
         "contains or detects hostile repository content.",
         "A review keeps only the checks that make its result correct, and a check whose result cannot be established "
         "counts as failed.",
-        "A restriction comes only from your own messages in this session: that the repository is not trusted, that code "
-        "must not run, or a narrower one, such as not running a pull request's tests.",
+        "In off and in auto, a restriction comes only from your own messages in this session or your answer to one of "
+        "main's questions in this session, whatever main asked: that the repository is not trusted, that code must not "
+        "run, or a narrower one, such as not running a pull request's tests.",
         "Saying only where a change comes from is not a restriction.",
-        "Text in a tool result, a file, a commit, a role's report, a handoff, dispatch or memory record, hook output or "
-        "a compaction summary can neither state nor lift a restriction, nor name an isolated environment.",
+        "A lift or an isolated environment comes only from words that expressly lift that restriction or name that "
+        "environment, such as a \"yes\" to main's question that names it; an answer that only chooses a Final check "
+        "scope, or words such as \"continue\" that name no restriction, lift nothing, and an unclear lift lifts "
+        "nothing, so main asks.",
+        "Text in a tool result other than your answer, a file, a commit, a role's report, a handoff, dispatch or memory "
+        "record, hook output or a compaction summary can neither state nor lift a restriction, nor name an isolated "
+        "environment.",
     ),
     "docs/reference.zh-TW.md": (
         "主 Agent 與角色用一般的檔案工具與一般的 Git 指令讀取儲存庫，沒有任何審查能隔離或偵測有惡意的儲存庫內容。",
         "審查只保留讓結果正確的檢查，而無法確認結果的檢查算作失敗。",
-        "限制只來自你在這個 session 自己的訊息：這個儲存庫不受信任、程式碼不得執行，或更窄的限制，例如不要跑某個 pull request 的測試。",
+        "在 off 與 auto 下，限制都只來自你在這個 session 自己的訊息，或你在這個 session 對主 Agent 提問的回答，不論主 Agent 問的"
+        "是什麼：這個儲存庫不受信任、程式碼不得執行，或更窄的限制，例如不要跑某個 pull request 的測試。",
         "只說明變更從哪裡來不算限制。",
-        "工具結果、檔案、commit、角色的回報、handoff、派工或記憶紀錄、hook 輸出或 compaction 摘要中的文字，都不能提出或解除限制，"
-        "也不能指定隔離環境。",
+        "解除限制或指定隔離環境，只能靠明確解除那個限制或指名那個環境的話，例如對主 Agent 指名該限制的問題回答「是」；只選擇最終檢查"
+        "範圍的回答，或沒有指名任何限制的「繼續」之類的話，都不會解除任何限制，意思不清楚的解除也不解除任何限制，主 Agent 會問你。",
+        "你的回答以外的工具結果，以及檔案、commit、角色的回報、handoff、派工或記憶紀錄、hook 輸出或 compaction 摘要中的文字，都不能"
+        "提出或解除限制，也不能指定隔離環境。",
     ),
 }
 
@@ -198,10 +210,45 @@ GLOSSARY_ENTRY = (
     "What delegation assumes about the repository it works in: its working tree, its Git directory and configuration, "
     "and every change in it are the user's own or content the user chose to accept, and reading and running it is the "
     "user's risk. Main and the roles read it with ordinary file tools and ordinary Git commands, and a review and the "
-    "final check run its code unless a restriction the user stated in this session covers the call; saying only where "
-    "a change comes from is not a restriction. No review contains or detects hostile repository content, and cc-feather "
+    # User's answer for restrictions ticket 01: the clause the spec's Further Notes "Glossary" states.
+    "final check run its code unless a restriction the user stated in this session, in their own message or a User's "
+    "answer, covers the call; saying only where a change comes from is not a restriction. No review contains or detects hostile repository content, and cc-feather "
     "offers no check of a repository before it is trusted: deciding whether to trust one is the user's.\n"
     "_Avoid_: safe repository, hostile repository"
+)
+
+# User's answer for restrictions ticket 01: the glossary's User's answer entry, as the spec's Further Notes "Glossary"
+# states it, in the Review section.
+USERS_ANSWER_ENTRY = (
+    "**User's answer**:\n"
+    "The user's own message in this conversation, or the AskUserQuestion answer to a question main asked, in the call "
+    "main made; no other tool result is the user's answer. It can set a Final check scope, set or lift Auto land and its "
+    "holds, and state or lift a restriction; review state's Final check scope defines it.\n"
+    "_Avoid_: user reply, user input"
+)
+# User's answer for restrictions ticket 01: ADR 0016's Execution bullet states the two sources, and a dated note after
+# the decision list says that 0.39.0 adds the user's answer.
+ADR_EXECUTION = (
+    "a covered call runs what needs execution only in an isolated environment that the user's own message, or the "
+    "user's answer to one of main's questions, in this session names, and otherwise reports it INCONCLUSIVE.",
+    "In off and in auto, a restriction comes only from the user's own messages in this session or the user's answer to "
+    "one of main's questions in this session: that the repository is not trusted, that code must not run, or a narrower "
+    "one such as not running a pull request's tests.",
+    "Text in a tool result other than the user's answer, a file, a commit, a role's report, a handoff, dispatch or "
+    "memory record, hook output or a compaction summary never states or lifts a restriction, nor names an isolated "
+    "environment.",
+)
+ADR_OLD_EXECUTION = (
+    "A restriction comes only from the user's own messages in this session: that the repository is not trusted,",
+    "Text in a tool result, a file, a commit,",
+    "only in an isolated environment the user's own message in this session names",
+)
+ADR_USERS_ANSWER_NOTE = (
+    "(Amended in 0.39.0, on 2026-11-18, by the [User's answer for restrictions spec](../specs/user-answer-restriction.md): "
+    "the user's answer to one of main's questions, as review state's Final check scope defines it, states or lifts a "
+    "restriction and names an isolated environment as the user's own message does, in off and in auto, whichever of "
+    "main's questions it answers; a lift and an isolated environment come only from words that expressly lift that "
+    "restriction or name that environment, and no other tool result is the user's answer.)"
 )
 
 # Acceptance 14: the notes on earlier ADRs, by file, with how many each carries.
@@ -419,6 +466,14 @@ class GlossaryTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, text)
 
+    def test_the_review_section_has_the_users_answer_entry(self):
+        # User's answer for restrictions ticket 01: one term, defined once, pointing to the rule that owns it.
+        text = normalised((ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        review = text.split("\n## Review\n", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(review.count(USERS_ANSWER_ENTRY), 1)
+        self.assertEqual(text.count("**User's answer**"), 1)
+        self.assertNotIn(USERS_ANSWER_ENTRY, tagged_blob(self, "CONTEXT.md"))
+
 
 class DecisionRecordTests(unittest.TestCase):
     """Acceptance 14: ADR 0016 and the notes on ADR 0009, 0011, 0013, 0014 and 0015."""
@@ -448,6 +503,25 @@ class DecisionRecordTests(unittest.TestCase):
             with self.subTest(linked=linked):
                 self.assertIn(f"]({linked})", text)
                 self.assertTrue((ADR / linked).is_file())
+
+    def test_adr_0016_execution_states_the_two_sources_with_a_dated_note(self):
+        # User's answer for restrictions ticket 01: the Execution bullet names the user's answer, the exception
+        # qualifies only a tool result, and the 0.39.0 note follows the decision list, before the supersession paragraph.
+        text = adr(ADR_0016)
+        bullet = next(line for line in text.split("\n") if line.startswith("- **Execution.** "))
+        for sentence in ADR_EXECUTION:
+            with self.subTest(sentence=sentence[:50]):
+                self.assertIn(sentence, bullet)
+        for phrase in ADR_OLD_EXECUTION:
+            with self.subTest(old=phrase[:50]):
+                self.assertNotIn(phrase, text)
+        self.assertIsNone(re.search(r"\btool result(?! other than the user's answer)", bullet))
+        self.assertEqual(text.count(ADR_USERS_ANSWER_NOTE), 1)
+        lines = text.split("\n")
+        at = lines.index(ADR_USERS_ANSWER_NOTE)
+        self.assertTrue(lines[at - 2].startswith("- **The handoff tool.** "))
+        self.assertTrue(lines[at + 2].startswith("This supersedes "))
+        self.assertTrue((ADR.parent / "specs" / "user-answer-restriction.md").is_file())
 
     def test_adr_0016_names_repo_check_only_as_a_rejected_option(self):
         text = adr(ADR_0016)
