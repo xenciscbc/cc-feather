@@ -42,7 +42,17 @@ Final check scope fixes ticket 02 adds CoveredPrimaryAcceptanceTests (S1.3, S2.1
 primary acceptance counts as rerun command by command within the overall acceptance's own run only under the same tool
 and conditions, the Claim's execution conditions included, with output showing each named unit ran and passed, and
 otherwise runs separately. The pin it replaces, updated where it is: in test_feather_retained_passes, the decision's
-list of what the flow does not check."""
+list of what the flow does not check.
+
+Final check scope fixes ticket 03 adds ReleaseScopeTests (S0, S1, S2.2-S2.4, S2.6, S2.7): in auto, a `full` pass valid
+at the commit to be released or tagged is used without asking; otherwise main asks the release question for that
+commit, a separate pending entry in the Plan's Dispatch record naming the commit by its full SHA, `full` while it is
+pending or unclear; the answer sets nothing for the Plan's scope or another commit and is no instruction to release or
+tag; a release on `related` needs a passed `related` run at that commit and waives no failure. It replaces "a release
+or tag runs `full`" where it was pinned, updated where the pins are (the RELEASE_* constants): review state's Final
+check, Recorded final check runs and Final check scope, the glossary's Final check scope and Dispatch record entries, the
+setup document, both reference documents and the README pair; PendingScopeQuestionTests' release-rule test now checks
+the replacement."""
 
 from __future__ import annotations
 
@@ -70,6 +80,114 @@ PATHS = {
 }
 SETUP_PARAGRAPH = "In auto, main records each final check run in the plan's dispatch record"
 SETUP_SCOPE_PARAGRAPH = "In auto, the final check runs at the plan's final check scope."
+
+# Final check scope fixes ticket 03: the release choice's sentences that replace "a release or tag runs `full`" where it
+# was pinned. The classes below pin each where the replaced sentence was pinned; ReleaseScopeTests checks them against
+# v0.37.0 with its own new pins.
+RELEASE_FINAL_CHECK = (
+    "A release or tag runs `full`, whatever scope the plan chose, unless the user's recorded answer to the release "
+    "question for that commit chose `related`, as Final check scope describes."
+)
+RELEASE_RECORDED_PASS = (
+    "A recorded pass makes its commit passed only while all of these hold: HEAD is that commit, and the workspace "
+    "reads What a gated pass judged states show no change; every claim's reading set is unchanged from the hash "
+    "recorded with the run; and the run's scope covers the scope now needed, a `full` pass covering `full` and "
+    "`related` and a `related` pass only `related`, while a release or tag needs a `full` pass at that commit or, when "
+    "the user's recorded answer to the release question for that commit chose `related`, a `related` pass at that "
+    "commit."
+)
+RELEASE_NOT_RUN = (
+    "A final check that did not run at the scope an operation needs counts as not run at the commit to be landed or "
+    "tagged, so that landing or release with it needs accept and land, as Accept and land at the end of the plan "
+    "describes: landing needs a scope covering the plan's Final check scope, a `full` run covering `full` and "
+    "`related` and a `related` run only `related`, and a release or tag needs `full`, or `related` when the user's "
+    "recorded answer to the release question for that commit chose it."
+)
+RELEASE_CONTEXT_SCOPE = (
+    "A release or tag runs `full` at the commit to be tagged unless the user, asked for that commit, chooses "
+    "`related`; a `full` pass already valid there is used without asking."
+)
+RELEASE_CONTEXT_RECORDED = (
+    "A recorded final check pass makes its commit passed only while HEAD is that commit, the workspace reads show no "
+    "change, every Claim's reading set is unchanged from the hash recorded with the run and the run's scope covers the "
+    "scope now needed, a release or tag needing a `full` pass unless the user chose `related` for that commit; a "
+    "recorded failure keeps its commit failed, and without a recorded run for the commit main runs the final check."
+)
+RELEASE_SETUP_RECORDED = (
+    "A resumed session, or main after a context compaction, reuses a recorded pass instead of running the final check "
+    "again only while `HEAD` is that commit, the workspace reads show no change, every claim's reading set is "
+    "unchanged and the run's scope covers the scope now needed, a release or tag needing a `full` pass unless the user "
+    "chose `related` for that commit; a recorded failure keeps its commit failed."
+)
+RELEASE_REFERENCE_RECORDED = (
+    "It also records each final check run with its commit, scope, each claim's reading-set hash, result and time, and "
+    "main reuses a recorded pass only while `HEAD` is that commit, the workspace reads show no change, every claim's "
+    "reading set is unchanged and the run's scope covers the scope now needed, a release or tag needing a `full` pass "
+    "unless you chose `related` for that commit; a recorded failure keeps its commit failed, and otherwise main runs "
+    "the final check again before landing."
+)
+RELEASE_REFERENCE_ZH_RECORDED = (
+    "它也記錄每次最終檢查的執行，包括 commit、範圍、每個 claim 閱讀範圍的雜湊、結果與時間；主 Agent 只在 `HEAD` 仍是那個 "
+    "commit、工作區的讀取沒有變動、每個 claim 的閱讀範圍都沒有改變，且那次執行的範圍涵蓋現在需要的範圍時，才沿用記錄下來的"
+    "通過，release 或 tag 需要 `full` 的通過，除非你為那個 commit 選了 `related`；記錄下來的失敗讓那個 commit 維持失敗，其他"
+    "情況主 Agent 會在進入預設 branch 前重新執行最終檢查。"
+)
+RELEASE_SETUP = (
+    "For a release or tag, a `full` pass already valid at the commit to be tagged, main's own or recorded, is used "
+    "without asking; otherwise main asks the user, for that commit, whether to run `full` or to tag on a `related` run "
+    "at that commit, stating that `related` leaves out the overall acceptance and reruns only this plan's claims' "
+    "primary acceptance.",
+    "Main marks that release question pending in the plan's dispatch record as a separate entry naming the commit, and "
+    "until the user's answer is recorded, or with an unclear answer, the release runs `full`; the answer applies to "
+    "that commit only, never changes the plan's scope and is not an instruction to release or tag, which still needs "
+    "the user's instruction, and Auto land never tags.",
+    "A release on `related` needs a passed `related` run at that commit and leaves out only the overall acceptance "
+    "there: a failure observed at that commit, the overall acceptance's included, and anything else that needs the "
+    "user's accept-and-land decision still need it, and the tag report states that the release used `related`.",
+)
+RELEASE_REFERENCE = (
+    "For a release or tag, a `full` pass already valid at the commit to be tagged, main's own or recorded, is used "
+    "without asking; otherwise main asks you, for that commit, whether to run `full` or to tag on a `related` run at "
+    "that commit, stating that `related` leaves out the overall acceptance and reruns only this plan's claims' primary "
+    "acceptance.",
+    "Main marks that release question pending in the plan's dispatch record as a separate entry naming the commit, and "
+    "until your answer is recorded, or with an unclear answer, the release runs `full`; your answer applies to that "
+    "commit only, never changes the plan's scope and is not an instruction to release or tag, which still needs your "
+    "instruction, and Auto land never tags.",
+    "A release on `related` needs a passed `related` run at that commit and leaves out only the overall acceptance "
+    "there: a failure observed at that commit, the overall acceptance's included, and anything else that needs your "
+    "accept-and-land decision still need it, and the tag report states that the release used `related`.",
+)
+RELEASE_REFERENCE_ZH = (
+    "release 或 tag 時，要打 tag 的 commit 上若已有有效的 `full` 通過（主 Agent 自己的或記錄下來的），就直接沿用而不問；否則"
+    "主 Agent 會針對那個 commit 問你要執行 `full`，還是以那個 commit 上 `related` 的執行打 tag，並說明 `related` 不跑整體"
+    "驗收，只重跑這份計畫各 claim 的主要驗收。",
+    "主 Agent 會在計畫的派工紀錄中，把這個 release 問題標為待回答，作為寫明那個 commit 的獨立項目；在你的回答記錄下來之前或"
+    "回答不清楚時，release 執行 `full`；你的回答只適用於那個 commit，不會改變計畫的範圍，也不是要求 release 或打 tag 的指示，"
+    "release 或打 tag 仍需要你的指示，而 Auto land 從不打 tag。",
+    "以 `related` release 需要那個 commit 上通過的 `related` 執行，且只省略那裡的整體驗收：在那個 commit 上觀察到的失敗"
+    "（包括整體驗收的失敗），以及其他需要你決定接受並合併的事項，仍然需要這個決定，tag 的報告也會寫出這次 release 用的是 "
+    "`related`。",
+)
+RELEASE_README_PAIRS = (
+    ("Final check scope", "最終檢查範圍",
+     "For a release or tag, a `full` pass already valid at its commit is used without asking; otherwise main asks you, "
+     "for that commit, whether to run `full` or to tag on a `related` run there, which leaves out the overall "
+     "acceptance, and the release runs `full` until your answer is recorded.",
+     "release 或 tag 時，它的 commit 上若已有有效的 `full` 通過就直接沿用而不問；否則主 Agent 會針對那個 commit 問你要執行 "
+     "`full`，還是以那裡 `related` 的執行打 tag（這會省略整體驗收），在你的回答記錄下來之前，release 執行 `full`。"),
+    ("Final check scope", "最終檢查範圍",
+     "Your answer applies to that commit only, does not change the plan's scope and is not an instruction to tag; a "
+     "failure at that commit is not waived, and the tag report says the release used `related`.",
+     "你的回答只適用於那個 commit，不會改變計畫的範圍，也不是要求打 tag 的指示；那個 commit 上的失敗不會因此免除，tag 的報告會"
+     "寫出這次 release 用的是 `related`。"),
+)
+
+
+def is_whole_sentence(sentence: str, text: str) -> bool:
+    """The match feather_support.stop_threshold_assert_whole_sentence asserts, as a boolean."""
+    end = "" if sentence.endswith("。") else r"(?=\s|$)"
+    return re.search(rf"(?:^|(?<=[\s。])){re.escape(sentence)}{end}", text) is not None
 
 
 def place_text(text: str, path: str, label: str) -> str:
@@ -133,11 +251,9 @@ class RecordedFinalCheckTests(unittest.TestCase):
             "and before it acts on the run's result.",
             "A recorded pass is a pass main takes from the dispatch record rather than from its own run in this session, "
             "as in a resumed session or after a context compaction.",
-            "A recorded pass makes its commit passed only while all of these hold: HEAD is that commit, and the "
-            "workspace reads What a gated pass judged states show no change; every claim's reading set is unchanged "
-            "from the hash recorded with the run; and the run's scope covers the scope now needed, a `full` pass "
-            "covering `full` and `related` and a `related` pass only `related`, while a release or tag needs a `full` "
-            "pass at that commit.",
+            # Replaced by final-check-scope-fixes ticket 03 (S1.1): a release or tag on the user's `related` answer for
+            # that commit needs a `related` pass at that commit.
+            RELEASE_RECORDED_PASS,
             "Main checks these conditions each time it relies on a recorded pass: before the Adversarial reviews at the "
             "final commit, before the decision at the end of the plan and before landing, release or tagging.",
             "A commit without a recorded run, or with a recorded failure, is never passed by a record, and a failure "
@@ -299,10 +415,8 @@ class RecordedFinalCheckTests(unittest.TestCase):
             "A resumed session, and main after a context compaction, take the Plan's READY, reading sets, passes, "
             "Adversarial review results and the user's decisions from it as if received in this session, while counts "
             "and the Stop threshold in effect still come only from this session.",
-            "A recorded final check pass makes its commit passed only while HEAD is that commit, the workspace reads "
-            "show no change, every Claim's reading set is unchanged from the hash recorded with the run and the run's "
-            "scope covers the scope now needed, a release or tag needing a `full` pass; a recorded failure keeps its "
-            "commit failed, and without a recorded run for the commit main runs the final check.",
+            # Replaced by final-check-scope-fixes ticket 03 (Further Notes "Glossary"): the release exception.
+            RELEASE_CONTEXT_RECORDED,
             "Main takes it as written, so an edit to it changes what main believes.",
             "Off mode writes none.",
         ),
@@ -317,10 +431,8 @@ class RecordedFinalCheckTests(unittest.TestCase):
         "setup.md#recorded runs": (
             "In auto, main records each final check run in the plan's dispatch record under `.feather/dispatch/`, with "
             "its commit, scope, each claim's reading-set hash, result and time.",
-            "A resumed session, or main after a context compaction, reuses a recorded pass instead of running the final "
-            "check again only while `HEAD` is that commit, the workspace reads show no change, every claim's reading set "
-            "is unchanged and the run's scope covers the scope now needed, a release or tag needing a `full` pass; a "
-            "recorded failure keeps its commit failed.",
+            # Replaced by final-check-scope-fixes ticket 03: the release exception.
+            RELEASE_SETUP_RECORDED,
             "The decision at the end of the plan and the completion report name a reused pass with its run's time.",
             "An environment change after the run, such as an upgraded tool, is not detected, and the dispatch record is "
             "taken as written, so an edit to it can let a commit land on a pass that would not hold now.",
@@ -328,11 +440,8 @@ class RecordedFinalCheckTests(unittest.TestCase):
             "compaction.",
         ),
         "reference.md#Dispatch record": (
-            "It also records each final check run with its commit, scope, each claim's reading-set hash, result and "
-            "time, and main reuses a recorded pass only while `HEAD` is that commit, the workspace reads show no change, "
-            "every claim's reading set is unchanged and the run's scope covers the scope now needed, a release or tag "
-            "needing a `full` pass; a recorded failure keeps its commit failed, and otherwise main runs the final check "
-            "again before landing.",
+            # Replaced by final-check-scope-fixes ticket 03: the release exception.
+            RELEASE_REFERENCE_RECORDED,
             "When main reuses a recorded pass, the decision at the end of the plan and the completion report say so "
             "with the run's time.",
             "A reused pass does not detect an environment change after its run, such as an upgraded tool, and the "
@@ -340,10 +449,8 @@ class RecordedFinalCheckTests(unittest.TestCase):
             "In `off`, main writes none, and the final check runs again in each session.",
         ),
         "reference.zh-TW.md#派工紀錄": (
-            "它也記錄每次最終檢查的執行，包括 commit、範圍、每個 claim 閱讀範圍的雜湊、結果與時間；主 Agent 只在 `HEAD` "
-            "仍是那個 commit、工作區的讀取沒有變動、每個 claim 的閱讀範圍都沒有改變，且那次執行的範圍涵蓋現在需要的範圍時，"
-            "才沿用記錄下來的通過，release 或 tag 需要 `full` 的通過；記錄下來的失敗讓那個 commit 維持失敗，其他情況主 "
-            "Agent 會在進入預設 branch 前重新執行最終檢查。",
+            # Replaced by final-check-scope-fixes ticket 03: the release exception.
+            RELEASE_REFERENCE_ZH_RECORDED,
             "主 Agent 沿用記錄下來的通過時，計畫結束時的決定與完成報告會說明這一點，並附上那次執行的時間。",
             "沿用的通過偵測不到執行之後的環境變動（例如工具升級），紀錄也照所寫的內容採信。",
             "在 `off` 下，主 Agent 不寫派工紀錄，每個 session 都會重新執行最終檢查。",
@@ -518,7 +625,9 @@ class FinalCheckScopeTests(unittest.TestCase):
             "as a claim's outcome verification, stands in for that rerun.",
             "A run at the plan's Final check scope passes or fails like any other final check run, so a passed run at "
             "`related` is a passed final check.",
-            "A release or tag runs `full`, whatever scope the plan chose.",
+            # Replaced by final-check-scope-fixes ticket 03 (S2.6): `full` unless the user chose `related` for that
+            # commit.
+            RELEASE_FINAL_CHECK,
             "Without the user's choice, the scope is `full`.",
             "When the plan has no overall acceptance apart from its claims' acceptance, so that both scopes run the same "
             "checks, no scope is asked or recorded, and the final check runs as `full`.",
@@ -548,10 +657,9 @@ class FinalCheckScopeTests(unittest.TestCase):
             "recorded pass, before the decision at the end of the plan and before landing.",
             "The decision at the end of the plan and the completion report state the scope the final check ran at, and "
             "they say `full` whenever no scope was chosen or none was asked.",
-            "A final check that did not run at a scope covering the plan's Final check scope, a `full` run covering "
-            "`full` and `related` and a `related` run only `related`, or that did not run at `full` for a release or "
-            "tag, counts as not run at the commit to be landed or tagged, so landing or release with it needs accept "
-            "and land, as Accept and land at the end of the plan describes.",
+            # Replaced by final-check-scope-fixes ticket 03 (S2.7): the scope each operation needs, a release or tag's
+            # being `full` or the `related` its answer chose.
+            RELEASE_NOT_RUN,
         ),
         "review-state.md#Dispatch record": (
             # Replaced by final-check-scope-fixes ticket 01: the record holds each question, pending, and its answer.
@@ -659,7 +767,8 @@ class FinalCheckScopeTests(unittest.TestCase):
             "asks it on, and the user's answer replaces the mark when main records it.",
             "Until that answer is recorded, with an unclear answer, or when no scope is asked, the scope is `full`, so "
             "an answer lost to a context compaction only widens the final check.",
-            "A release or tag always runs `full`.",
+            # Replaced by final-check-scope-fixes ticket 03: the release choice.
+            *RELEASE_SETUP,
             "A run at the chosen scope passes or fails like any other final check; one that did not run at the chosen "
             "scope needs the user's accept-and-land decision.",
             "The decision at the end of the plan and the completion report state the scope the final check ran at.",
@@ -686,7 +795,8 @@ class FinalCheckScopeTests(unittest.TestCase):
             "asks it on, and your answer replaces the mark when main records it; until then, with an unclear answer, or "
             "when no scope is asked, the scope is `full`, so an answer lost to a context compaction only widens the "
             "final check.",
-            "A release or tag always runs `full`.",
+            # Replaced by final-check-scope-fixes ticket 03: the release choice.
+            *RELEASE_REFERENCE,
             "A run at the chosen scope passes or fails like any other final check, a final check that did not run at the "
             "chosen scope needs your accept-and-land decision, and the decision at the end of the plan and the "
             "completion report state the scope the final check ran at.",
@@ -706,7 +816,8 @@ class FinalCheckScopeTests(unittest.TestCase):
             "會問你一個新的範圍問題。",
             "提問之前，主 Agent 會在計畫的派工紀錄中把問題標為待回答，並附上提問時依據的建議，你的回答在主 Agent 記錄下來時取代這個"
             "標記；在那之前、回答不清楚，或沒有詢問範圍時，範圍是 `full`，所以因 context 壓縮而遺失的回答只會擴大最終檢查。",
-            "release 或 tag 一律執行 `full`。",
+            # Replaced by final-check-scope-fixes ticket 03: the release choice.
+            *RELEASE_REFERENCE_ZH,
             "依所選範圍執行的結果與其他最終檢查一樣算通過或失敗，沒有依所選範圍執行的最終檢查需要你決定接受並合併，計畫結束時的決定"
             "與完成報告會寫出最終檢查執行時的範圍。",
             "選擇範圍不是審查事件；之後的計畫審查在建議與上次提問所依據的建議不同，或主 Agent 無法確定是否不同時，會再問一次；偏離後"
@@ -742,9 +853,8 @@ class FinalCheckScopeTests(unittest.TestCase):
          "is recorded the scope is `full`, so an answer lost to a context compaction only widens the final check.",
          "主 Agent 在問每個範圍問題之前，會先在計畫的派工紀錄中把它標為待回答，在你的回答記錄下來之前範圍是 `full`，所以因 context "
          "壓縮而遺失的回答只會擴大最終檢查。"),
-        ("Final check scope", "最終檢查範圍",
-         "A release always runs `full`.",
-         "release 一律執行 `full`。"),
+        # Replaced by final-check-scope-fixes ticket 03: the release choice.
+        *RELEASE_README_PAIRS,
         ("Final check scope", "最終檢查範圍",
          "When both scopes would run the same checks, you are not asked.",
          "兩種範圍會跑相同檢查時不會問你。"),
@@ -770,7 +880,8 @@ class FinalCheckScopeTests(unittest.TestCase):
             "user asks to change it.",
             "The user's answer to the latest question sets it, and until that answer is recorded it is `full`, which "
             "holds back no Claim.",
-            "A release always runs `full`.",
+            # Replaced by final-check-scope-fixes ticket 03 (Further Notes "Glossary"): the release sentence.
+            RELEASE_CONTEXT_SCOPE,
             "A final check run at the chosen scope passes or fails like any other: `related` is not a missing check and "
             "needs no Accept and land.",
             "Choosing it is not a review event, changes no count or verdict and gives no authority to land, release or "
@@ -1021,20 +1132,30 @@ class PendingScopeQuestionTests(unittest.TestCase):
         self.assertIn("Off mode writes none, and in off the cross-session rules of Resumed sessions hold without it.",
                       source("review-state.md#Dispatch record"))
 
-    def test_the_release_rule_stays_its_own_sentence(self):
-        # Ticket 03 replaces it; this ticket only separates it from the Plan's default scope.
-        for place, sentence in (("CONTEXT.md#Final check scope", "A release always runs `full`."),
-                                ("setup.md#scope", "A release or tag always runs `full`."),
-                                ("reference.md#Final check", "A release or tag always runs `full`."),
-                                ("reference.zh-TW.md#最終檢查", "release 或 tag 一律執行 `full`。"),
-                                ("review-state.md#Final check", "A release or tag runs `full`, whatever scope the plan "
-                                                                "chose.")):
-            with self.subTest(place=place):
-                self.assert_whole_sentence(sentence, source(place))
-        for path, label, sentence in (("README.md", "Final check scope", "A release always runs `full`."),
-                                      ("README.zh-TW.md", "最終檢查範圍", "release 一律執行 `full`。")):
-            with self.subTest(path=path):
-                self.assert_whole_sentence(sentence, place_text(source(path), path, label))
+    def test_the_release_rule_stays_apart_from_the_plans_default_scope(self):
+        # Ticket 01 separated the release rule from the Plan's default scope; final-check-scope-fixes ticket 03 replaced
+        # that standalone rule with the release choice. The old sentence is gone from each place, and the release choice
+        # stands there in sentences of its own, apart from the sentence on the Plan's default scope.
+        def readme(path, label):
+            return place_text(source(path), path, label)
+
+        for text, old, new in (
+                (source("CONTEXT.md#Final check scope"), "A release always runs `full`.", (RELEASE_CONTEXT_SCOPE,)),
+                (source("setup.md#scope"), "A release or tag always runs `full`.", RELEASE_SETUP),
+                (source("reference.md#Final check"), "A release or tag always runs `full`.", RELEASE_REFERENCE),
+                (source("reference.zh-TW.md#最終檢查"), "release 或 tag 一律執行 `full`。", RELEASE_REFERENCE_ZH),
+                (source("review-state.md#Final check"), "A release or tag runs `full`, whatever scope the plan chose.",
+                 (RELEASE_FINAL_CHECK,)),
+                (readme("README.md", "Final check scope"), "A release always runs `full`.",
+                 tuple(pair[2] for pair in RELEASE_README_PAIRS)),
+                (readme("README.zh-TW.md", "最終檢查範圍"), "release 一律執行 `full`。",
+                 tuple(pair[3] for pair in RELEASE_README_PAIRS))):
+            with self.subTest(old=old, new=new[0][:40]):
+                self.assertFalse(is_whole_sentence(old, text))
+                for sentence in new:
+                    self.assert_whole_sentence(sentence, text)
+                    self.assertNotIn("until that answer is recorded it is `full`", sentence)
+                    self.assertNotIn("Without the user's choice", sentence)
 
     def test_every_new_pin_fails_on_the_v0_37_0_text(self):
         for pins in self.new_pins():
@@ -1272,6 +1393,217 @@ class CoveredPrimaryAcceptanceTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:40]):
                 self.assert_whole_sentence(sentence, place_text(english, "README.md", label))
                 self.assert_whole_sentence(sentence_zh, place_text(chinese, "README.zh-TW.md", label_zh))
+
+    def test_every_new_pin_fails_on_the_v0_37_0_text(self):
+        for pins in self.new_pins():
+            for place, sentences in pins.items():
+                path, _, label = place.partition("#")
+                result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{self.V0_37_0}:{PATHS[path]}"],
+                                        capture_output=True, check=False, timeout=60)
+                if result.returncode != 0:
+                    self.skipTest(f"{self.V0_37_0} is not available")
+                try:
+                    text = place_text(result.stdout.decode("utf-8"), path, label)
+                except (KeyError, StopIteration):
+                    continue
+                for sentence in sentences:
+                    with self.subTest(place=place, sentence=sentence[:60]):
+                        self.assertNotIn(sentence, text)
+
+
+class ReleaseScopeTests(unittest.TestCase):
+    """Final check scope fixes ticket 03 (docs/specs/final-check-scope-fixes.md, S0, S1, S2.2-S2.4, S2.6 and S2.7):
+    whole-sentence pins of the release choice in review state, the glossary, the setup document, both reference
+    documents and the README pair, and off's kept rules."""
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+    assert_pinned = RecordedFinalCheckTests.assert_pinned
+
+    FINAL_CHECK = FinalCheckScopeTests.FINAL_CHECK
+    SCOPE = FinalCheckScopeTests.SCOPE
+    RUNS = RecordedFinalCheckTests.RUNS
+    V0_37_0 = PendingScopeQuestionTests.V0_37_0
+
+    # S2.6 and S1.1: a valid `full` pass is used without asking; otherwise main asks the release question for that
+    # commit, stating what `related` leaves out.
+    VALID_FULL_PASS = (
+        "In auto, at the commit to be released or tagged, a `full` pass that is valid there, main's own in this session "
+        "at that commit or a recorded pass that meets the conditions Recorded final check runs states, is used without "
+        "asking."
+    )
+    THE_QUESTION = (
+        "Otherwise main asks the user the release question, a scope question for that commit: whether to run `full` or "
+        "to tag on a `related` run at that commit, stating that `related` leaves out the plan's overall acceptance "
+        "checks and reruns only this plan's claims' primary acceptance."
+    )
+    ASK = {
+        SCOPE: (VALID_FULL_PASS, THE_QUESTION),
+        RUNS: (
+            "At the commit to be released or tagged, a recorded `full` pass that meets these conditions is used without "
+            "asking the release question, as Final check scope describes.",
+        ),
+    }
+
+    # S0, S2.2-S2.4 and S2.6: a separate pending entry for one commit, set only by the user's answer, `full` while
+    # pending or unclear, setting nothing for the Plan's scope or another commit.
+    ENTRY = {
+        SCOPE: (
+            "The release question and its answer are a separate entry in the plan's dispatch record naming the commit by "
+            "its full SHA: main writes the question there as pending before asking it, and only the user's answer to "
+            "it, written in place of that mark as this bullet states for the plan's scope question and in any case "
+            "before the release or tag, chooses `related` for that commit.",
+            "They neither replace nor set the plan's scope, and they set nothing for another commit.",
+            "While the release question is pending, unanswered or answered unclearly, the release or tag runs `full`.",
+        ),
+        "review-state.md#Dispatch record": (
+            "It also holds each release question, as a separate entry naming the commit to be released or tagged by its "
+            "full SHA, marked pending before main asks it, and the user's answer that replaces that mark, as Final check "
+            "scope describes.",
+        ),
+    }
+
+    # S2.6: the answer is no instruction to release or tag, and Auto land never tags.
+    NO_AUTHORITY = {
+        SCOPE: (
+            "The answer chooses only what the final check runs at that commit: it is not an instruction to release or "
+            "tag, which still needs the user's instruction, as Repository authority describes, and Auto land never "
+            "tags.",
+        ),
+    }
+
+    # S1.1, S1.2, S2.6 and S2.7: a release on `related` needs a passed `related` run at that commit, waives only the
+    # overall acceptance's run there and no failure, keeps everything else that needs accept and land, and is reported.
+    ON_RELATED = {
+        SCOPE: (
+            "A release or tag on `related` needs a passed `related` run at that commit, main's own in this session or a "
+            "recorded pass that meets the conditions Recorded final check runs states, never a pass from another "
+            "commit.",
+            "Choosing `related` for a release leaves out only the run of the plan's overall acceptance checks at that "
+            "commit and waives no failure: a failure observed at that commit, a failure of the overall acceptance "
+            "included, keeps that commit failed, as Final check describes, and everything Final check and Accept and "
+            "land at the end of the plan state as needing accept and land still needs it.",
+            "When a release or tag uses `related`, main's report of it states that the release used `related`.",
+        ),
+    }
+
+    # The glossary's Dispatch record entry: the release questions (spec Further Notes "Glossary").
+    CONTEXT = {
+        "CONTEXT.md#Dispatch record": (
+            "It holds each release question as a separate entry naming its commit, marked pending before main asks it, "
+            "and the user's answer to it, which replaces the mark.",
+        ),
+    }
+
+    # The pins of the sentences this ticket replaces, kept where the replaced pins were; listed here for the v0.37.0
+    # check.
+    REPLACED = {
+        FINAL_CHECK: (RELEASE_FINAL_CHECK,),
+        RUNS: (RELEASE_RECORDED_PASS,),
+        SCOPE: (RELEASE_NOT_RUN,),
+        "CONTEXT.md#Final check scope": (RELEASE_CONTEXT_SCOPE,),
+        "CONTEXT.md#Dispatch record": (RELEASE_CONTEXT_RECORDED,),
+        "setup.md#recorded runs": (RELEASE_SETUP_RECORDED,),
+        "setup.md#scope": RELEASE_SETUP,
+        "reference.md#Dispatch record": (RELEASE_REFERENCE_RECORDED,),
+        "reference.md#Final check": RELEASE_REFERENCE,
+        "reference.zh-TW.md#派工紀錄": (RELEASE_REFERENCE_ZH_RECORDED,),
+        "reference.zh-TW.md#最終檢查": RELEASE_REFERENCE_ZH,
+        "README.md#Final check scope": tuple(pair[2] for pair in RELEASE_README_PAIRS),
+        "README.zh-TW.md#最終檢查範圍": tuple(pair[3] for pair in RELEASE_README_PAIRS),
+    }
+
+    def new_pins(self):
+        return (self.ASK, self.ENTRY, self.NO_AUTHORITY, self.ON_RELATED, self.CONTEXT, self.REPLACED)
+
+    def test_a_valid_full_pass_is_used_and_otherwise_main_asks_for_that_commit(self):
+        self.assert_pinned(self.ASK)
+
+    def test_the_release_question_is_a_separate_pending_entry_for_one_commit(self):
+        self.assert_pinned(self.ENTRY)
+
+    def test_the_answer_is_no_instruction_to_release_or_tag(self):
+        self.assert_pinned(self.NO_AUTHORITY)
+        # Auto land still covers no release or tag.
+        self.assertIn("It covers no rebase, merge, merge through a hosting service, retry, release or tag, and no later "
+                      "push to the default branch, such as one of a later status change.",
+                      source("review-state.md#Repository authority"))
+
+    def test_a_release_on_related_waives_only_the_overall_acceptance_and_no_failure(self):
+        self.assert_pinned(self.ON_RELATED)
+        # The failed-commit rule the release choice points to still holds.
+        self.assertIn("Once it has failed at a commit, that commit's state is failed, and a later pass at the same "
+                      "commit lets landing proceed only through an accept-and-land decision that names the failure.",
+                      source(self.FINAL_CHECK))
+
+    def test_a_release_needs_full_or_the_related_its_answer_chose(self):
+        self.assert_pinned({self.FINAL_CHECK: (RELEASE_FINAL_CHECK,), self.RUNS: (RELEASE_RECORDED_PASS,),
+                            self.SCOPE: (RELEASE_NOT_RUN,)})
+
+    def test_the_glossary_states_the_release_choice_and_the_release_questions(self):
+        self.assert_pinned(self.CONTEXT)
+        self.assert_pinned({place: self.REPLACED[place]
+                            for place in ("CONTEXT.md#Final check scope", "CONTEXT.md#Dispatch record")})
+
+    def test_the_documents_state_the_release_choice(self):
+        self.assert_pinned({place: sentences for place, sentences in self.REPLACED.items()
+                            if place.split("#")[0] in ("setup.md", "reference.md", "reference.zh-TW.md")})
+
+    def test_both_readmes_state_the_release_choice_in_paired_sentences(self):
+        english = (config.ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (config.ROOT / "README.zh-TW.md").read_text(encoding="utf-8")
+        for label, label_zh, sentence, sentence_zh in RELEASE_README_PAIRS:
+            with self.subTest(sentence=sentence[:40]):
+                self.assert_whole_sentence(sentence, place_text(english, "README.md", label))
+                self.assert_whole_sentence(sentence_zh, place_text(chinese, "README.zh-TW.md", label_zh))
+
+    def test_the_release_rule_is_written_once(self):
+        # The release question and what `related` waives are review state's Final check scope; the other rules point
+        # to it.
+        owned = ("stating that `related` leaves out the plan's overall acceptance checks", "waives no failure",
+                 "neither replace nor set the plan's scope")
+        for path in ("review-state.md", "resource-risk-runs.md", "plan-review.md", "adversarial-review.md",
+                     "analyst.md"):
+            text = source(path)
+            for phrase in owned:
+                with self.subTest(path=path, phrase=phrase[:40]):
+                    self.assertEqual(text.count(phrase), 1 if path == "review-state.md" else 0)
+        for phrase in owned:
+            self.assertIn(phrase, source(self.SCOPE))
+
+    def test_no_sentence_lets_the_release_answer_tag_or_waive_a_failure(self):
+        # S2.6, attacked statically: no shipped sentence lets the release answer, or `related`, authorise a release or
+        # tag or waive a failure, and the old rule that a release or tag always runs `full` is gone from review state.
+        authorise = re.compile(r"\banswer\b[^.]*\b(?:authori[sz]es|permits|allows|is an instruction to) (?:a |the )?"
+                               r"(?:release|tag)", re.I)
+        waive = re.compile(r"`related`[^.]*\bwaives? (?:a|the|any|that|every) failure", re.I)
+        for path in ("review-state.md", "CONTEXT.md", "setup.md", "reference.md", "README.md"):
+            text = source(path)
+            with self.subTest(path=path):
+                self.assertIsNone(authorise.search(text))
+                self.assertIsNone(waive.search(text))
+        text = source("review-state.md")
+        for old in ("A release or tag runs `full`, whatever scope the plan chose.",
+                    "or that did not run at `full` for a release or tag"):
+            with self.subTest(old=old[:40]):
+                self.assertFalse(is_whole_sentence(old, text) if old.endswith(".") else old in text)
+
+    def test_off_keeps_its_rules(self):
+        # Fails if off loses its final check, its earlier failure rules or its having no scope, or if the release
+        # question stops being scoped to auto.
+        self.assert_pinned(FinalCheckScopeTests.OFF)
+        scope = source(self.SCOPE)
+        self.assertTrue(scope.startswith("In auto, "))
+        self.assertTrue(self.VALID_FULL_PASS.startswith("In auto, "))
+        off = ("In off, a plan has no Final check scope: no scope is asked or recorded, and the final check runs the "
+               "plan's overall acceptance checks under off's rules, as Final check describes.")
+        self.assertTrue(scope.endswith(off))
+        self.assertLess(scope.index(self.VALID_FULL_PASS), scope.index(off))
+        final_check = source(self.FINAL_CHECK)
+        off_final_check = "In off, the final check keeps its earlier rules, without the reruns, fix claims and stop above"
+        self.assertLess(final_check.index(RELEASE_FINAL_CHECK), final_check.index(off_final_check))
+        self.assertNotIn("release question", final_check[final_check.index(off_final_check):])
+        self.assertIn("In off, main records no run, and a record never makes a commit passed, as Final check describes.",
+                      source(self.RUNS))
 
     def test_every_new_pin_fails_on_the_v0_37_0_text(self):
         for pins in self.new_pins():
