@@ -54,7 +54,13 @@ check, Recorded final check runs and Final check scope, the glossary's Final che
 setup document, both reference documents and the README pair; PendingScopeQuestionTests' release-rule test now checks
 the replacement. Its code review (B1) also replaces, where they are pinned, Recorded final check runs' sentence on the
 scope recorded and Final check scope's sentence on the scope reported (RELEASE_RECORDED_SCOPE and
-RELEASE_REPORTED_SCOPE): a run at `related` on the release answer is recorded and reported as `related`."""
+RELEASE_REPORTED_SCOPE): a run at `related` on the release answer is recorded and reported as `related`.
+
+User's answer for restrictions ticket 02 (docs/specs/user-answer-restriction.md) updates, where they are, the
+FinalCheckScopeTests pins of the sentences it replaces: review state's Final check sentence on `full` without the user's
+answer, the setup document's and both reference documents' sentence on the ask after READY (no longer "once"), the
+README pair on the ask (no longer "once", and a later plan review asks again), and the glossary's Final check scope
+sentence on when main asks again; it adds a check that none of them says "once" or "Without the user's choice"."""
 
 from __future__ import annotations
 
@@ -644,7 +650,10 @@ class FinalCheckScopeTests(unittest.TestCase):
             # Replaced by final-check-scope-fixes ticket 03 (S2.6): `full` unless the user chose `related` for that
             # commit.
             RELEASE_FINAL_CHECK,
-            "Without the user's choice, the scope is `full`.",
+            # Replaced by user-answer-restriction ticket 02: `full` until the user's answer to the plan's scope
+            # question is recorded, as Final check scope states, in place of "Without the user's choice".
+            "Until the user's answer to the plan's scope question is recorded, or while it is unanswered or answered "
+            "unclearly, the scope is `full`.",
             "When the plan has no overall acceptance apart from its claims' acceptance, so that both scopes run the same "
             "checks, no scope is asked or recorded, and the final check runs as `full`.",
         ),
@@ -770,7 +779,9 @@ class FinalCheckScopeTests(unittest.TestCase):
             "`full` runs the plan's overall acceptance and reruns every claim's primary acceptance; `related` reruns "
             "every claim's primary acceptance alone, so a plan can land without its overall acceptance, such as the "
             "full suite.",
-            "Plan review recommends a scope with its reason, and after READY main asks the user once, in the same "
+            # User-answer-restriction ticket 02: "once" goes; the sentence below on a later plan review says when the
+            # question is asked again.
+            "Plan review recommends a scope with its reason, and after READY main asks the user in the same "
             "question resource-risk proposals use, with plan review's recommendation and its own; the question is asked "
             "even when no proposal is undecided, but not when the plan has no overall acceptance apart from its claims' "
             "acceptance, since both scopes would then run the same checks.",
@@ -799,7 +810,9 @@ class FinalCheckScopeTests(unittest.TestCase):
             "In auto, the final check runs at the plan's final check scope: `full` runs the plan's overall acceptance "
             "and reruns every claim's primary acceptance, and `related` reruns every claim's primary acceptance alone, "
             "so a plan whose claims' related tests cover what it changes can land without the full suite.",
-            "Plan review recommends a scope with its reason, and after READY main asks you once, in the same question as "
+            # User-answer-restriction ticket 02: "once" goes; the sentence below on a later plan review says when the
+            # question is asked again.
+            "Plan review recommends a scope with its reason, and after READY main asks you in the same question as "
             "resource-risk proposals, with plan review's recommendation and its own; it asks even when no proposal is "
             "undecided, but not when the plan has no overall acceptance apart from its claims' acceptance, since both "
             "scopes would then run the same checks.",
@@ -827,7 +840,8 @@ class FinalCheckScopeTests(unittest.TestCase):
         "reference.zh-TW.md#最終檢查": (
             "在 auto 下，最終檢查依計畫的最終檢查範圍執行：`full` 執行計畫的整體驗收並重跑每個 claim 的主要驗收，`related` 只重跑"
             "每個 claim 的主要驗收，所以各 claim 的相關測試已涵蓋計畫所改內容時，計畫可以不跑完整測試就進入預設 branch。",
-            "計畫審查會建議一個範圍並說明理由，主 Agent 在 READY 之後、與資源風險提議同一次的提問中問你一次，附上計畫審查的建議與它"
+            # User-answer-restriction ticket 02: 「一次」 goes, as in English.
+            "計畫審查會建議一個範圍並說明理由，主 Agent 在 READY 之後、與資源風險提議同一次的提問中問你，附上計畫審查的建議與它"
             "自己的建議；即使沒有未決定的提議也會問，但計畫除了各 claim 的驗收之外沒有整體驗收時不會問，因為兩種範圍會跑相同的檢查。",
             "只有你自己對主 Agent 所問範圍問題的回答能設定範圍，沒有這個提問時你表示的選擇不會設定範圍；你要求改變範圍時，主 Agent "
             "會問你一個新的範圍問題。",
@@ -852,11 +866,16 @@ class FinalCheckScopeTests(unittest.TestCase):
          "caused it or in a fix claim.",
          "合併前，主 Agent 會在要合併的 commit 上重跑每個 claim 的主要驗收，除非你選了最終檢查範圍 `related`，否則也會跑計畫"
          "的整體驗收；失敗時由造成失敗的 claim 或一個修正用的 claim 修正。"),
+        # Replaced by user-answer-restriction ticket 02: "once" goes, and a later plan review asks again when its
+        # recommendation differs or main cannot tell whether it does; the new question on your request is the next pair.
         ("Final check scope", "最終檢查範圍",
-         "in auto, plan review recommends `full` or `related` for the plan with its reason, and main asks you once, in "
-         "the same question after READY as resource-risk proposals, with plan review's recommendation and its own.",
+         "in auto, plan review recommends `full` or `related` for the plan with its reason, and main asks you in the "
+         "same question after READY as resource-risk proposals, with plan review's recommendation and its own; a later "
+         "plan review asks again when its recommendation differs from the one the last question was asked on or main "
+         "cannot tell whether it does.",
          "在 auto 下，計畫審查會為計畫建議 `full` 或 `related` 並說明理由，主 Agent 會在 READY 之後、與資源風險提議同一次的"
-         "提問中問你一次，附上計畫審查的建議與它自己的建議。"),
+         "提問中問你，附上計畫審查的建議與它自己的建議；之後的計畫審查在建議與上次提問所依據的建議不同，或主 Agent 無法確定是否"
+         "不同時，會再問你。"),
         # Replaced by final-check-scope-fixes ticket 01: only your answer to a scope question main asks sets it, a new
         # question on your request, the pending question and `full` until your answer is recorded; the release rule
         # stays its own sentence.
@@ -892,9 +911,11 @@ class FinalCheckScopeTests(unittest.TestCase):
             # Replaced by final-check-scope-fixes ticket 01 (Further Notes "Glossary"): when main asks, the latest answer
             # sets it, `full` until that answer is recorded, holding back no Claim, and no authority; the release rule
             # stays its own sentence.
+            # Replaced by user-answer-restriction ticket 02 (Further Notes "Glossary"): also when main cannot tell
+            # whether the recommendation changes.
             "Plan review recommends one with its reason; main asks the user after the Plan's READY and before its first "
-            "Claim is implemented, and again only after a later plan review whose recommendation changes or when the "
-            "user asks to change it.",
+            "Claim is implemented, and again only after a later plan review whose recommendation changes or main cannot "
+            "tell whether it does, or when the user asks to change it.",
             "The user's answer to the latest question sets it, and until that answer is recorded it is `full`, which "
             "holds back no Claim.",
             # Replaced by final-check-scope-fixes ticket 03 (Further Notes "Glossary"): the release sentence.
@@ -973,6 +994,19 @@ class FinalCheckScopeTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:40]):
                 self.assert_whole_sentence(sentence, place_text(english, "README.md", label))
                 self.assert_whole_sentence(sentence_zh, place_text(chinese, "README.zh-TW.md", label_zh))
+
+    def test_no_document_says_the_scope_question_is_asked_once(self):
+        # User-answer-restriction ticket 02: the documents stop saying the scope question after READY is asked once,
+        # and review state's Final check no longer says "Without the user's choice".
+        for place, old in (
+                ("README.md#Final check scope", "main asks you once"),
+                ("README.zh-TW.md#最終檢查範圍", "提問中問你一次"),
+                ("setup.md#scope", "main asks the user once"),
+                ("reference.md#Final check", "main asks you once"),
+                ("reference.zh-TW.md#最終檢查", "提問中問你一次"),
+                (self.FINAL_CHECK, "Without the user's choice")):
+            with self.subTest(place=place, old=old):
+                self.assertNotIn(old, source(place))
 
     def test_the_scope_bullets_follow_the_rules_they_extend(self):
         text = source("review-state.md")
