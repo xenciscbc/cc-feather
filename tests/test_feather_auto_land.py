@@ -519,13 +519,130 @@ class AutoLandRuleTests(unittest.TestCase):
             "records the plan's base revision.",
         ),
         "auto-land.md#Session": (
-            "After applying it, always remind the user in the reply that no file was written: the choice holds only in "
-            "this conversation, a new or resumed session uses the saved choice, and a context compaction may drop it, "
-            "while a session `on` is never recovered from a compaction summary.",
+            # Replaced by the recorded session `off` fix (2026-11-18): only a session `on` or `default` stays in this
+            # conversation; a recorded session `off` keeps holding its plan.
+            "After applying it, always remind the user in the reply that no configuration file was written: a session "
+            "`on` or `default` holds only in this conversation, a new or resumed session uses the saved choice in its "
+            "place, and a context compaction may drop it, while a session `on` is never recovered from a compaction "
+            "summary; a session `off` main recorded keeps holding each plan whose dispatch record keeps it, in a "
+            "resumed session and after a context compaction too, until the user's own words in this conversation lift "
+            "it, as Effect in this session states.",
             "A session choice comes only from the user's own words in this conversation and is not written into a "
             "handoff.",
         ),
     }
+
+    # S3 (user decision 2026-11-18): the recorded hold. A no-push instruction and a session `off` hold the landing, are
+    # recorded in each held plan's dispatch record, kept across a resumed session and a compaction for that plan only,
+    # lifted only by the user's own words, never recorded or read as a session `on`, and named as the source.
+    RECORDED_HOLD = {
+        "review-state.md#Auto land": (
+            # F1: the only record that affects the setting can only hold landing.
+            "The only record that affects the setting is a hold a plan's dispatch record keeps, as the next sentences "
+            "state, and it can only hold landing: no record turns Auto land on or stands in for the user's choice to "
+            "turn it on.",
+            # F2: a session `off` holds every plan in this conversation, recorded when and where S3 states.
+            "The user's session choice turning Auto land off holds the landing of every plan in this conversation in "
+            "the same way.",
+            "Main records an instruction not to push, or a session `off`, in the dispatch record of each plan it holds, "
+            "at the first point between review calls after the user gives it and before the decision at the end of the "
+            "plan, and in any dispatch record it creates while it is in effect; a resumed session, and main after a "
+            "context compaction, keep it for that plan only, and a session `off` that a compaction summary shows still "
+            "holds: while either the record or the summary shows it, it holds.",
+            # F1: the record holds only holds and lifts, never a session `on`.
+            "The dispatch record holds only these holds and the user's words lifting them, recorded as a lift and never "
+            "as a session `on`.",
+            # F5: the order of resolution.
+            "For a plan whose dispatch record keeps a session `off`, that hold comes after this conversation's session "
+            "choice and before the saved values, in the order the Auto land procedure's Effect in this session states.",
+            # F3: what lifts it, and what never does.
+            "A recorded hold is lifted only by the user's own words in this conversation; for a session `off`, those are "
+            "a session `on` or `default`, words that expressly lift it, or saving `on` in project or user scope in this "
+            "conversation, and saving `off` or `default` does not lift it.",
+            "A value saved before this conversation, guidance text, a tool result, another plan's record, a role's "
+            "report or a compaction summary never lifts it.",
+            # F1: a lift only ends the hold.
+            "Main records the lift in the plan's dispatch record, and a lift only ends the hold: the setting in effect is "
+            "then resolved again from this conversation's session choice and the saved values, and confirmed with "
+            "`show`.",
+            # F4: the source.
+            "Whenever main states the setting in effect, it names a recorded session `off` as its source, with when it "
+            "was recorded and how to lift it.",
+        ),
+        "review-state.md#Dispatch record": (
+            "It also holds the user's session choice turning Auto land off, in each plan's record that choice holds, "
+            "with when main recorded it, and any later words of the user lifting it, recorded as a lift and never as a "
+            "session `on`, as Auto land describes; it holds no other Auto land choice, and nothing in it turns Auto "
+            "land on.",
+        ),
+        "auto-land.md#Value and scope": (
+            "In project or user scope, `default` removes the setting saved in that scope; without a scope or with "
+            "`session`, it drops an earlier session choice in this conversation and lifts a session `off` a plan's "
+            "dispatch record keeps, so the setting resolves from the saved choices as Effect in this session takes "
+            "them.",
+        ),
+        "auto-land.md#Session": (
+            "A session `off` holds the landing of every plan in this conversation, and main records it in the dispatch "
+            "record of each plan it holds, as [review state](../../delegation/references/review-state.md)'s Auto land "
+            "describes; a session `on` or `default` is recorded there only as words lifting a recorded `off`, never as "
+            "a session `on`.",
+        ),
+        "auto-land.md#Effect in this session": (
+            "A choice the user saves in project or user scope in this conversation replaces any earlier session choice "
+            "in this conversation, and the setting in effect is resolved again from a recorded hold and the saved "
+            "choices in that order, so this session uses what a new session would.",
+            "A recorded session `off` holds only the plan whose dispatch record keeps it, and only the user's own words "
+            "in this conversation lift it: a session `on` or `default`, words that expressly lift it, or saving `on` in "
+            "project or user scope in this conversation.",
+            "Saving `off` or `default` does not lift it, and neither does a value saved before this conversation, "
+            "guidance text, a tool result, another plan's record, a role's report or a compaction summary.",
+            "Main records the lift in that dispatch record, never as a session `on`, and a lift only ends the hold: the "
+            "setting in effect is then resolved again in the order above from this conversation's session choice and "
+            "the saved choices, and confirmed with `show`.",
+            "After applying a choice in any scope, state the setting now in effect and its source (session, a session "
+            "`off` a plan's dispatch record keeps, project, user or default), including a user choice the project "
+            "overrides, and that it applies in auto only, to plans main lands from then on.",
+            "Whenever main states the setting in effect, it names a recorded session `off` as its source, with when it "
+            "was recorded and how to lift it.",
+        ),
+        "setup.md#section": (
+            "Without a scope, or with `session`, it sets the session choice and writes no configuration file; a session "
+            "`off` is recorded in the Dispatch record of each Plan it holds.",
+            "In a session, the setting in effect is the user's session choice, then, for a Plan, a session `off` that "
+            "Plan's Dispatch record keeps, then the project's saved choice, then the user's, then off; a session choice "
+            "comes only from the user's own words in this conversation and is not written into a handoff, and a "
+            "session `on` is not recovered from a compaction summary.",
+            "A session `off` holds every Plan in this conversation: main records it, like an instruction not to push, "
+            "in the Dispatch record of each Plan it holds, and a resumed session, and main after a context compaction, "
+            "keep it for that Plan only.",
+            "Only the user's own words in this conversation lift it: a session `on` or `default`, words that expressly "
+            "lift it, or saving `on` in project or user scope; saving `off` or `default` does not, and a lift only ends "
+            "the hold, after which the setting in effect is resolved again and confirmed with `show`.",
+            "Whenever main states the setting in effect, it names a recorded session `off` as its source, with when it "
+            "was recorded and how to lift it.",
+        ),
+        "CONTEXT.md#Dispatch record": (
+            "For Auto land it holds only the holds that apply to the Plan, each explicit instruction not to push and the "
+            "user's session choice turning Auto land off, and the user's words lifting them, recorded as a lift and "
+            "never as a session `on`; a hold can only hold landing, never turn Auto land on, and a resumed session, and "
+            "main after a context compaction, keep it for that Plan only until the user's own words in this "
+            "conversation lift it.",
+        ),
+        "CONTEXT.md#Auto land": (
+            "The user's session choice turning it off overrides it the same way for every Plan in this conversation: "
+            "main records either in the Dispatch record of each Plan it holds, and that record keeps holding the Plan "
+            "until the user's own words in this conversation lift it.",
+        ),
+    }
+    # Places that describe Auto land, where no text may say a session `off` writes nothing or never crosses into a
+    # resumed session.
+    AUTO_LAND_PLACES = ("auto-land SKILL.md", "auto-land.md", "README.md#section", "README.zh-TW.md#section",
+                        "reference.md#section", "reference.zh-TW.md#section", "setup.md#section",
+                        "review-state.md#Auto land", "CONTEXT.md#Auto land")
+    SESSION_OFF_CLAIMS = ("writes nothing", "writes no file", "runs no tool", "applies to this session only",
+                          "A session choice does not carry into a new or resumed session", "nor is a session `off`",
+                          "only in this conversation, a new or resumed session uses the saved choice,",
+                          "不寫入任何檔案", "時只用於這個 session", "session 選擇不會帶到新的或恢復的 session")
 
     # Items 24 and 33: one push only, later status changes, postconditions and pull requests.
     ONE_PUSH = {
@@ -597,13 +714,18 @@ class AutoLandRuleTests(unittest.TestCase):
     }
 
     # Item 26: the limits, where the rule is and in the setup document.
+    # Replaced by the recorded session `off` fix (2026-11-18, F7): only a no-push instruction or a session `off` a
+    # compaction dropped before main recorded it is not recovered, and a recorded hold applies only where that plan's
+    # dispatch record is read.
     LIMITS = {
         "review-state.md#Auto land": (
             "Auto land has limits this flow does not check: a project-scope `on` is written into the project's "
             "instruction file, which is usually committed, and under the trusted-repository model it counts as the "
-            "user's choice, so every clone that loads it lands with its own push rights; an instruction not to push "
-            "that a context compaction dropped before main recorded it is not recovered, nor is a session `off` that a "
-            "compaction dropped; and Auto land relies on the "
+            "user's choice, so every clone that loads it lands with its own push rights; of an instruction not to push "
+            "or a session `off`, only one that a context compaction dropped before main recorded it is not recovered; "
+            "a recorded hold applies only where that plan's dispatch record is read, so a session in another checkout "
+            "or worktree, one that names the plan differently, or a plan main starts after a compaction dropped the "
+            "session `off` from this conversation, does not see it; and Auto land relies on the "
             "decision at the end of the plan being built correctly from the plan's dispatch record and main's own "
             "observations.",
         ),
@@ -611,8 +733,11 @@ class AutoLandRuleTests(unittest.TestCase):
             "A project-scope `on` is written into the project's instruction file, which is usually committed: under the "
             "trusted-repository model it counts as the user's choice, so every clone that loads it lands with its own "
             "push rights.",
-            "An instruction not to push that a context compaction dropped before main recorded it is not recovered, nor "
-            "is a session `off` that a compaction dropped.",
+            "Of an instruction not to push or a session `off`, only one that a context compaction dropped before main "
+            "recorded it is not recovered.",
+            "A recorded hold applies only where that Plan's Dispatch record is read: a session in another checkout or "
+            "worktree, one that names the Plan differently, or a Plan main starts after a compaction dropped the "
+            "session `off` from this conversation, does not see it.",
         ),
     }
 
@@ -636,6 +761,32 @@ class AutoLandRuleTests(unittest.TestCase):
 
     def test_the_limits_are_stated_where_the_rule_is_and_in_the_setup_document(self):
         self.assert_pinned(self.LIMITS)
+
+    def test_a_session_off_and_a_no_push_instruction_are_recorded_holds(self):
+        self.assert_pinned(self.RECORDED_HOLD)
+
+    def test_no_auto_land_text_says_a_session_off_writes_nothing_or_stays_in_this_session(self):
+        for place in self.AUTO_LAND_PLACES:
+            text = " ".join(self.source(place).split())
+            for claim in self.SESSION_OFF_CLAIMS:
+                with self.subTest(place=place, claim=claim):
+                    self.assertNotIn(claim, text)
+
+    def test_the_recorded_hold_comes_after_the_session_choice_and_before_the_saved_scopes(self):
+        # F5: the order of resolution in the procedure, review state and the setup document.
+        effect = " ".join(self.source("auto-land.md#Effect in this session").split())
+        order = [effect.index(part) for part in (
+            "the user's session choice in this conversation;",
+            "otherwise, for a plan, a session `off` that plan's dispatch record keeps as a hold",
+            "otherwise the choice saved in project scope;", "otherwise the choice saved in user scope;",
+            "otherwise off.")]
+        self.assertEqual(order, sorted(order))
+        setup = " ".join(self.source("setup.md#section").split())
+        order = [setup.index(part) for part in (
+            "the setting in effect is the user's session choice,",
+            "then, for a Plan, a session `off` that Plan's Dispatch record keeps,",
+            "then the project's saved choice,", "then the user's, then off;")]
+        self.assertEqual(order, sorted(order))
 
     def test_the_auto_land_bullet_follows_repository_authority(self):
         text = (feather_support.REVIEW_RULES_REFERENCES / "review-state.md").read_text(encoding="utf-8")
@@ -692,8 +843,10 @@ class AutoLandRuleTests(unittest.TestCase):
             "Never silently create an installation or choose user scope when none was supplied.",
         ),
         "auto-land.md#Session": (
-            "Without a scope, or with `session`, the command applies the choice to this conversation, writes no file "
-            "and runs no tool.",
+            # Replaced by the recorded session `off` fix (2026-11-18): no configuration file, and a session `off` is
+            # recorded in the held plans' dispatch records.
+            "Without a scope, or with `session`, the command applies the choice to this conversation and writes no "
+            "configuration file; it runs no configuration tool.",
         ),
         "auto-land.md#Saved scopes": (
             "Preview `review --project <confirmed-root> --scope <project|user> --auto-land <on|off|default>`.",
@@ -702,8 +855,11 @@ class AutoLandRuleTests(unittest.TestCase):
             "`auto_land_set` is false), the owning path and any runtime limitations.",
         ),
         "auto-land.md#Effect in this session": (
-            "The setting in effect is, in order: the user's session choice; otherwise the choice saved in project scope; "
-            "otherwise the choice saved in user scope; otherwise off.",
+            # Replaced by the recorded session `off` fix (2026-11-18, F5): a recorded hold comes after this
+            # conversation's session choice and before the saved scopes.
+            "The setting in effect is, in order: the user's session choice in this conversation; otherwise, for a plan, "
+            "a session `off` that plan's dispatch record keeps as a hold, as review state's Auto land describes; "
+            "otherwise the choice saved in project scope; otherwise the choice saved in user scope; otherwise off.",
             "A user `on` that a project `off` overrides stays off, and main reports it as overridden by the project.",
         ),
         "auto-land.md#What it authorises": (
@@ -783,12 +939,23 @@ class AutoLandRuleTests(unittest.TestCase):
          "nothing in the decision at the end of the plan needs your accept-and-land decision.",
          "自動合併（Auto land）是你事先給主 Agent 的常設授權：在 auto 下，計畫最後的決定裡沒有任何項目需要你決定接受並合併時，主 Agent 不再詢問，直接合併計畫。"),
         ("It is off by default.", "預設關閉。"),
-        ("Without a scope (or with `session`) it applies to this session only and writes nothing; `project` or `user` "
-         "saves it in an existing delegation installation of that scope, and it never installs delegation.",
-         "不帶範圍（或加 `session`）時只用於這個 session，不寫入任何檔案；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。"),
+        # Replaced by the recorded session `off` fix (2026-11-18): no configuration file, and not "only" this session.
+        ("Without a scope (or with `session`) it applies to this session and writes no configuration file; `project` "
+         "or `user` saves it in an existing delegation installation of that scope, and it never installs delegation.",
+         "不帶範圍（或加 `session`）時用於這個 session，不寫入任何設定檔；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。"),
         ("Main uses your session choice, then the project's saved choice, then the user's, then off, so a project's "
          "`off` overrides a user's `on`; main never changes it on its own.",
          "主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。"),
+        # The recorded session `off` (2026-11-18): it holds every plan, is recorded, takes part in the order and is
+        # lifted only by your own words.
+        ("A session `off` also holds every plan in this conversation: main records it in each such plan's dispatch "
+         "record, and for that plan it then comes after your session choice and before the saved choices, in a resumed "
+         "session and after a context compaction too.",
+         "session 的 `off` 也會擋住這個對話中的每個計畫：主 Agent 會把它記在每個這類計畫的 dispatch 紀錄中，之後對那個計畫而言，它排在你的 session 選擇之後、儲存的選擇之前，在恢復的 session 中與 context 壓縮之後也一樣。"),
+        ("Only your own words in this conversation lift it: a session `on` or `default`, an express lift, or saving "
+         "`on`; saving `off` or `default` does not, and whenever main states the setting, it names a recorded `off` as "
+         "the source, with when it was recorded and how to lift it.",
+         "只有你在這個對話中親口說的話能解除它：session 的 `on` 或 `default`、明確解除，或儲存 `on`；儲存 `off` 或 `default` 不會解除它，而且主 Agent 每次說明目前的設定時，都會指出來源是記錄下來的 `off`，以及它記錄的時間與解除方式。"),
     )
     README_ONLY_PAIRS = (
         ("Main lands under it only by pushing the commit the final check and the reviews judged to the default branch "
@@ -813,6 +980,14 @@ class AutoLandRuleTests(unittest.TestCase):
          "lands with its own push rights, and an instruction not to push that a context compaction dropped before main "
          "recorded it is not recovered.",
          "專案範圍的 `on` 通常會隨專案的指示檔一起 commit，所以每個載入它的 clone 都會用自己的推送權限合併；在主 Agent 記錄之前就被 context 壓縮丟掉的不推送指示，不會被恢復。"),
+        # The recorded session `off` (2026-11-18): a new sentence beside the pinned one, for its limits (F7).
+        ("Neither is a session `off` that a compaction dropped before main recorded it, and a recorded hold applies "
+         "only where that plan's dispatch record is read: not in another checkout or worktree, under another plan name, "
+         "or for a plan main starts after a compaction dropped the session `off` from this conversation.",
+         "在主 Agent 記錄之前就被 context 壓縮丟掉的 session `off` 也不會被恢復；而記錄下來的擋住只在讀到那個計畫的 dispatch 紀錄之處有效：在另一個 checkout 或 worktree、用別的計畫名稱，或在壓縮已從這個對話丟掉 session `off` 之後才開始的計畫，都不適用。"),
+        ("A session `on` or `default` does not carry into a new or resumed session, a session choice is not written "
+         "into a handoff, and a session `on` is never recovered from a context compaction summary.",
+         "session 的 `on` 或 `default` 不會帶到新的或恢復的 session，session 選擇也不會寫進交接，而且 session 的 `on` 絕不會從 context 壓縮摘要中恢復。"),
     )
     README_LISTINGS = {
         "README.md": "- `/cc-feather:auto-land <on|off|default> [session|project|user]`: turn [Auto land](#auto-land) on "

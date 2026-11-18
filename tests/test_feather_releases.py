@@ -2413,7 +2413,9 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
         ("\n## Auto land\n", (
             "Updating from 0.36.0 needs setup update in every scope where delegation is installed, then a fresh session, because 0.37.0 changes the analyst role template.",
             "A 0.36.x or older configuration tool rejects a scope with a saved Auto land setting, so a downgrade first sets it back to `default` there.",
-            "That is `review --auto-land default` in every scope that saved the setting, run before the older plugin is reinstalled; a scope without a saved setting needs nothing, and a session choice, which writes nothing, needs nothing either.")),
+            # Replaced by the Auto land recorded session `off` fix (2026-11-18): a session choice writes no
+            # configuration file, while a session `off` is recorded in a Plan's Dispatch record.
+            "That is `review --auto-land default` in every scope that saved the setting, run before the older plugin is reinstalled; a scope without a saved setting needs nothing, and a session choice, which writes no configuration file, needs nothing either.")),
         ("\n## Added roles and incompatible role sets\n", (
             ResourceRiskConfirmationReleaseTests.SETUP[-1],
             "Upgrading to 0.37.0 needs setup update in every scope where delegation is installed, then a fresh session: it changes the analyst role template, and until the update `check` and `show` report analyst from an older template.",
