@@ -2378,8 +2378,9 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
     definition changed so existing installations need setup update, that a 0.36.x or older configuration tool rejects a
     scope with a saved Auto land setting so a downgrade first sets it back to `default` there, and that a session choice
     needs nothing; the validation entry records the tickets, the `git diff-tree` determination with its upgrade and
-    downgrade check, the test runs, the reviewing version, what the tests cannot show, the tag and the review round, and
-    is the file's last."""
+    downgrade check, the test runs, the reviewing version, what the tests cannot show, the tag and the review round.
+    Kept as history pins since 0.38.0: its note starts right after the 0.38.0 note, and only the 0.38.0 entry follows its
+    entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.37.0 note in order.
     UPDATES = (
@@ -2492,16 +2493,18 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_37_0(self):
-        self.assertEqual("0.37.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.38.0, final check scope fixes).
 
     def test_updates_sections_start_with_the_auto_land_note_in_both_languages(self):
         previous = DesignAndTestChecksReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = FinalCheckScopeFixesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.37.0 note starts right after the section's opening sentence, its sentences in order, before 0.36.0's.
+            # The 0.37.0 note starts right after the 0.38.0 note, its sentences in order, before 0.36.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_require_setup_update_and_set_auto_land_back_to_go_back(self):
@@ -2556,6 +2559,143 @@ class FinalCheckReuseAndAutoLandReleaseTests(unittest.TestCase):
         for stale in self.STALE:
             with self.subTest(stale=stale):
                 self.assertNotIn(stale, entry)
+        # Each ticket has its line in the review round, in order.
+        tickets = [entry.index(f"\n- {line}") for line in
+                   ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:", "Ticket 04:")]
+        self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.38.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(FinalCheckScopeFixesReleaseTests.ENTRY_HEADING))
+
+
+class FinalCheckScopeFixesReleaseTests(unittest.TestCase):
+    """0.38.0 (docs/specs/final-check-scope-fixes.md, Implementation Decisions' Release; ticket 04): the manifest version
+    is 0.38.0; the Updates note, in both languages, says what the release changes with a link to the reference, that
+    `v0.37.0`, at 6cbb1b5, carries the BROKEN against S2 this release fixes, that existing installations need no setup
+    update and how to go back to 0.37.0; the validation entry records the tickets, the BROKEN in `v0.37.0` and how
+    0.37.0's review round ended, the `git diff-tree` determination, the test runs, the reviewing version, what the tests
+    cannot show, the tag and the review round, and is the file's last."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.38.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.38.0 changes the final check scope in auto: main marks each scope question pending in the plan's dispatch record before asking it, and until your answer, your own message or your answer to main's question, is recorded, the scope is `full`; at `full`, the overall acceptance's own run stands in for a claim's primary acceptance, command by command, when it visibly ran that command under the same conditions; and a release or tag runs `full` unless you choose `related` for that commit, as [Automatic review](docs/reference.md#automatic-review) describes.",
+         "`v0.37.0`, at 6cbb1b5, carries the fault this release fixes, which its Adversarial review found BROKEN against S2 of the 0.37.0 spec: an answer widening the scope that a context compaction lost before main recorded it could leave an older, narrower scope, so update if you use 0.37.0.",
+         "It changes no installed guidance, policy template or role definition, only procedures the plugin loads from its package, so existing installations need only the plugin update and a fresh session; no `/cc-feather:setup update` is needed.",
+         "To go back to 0.37.0, reinstall the 0.37.0 plugin, which brings the fault back; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.38.0 修改 auto 下的最終檢查範圍：主 Agent 在提出每個範圍問題之前，先在計畫的分派紀錄中把它標為待答，在你的回答（你自己的訊息，或你對主 Agent 提問的回答）記錄下來之前，範圍是 `full`；在 `full` 下，整體驗收自己的執行若明顯以相同條件執行過某個 claim 主要驗收的指令，就逐一代替該指令，不再重跑；release 或建立 tag 時執行 `full`，除非你為那個 commit 選擇 `related`，詳見[自動審查](docs/reference.zh-TW.md#自動審查)。",
+         "`v0.37.0`（位於 6cbb1b5）帶有這一版修正的缺陷，它的對抗式審查判定它違反 0.37.0 規格的 S2（BROKEN）：擴大範圍的回答若在主 Agent 記錄之前被 context 壓縮遺失，可能留下較舊、較窄的範圍，所以使用 0.37.0 的話請更新。",
+         "它沒有改任何已安裝的指引、政策範本或角色定義，只改了 plugin 從套件載入的流程，所以既有安裝只要更新 plugin 再開新 session；不需要做 `/cc-feather:setup update`。",
+         "要回到 0.37.0，重新安裝 0.37.0 的 plugin，這會帶回這個缺陷；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # Each link in the note, with the document and heading it reaches, paired in both languages.
+    LINKS = (
+        (("(docs/reference.md#automatic-review)", "docs/reference.md", "\n## Automatic review\n"),),
+        (("(docs/reference.zh-TW.md#自動審查)", "docs/reference.zh-TW.md", "\n## 自動審查\n"),),
+    )
+
+    # The validation entry: the spec and its tickets with their commits, the BROKEN in `v0.37.0` and how 0.37.0's review
+    # round ended, the setup determination with its evidence, the way back, the test runs, the reviewing version, what
+    # the tests cannot show, the tag and the review round.
+    ENTRY_HEADING = "\n## 0.38.0 final check scope fixes\n"
+    ENTRY = (
+        "Implements [the Final check scope fixes spec](specs/final-check-scope-fixes.md), written on 2026-11-18 and added in d9befc8 with [ADR 0022](adr/0022-final-check-scope-answers-are-pending-until-recorded-and-a-release-may-use-related.md),",
+        "with the security analysis dispositions added in 40dc68d and plan review call 1's fix in 883ff2d.",
+        "ticket 01, the pending scope question, in b469021;",
+        "ticket 02, covered primary acceptance, in 2c5da0c;",
+        "ticket 03, the release scope, in 78bb39e and its fix b9338fc;",
+        "ticket 04, this release, in the commit carrying this entry.",
+        "`v0.37.0`, at 6cbb1b5, carries the fault this release fixes: 0.37.0's Adversarial review found ticket 02 BROKEN against S2 of [the 0.37.0 spec](specs/final-check-reuse-and-auto-land.md),",
+        "the Adversarial review at the final commit 6cbb1b5 returned BROKEN for ticket 02, the user chose to land as it stands by an accept-and-land decision, and `v0.37.0` was created at 6cbb1b5 and pushed.",
+        "**No setup update is required.**",
+        "`git diff-tree -r --name-only v0.37.0 HEAD -- templates skills/setup scripts` lists only `skills/setup/references/auto-land.md`, a procedure reference the plugin loads from its package:",
+        "existing installations need only the plugin update and a fresh session.",
+        "To go back to 0.37.0, reinstall the 0.37.0 plugin; no setup update or remove is needed.",
+        "`python -B -m unittest discover -s tests -t .` and `python -B -m unittest discover -s tests`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`",
+        "each ran 1449 tests on this release's working tree with this entry, all passing with 29 skips and the same count in both forms",
+        "(the 0.37.0 release ran 1413 tests with 29 skips after its fix).",
+        "ran 974 tests with 18 skips in its two commands (943 and 31) there, all passing.",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
+        "with the installed cc-feather 0.36.0's roles and procedures, not this release's candidate.",
+        "No live session ran with the 0.38.0 rules:",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.38.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 04 are accepted and only after the user's go-ahead.",
+        "Tickets 01 to 03 are Security-critical,",
+        "a security analysis by analyst ran on 2026-11-18 at d9befc8 and proposed F1 to F12, with dispositions the user approved, F11 and F12 recorded as limits;",
+        "plan review returned REVISE on call 1 at 40dc68d with B1,",
+        "and READY on call 2 at 883ff2d.",
+        "No claim is a Resource-risk claim: plan review proposed none.",
+        "Ticket 01: code review APPROVED and outcome verification CONFIRMED, each on call 1, at b469021.",
+        "Ticket 02: code review APPROVED and outcome verification CONFIRMED, each on call 1, at 2c5da0c.",
+        "code review APPROVED on call 2, over 78bb39e..b9338fc, and outcome verification CONFIRMED on call 1, at b9338fc.",
+        "the Adversarial reviews of tickets 01 to 03 at the final commit, the user's decision at the end of the plan and the tag follow the commit carrying this entry and are recorded after it.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_38_0(self):
+        self.assertEqual("0.38.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_scope_fixes_note_in_both_languages(self):
+        previous = FinalCheckReuseAndAutoLandReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.38.0 note starts right after the section's opening sentence, its sentences in order, before 0.37.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_name_the_broken_v0_37_0_and_need_no_setup_update(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                for pin in ("`v0.37.0`", "6cbb1b5", "BROKEN", "S2"):
+                    self.assertIn(pin, note)
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), links in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            for link, document, target in links:
+                with self.subTest(readme=name, link=link):
+                    self.assertIn(link, note)
+                    self.assertEqual(self.text(document).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_tag_and_review_round(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in
                    ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:", "Ticket 04:")]
