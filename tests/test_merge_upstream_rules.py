@@ -92,13 +92,19 @@ class MergeUpstreamRuleTests(unittest.TestCase):
         ),
         "merge-upstream SKILL.md#Fetch": (
             "Main fetches the remote with `git fetch <remote>` and reads the remote default branch's tip with `git "
-            "ls-remote <remote> refs/heads/<branch>`, which must print exactly one line naming a commit the fetch brought "
-            "in; otherwise it reports and stops.",
+            "ls-remote <remote> refs/heads/<branch>`, which must print exactly one line naming a commit present locally "
+            "after the fetch; otherwise it reports and stops.",
         ),
         "merge-upstream SKILL.md#Already landed": (
-            "When any commit after the Plan's base revision on the work branch is an ancestor of the fetched tip, part "
-            "of the Plan already reached the remote default branch: main reports, from the Dispatch record, which Claims "
-            "are accepted and which are not, and stops for the user.",
+            # Code review call 1, B1: an earlier Upstream merge's commits are not the Plan's own, so a later invocation
+            # can still reach Merge, Nothing to integrate or Resuming.
+            "The Plan's own commits are the commits after the Plan's base revision on the work branch other than the "
+            "merge commit of every earlier Upstream merge the Plan's Dispatch record holds and every commit reachable "
+            "from a remote tip such a merge merged, as `git rev-list HEAD ^<base revision> ^<each earlier merged remote "
+            "tip>` lists them less those merge commits.",
+            "When any of the Plan's own commits is an ancestor of the fetched tip, part of the Plan already reached the "
+            "remote default branch: main reports, from the Dispatch record, which Claims are accepted and which are "
+            "not, and stops for the user.",
         ),
         "merge-upstream SKILL.md#Nothing to integrate": (
             "When the fetched tip is an ancestor of the work branch, as `git merge-base --is-ancestor <tip> HEAD` shows "
@@ -116,6 +122,11 @@ class MergeUpstreamRuleTests(unittest.TestCase):
         "merge-upstream SKILL.md#Merge commit": (
             "The merge commit has exactly two parents, the work branch's tip before the merge first and the fetched tip "
             "second; when a conflict cannot be resolved, main reports it and asks the user, changing nothing further.",
+        ),
+        "merge-upstream SKILL.md#Recorded at once": (
+            "Right after the merge commits, before running the tool or writing the rest of the report, main starts the "
+            "Plan's Upstream merge entry in its Dispatch record with the remote tip, the tip before the merge and the "
+            "merge commit by full SHA, so a resumed invocation finds the merge.",
         ),
     }
 
@@ -284,8 +295,10 @@ class MergeUpstreamRuleTests(unittest.TestCase):
             "describe.",
         ),
         "merge-upstream SKILL.md#Before each wait": (
-            "Before stopping to wait for the user, for the agreement to merge, the approval of the report or the "
-            "landing decision, main updates the work's Active handoff when one exists and renews its Checkout lease.",
+            "Before every stop that waits for the user, for the agreement to merge, the approval of the report, the "
+            "landing decision, an Already landed stop or a conflict main cannot resolve, main updates the work's Active "
+            "handoff when one exists and renews its Checkout lease when it holds one; it takes or renews the lease "
+            "before merging, as Lease above describes.",
         ),
         "merge-upstream SKILL.md#No record of its own": (
             "This command writes no handoff record of its own.",
@@ -351,6 +364,10 @@ class MergeUpstreamRuleTests(unittest.TestCase):
             "When main stops because the remote default branch's tip is not an ancestor of the judged commit, its report "
             "also suggests the [merge-upstream command](../../merge-upstream/SKILL.md), `/cc-feather:merge-upstream`, "
             "which runs only when the user invokes it, and main does nothing else.",
+            # Code review call 1, non-blocking 1: an Upstream merge entry, like a hold, can only hold landing.
+            "The only records that affect Auto land are a hold a plan's dispatch record keeps, as the next sentences "
+            "state, and an Upstream merge entry, as stated above, and each, an Upstream merge entry like a hold, can "
+            "only hold landing: no record turns Auto land on or stands in for the user's choice to turn it on.",
         ),
         "review-state.md#Accept and land at the end of the plan": (
             "In auto with Auto land in effect, when nothing listed needs accept and land, main does not ask that "
@@ -406,6 +423,17 @@ class MergeUpstreamRuleTests(unittest.TestCase):
 
     def test_fetch_and_merge_never_pull_rebase_force_or_push(self):
         self.assert_pinned(self.FETCH_AND_MERGE)
+
+    def test_already_landed_looks_only_at_the_plans_own_commits(self):
+        # Code review call 1, B1: after a first Upstream merge, the commits it brought in are ancestors of every later
+        # fetched tip, so a condition over every commit after the base revision would stop each later invocation.
+        text = " ".join(source("merge-upstream SKILL.md#Already landed").split())
+        self.assertNotIn("When any commit after the Plan's base revision on the work branch is an ancestor", text)
+        self.assertIn("When any of the Plan's own commits is an ancestor of the fetched tip", text)
+        for excluded in ("the merge commit of every earlier Upstream merge",
+                         "every commit reachable from a remote tip such a merge merged"):
+            with self.subTest(excluded=excluded):
+                self.assertIn(excluded, text)
 
     def test_only_its_own_unpushed_merge_is_discarded(self):
         self.assert_pinned(self.DISCARD)

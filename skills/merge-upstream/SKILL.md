@@ -26,12 +26,13 @@ Take one Plan in the automatic flow whose remote default branch moved through a 
 
 - **Agreement.** Main names the Plan, its work branch, the remote and the default branch, and asks the user whether to fetch and merge now; the user may instead wait or land another Plan first. The agreement comes only from the user's own message or the user's answer, as review state's Final check scope defines it, and it authorises this Plan's integration only.
 - **Lease.** After the user agrees and before fetching, main takes or renews the Checkout lease of this checkout, as [the lease rules](../leases/SKILL.md#main-agent-rules) describe, and when it cannot take it, stops as they describe.
-- **Fetch.** Main fetches the remote with `git fetch <remote>` and reads the remote default branch's tip with `git ls-remote <remote> refs/heads/<branch>`, which must print exactly one line naming a commit the fetch brought in; otherwise it reports and stops.
-- **Already landed.** When any commit after the Plan's base revision on the work branch is an ancestor of the fetched tip, part of the Plan already reached the remote default branch: main reports, from the Dispatch record, which Claims are accepted and which are not, and stops for the user.
+- **Fetch.** Main fetches the remote with `git fetch <remote>` and reads the remote default branch's tip with `git ls-remote <remote> refs/heads/<branch>`, which must print exactly one line naming a commit present locally after the fetch; otherwise it reports and stops.
+- **Already landed.** The Plan's own commits are the commits after the Plan's base revision on the work branch other than the merge commit of every earlier Upstream merge the Plan's Dispatch record holds and every commit reachable from a remote tip such a merge merged, as `git rev-list HEAD ^<base revision> ^<each earlier merged remote tip>` lists them less those merge commits. When any of the Plan's own commits is an ancestor of the fetched tip, part of the Plan already reached the remote default branch: main reports, from the Dispatch record, which Claims are accepted and which are not, and stops for the user.
 - **Nothing to integrate.** When the fetched tip is an ancestor of the work branch, as `git merge-base --is-ancestor <tip> HEAD` shows by exiting 0, main reports that nothing needs integrating and stops, unless Resuming below applies.
 - **Merge.** Otherwise main merges the fetched tip, named by its full SHA, into the work branch with `git merge --no-ff -m "<message>" <full SHA>`, the message naming the remote default branch, resolves any conflicts itself, stages each resolved path by name with `git --literal-pathspecs add -- <paths>`, and commits the merge locally with `git commit --no-edit`.
 - **No pull, rebase, force or push.** It never uses `git pull`, never rebases or forces, and pushes nothing in this step.
 - **Merge commit.** The merge commit has exactly two parents, the work branch's tip before the merge first and the fetched tip second; when a conflict cannot be resolved, main reports it and asks the user, changing nothing further.
+- **Recorded at once.** Right after the merge commits, before running the tool or writing the rest of the report, main starts the Plan's Upstream merge entry in its Dispatch record with the remote tip, the tip before the merge and the merge commit by full SHA, so a resumed invocation finds the merge.
 
 ## Discarding a merge
 
@@ -90,7 +91,7 @@ Take one Plan in the automatic flow whose remote default branch moved through a 
 
 ## Handoff and lease
 
-- **Before each wait.** Before stopping to wait for the user, for the agreement to merge, the approval of the report or the landing decision, main updates the work's Active handoff when one exists and renews its Checkout lease.
+- **Before each wait.** Before every stop that waits for the user, for the agreement to merge, the approval of the report, the landing decision, an Already landed stop or a conflict main cannot resolve, main updates the work's Active handoff when one exists and renews its Checkout lease when it holds one; it takes or renews the lease before merging, as Lease above describes.
 - **No record of its own.** This command writes no handoff record of its own.
 
 ## Resuming

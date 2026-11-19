@@ -545,10 +545,11 @@ class AutoLandRuleTests(unittest.TestCase):
     # lifted only by the user's own words, never recorded or read as a session `on`, and named as the source.
     RECORDED_HOLD = {
         "review-state.md#Auto land": (
-            # F1: the only record that affects the setting can only hold landing.
-            "The only record that affects the setting is a hold a plan's dispatch record keeps, as the next sentences "
-            "state, and it can only hold landing: no record turns Auto land on or stands in for the user's choice to "
-            "turn it on.",
+            # F1: the only records that affect Auto land can only hold landing. Merge upstream ticket 02: an Upstream
+            # merge entry is named beside the hold, so this sentence agrees with Auto land's Upstream merge sentence.
+            "The only records that affect Auto land are a hold a plan's dispatch record keeps, as the next sentences "
+            "state, and an Upstream merge entry, as stated above, and each, an Upstream merge entry like a hold, can "
+            "only hold landing: no record turns Auto land on or stands in for the user's choice to turn it on.",
             # F2: a session `off` holds every plan in this conversation, recorded when and where S3 states.
             "The user's session choice turning Auto land off holds the landing of every plan in this conversation in "
             "the same way.",
