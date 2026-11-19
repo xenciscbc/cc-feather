@@ -413,6 +413,56 @@ class ChecksTest(MergeUpstreamBase):
         remotes = {entry["remote"]: entry for entry in result["remote_tracking"]["remotes"]}
         self.assertEqual(remotes["other"]["state"], "unknown")
 
+    def tracking(self, project: Path) -> dict:
+        result = self.run_tool(project)
+        self.assertEqual(result["remote_tracking"]["state"], "known", result["remote_tracking"])
+        return {entry["remote"]: entry for entry in result["remote_tracking"]["remotes"]}
+
+    def own_origin(self, project: Path, name: str) -> None:
+        origin = self.base / f"{name}.git"
+        self.git(self.base, "clone", "--quiet", "--bare", str(self.remote), str(origin))
+        self.addCleanup(remove_tree, origin)
+        self.git(project, "remote", "set-url", "origin", origin.as_uri())
+
+    def test_a_tracking_ref_is_the_remotes_by_its_fetch_refspec_not_its_name(self):
+        copy = self.copy_work("refspec-origin")
+        self.own_origin(copy, "refspec-origin")
+        self.git(copy, "config", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin-all/*")
+        self.git(copy, "push", "--quiet", "origin", f"{self.merge}:refs/heads/work")
+        self.git(copy, "fetch", "--quiet", "origin")
+        self.assertIn("origin-all/work", self.git(copy, "branch", "-r", "--contains", self.merge))
+        remotes = self.tracking(copy)
+        self.assertEqual((remotes["origin"]["state"], remotes["origin"]["contains_merge_commit"]), ("known", True))
+        self.assertEqual(remotes["origin"]["containing"], ["refs/remotes/origin-all/work"])
+        self.assertIn("refs/remotes/origin/main", remotes["origin"]["refs"])
+
+    def test_a_refspec_can_map_a_remote_under_another_remotes_name(self):
+        copy = self.copy_work("refspec-second")
+        self.git(copy, "update-ref", "-d", "refs/remotes/second/integration")
+        self.git(copy, "update-ref", "refs/remotes/stray/old", self.start)
+        self.git(copy, "config", "--replace-all", "remote.second.fetch",
+                 "+refs/heads/*:refs/remotes/origin/from-second/*")
+        self.git(copy, "config", "--add", "remote.second.fetch", "^refs/heads/nothing")
+        self.git(copy, "fetch", "--quiet", "second")
+        remotes = self.tracking(copy)
+        self.assertEqual((remotes["origin"]["state"], remotes["origin"]["contains_merge_commit"]), ("known", False))
+        self.assertEqual(remotes["origin"]["refs"], ["refs/remotes/origin/main"])
+        self.assertEqual((remotes["second"]["state"], remotes["second"]["contains_merge_commit"]), ("known", True))
+        self.assertEqual(remotes["second"]["containing"], ["refs/remotes/origin/from-second/integration"])
+        self.assertEqual(remotes["empty"]["state"], "unknown")
+
+    def test_an_unattributed_tracking_ref_holding_the_merge_makes_every_remote_unknown(self):
+        copy = self.copy_work("refspec-stray")
+        self.git(copy, "update-ref", "refs/remotes/stray/x", self.merge)
+        result = self.run_tool(copy)
+        self.assertEqual(result["remote_tracking"]["state"], "known", result["remote_tracking"])
+        remotes = {entry["remote"]: entry for entry in result["remote_tracking"]["remotes"]}
+        self.assertEqual(sorted(remotes), ["empty", "origin", "second"])
+        for name, entry in remotes.items():
+            self.assertEqual(entry["state"], "unknown", entry)
+            self.assertIn("refs/remotes/stray/x", entry["reason"])
+            self.assertIn(name, entry["reason"])
+
     def test_a_claim_whose_base_is_not_an_ancestor_is_unknown(self):
         payload = self.payload(claims=[{"id": "x", "base": self.remote_tip, "judged": [self.claim1]},
                                        {"id": "y", "base": None, "judged": [self.claim1]}])

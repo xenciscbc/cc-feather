@@ -4,8 +4,8 @@ Every Git command goes through the handoff tool's run_git, so it starts the Git 
 discovery with --no-pager, --no-optional-locks, an empty core.fsmonitor, GIT_OPTIONAL_LOCKS=0 and a timeout, and with
 --no-lazy-fetch whenever lazy_fetch_guard found a promisor remote that the installed Git can guard; when it cannot,
 no command that reads objects runs and every fact is unknown. The commands used only read: cat-file, merge-base,
-diff-tree, remote and for-each-ref. None fetches, merges, pushes or writes a ref, the index, an object or the working
-tree."""
+diff-tree, remote, config --get-all and for-each-ref. None fetches, merges, pushes or writes a ref, the index, an object
+or the working tree."""
 from pathlib import Path
 import subprocess
 
@@ -58,6 +58,37 @@ def all_unknown(request: dict, reason: str) -> dict:
             "classification": {"advice": True, "rule": classify.RULE, "upstream": dict(part),
                                "merge_result": dict(part)},
             "remote_tracking": dict(part), "default_branch_ref": dict(part)}
+
+
+def destinations(refspecs: list[str]) -> list[str]:
+    """The destinations of a remote's fetch refspecs, the right-hand sides that name its remote-tracking refs.
+
+    A leading `+` is dropped. A negative refspec (`^...`) only excludes sources and a refspec without a destination
+    stores nothing, so neither names a remote-tracking ref."""
+    found = []
+    for refspec in refspecs:
+        refspec = refspec.strip()
+        if refspec.startswith("+"):
+            refspec = refspec[1:]
+        if refspec.startswith("^"):
+            continue
+        _, separator, destination = refspec.partition(":")
+        if separator and destination:
+            found.append(destination)
+    return found
+
+
+def names_ref(destination: str, ref: str) -> bool:
+    """Whether a fetch refspec destination names the ref: an exact name, or a pattern with a single `*` matched as Git
+    matches it (the ref starts with the part before the `*` and ends with the part after it). A destination with more
+    than one `*` is not a valid refspec and names nothing."""
+    stars = destination.count("*")
+    if stars == 0:
+        return ref == destination
+    if stars > 1:
+        return False
+    prefix, suffix = destination.split("*")
+    return len(ref) >= len(prefix) + len(suffix) and ref.startswith(prefix) and ref.endswith(suffix)
 
 
 class Git:
@@ -306,13 +337,37 @@ class Facts:
             containing = set(self.git.output(
                 "for-each-ref", "--format=%(refname)", f"--contains={request['merge_commit']}", "refs/remotes/",
                 what="The remote-tracking refs that contain the merge commit could not be listed").split("\n"))
-            owned: dict[str, list[str]] = {name: [] for name in names}
+            # A ref is a remote's remote-tracking ref when one of the remote's fetch refspec destinations names it,
+            # whatever its name says; a ref several remotes' destinations name counts for each of them.
+            mapped: dict[str, list[str]] = {}
+            unreadable: dict[str, str] = {}
+            for name in names:
+                result = self.git.run("config", "--null", "--get-all", f"remote.{name}.fetch")
+                if result.returncode == 1 and not result.stdout:
+                    mapped[name] = []
+                elif result.returncode:
+                    unreadable[name] = (f"The fetch refspecs of the remote {name} could not be read: "
+                                        f"{result.stderr.strip() or f'git config exited with {result.returncode}'}")
+                else:
+                    mapped[name] = destinations([value for value in result.stdout.split("\0") if value])
+            owned: dict[str, list[str]] = {name: [] for name in mapped}
+            unclaimed = []
             for ref in sorted(refs):
-                owners = [name for name in names if ref.startswith(f"refs/remotes/{name}/")]
-                if owners:
-                    owned[max(owners, key=len)].append(ref)
+                owners = [name for name, targets in mapped.items() if any(names_ref(target, ref) for target in targets)]
+                for name in owners:
+                    owned[name].append(ref)
+                if not owners and ref in containing:
+                    unclaimed.append(ref)
             remotes = []
             for name in names:
+                if name in unreadable:
+                    remotes.append({"remote": name, **unknown(unreadable[name])})
+                    continue
+                if unclaimed:
+                    remotes.append({"remote": name, **unknown(
+                        "The merge commit is on " + ", ".join(unclaimed) + ", which no readable fetch refspec of any "
+                        f"remote names, so it may be a remote-tracking ref of any remote, {name} included")})
+                    continue
                 if not owned[name]:
                     remotes.append({"remote": name, **unknown(
                         f"The remote {name} has no remote-tracking refs, so whether the merge commit reached it "
