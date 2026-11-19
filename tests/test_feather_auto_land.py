@@ -1036,7 +1036,7 @@ class AutoLandRuleTests(unittest.TestCase):
 
     def test_setup_document_describes_the_setting(self):
         self.assert_pinned(self.SETUP_PINS)
-        self.assertIn("The plugin packages nineteen skills.", self.source("setup.md"))
+        self.assertIn("The plugin packages twenty skills.", self.source("setup.md"))
 
     def test_readmes_and_references_describe_the_command_in_both_languages(self):
         for name, listing in self.README_LISTINGS.items():

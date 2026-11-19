@@ -2713,7 +2713,8 @@ class UserAnswerRestrictionReleaseTests(unittest.TestCase):
     is 0.39.0; the Updates note, in both languages, says what the release changes with a link to Repository safety, that
     existing installations need no setup update and how to go back to 0.38.0; the validation entry records the tickets,
     the `git diff-tree` determination, the test runs, the reviewing version, what the tests cannot show, the tag and the
-    review round, and is the file's last."""
+    review round. Kept as history pins since 0.40.0: its note starts right after the 0.40.0 note, and only the 0.40.0
+    entry follows its entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.39.0 note in order.
     UPDATES = (
@@ -2793,16 +2794,18 @@ class UserAnswerRestrictionReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_39_0(self):
-        self.assertEqual("0.39.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.40.0, merge upstream).
 
     def test_updates_sections_start_with_the_user_answer_note_in_both_languages(self):
         previous = FinalCheckScopeFixesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = MergeUpstreamReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.39.0 note starts right after the section's opening sentence, its sentences in order, before 0.38.0's.
+            # The 0.39.0 note starts right after the 0.40.0 note, its sentences in order, before 0.38.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -2833,6 +2836,197 @@ class UserAnswerRestrictionReleaseTests(unittest.TestCase):
         # Each ticket has its line in the review round, in order.
         tickets = [entry.index(f"\n- {line}") for line in ("Spec and plans:", "Ticket 01:", "Ticket 02:", "Ticket 03:")]
         self.assertEqual(tickets, sorted(tickets))
+        # The entry was appended rather than rewriting an earlier one, and only the 0.40.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(MergeUpstreamReleaseTests.ENTRY_HEADING))
+
+
+class MergeUpstreamReleaseTests(unittest.TestCase):
+    """0.40.0 (docs/specs/merge-upstream.md, Implementation Decisions' Documents; ticket 03): the manifest version is
+    0.40.0; both READMEs, the setup document and both reference documents list `/cc-feather:merge-upstream` and say it
+    is user-invoked for a plan in auto whose remote default branch moved, merges and never rebases, and that the plan
+    then lands only on the user's command; the Updates note, in both languages, says what the release changes, that
+    existing installations need no setup update, determined from the diff against v0.39.0, and how to go back to
+    0.39.0; the validation entry records the tickets, the determination, this ticket's acceptance runs, the reviewing
+    version, what the tests cannot show and the tag, and is the file's last. The packaged skill count is
+    InstallDocumentTests' and the manifest place is tests/test_merge_upstream_rules.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.40.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.40.0 adds `/cc-feather:merge-upstream`, a command only you can run, for a plan in auto whose remote default branch moved while it waited to land, as [Merge upstream](docs/reference.md#merge-upstream) describes.",
+         "After you agree, main fetches and merges the remote default branch into the plan's branch locally, never rebases, pulls or forces, and pushes nothing in that step; the merge's Integration report gets plan review and your approval, the reviews it reopens run again, and the plan then lands only on your own command or accept and land.",
+         "Review state now keeps these rules in every session: the merge commit and the commits it brings in are never inside a claim's judged range, Auto land does not apply to a plan with an Upstream merge and does not land a range with a merge commit, main pushes no commit containing the merge before every pass its report requires is in unless you ask for an earlier push, and when Auto land stops because the remote default branch moved, its report suggests the command.",
+         "`git diff v0.39.0 HEAD -- templates skills/setup scripts` shows no change, so 0.40.0 changes no installed guidance, policy template, role definition or configuration tool, only skills and procedures the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.39.0, reinstall the 0.39.0 plugin; no setup update or remove is needed.",
+         "0.39.0 has no rules for an Upstream merge, so land any plan whose dispatch record holds one before going back."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.40.0 新增 `/cc-feather:merge-upstream`，一個只能由你執行的指令，用於在 auto 下等待合併期間遠端預設 branch 移動了的計畫，如[合併上游](docs/reference.zh-TW.md#合併上游)所述。",
+         "你同意後，主 Agent 在本機 fetch 遠端預設 branch 並把它 merge 進計畫的 branch，絕不 rebase、pull 或 force，這一步也不推送任何東西；這次 merge 的整合報告要經過計畫審查與你的核可，被它重新開啟的審查會再跑一次，之後這份計畫只在你親自下令或接受並合併時才合併。",
+         "審查狀態規則現在在每個 session 都保有這些規則：merge commit 與它帶進來的 commit 絕不算在任何 claim 的判斷範圍內；自動合併不適用於有 Upstream merge 的計畫，也不會合併含有 merge commit 的範圍；在報告要求的每項通過都完成之前，主 Agent 不推送任何包含這次 merge 的 commit，除非你要求提早推送；自動合併因遠端預設 branch 移動而停下時，它的回報會建議這個指令。",
+         "`git diff v0.39.0 HEAD -- templates skills/setup scripts` 沒有任何差異，所以 0.40.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill 與流程；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.39.0，重新安裝 0.39.0 的 plugin；不需要 setup update，也不需要先移除。",
+         "0.39.0 沒有 Upstream merge 的規則，所以回到 0.39.0 之前，先合併 dispatch 紀錄中有 Upstream merge 的計畫。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # Each link in the note, with the document and heading it reaches, paired in both languages.
+    LINKS = (
+        (("(docs/reference.md#merge-upstream)", "docs/reference.md", "\n### Merge upstream\n"),),
+        (("(docs/reference.zh-TW.md#合併上游)", "docs/reference.zh-TW.md", "\n### 合併上游\n"),),
+    )
+
+    # Every place that lists the command, with what it says: user-invoked, for a plan in auto whose remote default
+    # branch moved, merges and never rebases, and the plan then lands only on the user's command.
+    LISTINGS = {
+        "README.md": (
+            "- `/cc-feather:merge-upstream [plan name]`: bring the remote default branch into one plan in auto that waits to land after that branch moved, for example because another plan landed first; only you can run it.",
+            "After you agree, main merges it into the plan's branch locally and never rebases;",
+            "and the plan then lands only on your own command or accept and land, never under Auto land.",
+            "See [Merge upstream](docs/reference.md#merge-upstream).\n"),
+        "README.zh-TW.md": (
+            "| `/cc-feather:merge-upstream [計畫名稱]` | 遠端預設 branch 移動後（例如另一份計畫先合併了），把它帶進一份在 auto 下等待合併的計畫；只能由你執行。",
+            "你同意後，主 Agent 在本機把它 merge 進計畫的 branch，絕不 rebase；",
+            "之後這份計畫只在你親自下令或接受並合併時才合併，絕不經由自動合併。",
+            "見[合併上游](docs/reference.zh-TW.md#合併上游) |\n"),
+        "docs/setup.md": (
+            "`/cc-feather:merge-upstream [plan name]` is a user-invoked command, never run by the model on its own, for one Plan in the Automatic flow whose remote default branch moved while it waited to land.",
+            "main fetches the remote and merges its default branch into the Plan's work branch locally with `git merge --no-ff`, never rebasing, pulling or forcing and pushing nothing in that step;",
+            "The Plan then lands only on the user's own command or Accept and land, never under Auto land.",
+            "after a plugin update it needs only a fresh session, not a setup update.",
+            "See [the command](../skills/merge-upstream/SKILL.md) and [Merge upstream](reference.md#merge-upstream) in the reference."),
+        "docs/reference.md": (
+            "When the remote default branch moves while a plan in auto waits to land,",
+            "Auto land stops and its report suggests `/cc-feather:merge-upstream`.",
+            "The command runs only when you invoke it; main never runs it on its own.",
+            "it never pulls, rebases or forces, and pushes nothing in this step, so the reviewed commits keep their identities.",
+            "The plan then lands only on your own command or your accept-and-land decision, never under Auto land, which also does not land a range with a merge commit.",
+            "See [the command](../skills/merge-upstream/SKILL.md)."),
+        "docs/reference.zh-TW.md": (
+            "在 auto 下等待合併的計畫，遠端預設 branch 卻移動了",
+            "自動合併會停下，它的回報會建議 `/cc-feather:merge-upstream`。",
+            "這個指令只在你執行時才跑；主 Agent 絕不自行執行。",
+            "它絕不 pull、rebase 或 force，這一步也不推送任何東西，所以審查過的 commit 保有原本的識別。",
+            "之後這份計畫只在你親自下令或你決定接受並合併時才合併，絕不經由自動合併；自動合併也不會合併含有 merge commit 的範圍。",
+            "詳見[指令說明](../skills/merge-upstream/SKILL.md)。"),
+    }
+    # The reference sections, paired in both languages, between Auto land and Delegation preview.
+    REFERENCE_SECTIONS = (
+        ("docs/reference.md", "\n### Auto land\n", "\n### Merge upstream\n", "\n### Delegation preview\n"),
+        ("docs/reference.zh-TW.md", "\n### 自動合併\n", "\n### 合併上游\n", "\n### 分派預覽\n"),
+    )
+
+    # The validation entry: the spec and its tickets with their commits, the setup determination with its evidence, the
+    # way back, this ticket's acceptance runs, the reviewing version, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.40.0 merge upstream\n"
+    ENTRY = (
+        "Implements [the Merge upstream spec](specs/merge-upstream.md), written on 2026-11-19 and added in ba180fb,",
+        "with the security analysis dispositions added in 56ea524.",
+        "ticket 01, the read-only fact tool, in 0380aee, with fixes in e3f17bc and 47d797d;",
+        "ticket 02, the `merge-upstream` skill and its review-state rules, in 869eb7c, with a fix in edc2d4f;",
+        "ticket 03, this release, in the commit carrying this entry.",
+        "**No setup update is required.**",
+        "`git diff v0.39.0 HEAD -- templates skills/setup scripts` prints nothing, and `git diff-tree -r --name-only v0.39.0 HEAD -- templates skills/setup scripts` lists no path:",
+        "existing installations need only the plugin update and a fresh session.",
+        "To go back to 0.39.0, reinstall the 0.39.0 plugin; no setup update or remove is needed.",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the spec's Overall acceptance, the full `unittest discover` suite, is run by the final check,",
+        "with the installed cc-feather 0.39.0's roles and procedures, not this release's candidate.",
+        "No live session ran with the 0.40.0 rules:",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.40.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 03 are accepted and only after the user's go-ahead.",
+        "`v0.39.0`, at 7ad58b7, is not moved.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_40_0(self):
+        self.assertEqual("0.40.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_every_listing_describes_the_command(self):
+        for name, sentences in self.LISTINGS.items():
+            self.assert_in_order(self.text(name), sentences, name)
+
+    def test_the_readme_listings_follow_the_worktrees_command(self):
+        for name, previous in (("README.md", "- `/cc-feather:worktrees`:"), ("README.zh-TW.md", "| `/cc-feather:worktrees` |")):
+            text = self.text(name)
+            line = next(line for line in text.splitlines() if line.startswith(previous))
+            with self.subTest(readme=name):
+                self.assertTrue(text.split(line + "\n", 1)[1].startswith(self.LISTINGS[name][0]))
+
+    def test_the_reference_sections_sit_between_auto_land_and_delegation_preview(self):
+        for name, before, heading, after in self.REFERENCE_SECTIONS:
+            text = self.text(name)
+            with self.subTest(reference=name):
+                self.assertEqual(text.count(heading), 1)
+                self.assertLess(text.index(before), text.index(heading))
+                self.assertLess(text.index(heading), text.index(after))
+                section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+                for sentence in self.LISTINGS[name]:
+                    self.assertIn(sentence, section)
+
+    def test_every_link_to_the_command_resolves(self):
+        for name in self.LISTINGS:
+            path = config.ROOT / name
+            for link in re.findall(r"\]\(([^)#\s]*merge-upstream[^)#\s]*)", self.text(name)):
+                with self.subTest(place=name, link=link):
+                    self.assertTrue((path.parent / link).resolve().is_file(), link)
+
+    def test_updates_sections_start_with_the_merge_upstream_note_in_both_languages(self):
+        previous = UserAnswerRestrictionReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.40.0 note starts right after the section's opening sentence, its sentences in order, before 0.39.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.39.0 HEAD -- templates skills/setup scripts`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), links in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            for link, document, target in links:
+                with self.subTest(readme=name, link=link):
+                    self.assertIn(link, note)
+                    self.assertEqual(self.text(document).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
 

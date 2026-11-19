@@ -1,6 +1,6 @@
 {
   "name": "cc-feather",
-  "version": "0.39.0",
+  "version": "0.40.0",
   "description": "Claude Feather handoffs, scoped delegation, Explore model routing, setup and role model configuration.",
   "author": {
     "name": "xenciscbc"
@@ -29,7 +29,8 @@
     "./skills/auto-land",
     "./skills/adversarial-review",
     "./skills/leases",
-    "./skills/worktrees"
+    "./skills/worktrees",
+    "./skills/merge-upstream"
   ],
   "repository": "https://github.com/xenciscbc/cc-feather.git"
 }

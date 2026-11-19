@@ -163,6 +163,15 @@ Runner 是分派 skill 中 cc-feather 的啟動器。它執行一個指令，對
 
 用 `/cc-feather:auto-land` 設定，或用自己的話請主 Agent 設定，效果相同。不帶範圍（或加 `session`）時用於這個 session，不寫入任何設定檔；加 `project` 或 `user` 時，會儲存到該範圍既有的 agent 分派安裝，它絕不會安裝 agent 分派。session 的 `on` 或 `default` 不會帶到新的或恢復的 session，session 選擇也不會寫進交接，而且 session 的 `on` 絕不會從 context 壓縮摘要中恢復。主 Agent 依序採用你在這個 session 的選擇、專案儲存的選擇、使用者儲存的選擇，最後才是關閉，所以專案的 `off` 會覆蓋使用者的 `on`；主 Agent 絕不自行更改。session 的 `off` 也會擋住這個對話中的每個計畫：主 Agent 會把它記在每個這類計畫的 dispatch 紀錄中，之後對那個計畫而言，它排在你的 session 選擇之後、儲存的選擇之前，在恢復的 session 中與 context 壓縮之後也一樣。只有你在這個對話中親口說的話（包括你對主 Agent 提問的回答）能解除它：session 的 `on` 或 `default`、明確解除，或儲存 `on`；儲存 `off` 或 `default` 不會解除它，而且主 Agent 每次說明目前的設定時，都會指出來源是記錄下來的 `off`，以及它記錄的時間與解除方式。合併前，主 Agent 會用設定工具的 `show` 確認儲存的選擇，其他任何文字都不會開啟自動合併。主 Agent 只在 auto 下、計畫最後的決定裡沒有任何項目需要接受並合併、且沒有未知狀態時才依它合併，而且只會在推送當下向遠端查出預設 branch、確認要合併的每個 commit 都屬於這份計畫後，把最終檢查與審查判斷過的 commit 的完整 SHA 以 fast-forward 推送過去，不 force、不推送 tag 或 submodule；之後再確認遠端 branch 等於那個 SHA。無法 fast-forward、branch 受保護或任何拒絕，都會讓主 Agent 停下來問你；主 Agent 絕不 rebase、merge、透過代管服務合併 pull request 或重試。它只涵蓋那一次推送，絕不包含 release、tag 或之後推送狀態變更；你不推送的指示會擋住它，主 Agent 會把這個指示記在計畫的 dispatch 紀錄中，恢復的 session 也會遵守。自動合併之後，主 Agent 會把計畫的 ticket 標為完成並附上註記，寫明合併的 commit，完成進行中的交接，並回報合併的 commit、最終檢查的範圍與結果、每個 claim 的通過情形、被捨棄的資源風險提案與後續紀錄；它不會刪除 branch。在 `off` 下，自動合併沒有作用。專案範圍的 `on` 通常會隨專案的指示檔一起 commit，所以每個載入它的 clone 都會用自己的推送權限合併；在主 Agent 記錄之前就被 context 壓縮丟掉的不推送指示，不會被恢復。在主 Agent 記錄之前就被 context 壓縮丟掉的 session `off` 也不會被恢復；而記錄下來的擋住只在讀到那個計畫的 dispatch 紀錄之處有效：在另一個 checkout 或 worktree、用別的計畫名稱，或在壓縮已從這個對話丟掉 session `off` 之後才開始的計畫，都不適用。詳見[指令說明](../skills/auto-land/SKILL.md)。
 
+### 合併上游
+
+```text
+/cc-feather:merge-upstream
+/cc-feather:merge-upstream my-feature
+```
+
+在 auto 下等待合併的計畫，遠端預設 branch 卻移動了（例如你在另一個 worktree 跑的計畫先合併了）時，自動合併會停下，它的回報會建議 `/cc-feather:merge-upstream`。這個指令只在你執行時才跑；主 Agent 絕不自行執行。它用於你指名的計畫，或唯一一份等待中的計畫，否則主 Agent 會問你是哪一份；在 off 下，它會回報需要自動流程並停下。主 Agent 先檢查前提條件，包括工作區乾淨、計畫的 branch 在這裡 checkout 且沒有在其他 checkout 中，然後問你是否現在 fetch 並 merge；你也可以選擇等待，或先合併另一份計畫。你同意後，主 Agent fetch 遠端，用 `git merge --no-ff` 把 fetch 到的 tip merge 進計畫的 branch，自行解決衝突，並在本機 commit 這次 merge：它絕不 pull、rebase 或 force，這一步也不推送任何東西，所以審查過的 commit 保有原本的識別。branch 已經包含遠端預設 branch 時，主 Agent 回報不需要整合。一個唯讀工具會列出上游改了什麼、這次 merge 相對於 merge 前計畫的 tip 改了什麼、兩邊都改過的路徑，以及每個 claim 與這兩份清單的重疊，主 Agent 再把整合報告（Integration report）寫進計畫的 dispatch 紀錄，對每個 claim 保留它的通過或重新開啟它的審查，並附上理由。報告先經過計畫審查，再由你核可；重新開啟的審查以原本 claim 的呼叫執行，最終檢查在要合併的 commit 上執行，每個等待合併的安全關鍵 claim（fix claim 除外）都在那裡接受對抗式審查。在報告要求的每項通過都完成之前，主 Agent 不推送任何包含這次 merge 的 commit，除非你要求提早推送到它建立的 branch。之後這份計畫只在你親自下令或你決定接受並合併時才合併，絕不經由自動合併；自動合併也不會合併含有 merge commit 的範圍。報告保留的通過取決於主 Agent 的判斷與一次計畫審查；你在 session 之外做的推送，只有透過 fetch 更新的 remote-tracking ref 才看得到。這個指令隨 plugin 提供，plugin 更新後只要開新 session，不需要執行 setup update。詳見[指令說明](../skills/merge-upstream/SKILL.md)。
+
 ### 分派預覽
 
 ```text

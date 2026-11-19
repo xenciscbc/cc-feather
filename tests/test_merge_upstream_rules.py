@@ -8,6 +8,7 @@ the tool's real input keys and output parts."""
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import unittest
@@ -417,6 +418,13 @@ class MergeUpstreamRuleTests(unittest.TestCase):
         self.assertIn("\nname: merge-upstream\n", frontmatter)
         self.assertIn("\ndisable-model-invocation: true\n", frontmatter)
         self.assertRegex(frontmatter, r'\ndescription: "[^"\n]+"\n')
+
+    def test_the_command_is_packaged_after_the_worktrees_command(self):
+        # Ticket 03: the manifest lists the command once, right after `./skills/worktrees`, so no earlier skill-order
+        # pin moves.
+        skills = json.loads((config.ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["skills"]
+        self.assertEqual(skills.count("./skills/merge-upstream"), 1)
+        self.assertEqual(skills.index("./skills/merge-upstream"), skills.index("./skills/worktrees") + 1)
 
     def test_invocation_preconditions_and_off_mode(self):
         self.assert_pinned(self.INVOCATION)
