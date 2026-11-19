@@ -488,8 +488,11 @@ class AutoLandRuleTests(unittest.TestCase):
             "In off, Auto land has no effect: main asks as Accept and land at the end of the plan describes for off.",
         ),
         "review-state.md#Accept and land at the end of the plan": (
+            # Replaced by merge-upstream ticket 02 (S1, S2): a plan whose dispatch record holds an Upstream merge is
+            # asked even with Auto land in effect, as tests/test_merge_upstream_rules.py pins.
             "In auto with Auto land in effect, when nothing listed needs accept and land, main does not ask that "
-            "question and lands as Auto land describes; when anything listed needs it, main asks as above.",
+            "question and lands as Auto land describes, except for a plan whose dispatch record holds an Upstream "
+            "merge, for which main asks it; when anything listed needs it, main asks as above.",
         ),
     }
 
