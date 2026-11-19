@@ -155,11 +155,11 @@ The user's explicit, recorded acceptance of one or more named gated Claims witho
 _Avoid_: sign-off, override
 
 **Upstream merge**:
-Main's local merge of the remote default branch into the work branch of a Plan in the Automatic flow, made only when the user invokes `merge-upstream` and agrees, never a rebase and never pushed before every pass its Integration report requires is in, unless the user asks. A Plan whose Dispatch record holds one lands only on the user's own command or Accept and land, never under Auto land. It is not Landing: it brings the default branch into the work branch, not the work into the default branch.
+Main's local merge of the remote default branch into the work branch of a Plan in the Automatic flow, made only when the user invokes `merge-upstream` and agrees, never a rebase, and no commit that has it as an ancestor is pushed before every pass its Integration report requires is in, unless the user asks. The merge commit and the commits it brings in are never inside any Claim's judged range. A Plan with one lands only on the user's own command or Accept and land, never under Auto land, which refuses any range that contains a merge commit. It is not Landing: it brings the default branch into the work branch, not the work into the default branch.
 _Avoid_: sync, rebase, pull
 
 **Integration report**:
-Main's entry in a Plan's Dispatch record for one Upstream merge: the commits involved, the facts the merge-upstream tool reported, and for each Claim whether its passes reopen or stay with main's reason, the Adversarial reviews to rerun and the final check at the merge commit. It gets plan review and the user's approval before any reopened review runs, changes no Plan text, ticket or Claim, and its kept passes count only with both.
+Main's entry in a Plan's Dispatch record for one Upstream merge: the commits involved, the facts the merge-upstream tool reported, and for each Claim whether its passes reopen or stay with main's reason, the Adversarial reviews to rerun and the final check at the merge commit. It gets plan review and the user's approval before any reopened review runs, changes no Plan text, ticket or Claim, and its kept passes count only with both, each bound to the report's recorded hash and the merge commit's full SHA.
 _Avoid_: integration plan
 
 ## Resource-risk runs
