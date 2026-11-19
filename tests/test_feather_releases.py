@@ -2960,8 +2960,7 @@ class MergeUpstreamReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_40_0(self):
-        self.assertEqual("0.40.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+    # The manifest version is pinned by the current release's tests (0.41.0, handoff history).
 
     def test_every_listing_describes_the_command(self):
         for name, sentences in self.LISTINGS.items():
@@ -2994,11 +2993,14 @@ class MergeUpstreamReleaseTests(unittest.TestCase):
 
     def test_updates_sections_start_with_the_merge_upstream_note_in_both_languages(self):
         previous = UserAnswerRestrictionReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = HandoffHistoryReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.40.0 note starts right after the section's opening sentence, its sentences in order, before 0.39.0's.
+            # The 0.40.0 note starts right after the 0.41.0 note, its sentences in order, before 0.39.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -3017,6 +3019,107 @@ class MergeUpstreamReleaseTests(unittest.TestCase):
                 with self.subTest(readme=name, link=link):
                     self.assertIn(link, note)
                     self.assertEqual(self.text(document).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.41.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(HandoffHistoryReleaseTests.ENTRY_HEADING))
+
+
+class HandoffHistoryReleaseTests(unittest.TestCase):
+    """0.41.0 (docs/specs/handoff-history-command.md, Implementation Decisions' Documentation and release; ticket 01):
+    the manifest version is 0.41.0; the Updates note, in both languages, opens the section, says what the release
+    adds, that existing installations need no setup update, determined from the diff against v0.40.0, and how to go
+    back to 0.40.0; the validation entry records the spec and the ticket, the determination, the test runs, the live
+    run of the command, the reviewing version, what the tests cannot show and the tag, and is the file's last. The
+    packaged skill count is InstallDocumentTests' and the command's listings are HandoffHistoryCommandTests'."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.41.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.41.0 adds `/cc-feather:handoff-history`, a read-only command only you can run, for browsing completed handoff history.",
+         "Without an argument it lists the ten most recent completions as numbered headings, newest first; an argument filters by completion date, date range, work title or keyword, `sealed` includes sealed history and a trailing number or `all` sets the count, and replying with numbers shows those entries in full.",
+         "`/cc-feather:handoff-list` and `/cc-feather:handoff-resume` now point to it when no pending or unfinished work is left, without opening history.",
+         "`git diff v0.40.0 HEAD -- templates skills/setup scripts` shows no change, so 0.41.0 changes no installed guidance, policy template, role definition or configuration tool, only skills the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.40.0, reinstall the 0.40.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.41.0 新增 `/cc-feather:handoff-history`，一個只能由你執行的唯讀指令，用來瀏覽已完成的交接歷史。",
+         "不帶參數時，它由新到舊列出最近 10 筆完成紀錄的編號標題；參數可依完成日期、日期區間、工作標題或關鍵字篩選，`sealed` 納入已封存的歷史，結尾的數字或 `all` 決定筆數，回覆編號即可看那幾筆的全文。",
+         "`/cc-feather:handoff-list` 與 `/cc-feather:handoff-resume` 在沒有待辦或未完成的工作時，現在會提示這個指令，但不會開啟歷史。",
+         "`git diff v0.40.0 HEAD -- templates skills/setup scripts` 沒有任何差異，所以 0.41.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.40.0，重新安裝 0.40.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    # The validation entry: the spec and its ticket, the setup determination with its evidence, the way back, the test
+    # runs, the live run, the reviewing version, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.41.0 handoff history\n"
+    ENTRY = (
+        "Implements [the handoff history command spec](specs/handoff-history-command.md), written on 2026-11-19 and added in 6a97c8e;",
+        "the spec is one ticket, one claim, implemented in the commit carrying this entry.",
+        "The handoff tool, the handoff skill and the installed guidance are unchanged.",
+        "**No setup update is required.**",
+        "`git diff v0.40.0 HEAD -- templates skills/setup scripts` prints nothing, and `git diff-tree -r --name-only v0.40.0 HEAD -- templates skills/setup scripts` lists no path:",
+        "existing installations need only the plugin update and a fresh session.",
+        "To go back to 0.40.0, reinstall the 0.40.0 plugin; no setup update or remove is needed.",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "with the installed cc-feather 0.39.0's roles and procedures, not this release's candidate.",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.41.0` does not exist when this entry is written.",
+        "it is created only after ticket 01 is accepted and only after the user's go-ahead.",
+        "`v0.40.0`, at 31205ea, is not moved.",
+    )
+
+    @staticmethod
+    def text(name):
+        return (config.ROOT / name).read_text(encoding="utf-8")
+
+    @staticmethod
+    def section(text, heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    def note(self, name, heading, sentences):
+        section = self.section(self.text(name), heading)
+        return section[section.index(sentences[0]):section.index(sentences[-1]) + len(sentences[-1])]
+
+    def assert_in_order(self, section, sentences, place):
+        for sentence in sentences:
+            with self.subTest(place=place, sentence=sentence[:40]):
+                self.assertEqual(section.count(sentence), 1)
+        for earlier, later in zip(sentences, sentences[1:]):
+            with self.subTest(place=place, order=earlier[:40]):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_manifest_is_0_41_0(self):
+        self.assertEqual("0.41.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_handoff_history_note_in_both_languages(self):
+        previous = MergeUpstreamReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.41.0 note starts right after the section's opening sentence, its sentences in order, before 0.40.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.40.0 HEAD -- templates skills/setup scripts`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
 
     def test_validation_entry_records_the_release_check_and_tag(self):
         text = self.text("docs/setup-validation.md")
@@ -3053,7 +3156,7 @@ class InstallDocumentTests(unittest.TestCase):
     def test_setup_document_counts_the_packaged_skills(self):
         skills = json.loads(self.text(".claude-plugin/plugin.json"))["skills"]
         words = dict(enumerate(("nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-                                "seventeen", "eighteen", "nineteen", "twenty"), start=9))
+                                "seventeen", "eighteen", "nineteen", "twenty", "twenty-one"), start=9))
         setup = self.text("docs/setup.md")
         self.assertIn(f"The plugin packages {words[len(skills)]} skills.", setup)
         # Only the manifest's count is stated: an earlier count left behind would contradict it.
