@@ -463,6 +463,41 @@ class ChecksTest(MergeUpstreamBase):
             self.assertIn("refs/remotes/stray/x", entry["reason"])
             self.assertIn(name, entry["reason"])
 
+    def test_a_symbolic_tracking_ref_is_attributed_by_its_target(self):
+        # A single-branch clone fetches only main, yet clone still creates refs/remotes/origin/HEAD pointing at
+        # refs/remotes/origin/main; once the merge is pushed and fetched, that symbolic ref contains it too.
+        origin = self.base / "single-branch.git"
+        self.git(self.base, "clone", "--quiet", "--bare", str(self.remote), str(origin))
+        self.addCleanup(remove_tree, origin)
+        project = self.clone(origin.as_uri(), self.base / "single-branch", "--single-branch", "--branch", "main")
+        self.addCleanup(remove_tree, project)
+        self.assertEqual(self.git(project, "config", "--get-all", "remote.origin.fetch"),
+                         "+refs/heads/main:refs/remotes/origin/main")
+        self.assertEqual(self.git(project, "symbolic-ref", "refs/remotes/origin/HEAD"), "refs/remotes/origin/main")
+        remote_tip = self.git(project, "rev-parse", "refs/remotes/origin/main")
+        self.git(project, "switch", "--quiet", "-c", "work", self.start)
+        self.write(project / "src/only_claim.py", "only\n")
+        tip_before = self.commit(project, "src/only_claim.py", message="claim")
+        self.git(project, "-c", "commit.gpgSign=false", "merge", "--quiet", "--no-ff", "--no-edit", remote_tip)
+        merge = self.git(project, "rev-parse", "HEAD")
+        self.git(project, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+        self.git(project, "fetch", "--quiet", "origin")
+        self.assertIn("refs/remotes/origin/HEAD", self.git(project, "for-each-ref", "--format=%(refname)",
+                                                           f"--contains={merge}", "refs/remotes/"))
+        payload = {"remote": "origin", "default_branch": "main", "remote_tip": remote_tip, "tip_before": tip_before,
+                   "merge_commit": merge, "claims": [{"id": "01", "base": self.start, "judged": [tip_before]}]}
+        result = self.run_tool(project, payload)
+        self.assertEqual(result["remote_tracking"]["state"], "known", result["remote_tracking"])
+        remotes = {entry["remote"]: entry for entry in result["remote_tracking"]["remotes"]}
+        self.assertEqual(sorted(remotes), ["origin"])
+        origin_entry = remotes["origin"]
+        self.assertEqual((origin_entry["state"], origin_entry.get("contains_merge_commit")), ("known", True),
+                         origin_entry)
+        self.assertEqual(origin_entry["containing"], ["refs/remotes/origin/main"])
+        # The symbolic ref repeats its target, so it neither appears on its own nor makes anything unknown.
+        self.assertNotIn("refs/remotes/origin/HEAD", origin_entry["refs"])
+        self.assertEqual(unknown_parts(result["remote_tracking"]), [])
+
     def test_a_claim_whose_base_is_not_an_ancestor_is_unknown(self):
         payload = self.payload(claims=[{"id": "x", "base": self.remote_tip, "judged": [self.claim1]},
                                        {"id": "y", "base": None, "judged": [self.claim1]}])

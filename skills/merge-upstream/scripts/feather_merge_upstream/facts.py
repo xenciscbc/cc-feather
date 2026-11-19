@@ -315,15 +315,21 @@ class Facts:
         try:
             names = [name for name in self.git.output("remote", what="The remotes could not be listed").split("\n")
                      if name]
-            listing = self.git.output("for-each-ref", "--format=%(refname)%00%(objectname)", "refs/remotes/",
-                                      what="The remote-tracking refs could not be listed")
+            listing = self.git.output("for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)",
+                                      "refs/remotes/", what="The remote-tracking refs could not be listed")
         except Unknown as error:
             return unknown(str(error)), unknown(str(error))
         refs = {}
+        # The target of each symbolic ref (such as refs/remotes/origin/HEAD); an ordinary ref has none. for-each-ref
+        # leaves out a symbolic ref whose target cannot be resolved.
+        symrefs: dict[str, str] = {}
         for line in listing.split("\n"):
-            name, separator, objectname = line.partition("\0")
+            name, separator, rest = line.partition("\0")
             if separator:
+                objectname, _, target = rest.partition("\0")
                 refs[name] = objectname
+                if target:
+                    symrefs[name] = target
         wanted = f"refs/remotes/{request['remote']}/{request['default_branch']}"
         if wanted in refs:
             default = {"state": "known", "ref": wanted, "commit": refs[wanted],
@@ -338,7 +344,10 @@ class Facts:
                 "for-each-ref", "--format=%(refname)", f"--contains={request['merge_commit']}", "refs/remotes/",
                 what="The remote-tracking refs that contain the merge commit could not be listed").split("\n"))
             # A ref is a remote's remote-tracking ref when one of the remote's fetch refspec destinations names it,
-            # whatever its name says; a ref several remotes' destinations name counts for each of them.
+            # whatever its name says; a ref several remotes' destinations name counts for each of them. A symbolic ref
+            # is attributed by its target: it adds nothing when its target is itself listed (the target is attributed
+            # on its own), otherwise it belongs to the remotes whose destinations name its target, and with none it is
+            # unclaimed like an ordinary ref that no destination names.
             mapped: dict[str, list[str]] = {}
             unreadable: dict[str, str] = {}
             for name in names:
@@ -353,7 +362,11 @@ class Facts:
             owned: dict[str, list[str]] = {name: [] for name in mapped}
             unclaimed = []
             for ref in sorted(refs):
-                owners = [name for name, targets in mapped.items() if any(names_ref(target, ref) for target in targets)]
+                attributed = symrefs.get(ref, ref)
+                if attributed != ref and attributed in refs:
+                    continue
+                owners = [name for name, targets in mapped.items()
+                          if any(names_ref(target, attributed) for target in targets)]
                 for name in owners:
                     owned[name].append(ref)
                 if not owners and ref in containing:
