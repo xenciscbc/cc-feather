@@ -3036,11 +3036,12 @@ class MergeUpstreamReleaseTests(unittest.TestCase):
 
 class HandoffHistoryReleaseTests(unittest.TestCase):
     """0.41.0 (docs/specs/handoff-history-command.md, Implementation Decisions' Documentation and release; ticket 01):
-    the manifest version is 0.41.0; the Updates note, in both languages, opens the section, says what the release
-    adds, that existing installations need no setup update, determined from the diff against v0.40.0, and how to go
-    back to 0.40.0; the validation entry records the spec and the ticket, the determination, the test runs, the live
-    run of the command, the reviewing version, what the tests cannot show and the tag, and is the file's last. The
-    packaged skill count is InstallDocumentTests' and the command's listings are HandoffHistoryCommandTests'."""
+    the Updates note, in both languages, says what the release adds, that existing installations need no setup update,
+    determined from the diff against v0.40.0, and how to go back to 0.40.0; the validation entry records the spec and
+    the ticket, the determination, the test runs, the live run of the command, the reviewing version, what the tests
+    cannot show and the tag. The packaged skill count is InstallDocumentTests' and the command's listings are
+    HandoffHistoryCommandTests'. Since 0.42.0 the manifest version is ReviewLevelReleaseTests', the note follows the
+    0.42.0 note and the entry is followed only by the 0.42.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.41.0 note in order.
     UPDATES = (
@@ -3100,16 +3101,16 @@ class HandoffHistoryReleaseTests(unittest.TestCase):
             with self.subTest(place=place, order=earlier[:40]):
                 self.assertLess(section.index(earlier), section.index(later))
 
-    def test_manifest_is_0_41_0(self):
-        self.assertEqual("0.41.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_handoff_history_note_in_both_languages(self):
         previous = MergeUpstreamReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = ReviewLevelReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.41.0 note starts right after the section's opening sentence, its sentences in order, before 0.40.0's.
+            # The 0.41.0 note starts right after the 0.42.0 note, its sentences in order, before 0.40.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -3120,6 +3121,101 @@ class HandoffHistoryReleaseTests(unittest.TestCase):
                 self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
                 self.assertEqual(note.count("`git diff v0.40.0 HEAD -- templates skills/setup scripts`"), 1)
                 self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.42.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(ReviewLevelReleaseTests.ENTRY_HEADING))
+
+
+class ReviewLevelReleaseTests(unittest.TestCase):
+    """0.42.0 (docs/specs/review-level.md; ticket 01): the manifest version is 0.42.0; the Updates note, in both
+    languages, opens the section, says what the release adds, that existing installations need no setup update,
+    determined from the diff against v0.41.0 over `templates scripts`, and how to go back to 0.41.0; the validation
+    entry records the spec and the ticket, the determination, the test runs, the reviewing version, what the tests
+    cannot show and the tag, and is the file's last. The Review level's own sentences are
+    tests/test_feather_review_level.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.42.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.42.0 adds the Review level: in auto, before the first claim of a plan of plan-driven work is implemented, main recommends `standard`, `light` or `off` for that plan with a one-line reason and you choose, as [Review level](#review-level) describes.",
+         "`standard` runs the Automatic flow unchanged, `off` turns automatic review off for that plan, and `light` turns it off too but has main request each claim's code review from reviewer, run every acceptance item and report each result, then stop in the conversation listing what is left, landing included.",
+         "`git diff v0.41.0 HEAD -- templates scripts` shows no change, so 0.42.0 changes no installed guidance, policy template, role definition or configuration tool, only skills and procedures the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.41.0, reinstall the 0.41.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.42.0 新增審查等級（Review level）：在 auto 下，依計畫施工的計畫在第一個 claim 實作之前，主 Agent 會為這份計畫建議 `standard`、`light` 或 `off` 並附上一行理由，由你選擇，如[審查等級](#審查等級)所述。",
+         "`standard` 照舊執行自動流程，`off` 對這份計畫關閉自動審查，`light` 也關閉它，但會讓主 Agent 請 reviewer 審查每個 claim 的程式碼、執行每項驗收並回報結果，之後在對話中停下，列出剩下的工作，包括合併。",
+         "`git diff v0.41.0 HEAD -- templates scripts` 沒有任何差異，所以 0.42.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill 與流程；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.41.0，重新安裝 0.41.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # The note's link to the README's Review level section, and the heading it resolves to.
+    LINKS = (("[Review level](#review-level)", "\n### Review level\n"),
+             ("[審查等級](#審查等級)", "\n### 審查等級\n"))
+
+    # The validation entry: the spec and its ticket, the setup determination with its evidence, the way back, the test
+    # runs, the reviewing version, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.42.0 review level\n"
+    ENTRY = (
+        "Implements [the Review level spec](specs/review-level.md), written on 2026-11-20, added in 4afa496 and corrected in a4e9f8f;",
+        "the spec is one ticket, one claim, implemented in the commit carrying this entry.",
+        "**No setup update is required.**",
+        "`git diff v0.41.0 HEAD -- templates scripts` prints nothing, and `git diff-tree -r --name-only v0.41.0 HEAD -- templates scripts` lists no path:",
+        "existing installations need only the plugin update and a fresh session.",
+        "To go back to 0.41.0, reinstall the 0.41.0 plugin; no setup update or remove is needed.",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "with the installed cc-feather 0.41.0's roles and procedures, not this release's candidate.",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.42.0` does not exist when this entry is written.",
+        "it is created only after ticket 01 is accepted and only after the user's go-ahead.",
+        "`v0.41.0`, at 8b1f84d, is not moved.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_42_0(self):
+        self.assertEqual("0.42.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_review_level_note_in_both_languages(self):
+        previous = HandoffHistoryReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.42.0 note starts right after the section's opening sentence, its sentences in order, before 0.41.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.41.0 HEAD -- templates scripts`"), 1)
+                # skills/setup/references/auto-review.md changes in this release, so the evidence leaves it out.
+                self.assertNotIn("templates skills/setup scripts", note)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertIn(link, note)
+                self.assertEqual(self.text(name).count(target), 1)
 
     def test_validation_entry_records_the_release_check_and_tag(self):
         text = self.text("docs/setup-validation.md")

@@ -9,7 +9,7 @@ An implementation basis with stated scope and acceptance criteria that the user 
 _Avoid_: task list, todo
 
 **Plan-driven work**:
-Work carried out to implement a Plan. In auto mode it is the only work that gets the automatic review flow.
+Work carried out to implement a Plan. In auto mode it is the only work that gets the automatic review flow, which it gets at Review level `standard`.
 _Avoid_: planned task, ticket work
 
 **Unplanned work**:
@@ -73,7 +73,7 @@ The user's own message in this conversation, or the AskUserQuestion answer to a 
 _Avoid_: user reply, user input
 
 **Automatic flow**:
-The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work. Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; this is the only review timing in auto. When a Claim that depends on another starts, and what stops with a stopped Claim, are review state's Dependent claims.
+The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work at Review level `standard`. Each Claim's Code review and then Outcome verification run once that Claim is implemented and committed; this is the only review timing in auto. When a Claim that depends on another starts, and what stops with a stopped Claim, are review state's Dependent claims.
 _Avoid_: three-layer protection, pipeline
 
 **Explicit request**:

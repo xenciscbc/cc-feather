@@ -42,10 +42,12 @@ class ReviewRulesFollowUpTests(unittest.TestCase):
             "which lets main commit, push to branches it created and open pull requests before acceptance without asking, while landing, release and completion still wait for both passes, plus HELD for a Security-critical claim, or the user's explicit accept-and-land decision",
         ),
         "README.md": (
-            "enabled mode `auto` reviews plan-driven work and lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions in the [reference](docs/reference.md#automatic-review)).",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "enabled mode `auto` runs the Automatic flow on plan-driven work at [Review level](#review-level) `standard`, unless you choose another level for a plan, and at that level lets main, without asking, commit its claims before their passes, push them to branches it created for the work and open pull requests that list the unaccepted claims; landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions in the [reference](docs/reference.md#automatic-review)).",
         ),
         "README.zh-TW.md": (
-            "開啟後的 `auto` 審查依計畫施工的工作，並讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見[參考文件](docs/reference.zh-TW.md#自動審查)的 Commit 條件與你的決定）；",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "開啟後的 `auto` 以[審查等級](#審查等級) `standard` 對依計畫施工的工作執行自動流程（除非你為某份計畫選了其他等級），並在這個等級下讓主 Agent 不經詢問，在 claim 通過前先 commit、推到它為這項工作建立的 branch，以及開 PR 列出尚未驗收的 claim；進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見[參考文件](docs/reference.zh-TW.md#自動審查)的 Commit 條件與你的決定）；",
         ),
         "CONTEXT.md#Acceptance gate": (
             "The rule that a gated Claim, one of Plan-driven work in the Automatic flow or one an active handoff records as unreviewed, unverified or pending acceptance, is landed, released or tagged, reported complete or has its ticket set to a done value only with a valid APPROVED and a valid CONFIRMED, and for a Security-critical claim a valid HELD as well, or with the user's Accept and land decision.",

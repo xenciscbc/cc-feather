@@ -813,7 +813,8 @@ class AdversarialReviewTests(unittest.TestCase):
             "for a Security-critical claim's Adversarial review, read the [adversarial-review procedure](references/adversarial-review.md)'s At the final commit and follow it.",
         ),
         "plan-review.md": (
-            "In auto, plan-driven work gets the full review flow: plan review before implementation, then [code review](code-review.md), then [outcome verification](outcome-verification.md), and for a Security-critical claim then [Adversarial review](adversarial-review.md).",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "In auto, plan-driven work gets the full review flow at Review level `standard`: plan review before implementation, then [code review](code-review.md), then [outcome verification](outcome-verification.md), and for a Security-critical claim then [Adversarial review](adversarial-review.md).",
             # Retained passes ticket 01 (Acceptance item 18): per-Claim timing replaces "In auto, once the reviewed plan is
             # implemented, follow".
             # Delegation dedupe ticket 02: the timing points to review state and the Adversarial review procedure.
@@ -843,7 +844,8 @@ class AdversarialReviewTests(unittest.TestCase):
             "The mode covers automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review.",
         ),
         "auto-review.md#Meaning": (
-            "`auto` gives plan-driven work, meaning work done from a plan, spec or ticket the user agreed to, automatic plan review, code review, outcome verification and then, for a Security-critical claim, Adversarial review before it is reported complete.",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "At Review level `standard`, `auto` gives plan-driven work, meaning work done from a plan, spec or ticket the user agreed to, automatic plan review, code review, outcome verification and then, for a Security-critical claim, Adversarial review before it is reported complete.",
             "and landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus a valid HELD for a Security-critical claim, or the user's explicit accept-and-land decision.",
             "and does not erase findings, manufacture READY, APPROVED, CONFIRMED or HELD, or reset any automatic review count.",
         ),
@@ -872,7 +874,8 @@ class AdversarialReviewTests(unittest.TestCase):
             "The span from the user's authorization to implement until completion is reported, including code review, outcome verification and, for a Security-critical claim, Adversarial review.",
         ),
         "CONTEXT.md#Automatic flow": (
-            "The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work.",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "The sequence plan review, then code review, then outcome verification, and for a Security-critical claim then Adversarial review, that auto mode applies to Plan-driven work at Review level `standard`.",
         ),
         "CONTEXT.md#Pending-acceptance claim": (
             "A gated Claim whose Active handoff note says it has passed one or more of the steps it needs (code review, outcome verification and, for a Security-critical claim, Adversarial review), or has an Accept and land decision, but is not yet landed, released or reported complete.",
@@ -893,14 +896,16 @@ class AdversarialReviewTests(unittest.TestCase):
         "README.md": (
             # Retained passes ticket 04 (Acceptance items 8, 15 and 17): the table states the step's timing in auto and in off.
             "| Adversarial review | For a Security-critical claim: in auto, once at the end, after the final check passes at the final commit; in `off`, after APPROVED and CONFIRMED at the same commit | adversary | HELD |",
-            "- `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work.",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "- `/cc-feather:auto-on`: enable automatic plan review, code review, outcome verification and, for Security-critical claims, Adversarial review of plan-driven work, the Automatic flow, which runs at [Review level](#review-level) `standard` unless you choose another level for a plan.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your accept-and-land decision.",
             "landing on the default branch, release, reporting complete and ticket completion still wait for both passes, plus HELD for a Security-critical claim, or your explicit accept-and-land decision (see Commit and Your decisions in the [reference](docs/reference.md#automatic-review)).",
         ),
         "README.zh-TW.md": (
             # Retained passes ticket 04 (Acceptance items 8, 15 and 17).
             "| 對抗式審查 | 安全關鍵 claim：在 auto 下，最終檢查在最後的 commit 上通過後，最後做一次；在 `off` 下，在同一個 commit 拿到 APPROVED 與 CONFIRMED 之後 | adversary | HELD |",
-            "| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查；",
+            # Review level ticket 01 (docs/specs/review-level.md): the Automatic flow runs at Review level `standard`.
+            "| `/cc-feather:auto-on` | 開啟依計畫施工的自動計畫審查、程式碼審查、結果驗證，以及安全關鍵 claim 的對抗式審查，也就是自動流程，除非你為某份計畫選了其他等級，它都以[審查等級](#審查等級) `standard` 執行；",
             "但合併到預設 branch、release、回報完成與 ticket 完成仍需兩項通過（安全關鍵 claim 還要加上 HELD）或你的接受並合併決定 |",
             "進入預設 branch、release、回報完成與把 ticket 設成完成，仍要等兩關都通過（安全關鍵 claim 還要加上 HELD），或你明確決定「接受並合併」（見[參考文件](docs/reference.zh-TW.md#自動審查)的 Commit 條件與你的決定）；",
         ),
