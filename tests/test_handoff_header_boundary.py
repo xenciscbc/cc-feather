@@ -159,10 +159,17 @@ class HeaderLineEndingTest(LocalFixesBase):
         for index, value in enumerate(self.VALUES):
             with self.subTest(value=value):
                 name = f"v{index}.md"
-                created = self.run_tool("create", "--work", name,
-                                        payload={"title": TITLE, "details": "證據",
-                                                 "fields": {"goal": value, "progress": "p", "next": "n"}})
-                self.assertEqual(created["status"], "ok")
+                payload = {"title": TITLE, "details": "證據", "fields": {"goal": value, "progress": "p", "next": "n"}}
+                if any(char < " " for char in value):
+                    # create refuses a C0 control (0.42.1), so a record that already holds one, written before,
+                    # is put as create used to write it; it still reads and updates intact.
+                    error = self.run_tool("create", "--work", name, payload=payload, expected=2)
+                    self.assertEqual(error["code"], "input")
+                    self.put(name, f"# {TITLE}\n更新：{UPDATED}\n狀態：進行中\n目標：{value}\n進度：p\n下一步：n\n\n"
+                                   "## 詳細紀錄\n證據\n".encode())
+                else:
+                    created = self.run_tool("create", "--work", name, payload=payload)
+                    self.assertEqual(created["status"], "ok")
                 before = (self.directory / name).read_bytes()
                 read = self.run_tool("read", "--work", name)
                 self.assertEqual((read["status"], read["problems"]), ("ok", []))

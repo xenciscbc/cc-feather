@@ -3142,7 +3142,8 @@ class ReviewLevelReleaseTests(unittest.TestCase):
     determined from the diff against v0.41.0 over `templates scripts`, and how to go back to 0.41.0; the validation
     entry records the spec and the ticket, the determination, the test runs, the reviewing version, what the tests
     cannot show and the tag, and is the file's last. The Review level's own sentences are
-    tests/test_feather_review_level.py's."""
+    tests/test_feather_review_level.py's. Since 0.42.1 the manifest version is HandoffControlCharactersReleaseTests',
+    the note follows the 0.42.1 note and the entry is followed only by the 0.42.1 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.42.0 note in order.
     UPDATES = (
