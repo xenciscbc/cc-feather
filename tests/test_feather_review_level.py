@@ -98,9 +98,12 @@ class ReviewLevelTests(unittest.TestCase):
             "`light` runs no final check of the Automatic flow; the final check that Final check requires in off before "
             "a landing or release the acceptance gate does not cover still runs.",
         ),
+        # Stops-in-conversation ticket 01: the stop refers to review state's Asking in the conversation instead of saying
+        # "without a question tool" itself.
         "review-state.md#The stop at the end": (
             "Once every Claim of a Plan at `light` has finished its Code review, with APPROVED or stopped, and its "
-            "acceptance run, main stops in the conversation, without a question tool, listing for each Claim the Code "
+            "acceptance run, main stops in the conversation, as Asking in the conversation describes, listing for each "
+            "Claim the Code "
             "review's verdict, the acceptance results and the open findings, then what is left, landing included, and "
             "that the ticket stays unfinished until the user accepts it or says it is done, as Ticket status and User "
             "decisions describe.",
