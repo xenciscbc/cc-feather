@@ -1,0 +1,24 @@
+# A Plan's Review level is the user's choice, and `light` is off plus one independent code review
+
+In auto, every Plan of Plan-driven work runs the whole Automatic flow: plan review, code review, outcome verification, the final check and, for a Security-critical claim, Adversarial review. A small fix with a known cause, such as a UI adjustment, a wording change or a log message, becomes Plan-driven work as soon as it is written as a ticket or spec, and then waits for every step. The user wants such fixes finished faster.
+
+The user decided (2026-11-20, in a grilling session with a second opinion from Codex), for auto only:
+
+- **Each Plan gets a Review level, chosen by the user**: `standard` (the Automatic flow), `light` or `off` (the existing task-level off). Before the Plan's first Claim is implemented, main recommends one with a one-line reason. The user's own instruction naming a level is the choice; a level written in a ticket is only an input to the recommendation. Until the choice is known in the session the level is `standard`, and main never changes it on its own.
+- **`light` is `off` plus three things main does on its own**: once a Claim is implemented, it requests the Claim's code review from the reviewer role, counted and stopped as an Explicit request is; it runs every acceptance item and reports each observed result; and it stops in the conversation without a question tool, listing what is left, landing included. Every rule off mode keeps still applies, including the classification of Security-critical claims, their security analysis and their routing to security-executor.
+- **Main recommends `light` narrowly**: one Claim; a known cause and small scope; acceptance that shows the outcome directly; not Security-critical; no migration, irreversible operation, foreseeable resource risk or change to shared test support or build configuration. A Plan at `light` that turns out to need a Security-critical change, or has a material Deviation, stops for the user to choose its level again.
+- **Stopping in the conversation, not with a question tool**: a pending question that the user dismisses still returns a result that makes the model run again, at full context cost once the prompt cache has expired; a turn that ends in the conversation lets the user leave with `/clear` or a new session without another model call.
+
+This amends [ADR 0003](0003-review-cost-and-independence-stay-user-configured.md), which rejected skipping a step for some Claim types because that changes the review contract rather than its configuration. The difference is who decides and what changes: steps are not skipped by Claim type or by main's judgement but by the user's choice for one Plan, and `light` adds no review contract of its own; it is off mode with a code review main requests for the user. [ADR 0009](0009-security-critical-claims-get-an-adversarial-review.md) is unchanged: main never recommends `light` for a Security-critical claim, and the Automatic flow keeps the Adversarial review.
+
+## Considered Options
+
+- **A third global Review mode beside `auto` and `off`**: size is a property of the work, not of the session, so a session-wide mode would have to be switched for every small fix and switched back.
+- **A separate light flow inside auto**, with its own Dispatch record, an Acceptance gate of APPROVED plus a final check at `related`, and its own rules for Auto land, Dependent claims, fix Claims, Upstream merges and explicit requests: worked out in full and then dropped. Review state, which main reads in full before most review decisions, would grow in every session for every kind of work, and the rules it adds serve cases a one-ticket fix rarely meets.
+- **Off plus an explicit code review the user asks for**: the same checks, but the user must remember to ask; `light` makes main ask for them.
+- **Main reviews its own change**: no independent check would remain; the reviewer role keeps the one independent look, as ADR 0001 keeps review independent of implementation.
+- **Let main decide the level by Claim type**: ADR 0003's reason still holds; main wants to save calls while judging, so the judgement is unreliable.
+
+## Consequences
+
+A small known fix written as a ticket costs one implementation, one independent code review and main's acceptance run, and stops once for the user's landing instruction. It loses plan review, outcome verification, the final check as a recorded gate, a Dispatch record and the Acceptance gate, exactly as off does: it carries across sessions only through an active handoff, and landing waits only on the user's instruction. Main's recommendation conditions are the only guard against choosing `light` for work that needs more. Revisit if light Plans often lose state between sessions or turn out to need the Automatic flow midway.
