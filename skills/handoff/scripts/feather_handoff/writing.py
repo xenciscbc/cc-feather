@@ -23,6 +23,15 @@ def text_value(value: object, name: str, multiline: bool = False) -> str:
         raise HandoffError("input", f"{name} must be text without NUL")
     if not multiline and ("\n" in value or "\r" in value):
         raise HandoffError("input", f"{name} must be a single line; use details for longer content")
+    # Other C0 controls and DEL usually come from an escape a caller did not mean, such as "\a" or "\t" in a
+    # non-raw Windows path; refuse them before anything is written, since history cannot be corrected later.
+    allowed = "\t\n\r" if multiline else ""
+    for offset, char in enumerate(value):
+        if (char < " " or char == "\x7f") and char not in allowed:
+            kept = "TAB, LF and CR" if multiline else "none"
+            raise HandoffError("input", f"{name} contains control character U+{ord(char):04X} at offset {offset}; "
+                               f"control characters allowed here: {kept}. Check for an unintended escape such as "
+                               r"\a or \t in a path, and pass backslashes literally")
     return value
 
 

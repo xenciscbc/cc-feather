@@ -3187,16 +3187,16 @@ class ReviewLevelReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_42_0(self):
-        self.assertEqual("0.42.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_review_level_note_in_both_languages(self):
         previous = HandoffHistoryReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = HandoffControlCharactersReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.42.0 note starts right after the section's opening sentence, its sentences in order, before 0.41.0's.
+            # The 0.42.0 note starts right after the 0.42.1 note, its sentences in order, before 0.41.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -3216,6 +3216,87 @@ class ReviewLevelReleaseTests(unittest.TestCase):
             with self.subTest(readme=name, link=link):
                 self.assertIn(link, note)
                 self.assertEqual(self.text(name).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.42.1 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(HandoffControlCharactersReleaseTests.ENTRY_HEADING))
+
+
+class HandoffControlCharactersReleaseTests(unittest.TestCase):
+    """0.42.1 (a fix decided in the conversation on 2026-11-20, one claim without a spec): the manifest version is
+    0.42.1; the Updates note, in both languages, opens the section, says what the release fixes, that existing
+    installations need no setup update, determined from the diff against v0.42.0 over `templates scripts`, and how to
+    go back to 0.42.0; the validation entry records the report, the fix, the determination, the test runs and the tag,
+    and is the file's last. The tool's behaviour is tests/test_handoff_tool.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.42.1 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.42.1 makes the handoff tool refuse control characters: `create` and `update` return `input`, naming the value, the character and its offset, and write nothing when the title or a field holds U+0000–U+001F or U+007F, or `details` or a `replacement` holds one other than TAB, LF and CR.",
+         "Such a character usually comes from an unintended escape, such as `\\a` or `\\t` in a non-raw Python string holding a Windows path, which the tool used to save silently; records that already hold one are neither checked nor changed.",
+         "`git diff v0.42.0 HEAD -- templates scripts` shows no change, so 0.42.1 changes no installed guidance, policy template, role definition or configuration tool, only the handoff tool and its reference the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.42.0, reinstall the 0.42.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.42.1 讓交接工具拒收控制字元：標題或欄位含有 U+0000–U+001F 或 U+007F，或 `details`、`replacement` 含有 TAB、LF、CR 以外的控制字元時，`create` 與 `update` 回傳 `input`，指出是哪個值、哪個字元與它的位置，且不寫入任何東西。",
+         "這類字元通常來自不小心的跳脫，例如以非 raw 的 Python 字串表示 Windows 路徑時的 `\\a` 或 `\\t`，工具以前會默默存下；已經含有這類字元的紀錄不檢查也不修改。",
+         "`git diff v0.42.0 HEAD -- templates scripts` 沒有任何差異，所以 0.42.1 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的交接工具與它的參考文件；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.42.0，重新安裝 0.42.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+
+    # The validation entry: the report and the fix, the setup determination with its evidence, the way back, the test
+    # runs and the tag.
+    ENTRY_HEADING = "\n## 0.42.1 handoff control characters\n"
+    ENTRY = (
+        "The handoff tool now refuses, in `create` and `update`, a title or field value that holds a control character, U+0000–U+001F or U+007F,",
+        "Records that already hold such characters are neither checked nor changed.",
+        "**No setup update is required.**",
+        "`git diff v0.42.0 HEAD -- templates scripts` prints nothing, and `git diff-tree -r --name-only v0.42.0 HEAD -- templates scripts` lists no path:",
+        "existing installations need only the plugin update and a fresh session.",
+        "To go back to 0.42.0, reinstall the 0.42.0 plugin; no setup update or remove is needed.",
+        "the new handoff tool test fails against the 0.42.0 tool and passes against this one;",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "`v0.42.1` does not exist when this entry is written.",
+        "it is created only after the user's go-ahead.",
+        "`v0.42.0`, at 2bdf3db, is not moved.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_42_1(self):
+        self.assertEqual("0.42.1", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_control_characters_note_in_both_languages(self):
+        previous = ReviewLevelReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.42.1 note starts right after the section's opening sentence, its sentences in order, before 0.42.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.42.0 HEAD -- templates scripts`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
 
     def test_validation_entry_records_the_release_check_and_tag(self):
         text = self.text("docs/setup-validation.md")

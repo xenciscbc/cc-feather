@@ -115,6 +115,36 @@ class HandoffToolTest(unittest.TestCase):
         self.assertEqual(before, self.snapshot())
         self.assertEqual(self.run_tool("read", "--work", "config-audit.md")["content"], RECORD)
 
+    def test_create_and_update_refuse_control_characters_before_writing(self):
+        # A non-raw Python string turns "J:\gotmp\axrg303-golden\tt_*.pdf" into BEL and TAB; refuse it unwritten.
+        fields = {"goal": "Compare prints", "progress": "Golden set saved.", "next": "Rerun compare"}
+        mangled = "J:\\gotmp\axrg303-golden\tt_*.pdf"
+        cases = (({"title": "print\tcompare", "fields": fields}, "title", "U+0009 at offset 5"),
+                 ({"fields": {**fields, "notes": mangled}}, "notes", "U+0007 at offset 8"),
+                 ({"fields": {**fields, "environment": "shell\x7f"}}, "environment", "U+007F at offset 5"),
+                 ({"fields": fields, "details": "line one\nbell\x07"}, "details", "U+0007 at offset 13"))
+        for payload, name, where in cases:
+            with self.subTest(value=name):
+                error = self.run_tool("create", "--work", "print.md", payload=payload, expected=2)
+                self.assertEqual(error["code"], "input")
+                self.assertIn(f"{name} contains control character {where}", error["message"])
+                self.assertEqual(self.snapshot(), {})
+        literal = "J:\\gotmp\\axrg303-golden\\tt_*.pdf"
+        created = self.run_tool("create", "--work", "print.md", payload={
+            "fields": {**fields, "notes": literal}, "details": "col1\tcol2\r\nnext\n"})
+        read = self.run_tool("read", "--work", "print.md")
+        self.assertIn(f"注意：{literal}\n", read["content"])
+        self.assertIn("col1\tcol2\nnext", read["content"])
+        before = self.snapshot()
+        for payload, name in (({"fields": {"next": "Rerun\x1b[0m"}}, "next"),
+                              ({"replacement": read["content"] + "\x0c"}, "replacement")):
+            with self.subTest(update=name):
+                error = self.run_tool("update", "--work", "print.md",
+                                      payload={"version": created["version"], **payload}, expected=2)
+                self.assertEqual(error["code"], "input")
+                self.assertIn(f"{name} contains control character", error["message"])
+                self.assertEqual(before, self.snapshot())
+
     def test_create_validates_before_writing_and_respects_git_tracking(self):
         payload = {"fields": {"goal": "Audit", "progress": "Port checked", "next": "Read readiness"}}
         invalid = {"fields": {**payload["fields"], "status": "done"}}
