@@ -1,6 +1,8 @@
 """Design and test checks (docs/specs/design-and-test-checks.md). Ticket 01: the user-invoked /cc-feather:test-speedup
 command, which reports test speed-ups that keep correctness, lists existing tests with resource risk and measures only
-after the user agrees; its manifest position, README listings, reference section and the setup document's skill count. Ticket 02: the user-invoked
+after the user agrees; its manifest position, README listings, reference section and the setup document's skill count.
+Since 0.44.0 (docs/specs/test-speedup-smaller-checks.md) the command also offers smaller inputs, replacements in Removals
+and profiling in the measurement offer, and the widened removal sentences replace their pins. Ticket 02: the user-invoked
 /cc-feather:overdesign-check command, which reports Over-design in a target with each item weighed by the delegation
 skill's rule, keeps trust-boundary checks and asks the user about old formats without evidence; the CONTEXT.md
 Over-design entry, an unchanged Unbounded probe entry, and the weighing pointed to but restated by neither command.
@@ -72,11 +74,18 @@ class TestSpeedupCommandTests(unittest.TestCase):
         ),
         "SKILL.md#1. Static pass": (
             "The static pass always comes first and runs nothing.",
+            "- inputs, data sets, iteration counts and fixtures larger than the behaviour needs, which a smaller one can verify;",
         ),
         "SKILL.md#Correctness bar": (
             "Each speed-up names the test or assertion that keeps verifying the behaviour it touches.",
             "A speed-up keeps every assertion, test and timeout at least as strict as it is now: weakening an assertion, adding a skip or loosening a timeout is never offered.",
-            "Removing a test is offered only in the Removals section, each removal naming the test that covers exactly the same behaviour as evidence, for the user to decide one by one.",
+            "A smaller input is offered only when size is not what the test verifies.",
+            "A test of performance, of a limit or boundary of size, of a race or concurrency that needs many iterations, or one that generates property-based or fuzz cases keeps its size; reducing the number of generated cases counts as weakening and is never offered.",
+            "A smaller-input speed-up names the test that keeps verifying every boundary value the larger input reached.",
+            "Removing a test is offered only in the Removals section, each removal either naming the test that covers exactly the same behaviour as evidence or being a replacement, for the user to decide one by one, replacements included.",
+            "A replacement describes a smaller test that verifies the same fact and states that fact, then lists everything else the removed test verifies, such as wiring between components, routing or configuration loading, each item with the existing test that keeps verifying it.",
+            "A replacement with any item lacking such a test is not offered.",
+            "The smaller test is described in the report, not written; a picked replacement's Plan writes it before the heavy test is removed.",
         ),
         "SKILL.md#Existing tests with resource risk": (
             "In a section of its own, list the existing tests that meet the criteria of an Unbounded probe in [cc-feather's glossary](../../CONTEXT.md), applied without a budget since the static pass runs nothing.",
@@ -85,7 +94,7 @@ class TestSpeedupCommandTests(unittest.TestCase):
         ),
         "SKILL.md#2. Report": (
             "**Speed-ups**, ordered by expected gain, each with its location, kind, expected gain (high, medium or low, with the reason), how correctness is kept and its risk.",
-            "**Removals**, each with the covering test as evidence.",
+            "**Removals**, each with the covering test as evidence, or, for a replacement, the smaller test it describes, the fact that test verifies and, for each other thing the removed test verifies, the test that keeps verifying it.",
         ),
         "SKILL.md#3. Measurement": (
             "After the static report, main offers to measure and runs nothing without the user's agreement.",
@@ -95,6 +104,10 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "A flagged test the user includes runs inside the Runner, with the memory, time and output limits the offer states.",
             "For the Runner's path and invocation, read [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s The Runner, where the path is relative to the delegation skill, and for how a contained, refused or evidence-missing result is judged, its Main's floor.",
             "After measurement, the report gives each speed-up's gain in seconds.",
+            "The offer may include profiling the slowest tests to show where their time goes, with the tests to profile named in the offer.",
+            "Profiling uses the ecosystem's profiler where one is already available in the project's environment; the offer never installs a package or changes configuration to get one.",
+            "Profiling runs only with the user's agreement and under the same rules as the rest of measurement, a flagged test inside the Runner.",
+            "What profiling shows is reported as speed-ups under the same correctness bar.",
         ),
     }
 
@@ -104,6 +117,12 @@ class TestSpeedupCommandTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(place=place, sentence=sentence[:60]):
                     self.assert_whole_sentence(sentence, text)
+
+    def test_removals_keep_no_expected_gain_order(self):
+        report = self.source("SKILL.md#2. Report")
+        removals = next(line for line in report.splitlines() if line.startswith("- **Removals**"))
+        self.assertNotIn("expected gain", removals)
+        self.assertNotIn("ordered", removals)
 
     def test_detection_hints_name_each_ecosystem(self):
         hints = next(p for p in self.source("SKILL.md#1. Static pass").split("\n\n") if p.startswith("Detection hints:"))
@@ -145,12 +164,18 @@ class TestSpeedupCommandTests(unittest.TestCase):
          "`/cc-feather:test-speedup` 檢查你指定的測試，或整個專案的測試，連同測試設定，但不含 CI pipeline 設定。"),
         ("It analyses statically first and runs nothing: each speed-up names the test or assertion that keeps verifying what it touches, speed-ups are ordered by expected gain, and weakening an assertion, adding a skip or loosening a timeout is never offered.",
          "它先做靜態分析，不執行任何東西：每條加速建議都指出由哪個測試或斷言繼續驗證它動到的行為，依預期效益排序，而且從不建議削弱斷言、加上 skip 或放寬 timeout。"),
-        ("Removing a test is offered only in a section of its own, with the covering test as evidence, for you to decide one by one.",
-         "刪除測試只列在獨立的一節，附上涵蓋相同行為的測試作為證據，由你逐條決定。"),
+        ("It also looks for inputs, data sets, iteration counts and fixtures larger than the behaviour needs, and offers a smaller one only when size is not what the test verifies, naming the test that keeps verifying every boundary the larger input reached; fewer generated property-based or fuzz cases count as weakening and are never offered.",
+         "它也會找出比行為所需更大的輸入、資料集、迭代次數與 fixture，只有在大小不是測試要驗證的對象時才建議改小，並指出由哪個測試繼續驗證較大輸入涵蓋到的每個邊界；減少產生的 property-based 或 fuzz 案例算是削弱，從不建議。"),
+        ("Removing a test is offered only in a section of its own, with the covering test as evidence or as a replacement, for you to decide one by one.",
+         "刪除測試只列在獨立的一節，附上涵蓋相同行為的測試作為證據，或以替換的形式提出，由你逐條決定。"),
+        ("A replacement describes a smaller test that verifies the same fact and lists everything else the heavy test verifies, such as wiring between components, routing or configuration loading, each with the existing test that keeps verifying it; when anything has no such test, the replacement is not offered.",
+         "替換會描述一個驗證同一事實的較小測試，並列出較重的測試還驗證的其他每件事，例如元件之間的接線、路由或設定載入，各附上繼續驗證它的既有測試；只要有一件沒有這樣的測試，就不提出這項替換。"),
         ("Another section lists existing tests that meet the Unbounded probe criteria, as information that holds nothing back.",
          "另一節列出符合 Unbounded probe 判準的既有測試，只供參考，不擋任何事。"),
         ("Then main offers to measure, stating the command, the scope and the tests it leaves out, and runs nothing until you agree; tests with resource risk are left out unless you include them, and then run inside the Runner.",
          "之後主 Agent 才提議量測，說明指令、範圍與排除的測試，經你同意才執行；有資源風險的測試預設排除，你決定納入時改在 Runner 內執行。"),
+        ("The measurement may include profiling the slowest tests the offer names, with a profiler the project's environment already has, to show where their time goes; it too runs only after you agree, and what it shows is reported as speed-ups that keep what the tests verify.",
+         "量測也可以對提議中列出的最慢測試做 profiling，使用專案環境中已有的 profiler，找出時間花在哪裡；它同樣經你同意才執行，結果以加速建議回報，同樣不削弱測試驗證的內容。"),
         ("With delegation installed, analyst does the reading.",
          "裝有分派元件時，由 analyst 負責閱讀分析。"),
         ("See [the command](../skills/test-speedup/SKILL.md).",

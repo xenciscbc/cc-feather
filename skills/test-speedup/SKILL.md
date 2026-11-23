@@ -27,11 +27,12 @@ The static pass always comes first and runs nothing. Look for:
 - fixed sleeps that can wait on an event or a condition;
 - real I/O, such as network, disk, processes or databases, that a fake can replace;
 - tests that can run in parallel;
+- inputs, data sets, iteration counts and fixtures larger than the behaviour needs, which a smaller one can verify;
 - behaviour tested again at several levels.
 
 Detection hints: Go tests run with `go test`, where `t.Parallel()`, `TestMain` and `-run`/`-count` flags matter; Python tests with pytest or unittest, where fixture scope, `conftest.py` and pytest-xdist matter; JavaScript or TypeScript tests run with pnpm, Vue included, where the vitest or jest configuration, its pool and isolation settings and the `package.json` test scripts matter.
 
-**Correctness bar.** Each speed-up names the test or assertion that keeps verifying the behaviour it touches. A speed-up keeps every assertion, test and timeout at least as strict as it is now: weakening an assertion, adding a skip or loosening a timeout is never offered. Removing a test is offered only in the Removals section, each removal naming the test that covers exactly the same behaviour as evidence, for the user to decide one by one.
+**Correctness bar.** Each speed-up names the test or assertion that keeps verifying the behaviour it touches. A speed-up keeps every assertion, test and timeout at least as strict as it is now: weakening an assertion, adding a skip or loosening a timeout is never offered. A smaller input is offered only when size is not what the test verifies. A test of performance, of a limit or boundary of size, of a race or concurrency that needs many iterations, or one that generates property-based or fuzz cases keeps its size; reducing the number of generated cases counts as weakening and is never offered. A smaller-input speed-up names the test that keeps verifying every boundary value the larger input reached. Removing a test is offered only in the Removals section, each removal either naming the test that covers exactly the same behaviour as evidence or being a replacement, for the user to decide one by one, replacements included. A replacement describes a smaller test that verifies the same fact and states that fact, then lists everything else the removed test verifies, such as wiring between components, routing or configuration loading, each item with the existing test that keeps verifying it. A replacement with any item lacking such a test is not offered. The smaller test is described in the report, not written; a picked replacement's Plan writes it before the heavy test is removed.
 
 **Existing tests with resource risk.** In a section of its own, list the existing tests that meet the criteria of an Unbounded probe in [cc-feather's glossary](../../CONTEXT.md), applied without a budget since the static pass runs nothing. Weigh each one as [the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings describes. The list is information: it holds nothing back, and the Unbounded probe term and the delegation rules for it are unchanged.
 
@@ -40,9 +41,11 @@ Detection hints: Go tests run with `go test`, where `t.Parallel()`, `TestMain` a
 The report has three sections:
 
 - **Speed-ups**, ordered by expected gain, each with its location, kind, expected gain (high, medium or low, with the reason), how correctness is kept and its risk.
-- **Removals**, each with the covering test as evidence.
+- **Removals**, each with the covering test as evidence, or, for a replacement, the smaller test it describes, the fact that test verifies and, for each other thing the removed test verifies, the test that keeps verifying it.
 - **Existing tests with resource risk**, each with its reason and weighing.
 
 ## 3. Measurement
 
 After the static report, main offers to measure and runs nothing without the user's agreement. The offer states the command, using the ecosystem's per-test timing where one exists, the scope and the tests it leaves out. Tests listed with resource risk are left out by default. Unflagged tests run with their ordinary command. A flagged test the user includes runs inside the Runner, with the memory, time and output limits the offer states. For the Runner's path and invocation, read [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s The Runner, where the path is relative to the delegation skill, and for how a contained, refused or evidence-missing result is judged, its Main's floor. After measurement, the report gives each speed-up's gain in seconds.
+
+The offer may include profiling the slowest tests to show where their time goes, with the tests to profile named in the offer. Profiling uses the ecosystem's profiler where one is already available in the project's environment; the offer never installs a package or changes configuration to get one. Profiling runs only with the user's agreement and under the same rules as the rest of measurement, a flagged test inside the Runner. What profiling shows is reported as speed-ups under the same correctness bar.

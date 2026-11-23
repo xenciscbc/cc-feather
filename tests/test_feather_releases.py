@@ -3321,7 +3321,8 @@ class StopsInConversationReleaseTests(unittest.TestCase):
     determined from the diff against v0.42.1 over `templates scripts`, and how to go back to 0.42.1; the validation
     entry records the spec and the ticket, the determination, the test runs, the reviewing version, what the tests
     cannot show and the tag, and is the file's last. The rule's own sentences are
-    tests/test_feather_stops_in_conversation.py's."""
+    tests/test_feather_stops_in_conversation.py's. Since 0.44.0 the manifest version is SmallerChecksReleaseTests', the
+    note follows the 0.44.0 note and the entry is followed only by the 0.44.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.43.0 note in order.
     UPDATES = (
@@ -3363,16 +3364,16 @@ class StopsInConversationReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_43_0(self):
-        self.assertEqual("0.43.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_stops_in_conversation_note_in_both_languages(self):
         previous = HandoffControlCharactersReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = SmallerChecksReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.43.0 note starts right after the section's opening sentence, its sentences in order, before 0.42.1's.
+            # The 0.43.0 note starts right after the 0.44.0 note, its sentences in order, before 0.42.1's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -3383,6 +3384,109 @@ class StopsInConversationReleaseTests(unittest.TestCase):
                 self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
                 self.assertEqual(note.count("`git diff v0.42.1 HEAD -- templates scripts`"), 1)
                 self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.44.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(SmallerChecksReleaseTests.ENTRY_HEADING))
+
+
+class SmallerChecksReleaseTests(unittest.TestCase):
+    """0.44.0 (docs/specs/test-speedup-smaller-checks.md; ticket 01): the manifest version is 0.44.0; the Updates note,
+    in both languages, opens the section, says what the release changes, that existing installations need the plugin
+    update and a fresh session but no setup update, determined from the diff against v0.42.1 over `templates scripts`
+    because v0.43.0 did not exist when it was written, and how to go back to 0.43.0; the validation entry records the
+    spec and the ticket, the determination with the tag it used, the way back, the test runs, the reviewing version,
+    what the tests cannot show and the tag, and is the file's last. The command's own sentences are
+    tests/test_feather_design_checks.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.44.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.44.0 makes `/cc-feather:test-speedup` also look for tests that could verify the same fact at a smaller scale: it offers a smaller input, data set, iteration count or fixture only when size is not what the test verifies, and a removal may be a replacement, a smaller test described in the report, offered only when everything else the heavy test verifies has an existing test that keeps verifying it.",
+         "The measurement offer may also profile the slowest tests, run only after you agree, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "`git diff v0.42.1 HEAD -- templates scripts` shows no change, so 0.44.0 changes no installed guidance, policy template, role definition or configuration tool, only a skill the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.43.0, reinstall the 0.43.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.44.0 讓 `/cc-feather:test-speedup` 也找出能以更小規模驗證同一事實的測試：只有在大小不是測試要驗證的對象時，才建議改用較小的輸入、資料集、迭代次數或 fixture；刪除也可以是替換，也就是報告中描述的一個較小測試，只有在較重的測試所驗證的其他每件事都有既有測試繼續驗證時才提出。",
+         "量測的提議也可以對最慢的測試做 profiling，同樣經你同意才執行，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "`git diff v0.42.1 HEAD -- templates scripts` 沒有任何差異，所以 0.44.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的一個 skill；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.43.0，重新安裝 0.43.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    FRESH_SESSION = ("existing installations need the plugin update and a fresh session",
+                     "既有安裝需要更新 plugin 再開新 session")
+    # The note's link to the reference's Design and test checks section, and the heading it resolves to.
+    LINKS = (("[Design and test checks](docs/reference.md#design-and-test-checks)", "docs/reference.md",
+              "\n## Design and test checks\n"),
+             ("[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)", "docs/reference.zh-TW.md",
+              "\n## 設計與測試檢查\n"))
+
+    # The validation entry: the spec and its ticket, the setup determination with its evidence and the tag it used, the
+    # way back, the test runs, the reviewing version, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.44.0 smaller checks in test-speedup\n"
+    ENTRY = (
+        "Implements [the smaller-checks-in-test-speedup spec](specs/test-speedup-smaller-checks.md), written on 2026-11-23 and added in ff487a2;",
+        "the spec is one ticket, one claim, implemented in the commit carrying this entry.",
+        "**No setup update is required.**",
+        "`git diff v0.42.1 HEAD -- templates scripts` prints nothing, and `git diff-tree -r --name-only v0.42.1 HEAD -- templates scripts` lists no path:",
+        "existing installations need only the plugin update and a fresh session.",
+        "The evidence uses `v0.42.1`, the latest release tag when this entry is written, because `v0.43.0` does not exist yet;",
+        "the final check at the commit to be tagged runs them again.",
+        "To go back to 0.43.0, reinstall the 0.43.0 plugin; no setup update or remove is needed.",
+        "the ticket's primary acceptance, the full `python -B -m unittest discover` suite, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "with the installed cc-feather 0.42.1's roles and procedures, not this release's candidate.",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.44.0` does not exist when this entry is written.",
+        "it is created only after `v0.43.0`, only after ticket 01 is accepted and only after the user's go-ahead.",
+        "`v0.42.1`, at c8998bd, is not moved.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_44_0(self):
+        self.assertEqual("0.44.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_smaller_checks_note_in_both_languages(self):
+        previous = StopsInConversationReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.44.0 note starts right after the section's opening sentence, its sentences in order, before 0.43.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update, fresh in zip(("README.md", "README.zh-TW.md"), self.UPDATES,
+                                                                    self.NO_SETUP_UPDATE, self.FRESH_SESSION):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count(fresh), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.42.1 HEAD -- templates scripts`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target_file, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertIn(link, note)
+                self.assertEqual(self.text(target_file).count(target), 1)
 
     def test_validation_entry_records_the_release_check_and_tag(self):
         text = self.text("docs/setup-validation.md")
