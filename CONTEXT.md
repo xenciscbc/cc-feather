@@ -188,6 +188,10 @@ _Avoid_: resource incident, memory log
 cc-feather's launcher in the delegation skill that runs one command with a memory limit for its whole process tree, a time limit and an output limit, and reports one result: passed, target failed, contained by a limit, refused or evidence missing. It refuses to start rather than run without its limits. Only processes inside its containment are limited; work handed to an already running service, or done by a tool outside the shell, is not. A Runner invocation goes through the host's normal permission handling, and the Runner is never the isolated environment the user named.
 _Avoid_: sandbox, watchdog
 
+**Unbounded run configuration**:
+A setting of how a test run is executed, in its test runner configuration, its test scripts or the flags it runs with rather than in the tests' own code, under which the whole run's peak memory or total time has no bound the configuration establishes, or a bound that does not fit the project's resource guidance. It is judged by the value in effect, a framework's default included, and a value that cannot be established counts as none. Concurrency that follows the machine's core count, a worker pool or isolation mode known to grow memory, a multiplier of the run's work, heavy instrumentation on top of uncapped concurrency and a limit switched off or absent are examples, not a closed list. An Unbounded probe concerns one test's own work; this concerns how the whole run is executed. Output volume, which the tests' code decides, and services outside the run, such as a container runtime or a database, are outside it. It is reported as information and holds nothing back.
+_Avoid_: heavy config, worker explosion
+
 ## Design checks
 
 **Over-design**:
