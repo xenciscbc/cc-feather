@@ -425,6 +425,27 @@ class GlossaryTests(unittest.TestCase):
         start = terms.index("Unbounded probe")
         self.assertEqual(terms[start:start + 3], ["Unbounded probe", "Observed resource risk", "Runner"])
 
+    def test_the_run_configuration_entry_is_defined_once_last_in_the_section(self):
+        # test-run-configuration ticket 01: the Unbounded run configuration entry follows Runner and ends the section.
+        text = (ROOT / "CONTEXT.md").read_text(encoding="utf-8")
+        self.assertEqual(text.count("**Unbounded run configuration**:"), 1)
+        section = feather_support.glossary_entries(text.split("\n## Resource-risk runs\n", 1)[1].split("\n## ", 1)[0])
+        self.assertEqual(list(section)[-2:], ["Runner", "Unbounded run configuration"])
+
+    def test_the_run_configuration_entry_carries_its_decisions(self):
+        entry = self.entries["Unbounded run configuration"]
+        for phrase in ("in its test runner configuration, its test scripts or the flags it runs with rather than in the "
+                       "tests' own code",
+                       "the whole run's peak memory or total time has no bound the configuration establishes",
+                       "It is judged by the value in effect, a framework's default included, and a value that cannot be "
+                       "established counts as none.",
+                       "are examples, not a closed list",
+                       "Output volume, which the tests' code decides, and services outside the run, such as a container "
+                       "runtime or a database, are outside it.",
+                       "It is reported as information and holds nothing back."):
+            with self.subTest(phrase=phrase[:40]):
+                self.assertIn(phrase, " ".join(entry.split()))
+
     def test_the_entries_carry_their_decisions(self):
         pins = {
             "Unbounded probe": ("whoever wrote it", "no established bound on total work or retained data",

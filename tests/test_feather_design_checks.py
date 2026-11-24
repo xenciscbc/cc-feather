@@ -7,6 +7,9 @@ and profiling in the measurement offer, and the widened removal sentences replac
 skill's rule, keeps trust-boundary checks and asks the user about old formats without evidence; the CONTEXT.md
 Over-design entry, an unchanged Unbounded probe entry, and the weighing pointed to but restated by neither command.
 Ticket 03: neither command is named by an installed policy template or role definition.
+Since 0.45.0 (docs/specs/test-run-configuration.md, ticket 01) the command also checks run configurations for each
+Unbounded run configuration, looks up defaults in a fixed order, bounds a parallel speed-up and a flagged measurement, and
+reports a fourth section; the report's section count moves from three to four.
 """
 
 from __future__ import annotations
@@ -92,9 +95,30 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "Weigh each one as [the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings describes.",
             "The list is information: it holds nothing back, and the Unbounded probe term and the delegation rules for it are unchanged.",
         ),
+        "SKILL.md#Run configurations with resource risk": (
+            "The static pass also checks the settings and run parameters within the scope that do not belong to the tests' code, above all those concerning concurrency, isolation, memory and time, for each Unbounded run configuration in [cc-feather's glossary](../../CONTEXT.md).",
+            "Each setting is judged by the value in effect, a framework's default included, and a value that cannot be established counts as none.",
+            "The scope stays as it is, so CI pipeline configuration stays outside the check.",
+            "Hints, as examples and not a closed list: concurrency that is uncapped or follows the machine's core count, such as vitest `pool` and `maxWorkers`, `go test -p` or pytest-xdist `-n auto`; a worker pool or isolation mode known to grow memory, such as vitest `vmThreads` and `vmForks`; per-worker heap settings, such as a raised Node heap limit; multipliers of the run's work, such as retries or `go test -count`; heavy instrumentation, such as `-race` or coverage, on uncapped concurrency; and a limit switched off or absent, such as a zero timeout, a test script in watch mode or a framework without a default timeout.",
+            "Weigh each flagged setting as [the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings describes.",
+        ),
+        "SKILL.md#Lookups": (
+            "Defaults and known problems of the frameworks in scope are looked up only for settings concerning concurrency, isolation, memory and time, in this order: the installed version's own files, such as its bundled documentation or type definitions, read and never run; the official documentation and changelog; the official issue tracker.",
+            "A query sent outside carries only the framework's name, its version and the setting's name.",
+            "Each conclusion names its source and the version it applies to, and what cannot be found is reported as unknown, which counts as no bound.",
+            "The static pass still runs nothing: a fact only a command shows, such as `go help testflag`'s output, is reported as unknown there, and the measurement offer may name that command, which then runs only with the user's agreement under the same rules as measurement.",
+            "The lookups follow the Who analyses split: analyst does them in its Assignments when delegation is installed and the check is not small, and main does them otherwise.",
+        ),
+        "SKILL.md#Parallel speed-ups": (
+            "A speed-up that raises concurrency states the worker count it leads to and its memory effect.",
+            "A worker count that follows the machine's core count is never offered.",
+        ),
         "SKILL.md#2. Report": (
             "**Speed-ups**, ordered by expected gain, each with its location, kind, expected gain (high, medium or low, with the reason), how correctness is kept and its risk.",
             "**Removals**, each with the covering test as evidence, or, for a replacement, the smaller test it describes, the fact that test verifies and, for each other thing the removed test verifies, the test that keeps verifying it.",
+            "**Run configurations with resource risk**, each flagged setting with its location, kind, whether it affects memory or time, why it is unbounded, its weighing and the direction of a fix.",
+            "cc-feather states no cap's number: the direction names where the number comes from, the project's or the user's resource guidance or a measured per-worker peak.",
+            "The section is information and holds nothing back.",
         ),
         "SKILL.md#3. Measurement": (
             "After the static report, main offers to measure and runs nothing without the user's agreement.",
@@ -104,6 +128,9 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "A flagged test the user includes runs inside the Runner, with the memory, time and output limits the offer states.",
             "For the Runner's path and invocation, read [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s The Runner, where the path is relative to the delegation skill, and for how a contained, refused or evidence-missing result is judged, its Main's floor.",
             "After measurement, the report gives each speed-up's gain in seconds.",
+            "When a run in the offer's scope has a flagged setting, the offer states how that run is bounded: by default a command-line override of the setting, such as `--maxWorkers=N` or `-p N`, which changes no file, with N taken in the budget order [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s The budget states, and asked of the user when no source states it; or the run inside the Runner.",
+            "When the run's configuration is flagged, the ordinary command that unflagged tests run with itself runs bounded, with the override or inside the Runner.",
+            "The offer and the report say that timings taken at a different concurrency are not comparable with the ordinary run.",
             "The offer may include profiling the slowest tests to show where their time goes, with the tests to profile named in the offer.",
             "Profiling uses the ecosystem's profiler where one is already available in the project's environment; the offer never installs a package or changes configuration to get one.",
             "Profiling runs only with the user's agreement and under the same rules as the rest of measurement, a flagged test inside the Runner.",
@@ -117,6 +144,26 @@ class TestSpeedupCommandTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(place=place, sentence=sentence[:60]):
                     self.assert_whole_sentence(sentence, text)
+
+    def test_the_report_has_four_sections(self):
+        report = self.source("SKILL.md#2. Report")
+        self.assertIn("The report has four sections:\n", report)
+        self.assertNotIn("three sections", self.source("SKILL.md"))
+        sections = [line.split("**")[1] for line in report.splitlines() if line.startswith("- **")]
+        self.assertEqual(sections, ["Speed-ups", "Removals", "Existing tests with resource risk",
+                                    "Run configurations with resource risk"])
+
+    def test_run_configuration_hints_leave_out_output_and_outside_services(self):
+        hints = self.source("SKILL.md#Run configurations with resource risk")
+        for kind in ("output volume", "container runtime", "database"):
+            with self.subTest(kind=kind):
+                self.assertNotIn(kind, hints)
+
+    def test_the_budget_order_the_measurement_points_to_exists(self):
+        runs = (SKILLS / "delegation" / "references" / "resource-risk-runs.md").read_text(encoding="utf-8")
+        execution = runs.split("\n## Execution method\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("\n- **The budget.** The budget comes, in order,", execution)
+        self.assertNotIn("The budget comes, in order,", self.source("SKILL.md"))
 
     def test_removals_keep_no_expected_gain_order(self):
         report = self.source("SKILL.md#2. Report")
@@ -172,8 +219,18 @@ class TestSpeedupCommandTests(unittest.TestCase):
          "替換會描述一個驗證同一事實的較小測試，並列出較重的測試還驗證的其他每件事，例如元件之間的接線、路由或設定載入，各附上繼續驗證它的既有測試；只要有一件沒有這樣的測試，就不提出這項替換。"),
         ("Another section lists existing tests that meet the Unbounded probe criteria, as information that holds nothing back.",
          "另一節列出符合 Unbounded probe 判準的既有測試，只供參考，不擋任何事。"),
+        ("It also checks the settings and run parameters that do not belong to the tests' code, above all those concerning concurrency, isolation, memory and time, for an Unbounded run configuration, judged by the value in effect, a framework's default included, with a value it cannot establish counting as none.",
+         "它也會檢查不屬於測試程式碼本身的設定與執行參數，尤其是與並行、隔離、記憶體和時間有關的部分，找出 Unbounded run configuration；判斷依據是實際生效的值，包括框架的預設值，無法確定的值視為沒有上限。"),
+        ("It looks up defaults and known problems in the installed version's own files, read and never run, then the official documentation and changelog, then the official issue tracker; a query sent outside carries only the framework's name, its version and the setting's name, each conclusion names its source and version, and what it cannot find is reported as unknown.",
+         "它依序查詢預設值與已知問題：先看已安裝版本自帶的檔案，只讀不執行，再看官方文件與 changelog，最後看官方 issue tracker；送到外部的查詢只帶框架名稱、版本與設定名稱，每個結論都註明來源與版本，查不到的就回報為未知。"),
+        ("A speed-up that raises concurrency states the worker count it leads to and its memory effect, and a worker count that follows the machine's core count is never offered.",
+         "提高並行度的加速建議會說明它造成的 worker 數量與對記憶體的影響，從不建議依機器核心數決定 worker 數量。"),
+        ("A fourth section lists each flagged setting with its location, kind, whether it affects memory or time, why it is unbounded, its weighing and the direction of a fix, as information that holds nothing back; cc-feather states no cap's number.",
+         "第四節列出每個被標出的設定，附上位置、種類、影響記憶體還是時間、為何沒有上限、權衡結果與修正方向，只供參考，不擋任何事；cc-feather 不提供任何上限的數字。"),
         ("Then main offers to measure, stating the command, the scope and the tests it leaves out, and runs nothing until you agree; tests with resource risk are left out unless you include them, and then run inside the Runner.",
          "之後主 Agent 才提議量測，說明指令、範圍與排除的測試，經你同意才執行；有資源風險的測試預設排除，你決定納入時改在 Runner 內執行。"),
+        ("When a run's configuration is flagged, the measurement bounds it with a command-line override that changes no file, its number taken as the budget rules take one or asked of you when no source states it, or runs it inside the Runner, and says that timings taken at a different concurrency are not comparable with your ordinary run.",
+         "執行設定被標出時，量測會用不改任何檔案的命令列覆寫來限制它，數字依預算規則取得，沒有來源說明時就問你，或改在 Runner 內執行；並說明在不同並行度下量到的時間不能和你平常的執行相比。"),
         ("The measurement may include profiling the slowest tests the offer names, with a profiler the project's environment already has, to show where their time goes; it too runs only after you agree, and what it shows is reported as speed-ups that keep what the tests verify.",
          "量測也可以對提議中列出的最慢測試做 profiling，使用專案環境中已有的 profiler，找出時間花在哪裡；它同樣經你同意才執行，結果以加速建議回報，同樣不削弱測試驗證的內容。"),
         ("With delegation installed, analyst does the reading.",

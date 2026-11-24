@@ -282,8 +282,10 @@ class GlossaryTests(unittest.TestCase):
                 self.assertEqual(self.text.count(f"**{term}**:"), 1)
         terms = list(self.entries)
         start = terms.index("Resource-risk claim")
-        self.assertEqual(terms[start:start + 5],
-                         ["Resource-risk claim", "Execution method", "Unbounded probe", "Observed resource risk", "Runner"])
+        # test-run-configuration ticket 01: Unbounded run configuration ends the section, after Runner.
+        self.assertEqual(terms[start:start + 6],
+                         ["Resource-risk claim", "Execution method", "Unbounded probe", "Observed resource risk", "Runner",
+                          "Unbounded run configuration"])
         section_text = normalised(self.text).split("\n## Resource-risk runs\n", 1)[1]
         self.assertTrue(section_text.lstrip("\n").startswith("**Resource-risk claim**:"))
 
