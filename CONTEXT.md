@@ -181,7 +181,7 @@ A new or modified test or probe, whoever wrote it, any part of which, the input 
 _Avoid_: runaway test, heavy test
 
 **Observed resource risk**:
-Main's record on a Claim of a probe a role returned or a run a limit stopped: the run and its test or probe, the reason, how it was handled, the budget and any peak the Runner observed. It does not assume that plan review missed the risk. It is kept in the Plan's Dispatch record in auto, and in off in the Active handoff when one exists and otherwise in the session's state, never in the Claim's text. Main tells the user, carries it into every later brief of that Claim for a role that may execute code, and lists it at the end of the Plan.
+Main's record on a Claim of a probe a role returned, a run a limit stopped or a run the host, the operating system or another tool stopped for lack of a resource: the run and its test or probe, the reason, how it was handled, the budget and any peak the Runner observed. It does not assume that plan review missed the risk. It is kept in the Plan's Dispatch record in auto, and in off in the Active handoff when one exists and otherwise in the session's state, never in the Claim's text. Main tells the user, carries it into every later brief of that Claim for a role that may execute code, and lists it at the end of the Plan.
 _Avoid_: resource incident, memory log
 
 **Runner**:

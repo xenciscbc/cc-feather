@@ -3406,7 +3406,8 @@ class SmallerChecksReleaseTests(unittest.TestCase):
     because v0.43.0 did not exist when it was written, and how to go back to 0.43.0; the validation entry records the
     spec and the ticket, the determination with the tag it used, the way back, the test runs, the reviewing version,
     what the tests cannot show and the tag, and is the file's last. The command's own sentences are
-    tests/test_feather_design_checks.py's."""
+    tests/test_feather_design_checks.py's. Since 0.45.0 the manifest version is RunConfigurationsReleaseTests', the
+    note follows the 0.45.0 note and the entry is followed only by the 0.45.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.44.0 note in order.
     UPDATES = (
@@ -3458,16 +3459,16 @@ class SmallerChecksReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_44_0(self):
-        self.assertEqual("0.44.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_smaller_checks_note_in_both_languages(self):
         previous = StopsInConversationReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = RunConfigurationsReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.44.0 note starts right after the section's opening sentence, its sentences in order, before 0.43.0's.
+            # The 0.44.0 note starts right after the 0.45.0 note, its sentences in order, before 0.43.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -3496,6 +3497,132 @@ class SmallerChecksReleaseTests(unittest.TestCase):
             with self.subTest(sentence=sentence[:40]):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.45.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(RunConfigurationsReleaseTests.ENTRY_HEADING))
+
+
+class RunConfigurationsReleaseTests(unittest.TestCase):
+    """0.45.0 (docs/specs/test-run-configuration.md; tickets 01 and 02): the manifest version is 0.45.0; the Updates
+    note, in both languages, opens the section, says what both tickets change, that the verifier, adversary, executor
+    and security-executor role definitions changed so existing installations need the plugin update, then setup update
+    in every scope where delegation is installed, then a fresh session, that `check` reports those roles from an older
+    template until then, and how to go back to 0.44.0; the validation entry records the spec and the tickets, the setup
+    update observed in a scratch installation of 0.44.0 with what `check` reported before and after, the way back, the
+    test runs, what the tests cannot show and the tag, and is the file's last. The rules' own sentences are
+    tests/test_feather_design_checks.py's and tests/test_feather_resource_floor.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.45.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.45.0 makes `/cc-feather:test-speedup` also check the settings and run parameters that do not belong to the tests' code, above all those concerning concurrency, isolation, memory and time, judged by the value in effect, a framework's default included, and report each Unbounded run configuration in a fourth section, Run configurations with resource risk; it looks up defaults in the installed version's files, then the official documentation and changelog, then the official issue tracker, and reports what it cannot find as unknown.",
+         "A speed-up that raises concurrency states the worker count it leads to and its memory effect, and measurement bounds a flagged run with a command-line override that changes no file, or runs it inside the Runner, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "A test run that the host, the operating system or another tool stops for lack of memory or another resource is now reported as not completed, never as a failure, and is not run again without your agreement; a final check stopped that way counts as a final check that was not run, as [Resource limits](docs/reference.md#resource-limits) describes.",
+         "It changes the verifier, adversary, executor and security-executor role definitions, so existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` reports that those roles are from an older template.",
+         "To go back to 0.44.0, reinstall the 0.44.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session; no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.45.0 讓 `/cc-feather:test-speedup` 也檢查不屬於測試程式碼本身的設定與執行參數，尤其是與並行、隔離、記憶體和時間有關的部分，依實際生效的值判斷（包括框架的預設值），並把每個 Unbounded run configuration 列在第四節「有資源風險的執行設定」；它依序查詢已安裝版本的檔案、官方文件與 changelog、官方 issue tracker，查不到的就回報為未知。",
+         "提高並行度的加速建議會說明它造成的 worker 數量與對記憶體的影響；量測會用不改任何檔案的命令列覆寫限制被標出的執行，或改在 Runner 內執行，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "主機、作業系統或其他工具因記憶體或其他資源不足而停下的測試執行，現在回報為未完成，絕不算失敗，沒有你的同意不會再跑；這樣停下的 final check 算是沒有執行的 final check，詳見[資源限制](docs/reference.zh-TW.md#資源限制)。",
+         "它改了 verifier、adversary、executor 與 security-executor 的角色定義，所以既有安裝要先更新 plugin，再於每個裝有分派元件的範圍執行 `/cc-feather:setup update`，然後開新 session；在那之前，check 會回報這些角色來自較舊的範本。",
+         "要回到 0.44.0，重新安裝 0.44.0 的 plugin，並在每個裝有分派元件的範圍執行 `/cc-feather:setup update`，再開新 session；不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # The role definitions this release changes (`git diff --name-only v0.44.0 -- templates`), and those it does not.
+    CHANGED_ROLES = ("verifier", "adversary", "executor", "security-executor")
+    UNCHANGED_ROLES = ("analyst", "reviewer", "scout", "mech-executor", "Explore")
+    # The note's links to the reference sections, and the headings they resolve to.
+    LINKS = (
+        (("[Design and test checks](docs/reference.md#design-and-test-checks)", "docs/reference.md",
+          "\n## Design and test checks\n"),
+         ("[Resource limits](docs/reference.md#resource-limits)", "docs/reference.md", "\n### Resource limits\n")),
+        (("[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)", "docs/reference.zh-TW.md", "\n## 設計與測試檢查\n"),
+         ("[資源限制](docs/reference.zh-TW.md#資源限制)", "docs/reference.zh-TW.md", "\n### 資源限制\n")),
+    )
+
+    # The validation entry: the spec and its tickets, the setup update with its scratch evidence before and after, the
+    # way back, the test runs, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.45.0 run configurations in test-speedup\n"
+    ENTRY = (
+        "Implements [the run-configurations-in-test-speedup spec](specs/test-run-configuration.md), written on 2026-11-24, added in e754757 and revised in 47e07b0 and ccef99c;",
+        "ticket 01, run configurations in test-speedup, in 8aeab29, and ticket 02, runs stopped from outside and this release, in the commit carrying this entry.",
+        "The 0.44.0 release tests now follow the 0.45.0 note and entry.",
+        "**Setup update is required.**",
+        "This release changes the verifier, adversary, executor and security-executor role definition templates under `templates/agents/`, the only files under `templates/`, `skills/setup/` or `scripts/` that changed since v0.44.0,",
+        "Existing installations need the plugin update, then `/cc-feather:setup update` in every scope where delegation is installed, then a fresh session; until then `check` reports that those roles are from an older template.",
+        "A setup update brought a scratch installation of 0.44.0 under `J:\\gotmp\\cc-feather-0450-setup` to the new templates for the four roles:",
+        "before the update, this release's `check` reported `role_update_required: true` and warned that executor, security-executor, verifier and adversary are each from an older template, and named no other role;",
+        "after it, `check` reported `role_update_required: false` with no warning.",
+        "To go back to 0.44.0, reinstall the 0.44.0 plugin and run `/cc-feather:setup update` in every scope where delegation is installed, then start a fresh session; no remove is needed, since 0.45.0 changes no configuration tool or state.",
+        "the scratch directory was removed afterwards.",
+        "the ticket's primary acceptance, `python -B -m unittest` over the 23 modules it names, ran",
+        "`python -B -m unittest discover -s tests -t .`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.45.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 and 02 are accepted and only after the user's go-ahead.",
+        "`v0.44.0`, at 916ee74, is not moved.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_45_0(self):
+        self.assertEqual("0.45.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_run_configurations_note_in_both_languages(self):
+        previous = SmallerChecksReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.45.0 note starts right after the section's opening sentence, its sentences in order, before 0.44.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_require_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # Setup update after the plugin update and for going back, never said not to be needed, and no remove.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                self.assertNotIn(no_update, note)
+                self.assertNotIn("need only the plugin update", note)
+                self.assertNotIn("只要更新 plugin", note)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_names_every_role_definition_the_release_changes(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            for role in self.CHANGED_ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertIn(role, note)
+            for role in self.UNCHANGED_ROLES:
+                with self.subTest(readme=name, unchanged=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_resolve_and_state_no_budget(self):
+        for name, (heading, _, *sentences), links in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            for link, target_file, target in links:
+                with self.subTest(readme=name, link=link):
+                    self.assertIn(link, note)
+                    self.assertEqual(self.text(target_file).count(target), 1)
+            with self.subTest(readme=name, numbers=True):
+                self.assertIsNone(ResourceRiskRunsReleaseTests.NUMBERS.search(note))
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
         self.assertNotIn(".scratch", entry)
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))

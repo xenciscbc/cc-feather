@@ -1,7 +1,8 @@
 """Resource-risk runs ticket 03 (docs/specs/resource-risk-runs.md, Acceptance items 3 where a record is kept, 5 for the
 floor, 7 without its last sentence, 8, 10, 11, 13 for the Unbounded probe, Observed resource risk and Runner entries, and
-17): the floor paragraph each of the verifier, adversary, executor and security-executor definitions carries, and its
-absence from the other roles; the resource-risk runs reference that owns main's side (the Runner path and limits in a
+17), widened by test-run-configuration ticket 02 (docs/specs/test-run-configuration.md) for a run the host, the
+operating system or another tool stops: the floor paragraph each of the verifier, adversary, executor and
+security-executor definitions carries, and its absence from the other roles; the resource-risk runs reference that owns main's side (the Runner path and limits in a
 brief, main's floor, the Observed resource risk record, the Runner's boundary and the permission notes); the pointers
 ADR 0017 requires from review state's Execution and Dispatch record, the outcome-verification and Adversarial review
 procedures and the delegation skill's dispatch steps; and the three CONTEXT.md entries. These tests pin the shipped
@@ -42,6 +43,9 @@ BODY = (
     "refused, or whose evidence is missing, is inconclusive evidence judged from the Runner's result, not from the "
     "target's exit code; a non-zero exit with no limit event is a failure, and results established independently of "
     "that run stand. "
+    # test-run-configuration ticket 02: a run stopped from outside, which the outcome sentence then covers.
+    "A run the host, the operating system or another tool stops for lack of memory or another resource is inconclusive "
+    "evidence, not a failure, and is not run again. "
 )
 OUTCOME = {
     "verifier": "Report what a returned probe or a stopped run leaves undecided as INCONCLUSIVE. ",
@@ -50,7 +54,7 @@ OUTCOME = {
     "executor": "Report the task partial or blocked for what a returned probe or a stopped run leaves undecided. ",
     "security-executor": "Report the task partial or blocked for what a returned probe or a stopped run leaves undecided. ",
 }
-REPORT = "Your report names every probe you returned and every run a limit stopped, with the reason."
+REPORT = "Your report names every probe you returned and every run a limit or the host stopped, with the reason."
 # resource-risk-runs ticket 04: the Resource-risk claim sentences follow the opening, with the role's own words for an
 # insufficient Execution method (tests/test_feather_resource_method.py pins their decisions).
 METHOD = (
@@ -166,6 +170,8 @@ class RoleFloorTests(unittest.TestCase):
             "Never raise a limit and rerun.",
             "For each bounded probe you write and run against a budget, state its estimated peak memory and time and the "
             "basis of the estimate.",
+            "A run the host, the operating system or another tool stops for lack of memory or another resource is "
+            "inconclusive evidence, not a failure, and is not run again.",
             REPORT,
         ):
             with self.subTest(sentence=sentence[:50]):
@@ -267,7 +273,9 @@ class ReferenceTests(unittest.TestCase):
     def test_mains_floor_follows_execution_and_binds_reruns_and_reproductions(self):
         floor = section(reference(), "Main's floor")
         for sentence in (
-            "The floor follows execution, not authorship: it covers a new or modified test or probe whoever wrote it.",
+            # test-run-configuration ticket 02 widens it to the bullet that covers every test run main makes.
+            "The floor follows execution, not authorship: it covers a new or modified test or probe whoever wrote it, "
+            "and its bullet A run stopped from outside covers every test run main makes.",
             "It binds main when main runs a test or probe a role returned and when main reproduces a failure a role "
             "reported.",
         ):
@@ -294,14 +302,40 @@ class ReferenceTests(unittest.TestCase):
         self.assertIn("judged from the Runner's result, not from the target's exit code; a non-zero exit with no limit "
                       "event is a failure, and results established independently of that run stand.", judging)
 
+    def test_a_run_stopped_from_outside_is_not_completed_and_not_run_again(self):
+        # test-run-configuration ticket 02: every test run main makes, the final check included.
+        floor = section(reference(), "Main's floor")
+        labels = [line.split("**")[1] for line in floor.splitlines() if line.startswith("- **")]
+        self.assertEqual(labels, ["What is unbounded.", "A returned probe.", "A Resource-risk claim.", "Judging the run.",
+                                  "A run stopped from outside."])
+        stopped = bullet(floor, "A run stopped from outside")
+        for sentence in (
+            "This bullet applies to every test run main makes, the final check, acceptance checks, reruns, reproductions "
+            "and test-speedup's measurement included, not only to a new or modified test or probe.",
+            "A run the host, the operating system or another tool stops for lack of memory or another resource is "
+            "inconclusive evidence judged from what stopped it, not from its exit code.",
+            "Main reports it as not completed, never as a failure, tells the user what stopped it and does not run it "
+            "again without the user's agreement.",
+            "A final check stopped that way did not complete and counts as a final check that was not run: it is not a "
+            "run that passed or failed, so in auto main records it in the Plan's dispatch record as stopped from "
+            "outside, with what stopped it, never as a failed run, and a later run at the same commit can still pass.",
+            "The rule that a workspace change after a run makes it a failed run is unchanged.",
+            "During a Claim, main records it as an Observed resource risk.",
+        ):
+            with self.subTest(sentence=sentence[:50]):
+                self.assert_whole_sentence(sentence, stopped)
+
     def test_the_observed_resource_risk_record(self):
         record = section(reference(), "Observed resource risk")
         pins = {
             "Recording it": (
-                "When a role's report names a probe it returned or a run a limit stopped, or a run of main's own stops "
-                "on a limit, main records an Observed resource risk on that Claim.",
+                # test-run-configuration ticket 02 adds a run stopped from outside.
+                "When a role's report names a probe it returned, a run a limit stopped or a run the host, the operating "
+                "system or another tool stopped for lack of a resource, or a run of main's own stops on a limit or is "
+                "stopped that way, main records an Observed resource risk on that Claim.",
                 "It names the run and its test or probe, the reason, how it was handled (returned, redesigned, run "
-                "within a budget, stopped by a limit), the budget and any peak the Runner observed.",
+                "within a budget, stopped by a limit, stopped from outside), the budget and any peak the Runner "
+                "observed.",
                 "The record does not assume that plan review missed the risk: a probe invented during execution, or a "
                 "run in off, had no plan review to miss it.",
             ),
@@ -351,11 +385,20 @@ class PointerTests(unittest.TestCase):
             f"the resource-risk runs reference states: {READ_REFERENCE}", record)
 
     def test_execution_points_to_mains_floor(self):
+        # test-run-configuration ticket 02 widens it to main's own test runs, the final check included.
         self.assert_whole_sentence(
-            "Main's floor for running a test or probe a role returned or reproducing a failure a role reported, the "
-            "Runner path and limits a brief needs, and a claim's execution conditions, its approved Execution method "
+            "Main's floor for main's own test runs, the final check included, for running a test or probe a role "
+            "returned and for reproducing a failure a role reported, the Runner path and limits a brief needs, and a claim's execution conditions, its approved Execution method "
             "included, are main's side of resource-risk runs: " + READ_REFERENCE,
             bullet(self.text("review-state.md"), "Execution"))
+
+    def test_the_final_check_points_a_run_stopped_from_outside_to_mains_floor(self):
+        # test-run-configuration ticket 02: the pointer carries no condition of the rule.
+        final = bullet(self.text("review-state.md"), "Final check")
+        sentence = ("A final check run stopped from outside is judged as the resource-risk runs reference's Main's floor "
+                    "states: " + READ_REFERENCE)
+        self.assert_whole_sentence(sentence, final)
+        self.assertEqual(final.count("stopped from outside"), 1)
 
     def test_the_procedures_point_to_the_reference(self):
         brief = ("For the Runner path and limits the brief needs and the claim's execution conditions it carries, its "
@@ -364,11 +407,11 @@ class PointerTests(unittest.TestCase):
             ("outcome-verification.md", "2. "): brief,
             ("outcome-verification.md", "4. "): (
                 "Main reproduces a failure, and runs a probe the verifier returned, only within its own floor, and "
-                "records a probe the verifier returned or a run a limit stopped: " + READ_REFERENCE),
+                "records a probe the verifier returned or a run a limit or the host stopped: " + READ_REFERENCE),
             ("adversarial-review.md", "2. "): brief,
             ("adversarial-review.md", "6. "): (
                 "Main reproduces a BROKEN, and runs a probe the adversary returned, only within its own floor, and "
-                "records a probe the adversary returned or a run a limit stopped: " + READ_REFERENCE),
+                "records a probe the adversary returned or a run a limit or the host stopped: " + READ_REFERENCE),
         }
         for (path, step), sentence in pins.items():
             lines = [line for line in self.text(path).splitlines() if line.startswith(step)]
@@ -382,14 +425,17 @@ class PointerTests(unittest.TestCase):
         self.assert_whole_sentence(
             "For the Runner path and limits a brief of a role that may execute code needs, the claim's execution "
             "conditions it carries, its approved Execution method and Observed resource risks included, and a probe a "
-            "role returned or a run a limit stopped, read the "
+            "role returned or a run a limit or the host stopped, read the "
             f"{SKILL_LINK} and follow it.", dispatch)
 
     def test_the_rules_are_stated_only_in_the_reference(self):
         # ADR 0017: the pointers carry no condition of the rules they point to.
         owned = ("never with a timeout alone", "does not assume that plan review missed the risk",
                  "Only processes inside the Runner's containment are limited", "needs the user's agreement",
-                 "allows every Runner invocation", "in its next reply")
+                 "allows every Runner invocation", "in its next reply",
+                 # test-run-configuration ticket 02: the stopped-run rule's own phrases.
+                 "judged from what stopped it", "never as a failed run", "a later run at the same commit can still pass",
+                 "does not run it again without the user's agreement")
         for path in sorted(DELEGATION.rglob("*.md")):
             text = normalised(path.read_text(encoding="utf-8"))
             for phrase in owned:
@@ -405,8 +451,9 @@ class PointerTests(unittest.TestCase):
                 found += 1
         # resource-risk-runs ticket 04 adds plan review's pointer; resource-risk-confirmation ticket 01 adds plan
         # review's step 2 and step 5 pointers and the Dispatch record's pointer for decisions on proposed marks; final
-        # check reuse and Auto land ticket 02 adds review state's Final check scope pointer to the scope question.
-        self.assertEqual(found, 12)
+        # check reuse and Auto land ticket 02 adds review state's Final check scope pointer to the scope question;
+        # test-run-configuration ticket 02 adds review state's Final check pointer for a run stopped from outside.
+        self.assertEqual(found, 13)
 
 
 class GlossaryTests(unittest.TestCase):
@@ -451,7 +498,10 @@ class GlossaryTests(unittest.TestCase):
             "Unbounded probe": ("whoever wrote it", "no established bound on total work or retained data",
                                 "An unknown bound counts as none, and a bounded input size, a bounded outer loop or a "
                                 "timeout alone is not a bound.", "never with a timeout alone"),
-            "Observed resource risk": ("It does not assume that plan review missed the risk.",
+            # test-run-configuration ticket 02 widens it to a run stopped from outside.
+            "Observed resource risk": ("a probe a role returned, a run a limit stopped or a run the host, the operating "
+                                       "system or another tool stopped for lack of a resource",
+                                       "It does not assume that plan review missed the risk.",
                                        "never in the Claim's text", "lists it at the end of the Plan"),
             "Runner": ("a memory limit for its whole process tree", "Only processes inside its containment are limited",
                        "never the isolated environment the user named"),
@@ -460,6 +510,44 @@ class GlossaryTests(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(term=term, phrase=phrase[:40]):
                     self.assertIn(phrase, self.entries[term])
+
+
+class ReferenceDocumentTests(unittest.TestCase):
+    """test-run-configuration ticket 02: both reference documents' resource-limits section states the stopped-run rule in
+    its floor item and names a run the host stopped in its Observed resource risk item, paired by language. The release
+    tests' number check (ResourceRiskRunsReleaseTests.NUMBERS) scans the same section."""
+
+    PAIRS = (
+        ("docs/reference.md", "\n### Resource limits\n", (
+            ("3. **A floor for every run:**",
+             "A test run that the host, the operating system or another tool stops for lack of memory or another "
+             "resource, main's final check and its other runs included, is reported as not completed, never as a "
+             "failure, and is not run again without your agreement; a final check stopped that way counts as a final "
+             "check that was not run."),
+            ("4. **What happened is recorded:**",
+             "a returned probe, a run a limit stopped or a run the host stopped becomes an Observed resource risk on "
+             "the claim;"),
+        )),
+        ("docs/reference.zh-TW.md", "\n### 資源限制\n", (
+            ("3. **每次執行都有底線：**",
+             "主機、作業系統或其他工具因記憶體或其他資源不足而停下的測試執行（包括主 Agent 的 final check 與它的其他執行），"
+             "會回報為未完成，絕不算失敗，沒有你的同意不會再跑；這樣停下的 final check 算是沒有執行的 final check。"),
+            ("4. **記錄發生的事：**",
+             "交回的 probe、被限制停下的執行與被主機停下的執行，會在該 claim 記為 Observed resource risk；"),
+        )),
+    )
+
+    def test_the_resource_limits_items_state_the_stopped_run_rule_in_both_languages(self):
+        for name, heading, items in self.PAIRS:
+            text = normalised((ROOT / name).read_text(encoding="utf-8"))
+            resource_limits = text.split(heading, 1)[1].split("\n### ", 1)[0]
+            for item, sentence in items:
+                lines = [line for line in resource_limits.splitlines() if line.startswith(item)]
+                with self.subTest(document=name, item=item):
+                    self.assertEqual(len(lines), 1)
+                    self.assertEqual(lines[0].count(sentence), 1)
+                    # No option flag, which the release tests' number check also scans for.
+                    self.assertNotRegex(sentence, r"(?:^|\s)--?[A-Za-z]")
 
 
 if __name__ == "__main__":
