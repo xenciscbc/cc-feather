@@ -1,8 +1,10 @@
 """Renew a Checkout lease and take one over (checkout leases ticket 03).
 
-The lease tool runs as a subprocess against temporary real Git repositories with real linked worktrees, and only its
-JSON result and exit status are asserted, with the fixture of tests/test_leases_tool.py and the lock helpers of
-tests/test_leases_locks.py. Locks are set and read with `git worktree lock --reason` and `git worktree list
+The lease tool runs against temporary real Git repositories with real linked worktrees, with the fixture of
+tests/test_leases_tool.py and the lock helpers of tests/test_leases_locks.py. For single calls it runs in the test
+process through its entry point, `feather_leases.cli.main()`, with only its JSON result and exit code asserted and
+no internal state; it runs as a subprocess for races, concurrent readers, the environment it sees and the
+launcher. Locks are set and read with `git worktree lock --reason` and `git worktree list
 --porcelain -z`, using Claude Code's observed reason formats; Claude Code itself is not driven. Old activity times and
 critical-section locks left by a crashed operation are synthetic edits and files written by the tests. The
 concurrent-reader case, on Windows only, holds a lease open from the test process for a fraction of a second.

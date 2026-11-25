@@ -1,13 +1,16 @@
 """Acquire, release and list a Checkout lease (checkout leases ticket 01).
 
-The lease tool runs as a subprocess against temporary real Git repositories with real linked worktrees, and only its
-JSON result and exit status are asserted. The fixture and its isolated Git environment are those of
+The lease tool runs against temporary real Git repositories with real linked worktrees. For single calls it runs in
+the test process through its entry point, `feather_leases.cli.main()`, given the argument list a subprocess gets, with
+only its JSON result and exit code asserted and no internal state; it runs as a subprocess for races, concurrent
+readers, the environment it sees and the launcher. The fixture and its isolated Git environment are those of
 tests/test_handoff_shared_store.py: a base made with mkdtemp under FEATHER_LINK_TEST_DIR when set, holding main/ with
 one commit and linked worktrees wt1 and wt2 beside it (outside .claude/worktrees/), synthetic data only, removed on
 cleanup. Pre-created leases and critical-section locks are synthetic files written by the tests. The concurrency case
 starts two tool processes a fixed number of times, each with its own timeout. The concurrent-reader case, on Windows
 only, holds a lease and its critical section's lock open from the test process for a fraction of a second."""
 from datetime import datetime, timedelta, timezone
+import io
 import json
 import os
 from pathlib import Path
@@ -15,10 +18,18 @@ import subprocess
 import sys
 import time
 import unittest
+from unittest import mock
 
 from tests.test_handoff_shared_store import FIELDS, MARKER, ROOT, SharedBase
 
-TOOL = ROOT / "skills/leases/scripts/leases.py"
+LEASE_SCRIPTS = ROOT / "skills/leases/scripts"
+if str(LEASE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(LEASE_SCRIPTS))
+
+from feather_handoff import storage  # noqa: E402
+from feather_leases import cli  # noqa: E402
+
+TOOL = LEASE_SCRIPTS / "leases.py"
 HANDOFF_TOOL = ROOT / "skills/handoff/scripts/handoff.py"
 SKILL = ROOT / "skills/leases/SKILL.md"
 MAIN_KEY = ".main"
@@ -46,11 +57,34 @@ class LeaseBase(SharedBase):
         return [sys.executable, "-B", str(TOOL), "--project", str(project), *(["--exact-root"] if exact else []),
                 *args]
 
-    def lease(self, project: Path, *args, expected=0, exact=False, env=None) -> dict:
+    def lease(self, project: Path, *args, expected=0, exact=False, env=None, process=False) -> dict:
+        """The tool's JSON result, its exit code asserted. Given an env, or asked for a process, the tool is started
+        as a subprocess; otherwise its entry point runs in this process."""
+        if env is None and not process:
+            return self.lease_in_process(project, *args, expected=expected, exact=exact)
         result = subprocess.run(self.command(project, *args, exact=exact), capture_output=True, text=True,
                                 encoding="utf-8", timeout=TIMEOUT, env=env)
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout)
+
+    def lease_in_process(self, project: Path, *args, expected=0, exact=False) -> dict:
+        """`feather_leases.cli.main()` with the argument list a subprocess gets from its tool path on, standard output
+        captured as UTF-8 bytes and read as the subprocess helper reads it, and no registered root before or after,
+        as for a fresh tool process."""
+        stdout = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        stderr = io.StringIO()
+        storage.reset_roots()
+        try:
+            with mock.patch.object(sys, "argv", self.command(project, *args, exact=exact)[2:]), \
+                    mock.patch.object(sys, "stdout", stdout), mock.patch.object(sys, "stderr", stderr):
+                code = cli.main()
+            stdout.flush()
+        finally:
+            storage.reset_roots()
+        # The subprocess helper reads its output as UTF-8 text with universal newlines.
+        output = io.TextIOWrapper(io.BytesIO(stdout.buffer.getvalue()), encoding="utf-8").read()
+        self.assertEqual(code, expected, output + stderr.getvalue())
+        return json.loads(output)
 
     def acquire(self, project: Path, checkout: Path, *, session="session-a", purpose="ticket 01", expected=0,
                 exact=False) -> dict:
@@ -384,5 +418,5 @@ class PackagingTest(LeaseBase):
         self.assertIn("${CLAUDE_PLUGIN_ROOT}/skills/leases/scripts/leases.py", text)
 
     def test_a_usage_error_is_json(self):
-        refused = self.lease(self.main, "acquire", "--session", "s", expected=2)
+        refused = self.lease(self.main, "acquire", "--session", "s", expected=2, process=True)
         self.assertEqual((refused["status"], refused["code"]), ("error", "usage"), refused)

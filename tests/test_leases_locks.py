@@ -1,7 +1,9 @@
 """Protect a held Checkout lease with a Git worktree lock (checkout leases ticket 02).
 
-The lease tool runs as a subprocess against temporary real Git repositories with real linked worktrees, and only its
-JSON result and exit status are asserted, with the fixture of tests/test_leases_tool.py. Locks are set and read with
+The lease tool runs against temporary real Git repositories with real linked worktrees, with the fixture of
+tests/test_leases_tool.py. For single calls it runs in the test process through its entry point,
+`feather_leases.cli.main()`, with only its JSON result and exit code asserted and no internal state; it runs as a
+subprocess for races, concurrent readers, the environment it sees and the launcher. Locks are set and read with
 `git worktree lock --reason` and `git worktree list --porcelain -z`, using Claude Code's observed reason formats
 (`claude session <name> (pid N)`, `claude agent <id> (pid N)`); Claude Code itself is not driven. One case denies the
 current user write access to one worktree's administration directory for the duration of one acquire (icacls on
