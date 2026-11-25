@@ -12,6 +12,7 @@ only, holds a lease and its critical section's lock open from the test process f
 from datetime import datetime, timedelta, timezone
 import io
 import json
+import locale
 import os
 from pathlib import Path
 import subprocess
@@ -67,11 +68,23 @@ class LeaseBase(SharedBase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return json.loads(result.stdout)
 
+    @staticmethod
+    def child_stdout_encoding() -> str:
+        """The encoding a tool process started like the subprocess helper starts it gives its piped standard output
+        before the tool reconfigures it: PYTHONIOENCODING's encoding when set, UTF-8 in UTF-8 mode, else the
+        locale's."""
+        configured = os.environ.get("PYTHONIOENCODING", "").partition(":")[0]
+        if configured:
+            return configured
+        if os.environ.get("PYTHONUTF8") == "1":
+            return "utf-8"
+        return locale.getpreferredencoding(False)
+
     def lease_in_process(self, project: Path, *args, expected=0, exact=False) -> dict:
         """`feather_leases.cli.main()` with the argument list a subprocess gets from its tool path on, standard output
-        captured as UTF-8 bytes and read as the subprocess helper reads it, and no registered root before or after,
-        as for a fresh tool process."""
-        stdout = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
+        starting in the encoding a tool process would get (so the tool's own switch to UTF-8 is still needed) and read
+        as the subprocess helper reads it, and no registered root before or after, as for a fresh tool process."""
+        stdout = io.TextIOWrapper(io.BytesIO(), encoding=self.child_stdout_encoding())
         stderr = io.StringIO()
         storage.reset_roots()
         try:
