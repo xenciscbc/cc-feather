@@ -3648,7 +3648,8 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
     `git archive HEAD` and what `check` and `review` reported before and after, the unchanged scope without a saved
     setting, the way back, the test runs, what the tests cannot
     show and the tag, and is the file's last. The rules' own sentences are tests/test_feather_declared_suites.py's and
-    tests/test_feather_related_tests.py's."""
+    tests/test_feather_related_tests.py's. Since 0.47.0 the manifest version is TestDesignReleaseTests', the note
+    follows the 0.47.0 note and the entry is followed only by the 0.47.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.46.0 note in order.
     UPDATES = (
@@ -3709,16 +3710,16 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_46_0(self):
-        self.assertEqual("0.46.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_declared_suites_note_in_both_languages(self):
         previous = RunConfigurationsReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = TestDesignReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.46.0 note starts right after the section's opening sentence, its sentences in order, before 0.45.0's.
+            # The 0.46.0 note starts right after the 0.47.0 note, its sentences in order, before 0.45.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_require_setup_update_only_where_saved_on_in_both_languages(self):
@@ -3763,6 +3764,134 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
         # the template sentence is quoted as it now stands, with the catalogue's path.
         self.assertNotIn("git archive b9733cb", entry)
         self.assertNotIn("has a tracked Test suite catalogue", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.47.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(TestDesignReleaseTests.ENTRY_HEADING))
+
+
+class TestDesignReleaseTests(unittest.TestCase):
+    """0.47.0 (docs/specs/test-design.md; tickets 01 to 03): the manifest version is 0.47.0; the Updates note, in both
+    languages, opens the section, says that the release adds `/cc-feather:test-design`, that `test-speedup` gains
+    checks, that existing installations need the plugin update and a fresh session but no setup update, determined
+    from the diff against v0.46.0 over `templates skills/setup scripts`, and how to go back to 0.46.0; the validation
+    entry records the spec and the tickets, the determination with its evidence, that the setup document changes only
+    its count of packaged skills, that `test-speedup` gains checks, the way back, the full suite, the live run of the
+    command in a copy of the working tree with what it showed and that it wrote nothing, the reviewing version, what
+    the tests cannot show and the tag, and is the file's last. The command's and the shared test criteria's own
+    sentences are tests/test_feather_design_checks.py's; the packaged skill count is InstallDocumentTests'."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.47.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.47.0 adds `/cc-feather:test-design`, a command only you can run that proposes the tests the proposal just discussed, or a spec, ticket or existing feature you name, needs: each proposed test names the defect it would catch that no other test catches and uses the smallest input and the fewest runs that still catch it, and the command changes and runs nothing, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "`/cc-feather:test-speedup` gains checks: its static pass also checks the further criteria in the shared test criteria, each where its condition holds, such as a frontend test that needs no DOM running without a DOM environment, a test server binding port 0, a wait with a timeout, collected output with a limit, failure paths that clean up and a fixed sleep replaced by an event or condition wait.",
+         "`git diff v0.46.0 HEAD -- templates skills/setup scripts` shows no change, so 0.47.0 changes no installed guidance, policy template, role definition or configuration tool, only skills the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.46.0, reinstall the 0.46.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.47.0 新增 `/cc-feather:test-design`，一個只能由你執行的指令，為剛才討論的提案，或你指定的 spec、ticket 或既有功能，提出需要的測試：每個建議的測試都指出它能抓到、而其他測試抓不到的缺陷，並使用仍能抓到它的最小輸入與最少執行次數；這個指令不改也不執行任何東西，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "`/cc-feather:test-speedup` 增加了檢查：它的靜態分析也會在條件成立時檢查共用測試準則中的其他準則，例如不需要 DOM 的前端測試不使用 DOM 環境、測試用的 server 綁定 port 0、等待設有 timeout、收集的輸出有上限、失敗路徑會清理，以及固定的 sleep 改為等待事件或條件。",
+         "`git diff v0.46.0 HEAD -- templates skills/setup scripts` 沒有任何差異，所以 0.47.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.46.0，重新安裝 0.46.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    FRESH_SESSION = SmallerChecksReleaseTests.FRESH_SESSION
+    # The release changes no role definition (`git diff-tree -r --name-only v0.46.0 HEAD -- templates skills/setup
+    # scripts` lists no path), so the note names none.
+    ROLES = ("verifier", "adversary", "executor", "security-executor", "analyst", "reviewer", "scout", "Explore")
+    # The note's link to the reference's Design and test checks section, and the heading it resolves to.
+    LINKS = SmallerChecksReleaseTests.LINKS
+
+    # The validation entry: the spec and its tickets, the setup determination with its evidence, the setup document's
+    # skill count, test-speedup's checks, the way back, the full suite, the live run, the reviewing version, what the
+    # tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.47.0 test design\n"
+    ENTRY = (
+        "Implements [the test-design spec](specs/test-design.md), written on 2026-11-25, added in 588fe62 and revised in 2cc7187;",
+        "ticket 01, Shared test criteria and test-speedup's new checks, in 60a74f8, ticket 02, The /cc-feather:test-design command and its guideline reference, in 0aa9aa4, and ticket 03, Documents and the 0.47.0 release, in the commit carrying this entry.",
+        "`test-speedup` gains checks:",
+        "its static pass also checks the further criteria there, each where its condition holds:",
+        "The plugin now packages twenty-two skills, and the 0.46.0 release tests now follow the 0.47.0 note and entry.",
+        "**No setup update is required.**",
+        "`git diff v0.46.0 HEAD -- templates skills/setup scripts` prints nothing, and `git diff-tree -r --name-only v0.46.0 HEAD -- templates skills/setup scripts` lists no path:",
+        "existing installations need only the plugin update and a fresh session.",
+        "The setup document changes only its count of packaged skills, from twenty-one to twenty-two, and no procedure.",
+        "To go back to 0.46.0, reinstall the 0.46.0 plugin; no setup update or remove is needed.",
+        "`python -B -m unittest discover -s tests -t .`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "with `--plugin-dir` naming the copy, `--max-turns 40` and a 20-minute wall-clock timeout,",
+        "The run ended by itself after 386 s with exit status 0, neither at the turn limit nor at the timeout,",
+        "It had the six sections in order:",
+        "each naming the defect it would catch that no existing test catches, its expected result with the spec or ticket passage it comes from,",
+        "The hashes of every working-tree file of the copy, `.git` excluded, were equal before and after the run, and `git status --porcelain` in the copy printed nothing, so the command wrote nothing;",
+        "this shows that nothing was written, not that the command chose not to write.",
+        "The copy and the run's scratch files were removed afterwards.",
+        "This release's plan review, implementation and review round ran with the installed cc-feather 0.45.0's roles and procedures, not this release's candidate.",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.47.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 03 are accepted and only after the user's go-ahead.",
+        "`v0.46.0`, at 388a63d, is not moved.",
+        "The review round, with the tickets' passes, the final check, the user's decision at the end of the plan and the tag, follows the commit carrying this entry and is recorded after it.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_47_0(self):
+        self.assertEqual("0.47.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_test_design_note_in_both_languages(self):
+        previous = DeclaredTestSuitesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.47.0 note starts right after the section's opening sentence, its sentences in order, before 0.46.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update, fresh in zip(("README.md", "README.zh-TW.md"), self.UPDATES,
+                                                                    self.NO_SETUP_UPDATE, self.FRESH_SESSION):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count(fresh), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.46.0 HEAD -- templates skills/setup scripts`"), 1)
+                self.assertEqual(note.count("reinstall the 0.46.0 plugin") + note.count("重新安裝 0.46.0 的 plugin"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_names_the_command_and_test_speedup_checks(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count("`/cc-feather:test-design`"), 1)
+                self.assertEqual(note.count("`/cc-feather:test-speedup`"), 1)
+            for role in self.ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target_file, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertEqual(note.count(link), 1)
+                self.assertEqual(self.text(target_file).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_live_run_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The live run's result is recorded, not left as a placeholder.
+        self.assertNotIn("@@", entry)
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
 
