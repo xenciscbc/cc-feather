@@ -3626,9 +3626,14 @@ class RunConfigurationsReleaseTests(unittest.TestCase):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("No setup update is required", entry)
         self.assertNotIn(".scratch", entry)
-        # The entry was appended rather than rewriting an earlier one, and only the 0.46.0 entry follows it.
+        # The entry was appended rather than rewriting an earlier one: after it come only sections for work landed
+        # on main without a release, such as "## Test speed-ups, first batch", and then the 0.46.0 entry.
         after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
-        self.assertTrue(after.startswith(DeclaredTestSuitesReleaseTests.ENTRY_HEADING))
+        headings = re.findall(r"^## .*$", after, re.MULTILINE)
+        releases = [heading for heading in headings if re.match(r"^## \d", heading)]
+        self.assertEqual(releases[:1], [DeclaredTestSuitesReleaseTests.ENTRY_HEADING.strip("\n")])
+        self.assertTrue(all(heading.endswith("(on main after 0.45.0)")
+                            for heading in headings[:headings.index(releases[0])]))
 
 
 class DeclaredTestSuitesReleaseTests(unittest.TestCase):

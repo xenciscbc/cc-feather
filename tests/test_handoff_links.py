@@ -127,7 +127,7 @@ class LinkBase(unittest.TestCase):
         return json.loads(result.stdout)
 
     def git_init(self, path: Path) -> None:
-        subprocess.run(["git", "init", "--quiet", str(path)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(path)], check=True, capture_output=True, timeout=30)
 
     def tree(self, path: Path) -> dict:
         result = {}

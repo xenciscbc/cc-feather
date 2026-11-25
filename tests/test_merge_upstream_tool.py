@@ -94,11 +94,18 @@ def by_path(part: dict) -> dict:
 class MergeUpstreamBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # A class's own fixture, built once for the class and removed after it (ReadOnlyTest).
+        cls.prepare(cls.enterClassContext, cls.addClassCleanup)
+
+    @classmethod
+    def prepare(cls, enter_context, add_cleanup):
+        """Build the fixture on cls, entering the Git environment with enter_context and registering removal with
+        add_cleanup, so the same work serves one class (class scope) or the whole module (module scope)."""
         configured = os.environ.get("FEATHER_LINK_TEST_DIR")
         if configured:
             os.makedirs(configured, exist_ok=True)
         base = Path(os.path.realpath(tempfile.mkdtemp(dir=configured or None)))
-        cls.addClassCleanup(remove_tree, base)
+        add_cleanup(remove_tree, base)
         if os.path.normcase(str(base)).startswith(os.path.normcase(str(ROOT)) + os.sep):
             raise unittest.SkipTest(f"the test directory {base} is inside the project; set FEATHER_LINK_TEST_DIR")
         cls.base = base
@@ -108,7 +115,7 @@ class MergeUpstreamBase(unittest.TestCase):
         environment = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
         environment.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(empty), "HOME": str(base / "home"),
                             "XDG_CONFIG_HOME": str(base / "home")})
-        cls.enterClassContext(mock.patch.dict(os.environ, environment, clear=True))
+        enter_context(mock.patch.dict(os.environ, environment, clear=True))
         cls.git_version = cls.installed_git_version()
         cls.build()
 
@@ -255,10 +262,42 @@ class MergeUpstreamBase(unittest.TestCase):
         return target
 
 
-class ListsTest(MergeUpstreamBase):
-    def setUp(self):
-        self.result = self.run_tool(self.work)
-        self.assertEqual(self.result["status"], "ok", self.result)
+# The fixture the classes that only read it share: built by the first of them to run, once per module run, and
+# removed with its Git environment by the module's cleanup. Holds "values" (the fixture's attributes) or "error".
+_shared_fixture: dict = {}
+
+
+class SharedFixture:
+    """Mixin, placed before MergeUpstreamBase, for a class that reads the module's shared fixture instead of building
+    its own. ReadOnlyTest does not use it: the repositories it snapshots must not come from the shared fixture."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not _shared_fixture:
+            unittest.addModuleCleanup(_shared_fixture.clear)
+            # A class outside the module namespace, so unittest never collects it; it only carries the build.
+            holder = type("SharedFixtureHolder", (MergeUpstreamBase,), {"__module__": __name__})
+            known = set(vars(holder))
+            try:
+                holder.prepare(unittest.enterModuleContext, unittest.addModuleCleanup)
+            except Exception as error:
+                _shared_fixture["error"] = error
+                raise
+            _shared_fixture["values"] = {name: value for name, value in vars(holder).items() if name not in known}
+        if "error" in _shared_fixture:
+            raise _shared_fixture["error"]
+        for name, value in _shared_fixture["values"].items():
+            setattr(cls, name, value)
+
+
+class ListsTest(SharedFixture, MergeUpstreamBase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # One run for the class through run_tool's own checks, made by an instance that runs no test.
+        checker = cls()
+        cls.result = checker.run_tool(cls.work)
+        checker.assertEqual(cls.result["status"], "ok", cls.result)
 
     def test_commits_parents_and_merge_base_are_checked(self):
         result = self.result
@@ -358,7 +397,7 @@ class ListsTest(MergeUpstreamBase):
                          ("known", "refs/remotes/origin/main", self.remote_tip, True))
 
 
-class SettingsTest(MergeUpstreamBase):
+class SettingsTest(SharedFixture, MergeUpstreamBase):
     def test_diff_settings_and_the_directory_change_no_list(self):
         def facts(result: dict) -> dict:
             return {key: value for key, value in result.items() if key != "project"}
@@ -376,7 +415,7 @@ class SettingsTest(MergeUpstreamBase):
         self.assertEqual(facts(moved), facts(baseline))
 
 
-class ChecksTest(MergeUpstreamBase):
+class ChecksTest(SharedFixture, MergeUpstreamBase):
     def test_wrong_parent_order_makes_the_dependent_lists_unknown(self):
         result = self.run_tool(self.work, self.payload(tip_before=self.remote_tip, remote_tip=self.tip_before))
         self.assertFalse(result["merge_parents"]["as_expected"])
@@ -543,7 +582,7 @@ class ChecksTest(MergeUpstreamBase):
                                              "reason": "The input names no judged commit for this Claim"}])
 
 
-class InvalidInputTest(MergeUpstreamBase):
+class InvalidInputTest(SharedFixture, MergeUpstreamBase):
     def test_invalid_input_is_an_error_and_touches_nothing(self):
         before = snapshot(self.work)
         cases = {

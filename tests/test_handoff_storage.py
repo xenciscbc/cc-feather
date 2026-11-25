@@ -45,7 +45,7 @@ class HandoffStorageTest(unittest.TestCase):
         asked, redirected = parent / "asked", parent / "redirected"
         for project in (asked, redirected):
             project.mkdir()
-            subprocess.run(["git", "-C", str(project), "init", "--quiet"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(project), "init", "--quiet"], check=True, capture_output=True, timeout=30)
             (project / "source.txt").write_text(project.name, encoding="utf-8")
         self.addCleanup(storage.reset_roots)
         with patch.dict(os.environ, {"GIT_DIR": str(redirected / ".git"), "GIT_WORK_TREE": str(redirected)}):

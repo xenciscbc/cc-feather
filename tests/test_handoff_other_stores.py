@@ -159,8 +159,10 @@ class IncompleteTest(OtherStoresBase):
             user = os.environ.get("USERNAME")
             if not user:
                 self.skipTest("no USERNAME to deny listing the directory to")
-            denied = subprocess.run(["icacls", str(directory), "/deny", f"{user}:(RD)"], capture_output=True)
-            self.addCleanup(subprocess.run, ["icacls", str(directory), "/remove:d", user], capture_output=True)
+            denied = subprocess.run(["icacls", str(directory), "/deny", f"{user}:(RD)"], capture_output=True,
+                                    timeout=30)
+            self.addCleanup(subprocess.run, ["icacls", str(directory), "/remove:d", user],
+                            capture_output=True, timeout=30)
             if denied.returncode:
                 self.skipTest(f"icacls could not deny listing {directory} (exit {denied.returncode})")
         else:

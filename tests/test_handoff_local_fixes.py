@@ -404,12 +404,12 @@ class TrackingMarkerTest(LocalFixesBase):
 
     def setUp(self):
         super().setUp()
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         self.ignore = self.project / ".gitignore"
 
     def index(self) -> bytes:
         return subprocess.run(["git", "-c", f"safe.directory={self.project.as_posix()}", "-C", str(self.project),
-                               "ls-files"], capture_output=True, check=True).stdout
+                               "ls-files"], capture_output=True, check=True, timeout=30).stdout
 
     def test_track_records_marker_and_later_default_update_keeps_it(self):
         created = self.run_tool("create", "--work", "a.md", payload={"fields": FIELDS, "tracking": "track"})
@@ -442,7 +442,8 @@ class TrackingMarkerTest(LocalFixesBase):
         self.assertEqual(created["tracking"], "ignored")
         self.assertEqual(self.ignore.read_bytes(), f" {MARKER}\n/.feather/handoffs/\n".encode())
         ignored = subprocess.run(["git", "-c", f"safe.directory={self.project.as_posix()}", "-C", str(self.project),
-                                  "check-ignore", "-q", "--", ".feather/handoffs/a.md"], capture_output=True)
+                                  "check-ignore", "-q", "--", ".feather/handoffs/a.md"], capture_output=True,
+                                 timeout=30)
         self.assertEqual(ignored.returncode, 0)
 
     def test_track_keeps_an_indented_user_rule_and_strips_only_trailing_spaces(self):
@@ -483,7 +484,7 @@ class GitEnvironmentTest(LocalFixesBase):
 
     @unittest.skipUnless(os.name == "nt", "GIT_REDIRECT_STDOUT is a Git for Windows feature")
     def test_inherited_output_redirection_cannot_select_the_working_directory_as_root(self):
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         nested = self.project / "nested"
         nested.mkdir()
         redirected = self.directory / "redirected.txt"
@@ -497,7 +498,7 @@ class GitEnvironmentTest(LocalFixesBase):
         self.assertFalse(redirected.exists())
 
     def test_user_git_configuration_variables_still_decide_default_tracking(self):
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         config = tempfile.TemporaryDirectory()
         self.addCleanup(config.cleanup)
         home = Path(os.path.realpath(config.name))
@@ -527,7 +528,12 @@ class PendingUnknownTest(LocalFixesBase):
     SELECTIONS = (("clear", {}), ("seal", {"destination": "batch.md"}))
 
     def payload(self, extra: dict) -> dict:
-        entry = self.run_tool("history")["entries"][0]
+        # Read in this process: the read only prepares the clear or seal under test, which then starts, as a fresh
+        # tool process would, with no registered root.
+        code, listed = self.invoke("history")
+        self.assertEqual(code, 0, listed)
+        storage.reset_roots()
+        entry = listed["entries"][0]
         return {"version": entry["document_version"], "ids": [entry["id"]], **extra}
 
     def assert_pending_unknown(self, name: str, reasons: str):
@@ -770,7 +776,7 @@ class CompletedTrackingRecoveryTest(LocalFixesBase):
 
     def setUp(self):
         super().setUp()
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         self.ignore = self.project / ".gitignore"
 
     def save_completed(self, name: str, choice: str) -> dict:

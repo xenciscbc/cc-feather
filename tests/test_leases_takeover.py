@@ -16,7 +16,7 @@ import time
 import unittest
 
 from tests.test_leases_locks import AGENT, SESSION, CriticalSectionLock, LockBase
-from tests.test_leases_tool import HOLD, MAIN_KEY, TIMEOUT
+from tests.test_leases_tool import HOLD, MAIN_KEY, TIMEOUT, stop
 
 
 class TakeOverBase(LockBase):
@@ -136,7 +136,10 @@ class RenewTest(TakeOverBase):
             time.sleep(HOLD)
         finally:
             reader.close()
-        out, err = process.communicate(timeout=TIMEOUT)
+        try:
+            out, err = process.communicate(timeout=TIMEOUT)
+        finally:
+            stop(process)
         self.assertEqual(process.returncode, 0, out + err)
         renewed = json.loads(out)
         self.assertEqual((renewed["status"], renewed["lease"]["purpose"]), ("ok", "while read"), renewed)

@@ -35,7 +35,7 @@ class ProbeFailureBase(LocalFixesBase):
         self.ignore = self.project / ".gitignore"
 
     def git_init(self):
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         self.ignore.write_bytes(b"*.log\n")
 
     def save(self, operation: str, name: str, choice: str, completed: bool, payload: dict) -> tuple[int, dict]:
@@ -249,7 +249,7 @@ class GenuineNonGitTest(LocalFixesBase):
     def setUp(self):
         super().setUp()
         probe = subprocess.run(["git", "-C", str(self.project), "rev-parse", "--is-inside-work-tree"],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, timeout=30)
         if probe.returncode == 0:
             self.skipTest("the temporary directory is inside a Git repository")
 

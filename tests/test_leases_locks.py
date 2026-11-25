@@ -80,8 +80,10 @@ class AcquireLockTest(LockBase):
         admin = self.main / ".git" / "worktrees" / "wt1"
         if os.name == "nt":
             user = os.environ.get("USERNAME") or self.skipTest("USERNAME is not set")
-            subprocess.run(["icacls", str(admin), "/deny", f"{user}:(AD,WD)"], check=True, capture_output=True)
-            self.addCleanup(subprocess.run, ["icacls", str(admin), "/remove:d", user], capture_output=True)
+            subprocess.run(["icacls", str(admin), "/deny", f"{user}:(AD,WD)"], check=True, capture_output=True,
+                           timeout=60)
+            self.addCleanup(subprocess.run, ["icacls", str(admin), "/remove:d", user],
+                            capture_output=True, timeout=60)
         else:
             if os.geteuid() == 0:
                 self.skipTest("root ignores directory permissions")

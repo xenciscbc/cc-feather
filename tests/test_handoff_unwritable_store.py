@@ -43,8 +43,10 @@ class DenyMixin:
             if not user:
                 self.skipTest("no USERNAME to deny writing the directory to")
             rights = "(OI)(CI)(WD,AD)" if inherit else "(WD,AD)"
-            denied = subprocess.run(["icacls", str(directory), "/deny", f"{user}:{rights}"], capture_output=True)
-            self.addCleanup(subprocess.run, ["icacls", str(directory), "/remove:d", user], capture_output=True)
+            denied = subprocess.run(["icacls", str(directory), "/deny", f"{user}:{rights}"], capture_output=True,
+                                    timeout=30)
+            self.addCleanup(subprocess.run, ["icacls", str(directory), "/remove:d", user],
+                            capture_output=True, timeout=30)
             if denied.returncode:
                 self.skipTest(f"icacls could not deny writing {directory} (exit {denied.returncode})")
         else:
@@ -120,7 +122,7 @@ class StoreFixture(DenyMixin):
         """Grant write access to the store again before the test ends; the cleanups registered by deny repeat it."""
         if WINDOWS:
             restored = subprocess.run(["icacls", str(self.store), "/remove:d", os.environ["USERNAME"]],
-                                      capture_output=True)
+                                      capture_output=True, timeout=30)
             self.assertEqual(restored.returncode, 0, restored)
         else:
             for path in [self.store, *(path for path in self.store.rglob("*") if path.is_dir())]:
