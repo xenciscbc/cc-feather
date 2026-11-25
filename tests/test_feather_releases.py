@@ -3511,7 +3511,9 @@ class RunConfigurationsReleaseTests(unittest.TestCase):
     template until then, and how to go back to 0.44.0; the validation entry records the spec and the tickets, the setup
     update observed in a scratch installation of 0.44.0 with what `check` reported before and after, the way back, the
     test runs, what the tests cannot show and the tag, and is the file's last. The rules' own sentences are
-    tests/test_feather_design_checks.py's and tests/test_feather_resource_floor.py's."""
+    tests/test_feather_design_checks.py's and tests/test_feather_resource_floor.py's. Since 0.46.0 the manifest version
+    is DeclaredTestSuitesReleaseTests', the note follows the 0.46.0 note and the entry is followed only by the 0.46.0
+    entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.45.0 note in order.
     UPDATES = (
@@ -3572,16 +3574,16 @@ class RunConfigurationsReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_45_0(self):
-        self.assertEqual("0.45.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_run_configurations_note_in_both_languages(self):
         previous = SmallerChecksReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = DeclaredTestSuitesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.45.0 note starts right after the section's opening sentence, its sentences in order, before 0.44.0's.
+            # The 0.45.0 note starts right after the 0.46.0 note, its sentences in order, before 0.44.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_require_setup_update_in_both_languages(self):
@@ -3614,6 +3616,128 @@ class RunConfigurationsReleaseTests(unittest.TestCase):
                     self.assertEqual(self.text(target_file).count(target), 1)
             with self.subTest(readme=name, numbers=True):
                 self.assertIsNone(ResourceRiskRunsReleaseTests.NUMBERS.search(note))
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("No setup update is required", entry)
+        self.assertNotIn(".scratch", entry)
+        # The entry was appended rather than rewriting an earlier one, and only the 0.46.0 entry follows it.
+        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
+        self.assertTrue(after.startswith(DeclaredTestSuitesReleaseTests.ENTRY_HEADING))
+
+
+class DeclaredTestSuitesReleaseTests(unittest.TestCase):
+    """0.46.0 (docs/specs/declared-test-suites.md; tickets 01 to 04): the manifest version is 0.46.0; the Updates note,
+    in both languages, opens the section, says what the Test suite catalogue changes and that a project without one is
+    unchanged, that no role definition or configuration tool changed so existing installations need the plugin update
+    and a fresh session, that a scope which saved Related-test acceptance `on` also needs setup update, what `check`
+    and `review` report until then, and how to go back to 0.45.0; the validation entry records the spec and the
+    tickets, the setup update observed in a scratch installation of 0.45.0 with what `check` and `review` reported
+    before and after, the unchanged scope without a saved setting, the way back, the test runs, what the tests cannot
+    show and the tag, and is the file's last. The rules' own sentences are tests/test_feather_declared_suites.py's and
+    tests/test_feather_related_tests.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.46.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.46.0 lets a project declare its test suites in a Test suite catalogue, `.feather/test-suites.md` tracked in Git, as the [Test suite catalogue](docs/setup.md#test-suite-catalogue) section describes: every final check also runs the suites whose gates include `landing`, the release question also asks about those whose gates include `release`, and Related-test acceptance also writes acceptance from the catalogue; a project without a catalogue is unchanged.",
+         "It changes no role definition or configuration tool, only the Related-test acceptance guidance, so existing installations need the plugin update and a fresh session, and a scope that saved Related-test acceptance `on` also needs `/cc-feather:setup update` before that session; until then `check` warns that the delegation guidance is from an older template, and `review` that changes a saved setting asks for setup update first.",
+         "To go back to 0.45.0, reinstall the 0.45.0 plugin and run `/cc-feather:setup update` in every scope that saved Related-test acceptance `on`, then start a fresh session; no remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.46.0 讓專案可以在 Test suite catalogue（以 Git 追蹤的 `.feather/test-suites.md`）中宣告它的測試套件，詳見[測試套件目錄](docs/setup.md#test-suite-catalogue)一節：每次 final check 也會執行 gates 含 `landing` 的套件，release 的提問也會詢問 gates 含 `release` 的套件，Related-test acceptance 也會依目錄撰寫 acceptance；沒有目錄的專案不受影響。",
+         "它沒有改任何角色定義或設定工具，只改了 Related-test acceptance 的指引，所以既有安裝需要更新 plugin 再開新 session；已儲存 Related-test acceptance `on` 的範圍，還要在開新 session 前執行 `/cc-feather:setup update`；在那之前，check 會警告分派指引來自較舊的範本，而變更已儲存設定的 review 會要求先做 setup update。",
+         "要回到 0.45.0，重新安裝 0.45.0 的 plugin，並在每個已儲存 Related-test acceptance `on` 的範圍執行 `/cc-feather:setup update`，再開新 session；不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    # Only the scopes that saved Related-test acceptance `on` need setup update, in both languages.
+    SAVED_ON = ("in every scope that saved Related-test acceptance `on`", "每個已儲存 Related-test acceptance `on` 的範圍")
+    # The release changes no role definition (`git diff --name-only v0.45.0 -- templates scripts` lists only
+    # templates/related-tests.md), so the note names none.
+    ROLES = ("verifier", "adversary", "executor", "security-executor", "analyst", "reviewer", "scout", "Explore")
+    # The note's link to the setup document's Test suite catalogue section, and the heading it resolves to.
+    LINK = ("(docs/setup.md#test-suite-catalogue)", "docs/setup.md", "\n## Test suite catalogue\n")
+
+    # The validation entry: the spec and its tickets, the setup update with its scratch evidence before and after, the
+    # scope without a saved setting, the way back, the test runs, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.46.0 declared test suites\n"
+    ENTRY = (
+        "Implements [the declared-test-suites spec](specs/declared-test-suites.md), written on 2026-11-25, added in e69dabc and revised in ff7ceef and 7b78015;",
+        "ticket 01, Landing-required suites at every final check, in 70bff8f, ticket 02, Release-required suites in the release question, in 43e4d69, ticket 03, acceptance from the catalogue under Related-test acceptance, in b9733cb, and ticket 04, this release, in the commit carrying this entry.",
+        "A project without a catalogue keeps every rule as in 0.45.0.",
+        "The 0.45.0 release tests now follow the 0.46.0 note and entry.",
+        "**Setup update is required only in a scope that saved Related-test acceptance `on`.**",
+        "This release changes `templates/related-tests.md`, the only file under `templates/` or `scripts/` that changed since v0.45.0,",
+        "no role definition template and no configuration tool changed.",
+        "Existing installations need only the plugin update and a fresh session, except a scope that saved Related-test acceptance `on`, which needs `/cc-feather:setup update` before that session,",
+        "A scope without a saved setting renders the same bytes as 0.45.0.",
+        "Both were exercised in a scratch installation under `J:\\gotmp\\cc-feather-0460-setup`,",
+        "this release's `check` then reported `role_update_required: false` and the single warning `delegation guidance is from an older template; run setup update`;",
+        "this release's `review --related-tests off` refused with `installed guidance is from an older template; run setup update first` and left `CLAUDE.md` unchanged;",
+        "after it, `check` reported no warning.",
+        "this release's `check` reported no warning and its `update` preview listed no change.",
+        "To go back to 0.45.0, reinstall the 0.45.0 plugin and run `/cc-feather:setup update` in every scope that saved Related-test acceptance `on`, then start a fresh session; no remove is needed, since 0.46.0 changes no configuration tool or state, and a scope without a saved setting needs no setup update.",
+        "`CLAUDE.md` was byte-identical to the one the 0.45.0 tool had written before the upgrade.",
+        "the scratch directory was removed afterwards.",
+        "the ticket's primary acceptance, `python -B -m unittest` over the 18 modules it names, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the tests show the text, not that a model always follows it.",
+        "`v0.46.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 04 are accepted and only after the user's go-ahead.",
+        "`v0.45.0`, at 2133730, is not moved.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_46_0(self):
+        self.assertEqual("0.46.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_declared_suites_note_in_both_languages(self):
+        previous = RunConfigurationsReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.46.0 note starts right after the section's opening sentence, its sentences in order, before 0.45.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_require_setup_update_only_where_saved_on_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update, saved_on in zip(("README.md", "README.zh-TW.md"), self.UPDATES,
+                                                                       self.NO_SETUP_UPDATE, self.SAVED_ON):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                # Setup update after the plugin update and for going back, both limited to a scope that saved `on`.
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 2)
+                self.assertEqual(note.count("Related-test acceptance `on`"), 2)
+                self.assertEqual(note.count(saved_on), 1)
+                self.assertNotIn(no_update, note)
+                self.assertNotIn("every scope where delegation is installed", note)
+                self.assertNotIn("每個裝有分派元件的範圍", note)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_names_no_role_definition(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            for role in self.ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_resolve(self):
+        link, target_file, target = self.LINK
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(link), 1)
+        self.assertEqual(self.text(target_file).count(target), 1)
 
     def test_validation_entry_records_the_release_check_and_tag(self):
         text = self.text("docs/setup-validation.md")
