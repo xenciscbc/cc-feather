@@ -527,7 +527,12 @@ class PendingUnknownTest(LocalFixesBase):
     SELECTIONS = (("clear", {}), ("seal", {"destination": "batch.md"}))
 
     def payload(self, extra: dict) -> dict:
-        entry = self.run_tool("history")["entries"][0]
+        # Read in this process: the read only prepares the clear or seal under test, which then starts, as a fresh
+        # tool process would, with no registered root.
+        code, listed = self.invoke("history")
+        self.assertEqual(code, 0, listed)
+        storage.reset_roots()
+        entry = listed["entries"][0]
         return {"version": entry["document_version"], "ids": [entry["id"]], **extra}
 
     def assert_pending_unknown(self, name: str, reasons: str):

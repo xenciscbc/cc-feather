@@ -72,18 +72,23 @@ class AdoptBase(DenyMixin, SharedBase):
     def source_store(self, checkout: Path) -> Path:
         return checkout / ".feather" / "handoffs"
 
+    def exact_read(self, checkout: Path, *args) -> dict:
+        """A read-only run against the source checkout as an explicit root, in this process."""
+        code, result = self.invoke(checkout, "--exact-root", *args)
+        self.assertEqual(code, 0, result)
+        return result
+
     def request(self, checkout: Path, works=(), history=None, archives=(), source: str | None = None) -> dict:
         """The input main builds from read-only runs against the source checkout as an explicit root."""
         payload = {"source": source or str(checkout)}
         if works:
-            payload["works"] = {name: self.run_tool(checkout, "read", "--work", name, exact=True)["version"]
-                                for name in works}
+            payload["works"] = {name: self.exact_read(checkout, "read", "--work", name)["version"] for name in works}
         if history is not None:
-            listed = self.run_tool(checkout, "history", exact=True)
+            listed = self.exact_read(checkout, "history")
             ids = [item["id"] for item in listed["entries"] if history == "all" or item["title"] in history]
             payload["history"] = {"version": listed["documents"][0]["version"], "ids": ids}
         if archives:
-            sealed = self.run_tool(checkout, "history", "--include-sealed", exact=True)
+            sealed = self.exact_read(checkout, "history", "--include-sealed")
             versions = {document["source"]: document["version"] for document in sealed["documents"]}
             payload["archives"] = {name: versions[f"archive/{name}"] for name in archives}
         return payload
