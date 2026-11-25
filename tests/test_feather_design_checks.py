@@ -10,11 +10,17 @@ Ticket 03: neither command is named by an installed policy template or role defi
 Since 0.45.0 (docs/specs/test-run-configuration.md, ticket 01) the command also checks run configurations for each
 Unbounded run configuration, looks up defaults in a fixed order, bounds a parallel speed-up and a flagged measurement, and
 reports a fourth section; the report's section count moves from three to four.
+Since docs/specs/test-design.md, ticket 01, the static pass's speed criteria and the correctness bar, smaller inputs and
+the removal rule with replacements included, live in the shared test criteria reference in the test-speedup skill, which
+the command points to and restates none of; their pins move with them. The reference adds further criteria, each with
+its condition, and the sleep rule, which the static pass checks for; it points to the glossary's resource-risk and suite
+entries and to the delegation skill and copies none of them, and the reference section states the new checks.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import unittest
 
 from tests import feather_support
@@ -36,6 +42,7 @@ class TestSpeedupCommandTests(unittest.TestCase):
     """Ticket 01."""
 
     COMMAND = SKILLS / "test-speedup" / "SKILL.md"
+    CRITERIA = SKILLS / "test-speedup" / "references" / "test-criteria.md"
 
     def test_command_is_user_invoked_and_listed_after_related_tests(self):
         skills = manifest_skills()
@@ -50,13 +57,16 @@ class TestSpeedupCommandTests(unittest.TestCase):
     assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
 
     def source(self, name):
-        """'SKILL.md', 'SKILL.md#<heading>' (a '## ' section) or 'SKILL.md#<label>' (a '**<label>.**' paragraph)."""
-        text = self.COMMAND.read_text(encoding="utf-8")
-        _, _, label = name.partition("#")
+        """'<file>', '<file>#<heading>' (a '## ' section) or '<file>#<label>' (a '**<label>.**' paragraph or a
+        '- **<label>.**' bullet), where <file> is 'SKILL.md' or the shared reference 'test-criteria.md'."""
+        file, _, label = name.partition("#")
+        text = {"SKILL.md": self.COMMAND, "test-criteria.md": self.CRITERIA}[file].read_text(encoding="utf-8")
         if not label:
             return text
         if f"\n## {label}\n" in text:
             return text.split(f"\n## {label}\n", 1)[1].split("\n## ", 1)[0]
+        if f"\n- **{label}.**" in text:
+            return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
         return next(p for p in text.split("\n\n") if p.startswith(f"**{label}.**"))
 
     PINS = {
@@ -77,9 +87,58 @@ class TestSpeedupCommandTests(unittest.TestCase):
         ),
         "SKILL.md#1. Static pass": (
             "The static pass always comes first and runs nothing.",
-            "- inputs, data sets, iteration counts and fixtures larger than the behaviour needs, which a smaller one can verify;",
+            "Look for what [the shared test criteria](references/test-criteria.md)'s Speed criteria and Further criteria list, a further criterion only where its condition holds.",
         ),
         "SKILL.md#Correctness bar": (
+            "**Correctness bar.** Every speed-up and removal meets [the shared test criteria](references/test-criteria.md)'s Correctness bar, smaller inputs and replacements included.",
+        ),
+        "test-criteria.md": (
+            "The criteria in this reference say what makes a test slower or less robust than it needs to be, and its correctness bar says what a change to an existing test keeps.",
+            "A skill that writes, reviews or changes tests points to this reference and does not restate it.",
+        ),
+        "test-criteria.md#Rules this relies on": (
+            "Whether a test or a test run is unbounded is decided by the Unbounded probe and Unbounded run configuration entries in [cc-feather's glossary](../../../CONTEXT.md), and which suites a check runs by its Test suite catalogue and Related-test acceptance entries.",
+            "How a finding is weighed, how a test with resource risk is run and how work is reviewed are [the delegation skill](../../delegation/SKILL.md)'s rules.",
+            "This reference copies none of them.",
+        ),
+        "test-criteria.md#Speed criteria": (
+            "A test is slower than it needs to be where it has:",
+            "- per-test setup that can be shared per module or session;",
+            "- fixed sleeps that can wait on an event or a condition;",
+            "- real I/O, such as network, disk, processes or databases, that a fake can replace;",
+            "- tests that can run in parallel;",
+            "- inputs, data sets, iteration counts and fixtures larger than the behaviour needs, which a smaller one can verify;",
+            "- behaviour tested again at several levels.",
+        ),
+        "test-criteria.md#Further criteria": (
+            "Each criterion applies under the condition it states, and only there.",
+        ),
+        "test-criteria.md#No DOM where none is needed": (
+            "A frontend test that needs no DOM runs without a DOM environment, such as jsdom or happy-dom.",
+            "It applies to a frontend test whose code under test renders no component and uses no DOM or browser API.",
+        ),
+        "test-criteria.md#Port 0": (
+            "A test server binds port 0 rather than a fixed port, and the test reads the port it was given.",
+            "It applies to every test that starts a listening server, unless the fixed port is what the test verifies.",
+        ),
+        "test-criteria.md#Waits with a timeout": (
+            "A wait on a channel, promise or condition has a timeout, so that a missing event fails the test instead of hanging it.",
+            "It applies to every such wait in a test or its setup that blocks until another goroutine, thread, process or callback acts.",
+        ),
+        "test-criteria.md#Limited output": (
+            "Collected output has a limit.",
+            "It applies wherever a test or its setup keeps output it collects, such as a child process's output, logs or captured events, whose size nothing else bounds.",
+        ),
+        "test-criteria.md#Cleanup on failure paths": (
+            "Failure paths clean up goroutines, connections and transactions, as the success path does.",
+            "It applies to every test or fixture that starts a goroutine, opens a connection or begins a transaction, and is met by cleanup that runs however the test ends, such as `t.Cleanup`, `defer`, a `finally` block or a fixture's teardown.",
+        ),
+        "test-criteria.md#Fixed sleeps": (
+            "A fixed sleep becomes an event or condition wait, or a fake clock where it verifies the same logic, with real elapsed time kept only when real scheduling or clock integration is the property.",
+            "It applies to every fixed sleep in a test or its setup.",
+        ),
+        "test-criteria.md#Correctness bar": (
+            "The correctness bar governs changes to existing tests, speed-ups and removals alike: weakening an assertion, adding a skip, loosening a timeout and reducing generated cases are never offered there.",
             "Each speed-up names the test or assertion that keeps verifying the behaviour it touches.",
             "A speed-up keeps every assertion, test and timeout at least as strict as it is now: weakening an assertion, adding a skip or loosening a timeout is never offered.",
             "A smaller input is offered only when size is not what the test verifies.",
@@ -192,6 +251,63 @@ class TestSpeedupCommandTests(unittest.TestCase):
         self.assertNotIn("--memory-mib", command)
         self.assertNotIn("a timeout alone is not a bound", command)
 
+    SHARED_PARTS = ("Speed criteria", "Further criteria", "Correctness bar")
+
+    def shared_statements(self):
+        """Each sentence or list item of the shared criteria, with its bullet marker and bold label taken off."""
+        for part in self.SHARED_PARTS:
+            for line in self.source(f"test-criteria.md#{part}").splitlines():
+                line = re.sub(r"^- (\*\*[^*]+\*\* )?", "", line.strip())
+                for sentence in feather_support.sentences(line):
+                    yield part, sentence.rstrip(";")
+
+    def test_the_command_restates_none_of_the_shared_criteria(self):
+        command = " ".join(self.source("SKILL.md").split())
+        statements = list(self.shared_statements())
+        # Every speed criterion, further criterion and sentence of the bar is checked, not only a sample.
+        self.assertGreaterEqual(len(statements), 30)
+        for part, statement in statements:
+            with self.subTest(part=part, statement=statement[:60]):
+                self.assertNotIn(statement, command)
+        for part in self.SHARED_PARTS:
+            with self.subTest(heading=part):
+                self.assertNotIn(f"\n## {part}\n", self.source("SKILL.md"))
+
+    def test_the_further_criteria_are_six_each_with_its_condition(self):
+        further = self.source("test-criteria.md#Further criteria")
+        labels = [line.split("**")[1] for line in further.splitlines() if line.startswith("- **")]
+        self.assertEqual(labels, ["No DOM where none is needed.", "Port 0.", "Waits with a timeout.", "Limited output.",
+                                  "Cleanup on failure paths.", "Fixed sleeps."])
+        for label in labels:
+            with self.subTest(criterion=label):
+                self.assertIn(" It applies ", self.source(f"test-criteria.md#{label[:-1]}"))
+
+    def test_the_shared_reference_points_to_the_rules_it_relies_on_and_copies_none(self):
+        text = self.source("test-criteria.md")
+        flat = " ".join(text.split())
+        for link, target in (("../../../CONTEXT.md", config.ROOT / "CONTEXT.md"),
+                             ("../../delegation/SKILL.md", SKILLS / "delegation" / "SKILL.md")):
+            with self.subTest(link=link):
+                self.assertIn(f"]({link})", text)
+                self.assertEqual((self.CRITERIA.parent / link).resolve(), target.resolve())
+        entries = feather_support.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        delegation = (SKILLS / "delegation" / "SKILL.md").read_text(encoding="utf-8")
+        weighing = next(p for p in delegation.split("\n\n") if p.startswith("Before proposing or adopting a requirement"))
+        copied = [*feather_support.sentences(weighing)]
+        for term in ("Unbounded probe", "Unbounded run configuration", "Test suite catalogue",
+                     "Related-test acceptance"):
+            self.assertIn(term, flat)
+            copied += [s for s in feather_support.sentences(entries[term].split("\n_Avoid_")[0])]
+        for sentence in copied:
+            with self.subTest(sentence=sentence[:60]):
+                self.assertNotIn(sentence, flat)
+        self.assertNotIn("--memory-mib", flat)
+        self.assertNotIn("a timeout alone is not a bound", flat)
+        # Written for any skill that points to it: it names no command.
+        for command in ("test-speedup", "test-design", "overdesign-check"):
+            with self.subTest(command=command):
+                self.assertNotIn(command, text)
+
     README_LISTINGS = {
         "README.md": "- `/cc-feather:test-speedup [test paths or scope]`: report ways to make the tests, or the part you name, faster without weakening what they verify; only you can run it, and it changes no file. It analyses statically first, lists existing tests that could exhaust memory or time, and measures only after you agree; see the [reference](docs/reference.md#design-and-test-checks).",
         "README.zh-TW.md": "| `/cc-feather:test-speedup [測試路徑或範圍]` | 找出讓測試（或你指定的部分）變快、又不削弱驗證內容的方法；只能由你執行，不改任何檔案。先做靜態分析，列出可能耗盡記憶體或時間的既有測試，經你同意才量測；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
@@ -217,6 +333,11 @@ class TestSpeedupCommandTests(unittest.TestCase):
          "刪除測試只列在獨立的一節，附上涵蓋相同行為的測試作為證據，或以替換的形式提出，由你逐條決定。"),
         ("A replacement describes a smaller test that verifies the same fact and lists everything else the heavy test verifies, such as wiring between components, routing or configuration loading, each with the existing test that keeps verifying it; when anything has no such test, the replacement is not offered.",
          "替換會描述一個驗證同一事實的較小測試，並列出較重的測試還驗證的其他每件事，例如元件之間的接線、路由或設定載入，各附上繼續驗證它的既有測試；只要有一件沒有這樣的測試，就不提出這項替換。"),
+        # docs/specs/test-design.md, ticket 01: the new checks.
+        ("It also checks, each where its condition holds, that a frontend test that needs no DOM runs without a DOM environment, that a test server binds port 0, that a wait on a channel, promise or condition has a timeout, that collected output has a limit and that failure paths clean up goroutines, connections and transactions.",
+         "它也會在各自的適用條件成立時檢查：不需要 DOM 的前端測試不使用 DOM 環境、測試用的 server 綁定 port 0、等待 channel、promise 或條件時設有 timeout、收集的輸出有上限，以及失敗路徑會清理 goroutine、連線與 transaction。"),
+        ("A fixed sleep becomes an event or condition wait, or a fake clock where that verifies the same logic; real elapsed time stays only when real scheduling or clock integration is what the test verifies.",
+         "固定的 sleep 改為等待事件或條件，或在能驗證同樣邏輯時改用 fake clock；只有當真實的排程或時鐘整合正是要驗證的性質時，才保留真實經過的時間。"),
         ("Another section lists existing tests that meet the Unbounded probe criteria, as information that holds nothing back.",
          "另一節列出符合 Unbounded probe 判準的既有測試，只供參考，不擋任何事。"),
         ("It also checks the settings and run parameters that do not belong to the tests' code, above all those concerning concurrency, isolation, memory and time, for an Unbounded run configuration, judged by the value in effect, a framework's default included, with a value it cannot establish counting as none.",
