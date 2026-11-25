@@ -27,7 +27,7 @@ After applying a choice in any scope, state the setting now in effect and its so
 
 ## The rule
 
-Whenever the setting in effect is `on` while the loaded guidance carries no rule, from a session choice or from a choice saved earlier in this conversation, main reads and follows [the rule's template](../../../templates/related-tests.md), which the configuration tool renders the rule from. While `on` is in effect, main applies that rule as if the guidance stated that Related-test acceptance is on. Whenever the setting in effect is off, main does not apply the rule, even where the loaded guidance carries it. After a context compaction, main establishes the saved choices again with the tool's `show` in project and user scope and rereads the template before applying the rule.
+Whenever the setting in effect is `on` while the loaded guidance carries no rule, from a session choice or from a choice saved earlier in this conversation, main reads and follows [the rule's template](../../../templates/related-tests.md), which the configuration tool renders the rule from. While `on` is in effect, main applies that rule as if the guidance stated that Related-test acceptance is on. Whenever the setting in effect is off, main does not apply the rule, even where the loaded guidance carries it. After a context compaction, main establishes the saved choices again with the tool's `show` in project and user scope and rereads the template before applying the rule. Where the Working checkout tracks a Test suite catalogue, the template has main read [the delegation test-suites reference](../../delegation/references/test-suites.md) before writing acceptance, and that reference, not this procedure, states what the rule means with the catalogue.
 
 ## Meaning
 

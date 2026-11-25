@@ -12,6 +12,12 @@ the Release-required suites that have no pass there, asked and recorded apart fr
 user's answer leaves a suite out, which removes only its `release` gate and excuses no failure; a release-only run of
 suites is its own recorded entry; in off only the suites part is asked and nothing is recorded.
 
+Ticket 03 adds acceptance writing: the Related-test acceptance template gains one sentence that has main read the
+test-suites reference before writing acceptance in a checkout with a tracked catalogue, and the reference states the
+affected part of a suite, what "the full suite" means there, when `full` membership is resolved, what acceptance using
+a suite carries and which acceptance keeps its wording; the setup document and the Related-test acceptance procedure
+point to it. The configuration tool's handling of 0.45.0's guidance is tested in test_feather_related_tests.
+
 The existing pins this ticket replaces, updated where they are: in test_feather_final_check, ReleaseScopeTests'
 release question in review state's Final check scope; in test_feather_resource_floor, the count of links to the
 resource-risk runs reference."""
@@ -30,6 +36,8 @@ REVIEW_STATE = REFERENCES / "review-state.md"
 RESOURCE_RISK_RUNS = REFERENCES / "resource-risk-runs.md"
 SETUP = config.ROOT / "docs" / "setup.md"
 POINTER = "read the [test-suites reference](test-suites.md) and follow it."
+TEMPLATE = config.ROOT / "templates" / "related-tests.md"
+PROCEDURE = config.ROOT / "skills" / "setup" / "references" / "related-tests.md"
 
 
 def bullet(path, label: str) -> str:
@@ -174,8 +182,9 @@ class CatalogueReferenceTests(Pinned, unittest.TestCase):
                 with self.subTest(path=path.name, link=link):
                     self.assertEqual((path.parent / link).resolve(), OWNER.resolve())
                 found += 1
-        # Review state's Final check and Final check scope, and the resource-risk runs reference's The budget.
-        self.assertEqual(found, 3)
+        # Review state's Final check and Final check scope, and the resource-risk runs reference's The budget; ticket 03
+        # adds the Related-test acceptance procedure's pointer.
+        self.assertEqual(found, 4)
 
 
 class FinalCheckTests(Pinned, unittest.TestCase):
@@ -349,6 +358,102 @@ class ReleaseQuestionTests(Pinned, unittest.TestCase):
             with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
                 self.assertEqual(path.read_text(encoding="utf-8").count(sentence), 1 if path == OWNER else 0)
 
+
+class AcceptanceWritingTests(Pinned, unittest.TestCase):
+    """Ticket 03: the template's pointer, the reference's Acceptance section, and the pointers to it."""
+
+    def acceptance(self):
+        return OWNER.read_text(encoding="utf-8").split("\n## Acceptance\n", 1)[1]
+
+    def test_the_template_gains_one_self_contained_pointer(self):
+        sentence = ("When the Working checkout has a tracked Test suite catalogue, main reads the delegation skill's "
+                    "test-suites reference before writing acceptance and follows it.")
+        text = TEMPLATE.read_text(encoding="utf-8")
+        self.assert_whole_sentence(sentence, text)
+        self.assertEqual(text.count("test-suites"), 1)
+        for phrase in ("in the message that ends its turn", "Asking in the conversation", "Gates:", "`full`"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, text)
+
+    def test_the_section_says_when_it_applies(self):
+        self.assert_bullet(
+            OWNER, "When it applies",
+            "This section applies only to acceptance main writes while Related-test acceptance is on, in a project "
+            "with a tracked Test suite catalogue.")
+
+    def test_the_affected_part_with_its_reason_and_the_whole_suite_fallback(self):
+        self.assert_bullet(
+            OWNER, "The affected part",
+            "A Claim whose related tests are in a Declared test suite names that suite's command narrowed to the part "
+            "the change affects, with one sentence on why that part covers the change.",
+            "When the affected part cannot be determined, the Claim names the whole suite.",
+            "A Claim does not add a Landing-required suite unrelated to its change; the final check runs it.")
+
+    def test_each_full_suite_case_maps_to_the_suites_with_gate_full(self):
+        self.assert_bullet(
+            OWNER, "The full suite",
+            "Where the Related-test acceptance rule names the full suite, main names the suites whose gates include "
+            "`full`, each with its command and pass condition.",
+            "That holds for a Claim that changes shared test support or build configuration, a Claim whose related "
+            "tests cannot be determined, the release Claim unless the Plan's overall acceptance names those suites, "
+            "the only Claim of a Plan without overall acceptance, and the overall acceptance main adds.",
+            "For Release-required suites and a Claim's acceptance, Release above applies.")
+
+    def test_full_membership_is_resolved_when_the_overall_acceptance_is_written(self):
+        self.assert_bullet(
+            OWNER, "`full` membership",
+            "Which suites have gate `full` is resolved when main writes the overall acceptance, which names them with "
+            "their commands and pass conditions in its own text.",
+            "A later change to the catalogue does not alter an overall acceptance already written; changing which "
+            "suites it names is a change to the acceptance, made as any change to acceptance is.")
+
+    def test_acceptance_using_a_suite_carries_the_entry(self):
+        self.assert_bullet(
+            OWNER, "The entry in the acceptance",
+            "Acceptance that uses a Declared test suite carries the entry's command, prerequisites, pass condition and "
+            "budget, when the entry has one, in its own text, so the Claim's reading set holds them.")
+
+    def test_acceptance_that_keeps_its_wording_and_meaning(self):
+        self.assert_bullet(
+            OWNER, "Wording kept",
+            "Acceptance the user wrote, existing specs and tickets, a fix Claim's acceptance, and acceptance that says "
+            "\"the full suite\" keep their wording and meaning.",
+            "This section never changes what acceptance that says \"the full suite\" runs.")
+
+    def test_the_section_restates_neither_the_release_rule_nor_rules_owned_elsewhere(self):
+        section = self.acceptance()
+        for phrase in ("only because of the release", "in the message that ends its turn", "Asking in the conversation",
+                       "never as a failed run", "judged from what stopped it", "resource-risk-runs.md"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, section)
+
+    def test_the_setup_document_and_the_procedure_point_to_the_reference(self):
+        setup = " ".join(SETUP.read_text(encoding="utf-8").split("\n## Related-test acceptance\n", 1)[1]
+                         .split("\n## ", 1)[0].split())
+        for sentence in (
+                "In a project whose Working checkout tracks a Test suite catalogue, the rule has main read the "
+                "delegation skill's test-suites reference (`skills/delegation/references/test-suites.md`) before "
+                "writing acceptance, and that reference states what the rule's terms mean with the catalogue; this "
+                "document does not restate it.",
+                "A scope saved `on` renders the sentence that points to the reference only after setup update: until "
+                "then `check` reports that the delegation guidance is from an older template, and `review` that "
+                "changes a saved setting asks for setup update first.",
+                "To downgrade, reinstall the older plugin and run its setup update in each scope saved `on`, which "
+                "renders that version's rule without the sentence; a scope without a saved setting needs nothing."):
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, setup)
+        procedure = PROCEDURE.read_text(encoding="utf-8")
+        self.assert_whole_sentence(
+            "Where the Working checkout tracks a Test suite catalogue, the template has main read [the delegation "
+            "test-suites reference](../../delegation/references/test-suites.md) before writing acceptance, and that "
+            "reference, not this procedure, states what the rule means with the catalogue.", procedure)
+        self.assertEqual(procedure.count("test-suites.md"), 1)
+        # Neither copies the reference's Acceptance section.
+        for place, text in (("setup.md", setup), ("procedure", procedure)):
+            for phrase in ("narrowed to the part the change affects", "names the whole suite",
+                           "resolved when main writes the overall acceptance", "keep their wording and meaning"):
+                with self.subTest(place=place, phrase=phrase):
+                    self.assertNotIn(phrase, text)
 
 class BudgetTests(Pinned, unittest.TestCase):
     """Acceptance item 6: a suite's `Budget:` line in the resource-risk runs reference's budget order."""
