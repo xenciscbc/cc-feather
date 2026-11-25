@@ -3647,9 +3647,10 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
     has gate `full`, the setup update observed in a scratch installation of 0.45.0 with this release's tools from
     `git archive HEAD` and what `check` and `review` reported before and after, the unchanged scope without a saved
     setting, the way back, the test runs, what the tests cannot
-    show and the tag, and is the file's last. The rules' own sentences are tests/test_feather_declared_suites.py's and
+    show and the tag, and was appended after the earlier entries. The rules' own sentences are tests/test_feather_declared_suites.py's and
     tests/test_feather_related_tests.py's. Since 0.47.0 the manifest version is TestDesignReleaseTests', the note
-    follows the 0.47.0 note and the entry is followed only by the 0.47.0 entry."""
+    follows the 0.47.0 note, and the entry is followed only by sections for work landed on main without a release,
+    such as the second test speed-up batch's, and then the 0.47.0 entry, which is the file's last."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.46.0 note in order.
     UPDATES = (
