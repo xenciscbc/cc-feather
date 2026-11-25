@@ -19,10 +19,10 @@
     "tests/test_handoff_baseline.py": "5a2704812a91efa1a7bcf1526568cd1c257a89d3521c8ca3152edbc47423bc1a",
     "tests/test_handoff_history.py": "547a0a45ab3b143a6a28b6264caa743196b703fc0faa1dc86bd9293f2864b2c0",
     "tests/test_handoff_mutations.py": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
-    "tests/test_handoff_roots.py": "0169e6d0e9497b9f31bb56f7f4dac8fc642fbd9e80dd9d7a7db12401c1fb6384",
+    "tests/test_handoff_roots.py": "c7782251ca26fd57a6e35793904ee681c553fce2d7780f8de1659453bae5af79",
     "tests/test_handoff_snapshots.py": "ddc69458e6c1c3eace598f683837b060a3f54532c5b7900a9d7af62c8a31ffb4",
-    "tests/test_handoff_storage.py": "63bbe65b8a21a0cb5fa50b6e083e302ca9cb95d709c516881223388b58b9cbea",
-    "tests/test_handoff_tool.py": "63ffe93ce45b511cba56250cebf10d73bc6b9a8bcf769b3a854bf7a4c785d738"
+    "tests/test_handoff_storage.py": "9258d31ba84c0743d38e5ea1e7e1fa7a2d33ffc4ba9a7212f3d1f5263f0f8151",
+    "tests/test_handoff_tool.py": "cf3655dca105764fcafa680cffaa5fd2a297a9f07cf67f5352a6d248125cbf4f"
   },
   "upstream_paths": {
     "skills/handoff/scripts/feather_handoff/__init__.py": "skills/feather-handoff/scripts/feather_handoff/__init__.py",
@@ -61,7 +61,7 @@
     },
     "tests/test_handoff_roots.py": {
       "source_sha256": "a8df63d727f74b9ed0c94c80a73c92b831945ca5d72a3a26997651a484b04d4f",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Imports test_handoff_tool through the tests package; in-process invocations and the direct Store test reset the root registry via addCleanup."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Imports test_handoff_tool through the tests package; in-process invocations and the direct Store test reset the root registry via addCleanup. Every Git command these tests run through subprocess.run has a 30 s timeout (test-subprocess-timeouts, on main after 0.45.0)."
     },
     "tests/test_handoff_snapshots.py": {
       "source_sha256": "fe01504c901c07b74773d5bc9d7237ef97120ea781a1cdea85e3d26dc93b7be5",
@@ -69,11 +69,11 @@
     },
     "tests/test_handoff_storage.py": {
       "source_sha256": "b16da7a53f6b47248a5df87c169b8cf1392543ec748eba6db896964ddf021c4b",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added skewed_fstat and the st_ctime stat/fstat skew test. setUp builds the temporary directory from os.path.realpath; the inherited Git routing test resets the root registry via addCleanup."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added skewed_fstat and the st_ctime stat/fstat skew test. setUp builds the temporary directory from os.path.realpath; the inherited Git routing test resets the root registry via addCleanup. Every Git command these tests run through subprocess.run has a 30 s timeout (test-subprocess-timeouts, on main after 0.45.0)."
     },
     "tests/test_handoff_tool.py": {
       "source_sha256": "4fc44d45642d3450e4c8af9f134a4b5dc8aef91227536fe3a880cd0d46cd54f3",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. The tracking test expects the '# cc-feather: track /.feather/handoffs/' marker after tracking: track. setUp (shared by the roots and snapshots tests) builds the temporary project from os.path.realpath. Local change (0.42.1): create and update refuse control characters before writing (test_create_and_update_refuse_control_characters_before_writing)."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. The tracking test expects the '# cc-feather: track /.feather/handoffs/' marker after tracking: track. setUp (shared by the roots and snapshots tests) builds the temporary project from os.path.realpath. Local change (0.42.1): create and update refuse control characters before writing (test_create_and_update_refuse_control_characters_before_writing). Every Git command these tests run through subprocess.run has a 30 s timeout (test-subprocess-timeouts, on main after 0.45.0)."
     },
     "skills/handoff/scripts/feather_handoff/history.py": {
       "source_sha256": "7e68a3b831d0694f2048a79e373982bd272457b63530c86656aad25e746e4fc9",

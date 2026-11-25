@@ -108,7 +108,7 @@ class HandoffRootTest(unittest.TestCase):
         code, result = self.invoke("list")
         self.assertEqual(code, 0)
         self.assertEqual(result["root"]["state"], "non-git")
-        subprocess.run(["git", "-C", str(self.project), "init", "--quiet"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.project), "init", "--quiet"], check=True, capture_output=True, timeout=30)
         self.write_work()
         nested = self.project / "nested"
         nested.mkdir()

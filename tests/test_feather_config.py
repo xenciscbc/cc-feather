@@ -1416,7 +1416,7 @@ class FeatherConfigTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-B", str(SCRIPT), "install", "--project", str(project),
                                  "--scope", "project", "--claude-home", str(self.home)],
                                 cwd=SCRIPT.parent.parent, env=environment, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, check=False)
+                                stderr=subprocess.PIPE, check=False, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
         preview = json.loads(result.stdout.decode("utf-8"))
         self.assertEqual(preview["status"], "preview")

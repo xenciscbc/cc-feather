@@ -1134,8 +1134,10 @@ class WorkspaceAndCommitFixtureTests(unittest.TestCase):
             user = os.environ.get("USERNAME")
             if not user:
                 self.skipTest("no USERNAME to deny listing the directory to")
-            denied = subprocess.run(["icacls", str(locked), "/deny", f"{user}:(RD)"], capture_output=True)
-            self.addCleanup(subprocess.run, ["icacls", str(locked), "/remove:d", user], capture_output=True)
+            denied = subprocess.run(["icacls", str(locked), "/deny", f"{user}:(RD)"], capture_output=True,
+                                    timeout=120)
+            self.addCleanup(subprocess.run, ["icacls", str(locked), "/remove:d", user],
+                            capture_output=True, timeout=120)
         else:
             locked.chmod(0)
             self.addCleanup(locked.chmod, 0o755)

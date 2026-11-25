@@ -150,7 +150,7 @@ class HandoffToolTest(unittest.TestCase):
         invalid = {"fields": {**payload["fields"], "status": "done"}}
         self.run_tool("create", "--work", "bad.md", payload=invalid, expected=2)
         self.assertEqual(self.snapshot(), {})
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         ignore = self.project / ".gitignore"
         ignore.write_bytes(b"# Existing\n*.log\n")
         self.run_tool("create", "--work", "audit.md", payload=payload)
@@ -158,7 +158,7 @@ class HandoffToolTest(unittest.TestCase):
         self.run_tool("create", "--work", "tracked.md", payload={**payload, "tracking": "track"})
         self.assertEqual(ignore.read_text(), "# Existing\n*.log\n# cc-feather: track /.feather/handoffs/\n")
         index = subprocess.run(["git", "-c", f"safe.directory={self.project.as_posix()}", "-C",
-                                str(self.project), "ls-files"], capture_output=True, check=True)
+                                str(self.project), "ls-files"], capture_output=True, check=True, timeout=30)
         self.assertEqual(index.stdout, b"")
 
     def test_legacy_update_requires_reviewed_replacement_for_multiline_field(self):
@@ -214,7 +214,7 @@ class HandoffToolTest(unittest.TestCase):
         self.assertEqual(path.read_bytes(), before)
 
     def test_tracking_failure_reports_saved_create_and_update_for_recovery(self):
-        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "--quiet", str(self.project)], check=True, capture_output=True, timeout=30)
         ignore = self.project / ".gitignore"
         ignore.write_bytes(b"\xff")
         fields = {"goal": "Audit", "progress": "Port checked", "next": "Read readiness"}

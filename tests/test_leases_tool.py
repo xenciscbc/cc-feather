@@ -27,6 +27,16 @@ TIMEOUT = 60
 HOLD = 0.3  # how long the concurrent-reader case holds each file open; well inside the tool's patience
 
 
+def stop(process: subprocess.Popen) -> None:
+    """End a tool process the test started if it is still running, and collect its pipes within TIMEOUT."""
+    if process.poll() is None:
+        process.kill()
+        try:
+            process.communicate(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            pass
+
+
 class LeaseBase(SharedBase):
     def setUp(self):
         super().setUp()
@@ -135,8 +145,8 @@ class AcquireTest(LeaseBase):
                     try:
                         out, err = process.communicate(timeout=TIMEOUT)
                     except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.communicate()
+                        for racer in processes:
+                            stop(racer)
                         self.fail("a racing acquire did not finish in time")
                     self.assertEqual(process.returncode, 0, out + err)
                     results.append(json.loads(out))
@@ -236,7 +246,10 @@ class CriticalSectionTest(LeaseBase):
             reader.close()
             if held_lock is not None:
                 held_lock.close()
-        out, err = process.communicate(timeout=TIMEOUT)
+        try:
+            out, err = process.communicate(timeout=TIMEOUT)
+        finally:
+            stop(process)
         self.assertIsNotNone(held_lock, "the release's critical section was never observed")
         self.assertEqual(process.returncode, 0, out + err)
         released = json.loads(out)
