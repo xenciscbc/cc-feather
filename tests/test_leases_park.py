@@ -11,8 +11,8 @@ from pathlib import Path
 import subprocess
 import unittest
 
+from tests import test_leases_tool
 from tests.test_leases_locks import LockBase
-from tests.test_leases_tool import CriticalSectionTest
 
 
 class ParkBase(LockBase):
@@ -242,7 +242,7 @@ class ParkLeaseTest(ParkBase):
         self.merge(self.main, "wt1")
         before = self.head(self.wt1)
         acquired = self.acquire(self.main, self.wt1)
-        data = CriticalSectionTest.write_lock(self, "wt1", timedelta(seconds=30))
+        data = test_leases_tool.CriticalSectionTest.write_lock(self, "wt1", timedelta(seconds=30))
         result = self.park(self.wt1, acquired["lease"]["lease_id"])
         self.assertEqual((result["status"], result["released"], result["park"]["parked"]), ("busy", False, False),
                          result)
