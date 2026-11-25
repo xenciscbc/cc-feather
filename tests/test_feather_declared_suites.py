@@ -7,6 +7,11 @@ run has one line per suite; the decision at the end of the Plan lists the catalo
 revision; a suite's `Budget:` line counts as the project's resource guidance for it. The setup document and both
 READMEs describe it. Tests check which sentences the shipped documents state, not how main applies them.
 
+Ticket 02 adds the release side: before a release or tag, the release question for that commit has a suites part for
+the Release-required suites that have no pass there, asked and recorded apart from its `full`/`related` part; only the
+user's answer leaves a suite out, which removes only its `release` gate and excuses no failure; a release-only run of
+suites is its own recorded entry; in off only the suites part is asked and nothing is recorded.
+
 The existing pins this ticket replaces, updated where they are: in test_feather_final_check, ReleaseScopeTests'
 release question in review state's Final check scope; in test_feather_resource_floor, the count of links to the
 resource-risk runs reference."""
@@ -169,8 +174,8 @@ class CatalogueReferenceTests(Pinned, unittest.TestCase):
                 with self.subTest(path=path.name, link=link):
                     self.assertEqual((path.parent / link).resolve(), OWNER.resolve())
                 found += 1
-        # Review state's Final check and the resource-risk runs reference's The budget.
-        self.assertEqual(found, 2)
+        # Review state's Final check and Final check scope, and the resource-risk runs reference's The budget.
+        self.assertEqual(found, 3)
 
 
 class FinalCheckTests(Pinned, unittest.TestCase):
@@ -250,6 +255,99 @@ class RecordedRunTests(Pinned, unittest.TestCase):
             "pass, and a narrowed run covers only its part, never the whole suite.",
             "A suite that passed inside a run that was otherwise incomplete still covers that suite, but a suite's "
             "recorded pass never makes a failed commit passed.")
+
+
+class ReleaseQuestionTests(Pinned, unittest.TestCase):
+    """Ticket 02: the release question's suites part in review state's Final check scope, its records, off, and the
+    reference's release side."""
+
+    def test_the_trigger_and_the_pointer_for_what_a_pass_is(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Final check scope",
+            "When Git tracks a Test suite catalogue at the commit to be released or tagged, in off and in auto, the "
+            "release question for that commit has a suites part when at least one Release-required suite at that "
+            "commit has no pass there, from main's own run in this session at that commit or, in auto, from a recorded "
+            "pass that meets the conditions Recorded final check runs states; what a suite's pass is, and which suites "
+            "are Release-required suites at that commit, are as the test-suites reference states: " + POINTER)
+
+    def test_the_two_parts_are_independent_and_recorded_apart(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Final check scope",
+            "The suites part is asked even when a valid `full` pass at that commit lets main skip the `full`/`related` "
+            "part, which is asked only as this bullet states above; the suites part and its answer are recorded apart "
+            "from the `full`/`related` part and its answer in the release question's entry for that commit, the "
+            "suites part written there as pending before main asks it and replaced only by the user's answer to it.")
+
+    def test_it_lists_prerequisites_and_is_asked_as_part_of_the_release_question(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Final check scope",
+            "The suites part lists each suite it asks about with that suite's prerequisites and asks whether to run "
+            "it; it is part of the release question, so main asks it as Asking in the conversation states and waits "
+            "for the answer.")
+        # The Asking in the conversation bullet already names the release question and is not changed.
+        asking = bullet(REVIEW_STATE, "Asking in the conversation")
+        self.assertIn("the release question,", asking)
+        self.assertNotIn("suites part", asking)
+        self.assertNotIn("in the message that ends its turn", bullet(REVIEW_STATE, "Final check scope"))
+
+    def test_only_the_users_answer_leaves_a_suite_out_and_the_default_runs_them(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Final check scope",
+            "Only the user's answer to the suites part, as this bullet defines the user's answer, leaves a suite out; a "
+            "tool result other than the user's answer, a record, a role's report and a compaction summary never do, "
+            "and while the suites part is pending, unanswered or answered unclearly, every suite it lists runs at that "
+            "commit before the release or tag.")
+
+    def test_leaving_a_suite_out_removes_only_its_release_gate(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Final check scope",
+            "Leaving a suite out removes only its `release` gate at that commit: a suite that is also a "
+            "Landing-required suite, or that an acceptance names, still has to pass, and leaving a suite out excuses "
+            "no failure, so a failure observed at that commit keeps that commit failed, as Final check describes.",
+            "Main's report of a release or tag names each Release-required suite the answer to the suites part left "
+            "out.")
+
+    def test_a_kept_suite_that_has_not_passed_blocks_the_release(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Final check scope",
+            "The suites the answer keeps run at that commit, one at a time, before the release or tag: a failure among "
+            "them keeps that commit failed, and a kept suite whose prerequisites are missing, whose output does not "
+            "show its pass condition or whose run was stopped from outside blocks the release or tag until the user "
+            "decides, as Final check describes for a required check that has not passed without a failure.")
+
+    def test_off_asks_only_the_suites_part_and_records_nothing(self):
+        off = ("In off, which has no `full`/`related` part, main asks only the suites part before a release or tag, in "
+               "the conversation, records nothing, and takes a suite's pass only from its own run in this session at "
+               "that commit, never from a record or another session.")
+        self.assert_bullet(REVIEW_STATE, "Final check scope", off)
+        scope = bullet(REVIEW_STATE, "Final check scope")
+        self.assertLess(scope.index(off), scope.index("In off, a plan has no Final check scope:"))
+
+    def test_a_release_only_run_is_its_own_recorded_entry(self):
+        self.assert_bullet(
+            REVIEW_STATE, "Recorded final check runs",
+            "A release-only run of suites, a run of Release-required suites at the commit to be released or tagged that "
+            "the release question's suites part keeps, outside a final check run, is its own entry at that commit, "
+            "with each claim's reading-set hash, the time the run ended and one line for each suite it ran in the form "
+            "above, written as a final check run's entry is; a suite's pass in it covers that suite at that commit "
+            "only under the conditions below for a recorded pass, other than the one on scope.")
+        self.assert_bullet(
+            REVIEW_STATE, "Dispatch record",
+            "That entry also holds the release question's suites part, marked pending before main asks it, and the "
+            "user's answer that replaces that mark, apart from its `full`/`related` part, and the record holds each "
+            "release-only run of suites as its own entry at its commit, as Recorded final check runs describes.")
+
+    def test_the_reference_states_the_release_side(self):
+        self.assert_bullet(
+            OWNER, "Release",
+            "Which suites are Release-required suites at a release or tag is decided by the catalogue at the commit to "
+            "be released or tagged.",
+            "Release-required suites run through review state's release question, as its Final check scope states, "
+            "and are never added to a Claim's acceptance only because of the release.")
+        sentence = "are never added to a Claim's acceptance only because of the release"
+        for path in sorted((config.ROOT / "skills").rglob("*.md")):
+            with self.subTest(path=path.relative_to(config.ROOT).as_posix()):
+                self.assertEqual(path.read_text(encoding="utf-8").count(sentence), 1 if path == OWNER else 0)
 
 
 class BudgetTests(Pinned, unittest.TestCase):
