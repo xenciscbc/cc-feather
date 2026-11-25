@@ -125,11 +125,35 @@ python -B scripts/feather_config.py review --project /absolute/project --scope p
 
 A scope saved `on` carries the whole rule in its managed delegation block, after the automatic review paragraph and after a saved Stop threshold sentence, in auto and in off; project scope says it is on in this project and that this overrides broader Feather guidance. A project saved `off` states in one sentence in the same place that Related-test acceptance is off in this project and that this overrides broader Feather guidance. The rule is written once, in `templates/related-tests.md`, which the configuration tool renders; this document describes it without restating it. That guidance text is how main learns a saved choice: main writes acceptance while writing a spec, tickets or a plan, when the delegation skill is not necessarily loaded, so the loaded guidance carries the whole rule. A scope without a saved setting has no such text, so its guidance and state stay byte-identical to what 0.33.0 writes. Delegation guidance from a template older than the one the tool can edit is not changed: `--related-tests` asks for setup update first.
 
+In a project whose Working checkout tracks a Test suite catalogue, the rule has main read the delegation skill's test-suites reference (`skills/delegation/references/test-suites.md`) before writing acceptance, and that reference states what the rule's terms mean with the catalogue; this document does not restate it. A scope saved `on` renders the sentence that points to the reference only after setup update: until then `check` reports that the delegation guidance is from an older template, and `review` that changes a saved setting asks for setup update first. To downgrade, reinstall the older plugin and run its setup update in each scope saved `on`, which renders that version's rule without the sentence; a scope without a saved setting needs nothing.
+
 `show` and `check` report `related_tests`, which is the saved setting or `off`, and `related_tests_set`, which is false when none is saved; session export is unchanged. Setup update, `model`, switching the review mode, changing the Stop threshold and installing or removing the handoff or leases component keep the saved setting and its rule; removing the delegation component removes both. Updating from 0.33.0 needs no setup update: 0.34.0 changes no role definition template and no handoff, delegation or leases policy template, so existing installations need only the plugin update and a fresh session, and a scope's guidance and state stay byte-identical until the setting is saved in it. A 0.33.x or older configuration tool rejects a scope with a saved setting, so a downgrade first sets it back to `default` there. That is `review --related-tests default` in every scope that saved the setting, run before the older plugin is reinstalled; a scope without a saved setting needs nothing, and a session choice, which writes nothing, needs nothing either.
 
 In a session, the setting in effect is the user's session choice, then the project guidance, then the user guidance, then off; a session choice comes only from the user's own words in this conversation and is not written into a handoff. A choice saved in project or user scope during a conversation replaces an earlier session choice, and the setting in effect is resolved again from the saved choices, as for the Stop threshold.
 
 The setting changes how main writes acceptance, not how any review or the final check runs. Each review and the rerun of a Claim's primary acceptance use the acceptance as written, and the final check runs as before. A Claim that breaks a test its acceptance does not name passes its own reviews; the break is found only at the final check. In auto, a failure attributed with evidence to that Claim is then fixed by that Claim with its code review and outcome verification again, and an unattributed one becomes a fix Claim; in off, the failure reopens the Claims it affects. The final check runs before landing and release, so work that main never lands or releases does not get the full suite from this setting. Finding related tests by searching for paths and directory names can miss a test that reaches a file only through a path built at run time from parts that are not searched for. The rule binds how main writes acceptance in sessions where the guidance or a session choice turns it on; acceptance written elsewhere, or by the user, is taken as written.
+
+## Test suite catalogue
+
+A project may declare its test suites, with what each one needs to run and to pass, in a Test suite catalogue, `.feather/test-suites.md` in its checkout, tracked in Git with the code it tests. It has no setup command or configuration key: writing the file and committing it is the whole setup, and a project without it behaves as before. Each suite is one `## <suite name>` section with the labelled lines `Command:`, `Prerequisites:`, `Passes when:` and `Gates:`, and optionally `Budget:`, `Conflicts:` and `Affected part:`. For example:
+
+```markdown
+## e2e smoke
+
+Command: `pnpm exec playwright test --grep @smoke`, run in `web/` with `CI=1`
+Prerequisites: the development server on port 5173 and a seeded test database
+Passes when: the summary line reports more than 0 passed tests, and no test tagged `@smoke` is skipped
+Gates: landing, release
+```
+
+The gates are `landing`, `full`, `release` or `none`. Landing-required suites, those whose gates include `landing`, run at every final check at Final check scope `full` and `related` alike, in auto and in off, so `related` never leaves them out. Main uses the file only when Git tracks it at the commit it works on, and reports a file that is untracked or ignored instead of using it. A project that ignores all of `.feather/` can track the catalogue alone with:
+
+```gitignore
+/.feather/*
+!/.feather/test-suites.md
+```
+
+The rules for the catalogue, such as what counts as a pass and when main reads the file, are in the delegation skill's test-suites reference (`skills/delegation/references/test-suites.md`); this section describes them without restating them.
 
 ## Auto land
 

@@ -65,8 +65,24 @@ An optional delegation setting, off by default, under which main names in each C
 _Avoid_: partial tests, quick tests, test scope
 
 **Final check scope**:
-What the final check runs for a Plan in the Automatic flow: `full`, the Plan's overall acceptance and a rerun of every Claim's primary acceptance, or `related`, the rerun of every Claim's primary acceptance alone. At `full`, a Claim's primary acceptance that the overall acceptance's own run visibly executed, with the same tool and the same conditions, is not run a second time. Plan review recommends one with its reason; main asks the user after the Plan's READY and before its first Claim is implemented, and again only after a later plan review whose recommendation changes or main cannot tell whether it does, or when the user asks to change it. The user's answer to the latest question sets it, and until that answer is recorded it is `full`, which holds back no Claim. A release or tag runs `full` at the commit to be tagged unless the user, asked for that commit, chooses `related`; a `full` pass already valid there is used without asking. A final check run at the chosen scope passes or fails like any other: `related` is not a missing check and needs no Accept and land. Choosing it is not a review event, changes no count or verdict and gives no authority to land, release or tag.
+What the final check runs for a Plan in the Automatic flow: `full`, the Plan's overall acceptance and a rerun of every Claim's primary acceptance, or `related`, the rerun of every Claim's primary acceptance alone. At `full`, a Claim's primary acceptance that the overall acceptance's own run visibly executed, with the same tool and the same conditions, is not run a second time. Plan review recommends one with its reason; main asks the user after the Plan's READY and before its first Claim is implemented, and again only after a later plan review whose recommendation changes or main cannot tell whether it does, or when the user asks to change it. The user's answer to the latest question sets it, and until that answer is recorded it is `full`, which holds back no Claim. A release or tag runs `full` at the commit to be tagged unless the user, asked for that commit, chooses `related`; a `full` pass already valid there is used without asking. A final check run at the chosen scope passes or fails like any other: `related` is not a missing check and needs no Accept and land. In a project with a Test suite catalogue, both scopes also run every Landing-required suite. Choosing it is not a review event, changes no count or verdict and gives no authority to land, release or tag.
 _Avoid_: test scope, quick check, partial final check
+
+**Test suite catalogue**:
+A project's optional list of its Declared test suites, kept in `.feather/test-suites.md` of the Working checkout and tracked in Git with the code it tests. A project without one keeps every rule as before; writing one is a change to the checkout, not one of cc-feather's own records.
+_Avoid_: test registry, test config, test tiers
+
+**Declared test suite**:
+One named group of tests in the Test suite catalogue: the command that runs it, the prerequisites it needs, the condition its output must show for it to pass, and the gates that require it, `landing`, `full`, `release`, any combination of them, or none for a suite that runs only when a Claim's acceptance names it. It passes only when the command succeeds and its output shows positive evidence that the required tests ran. A run whose assertions failed is a failure. Otherwise, a run whose prerequisites are missing, or whose output does not show the condition, has not run, and a run stopped from outside has not completed; these results are kept apart from a failure.
+_Avoid_: test tier, heavy tests, light tests, quick tests, smoke layer
+
+**Landing-required suite**:
+A Declared test suite whose gates include `landing`. Every final check runs it at the commit to be landed or tagged, at Final check scope `full` and `related` alike; when it has not passed there, the final check has not run at the scope the operation needs, so landing with it needs Accept and land that names it.
+_Avoid_: mandatory tests, smoke gate
+
+**Release-required suite**:
+A Declared test suite whose gates include `release`. Before a release or tag, main runs it at the commit to be tagged unless it has already passed there, or the user, asked in the conversation for that commit, chooses to leave it out; a question that is pending, unanswered or answered unclearly runs it. Leaving it out removes only its `release` gate at that commit, never a `landing` gate or an acceptance that names it, and waives no failure; the report of the release says which suites it left out.
+_Avoid_: heavy tests, nightly suite, release tier
 
 **User's answer**:
 The user's own message in this conversation, or the AskUserQuestion answer to a question main asked, in the call main made; no other tool result is the user's answer. It can set a Final check scope, set or lift Auto land and its holds, and state or lift a restriction; review state's Final check scope defines it.

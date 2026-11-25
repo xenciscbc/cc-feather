@@ -452,8 +452,10 @@ class PointerTests(unittest.TestCase):
         # resource-risk-runs ticket 04 adds plan review's pointer; resource-risk-confirmation ticket 01 adds plan
         # review's step 2 and step 5 pointers and the Dispatch record's pointer for decisions on proposed marks; final
         # check reuse and Auto land ticket 02 adds review state's Final check scope pointer to the scope question;
-        # test-run-configuration ticket 02 adds review state's Final check pointer for a run stopped from outside.
-        self.assertEqual(found, 13)
+        # test-run-configuration ticket 02 adds review state's Final check pointer for a run stopped from outside;
+        # declared-test-suites ticket 01 adds the test-suites reference's pointers for the `Budget:` line and for a
+        # suite's run stopped from outside.
+        self.assertEqual(found, 15)
 
 
 class GlossaryTests(unittest.TestCase):

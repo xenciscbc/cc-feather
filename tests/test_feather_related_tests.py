@@ -24,6 +24,27 @@ PROJECT_ON = "Related-test acceptance is on in this project; this overrides broa
 PROJECT_OFF = "Related-test acceptance is off in this project; this overrides broader Feather guidance."
 STOP_LINE = {"user": "The Stop threshold for automatic review is {k}.",
              "project": "The Stop threshold in this project is {k}; this overrides broader Feather guidance."}
+# declared-test-suites ticket 03: the one sentence the template gains, pointing to the test-suites reference.
+CATALOGUE_SENTENCE = ("When the Working checkout has a Test suite catalogue at `.feather/test-suites.md` tracked in Git, "
+                      "main reads the delegation skill's test-suites reference before writing acceptance and follows it.")
+# Test data: the rule 0.45.0's template rendered (templates/related-tests.md at the 0.45.0 release, commit aad2f67).
+# The configuration tool and every other guidance template are unchanged since then, so the tool rendering this text
+# in place of the template writes exactly what 0.45.0 wrote.
+RULE_0_45_0 = (
+    "When main writes a Claim's acceptance in a spec, ticket or plan, it names the test modules related "
+    "to the change instead of the full test suite: those that test or read the files the Claim changes, "
+    "found by searching the tests for those files' paths and directory names. It names the full suite "
+    "instead when the Claim changes shared test support or build configuration, when its related tests "
+    "cannot be determined, and for a release unless the Plan's overall acceptance names the full suite. "
+    "The named tests are a minimum: running more for a file the list does not cover does not change the "
+    "acceptance. A Plan's overall acceptance keeps the full suite, which the final check runs. When main "
+    "writes a Plan of several Claims that has no overall acceptance, it adds one that names the full "
+    "suite where the Plan is written, in the spec for tickets of a spec. That overall acceptance states "
+    "that it is the Plan's overall acceptance, which the final check runs for each commit to be landed or "
+    "tagged, not for each Claim, and that it is not part of any Claim's acceptance; each ticket cites it. "
+    "The only Claim of a Plan without overall acceptance keeps the full suite itself. Acceptance the user "
+    "wrote, existing specs and tickets, and a fix Claim's acceptance keep their wording."
+)
 # The rule's decision-carrying sentences, as the spec's "The rule" states them.
 RULE_SENTENCES = (
     "When main writes a Claim's acceptance in a spec, ticket or plan, it names the test modules related to the change instead of the full test suite: those that test or read the files the Claim changes, found by searching the tests for those files' paths and directory names.",
@@ -33,6 +54,7 @@ RULE_SENTENCES = (
     "When main writes a Plan of several Claims that has no overall acceptance, it adds one that names the full suite where the Plan is written, in the spec for tickets of a spec.",
     "That overall acceptance states that it is the Plan's overall acceptance, which the final check runs for each commit to be landed or tagged, not for each Claim, and that it is not part of any Claim's acceptance; each ticket cites it.",
     "The only Claim of a Plan without overall acceptance keeps the full suite itself.",
+    CATALOGUE_SENTENCE,
     "Acceptance the user wrote, existing specs and tickets, and a fix Claim's acceptance keep their wording.",
 )
 
@@ -331,6 +353,77 @@ class RelatedTestsSettingTests(unittest.TestCase):
         self.apply("update")
         self.apply("review", "project", "--related-tests", "on")
         self.assertEqual(self.block("project"), self.expected_block("off", "project", self.on_paragraph("project")))
+
+    # declared-test-suites ticket 03: guidance 0.45.0's template rendered, kept as test data in RULE_0_45_0.
+
+    def render_0_45_0(self):
+        return mock.patch.object(config, "_related_tests_rule", lambda: RULE_0_45_0)
+
+    def test_the_template_gains_exactly_one_sentence_over_0_45_0(self):
+        self.assertEqual(self.rule().replace(CATALOGUE_SENTENCE + " ", "", 1), RULE_0_45_0)
+        self.assertEqual(self.rule().count(CATALOGUE_SENTENCE), 1)
+        self.assertNotIn(CATALOGUE_SENTENCE, RULE_0_45_0)
+
+    def test_0_45_0_guidance_saved_on_is_from_an_older_template_until_setup_update(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                with self.subTest(scope=scope, mode=mode):
+                    with self.render_0_45_0():
+                        self.apply("install", scope, "--review-mode", mode)
+                        self.apply("review", scope, "--stop-threshold", "4", "--related-tests", "on")
+                        self.assertEqual(self.older_template_warnings(scope), [])
+                    on = PROJECT_ON if scope == "project" else USER_ON
+                    self.assertEqual(self.block(scope), self.expected_block(mode, scope, on + " " + RULE_0_45_0, 4))
+                    # check reports it.
+                    self.assertEqual(self.older_template_warnings(scope),
+                                     ["delegation guidance is from an older template; run setup update"])
+                    # review that changes a saved setting refuses and changes nothing.
+                    before = self.files()
+                    for extra in (("--related-tests", "off"), ("--related-tests", "default"),
+                                  ("--stop-threshold", "5")):
+                        with self.subTest(extra=extra):
+                            code, error = self.call("review", scope, *extra)
+                            self.assertEqual(code, 2, error)
+                            self.assertIn("installed guidance is from an older template; run setup update first",
+                                          error["error"])
+                            self.assertEqual(self.files(), before)
+                    # Setup update replaces the managed block with the new rendering.
+                    self.apply("update", scope)
+                    self.assertEqual(self.block(scope), self.expected_block(mode, scope, self.on_paragraph(scope), 4))
+                    self.assertIn(CATALOGUE_SENTENCE, self.block(scope))
+                    self.assertEqual(self.older_template_warnings(scope), [])
+                    self.assertEqual(self.record(scope)["related_tests"], "on")
+                    self.apply("remove", scope)
+
+    def test_a_downgrade_to_0_45_0_renders_its_rule_with_its_setup_update(self):
+        for scope in ("project", "user"):
+            with self.subTest(scope=scope):
+                self.apply("install", scope, "--review-mode", "auto")
+                self.apply("review", scope, "--related-tests", "on")
+                with self.render_0_45_0():
+                    self.assertEqual(self.older_template_warnings(scope),
+                                     ["delegation guidance is from an older template; run setup update"])
+                    self.apply("update", scope)
+                    on = PROJECT_ON if scope == "project" else USER_ON
+                    self.assertEqual(self.block(scope), self.expected_block("auto", scope, on + " " + RULE_0_45_0))
+                    self.assertEqual(self.older_template_warnings(scope), [])
+                self.apply("remove", scope)
+
+    def test_guidance_without_a_saved_setting_is_byte_identical_to_0_45_0(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                with self.subTest(scope=scope, mode=mode):
+                    with self.render_0_45_0():
+                        self.apply("install", scope, "--review-mode", mode)
+                    written = (self.guidance(scope).read_bytes(), self.state_path(scope).read_bytes())
+                    self.assertEqual(self.older_template_warnings(scope), [])
+                    code, preview = self.call("update", scope)
+                    self.assertEqual((code, preview["changes"]), (0, []), preview)
+                    self.apply("remove", scope)
+                    self.apply("install", scope, "--review-mode", mode)
+                    self.assertEqual((self.guidance(scope).read_bytes(), self.state_path(scope).read_bytes()), written)
+                    self.assertNotIn("test-suites", self.block(scope))
+                    self.apply("remove", scope)
 
     # Session export, preservation and rollback.
 
