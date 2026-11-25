@@ -11,8 +11,9 @@ nothing is written in the linked worktree in the store's place.
 Tests run under a unique directory made with mkdtemp under FEATHER_LINK_TEST_DIR when it is set, otherwise the system
 temporary directory, with an isolated Git environment (GIT_CONFIG_NOSYSTEM, an empty GIT_CONFIG_GLOBAL, HOME and
 XDG_CONFIG_HOME inside the base, inherited GIT_* removed) and synthetic data only. The base holds main/ with one
-commit, linked worktrees wt1 and wt2 added from it and an empty outside/ sentinel, and is removed on cleanup. The
-tool runs as a subprocess with --project; in-process cases drive the CLI entry point or a mutation's public operation,
+commit, linked worktrees wt1 and wt2 added from it and an empty outside/ sentinel, and is removed on cleanup; main, wt1
+and wt2 are copied from a template that each test module builds once, on first use, in a directory of its own beside
+the bases, with the four files that hold absolute worktree paths rewritten to the copy's paths. The tool runs as a subprocess with --project; in-process cases drive the CLI entry point or a mutation's public operation,
 never the resolver or path helpers."""
 import contextlib
 import errno
@@ -75,6 +76,28 @@ def remove_base(base: Path) -> None:
         shutil.rmtree(base, onerror=writable)
 
 
+# The repository template of each test module: module name -> the template's base directory (its strict real path).
+TEMPLATES: dict[str, Path] = {}
+WORKTREES = ("wt1", "wt2")
+
+
+def worktree_links(base: Path) -> dict[Path, bytes]:
+    """The four files that hold absolute worktree paths below base, each with its bytes in the form Git writes them
+    (on Windows with / separators)."""
+    links = {}
+    for name in WORKTREES:
+        admin = base / "main" / ".git" / "worktrees" / name
+        links[base / name / ".git"] = f"gitdir: {admin.as_posix()}\n".encode("utf-8")
+        links[admin / "gitdir"] = f"{(base / name / '.git').as_posix()}\n".encode("utf-8")
+    return links
+
+
+def drop_template(module: str) -> None:
+    base = TEMPLATES.pop(module, None)
+    if base is not None:
+        remove_base(base)
+
+
 def git_call(args: list[str]) -> tuple[str, list[str], bool]:
     """(the -C directory, the Git command after it, whether --no-lazy-fetch was passed) of one recorded start."""
     index = args.index("-C")
@@ -102,11 +125,38 @@ class SharedBase(unittest.TestCase):
                             "HOME": str(self.base / "home"), "XDG_CONFIG_HOME": str(self.base / "home")})
         self.enterContext(mock.patch.dict(os.environ, environment, clear=True))
         self.addCleanup(storage.reset_roots)
-        self.main = self.repository("main", b"main\n")
+        self.template = self.repository_template(configured)
+        for name in ("main", *WORKTREES):
+            shutil.copytree(self.template / name, self.base / name, symlinks=True)
+        for path, content in worktree_links(self.base).items():
+            path.write_bytes(content)
+        self.main = self.base / "main"
         self.wt1, self.wt2 = self.base / "wt1", self.base / "wt2"
-        self.git(self.main, "worktree", "add", "--quiet", str(self.wt1))
-        self.git(self.main, "worktree", "add", "--quiet", str(self.wt2))
         self.store = self.main / ".feather" / "handoffs"
+
+    def repository_template(self, configured: str | None) -> Path:
+        """This test module's template of main with its linked worktrees wt1 and wt2, built on its first use and
+        removed by the module's cleanup; a template whose building failed part way is removed and never reused."""
+        module = type(self).__module__
+        if module in TEMPLATES:
+            return TEMPLATES[module]
+        made = Path(tempfile.mkdtemp(prefix="template-", dir=configured or None))
+        try:
+            try:
+                base = Path(os.path.realpath(made, strict=True))
+            except OSError:
+                self.skipTest(STRICT_REALPATH)
+            main = self.repository("main", b"main\n", base / "main")
+            for name in WORKTREES:
+                self.git(main, "worktree", "add", "--quiet", str(base / name))
+            for path, content in worktree_links(base).items():
+                self.assertEqual(path.read_bytes(), content, path)
+        except BaseException:
+            remove_base(made)
+            raise
+        TEMPLATES[module] = base
+        unittest.addModuleCleanup(drop_template, module)
+        return base
 
     def git(self, cwd: Path, *args: str) -> str:
         try:
@@ -225,6 +275,41 @@ class SharedBase(unittest.TestCase):
         self.assertEqual(refused["code"], "project-root-uncertain", refused)
         self.assertEqual(self.tree(), before)
         return listed
+
+
+class TemplateCopyTest(SharedBase):
+    """The repository template's copy is a real repository whose linked worktrees are its own, at its own paths."""
+
+    def same_directory(self, first: str | Path, second: Path) -> bool:
+        return os.path.normcase(os.path.realpath(first)) == os.path.normcase(os.path.realpath(second))
+
+    def test_a_copy_has_its_own_worktrees_and_never_names_the_template(self):
+        listed = []
+        for block in self.git(self.main, "worktree", "list", "--porcelain").split("\n\n"):
+            fields = dict(line.partition(" ")[::2] for line in block.splitlines())
+            listed.append((fields.get("worktree"), fields.get("branch")))
+        expected = [(self.main, "refs/heads/main"), (self.wt1, "refs/heads/wt1"), (self.wt2, "refs/heads/wt2")]
+        self.assertEqual(len(listed), len(expected), listed)
+        for (path, branch), (directory, wanted) in zip(listed, expected):
+            self.assertTrue(path and self.same_directory(path, directory), (path, directory))
+            self.assertEqual(branch, wanted, listed)
+        for name, worktree in (("wt1", self.wt1), ("wt2", self.wt2)):
+            top = self.git(worktree, "rev-parse", "--show-toplevel")
+            self.assertTrue(self.same_directory(top, worktree), (top, worktree))
+            git_dir = self.git(worktree, "rev-parse", "--absolute-git-dir")
+            own = self.main / ".git" / "worktrees" / name
+            self.assertTrue(os.path.isdir(git_dir) and os.path.samefile(git_dir, own), (git_dir, own))
+        forms = {str(self.template), self.template.as_posix()}
+        if os.name == "nt":
+            forms = {form.lower() for form in forms}
+        for relative, content in self.tree().items():
+            if relative.split("/", 1)[0] not in ("main", "wt1", "wt2"):
+                continue
+            text = content.decode("utf-8", "replace")
+            if os.name == "nt":
+                text = text.lower()
+            for form in forms:
+                self.assertNotIn(form, text, relative)
 
 
 class StoreSelectionTest(SharedBase):

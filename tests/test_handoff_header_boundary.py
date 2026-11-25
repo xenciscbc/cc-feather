@@ -1,7 +1,7 @@
 """C6: the work header ends at the managed sections' fence-aware ATX heading rule, in reads and updates alike."""
 import unittest
 
-from tests.test_handoff_local_fixes import COMPLETED, LocalFixesBase, sha
+from tests.test_handoff_local_fixes import COMPLETED, InProcessBase, sha
 
 TITLE = "交接 Foo ✓"
 UPDATED = "2026-09-10T09:00:00+08:00"
@@ -32,7 +32,7 @@ SAMPLE = (1, 7, 13, 19, 20, 26)
 VARIANTS = {"lf": {}, "crlf": {"eol": "\r\n"}, "bom": {"bom": True}, "bom-crlf": {"eol": "\r\n", "bom": True}}
 
 
-class HeaderBoundaryTest(LocalFixesBase):
+class HeaderBoundaryTest(InProcessBase):
     def each(self):
         """Every heading with LF; with CRLF and BOM, one heading per level covering each indent and separator."""
         return [(f"{variant}-{index}.md", heading, options)
@@ -109,7 +109,7 @@ class HeaderBoundaryTest(LocalFixesBase):
                          data.replace("證據 ✓".encode(), "新證據".encode()))
 
 
-class HeaderBoundaryControlTest(LocalFixesBase):
+class HeaderBoundaryControlTest(InProcessBase):
     def test_non_headings_keep_field_like_lines_in_the_header(self):
         for label, line in CONTROLS.items():
             with self.subTest(label):
@@ -149,7 +149,7 @@ class HeaderBoundaryControlTest(LocalFixesBase):
                 self.assertEqual((self.directory / "a.md").read_bytes(), data)
 
 
-class HeaderLineEndingTest(LocalFixesBase):
+class HeaderLineEndingTest(InProcessBase):
     """Header lines end only at LF (or CRLF): characters str.splitlines breaks on stay inside a field value."""
 
     VALUES = ("see # 1", "see\x0b# 1", "see\x0c# 1", "see\x1c# 1", "see\x1d# 1", "see\x1e# 1", "see\x85# 1",
@@ -181,7 +181,7 @@ class HeaderLineEndingTest(LocalFixesBase):
                                  before.replace("下一步：n\n".encode(), "下一步：n\n注意：z\n".encode(), 1))
 
 
-class HeaderFenceTest(LocalFixesBase):
+class HeaderFenceTest(InProcessBase):
     """A fence in the header hides headings: closed, the header ends at the next real heading; open, at the end."""
 
     def data(self, closed: bool) -> bytes:

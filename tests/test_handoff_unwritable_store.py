@@ -24,13 +24,37 @@ import subprocess
 import unittest
 from unittest import mock
 
-from tests.test_handoff_shared_store import FIELDS, SKILL, TOOL_REFERENCE, SharedBase, assert_sentences
+from tests.test_handoff_shared_store import FIELDS, SKILL, TOOL_REFERENCE, SharedBase, assert_sentences, \
+    is_directory_link
 from feather_handoff import storage
 
 WINDOWS = os.name == "nt"
 NOT_DENIED = ("this platform and user can still create files in a directory denied write access (for example "
               "running as root, or a volume that ignores permission bits or ACLs)")
 DONE = {**FIELDS, "status": "完成"}
+# The prepared store of each (test module, Working checkout relative to the base): the first base directory, the
+# directories and files (with bytes) the first prepare created or changed below it, and the result it returned.
+PREPARED: dict[tuple[str, str], tuple[Path, tuple[str, ...], dict[str, bytes], dict]] = {}
+
+
+def snapshot(base: Path) -> tuple[set[str], dict[str, bytes]]:
+    """Every directory and file (with its bytes) below base, relative to it, not following directory links."""
+    directories, files = set(), {}
+    for current, names, filenames in os.walk(base):
+        names[:] = [name for name in names if not is_directory_link(Path(current, name))]
+        for name in names:
+            directories.add(Path(current, name).relative_to(base).as_posix())
+        for name in filenames:
+            item = Path(current, name)
+            files[item.relative_to(base).as_posix()] = item.read_bytes()
+    return directories, files
+
+
+def base_names(base: Path) -> list[bytes]:
+    """The forms in which a file could name base: native, with / separators and JSON-escaped; lower case on
+    Windows, where paths compare without case."""
+    forms = {str(base), base.as_posix(), str(base).replace("\\", "\\\\")}
+    return [(form.lower() if WINDOWS else form).encode("utf-8") for form in forms]
 
 
 class DenyMixin:
@@ -81,8 +105,36 @@ class StoreFixture(DenyMixin):
         return self.wt1
 
     def prepare(self) -> dict:
-        """From the Working checkout: an active a.md, a deferred completed b.md, and history holding the completed h.md."""
-        active = self.run_tool(self.working(), "create", "--work", "a.md", payload={"title": "a", "fields": FIELDS})
+        """From the Working checkout: an active a.md, a deferred completed b.md, and history holding the completed h.md.
+
+        The first prepare of a test module for a Working checkout runs through the tool and records what it created or
+        changed below the base; a later one writes that recording into its own copy and starts no tool process."""
+        key = (type(self).__module__, self.working().relative_to(self.base).as_posix())
+        if key in PREPARED:
+            first, directories, files, result = PREPARED[key]
+            names = base_names(first)
+            for name, content in files.items():
+                searched = content.lower() if WINDOWS else content
+                self.assertFalse(any(form in searched for form in names), f"{name} names the first base {first}")
+            for name in directories:
+                (self.base / name).mkdir(parents=True, exist_ok=True)
+            for name, content in files.items():
+                (self.base / name).parent.mkdir(parents=True, exist_ok=True)
+                (self.base / name).write_bytes(content)
+            return dict(result)
+        before = snapshot(self.base)
+        result = self.prepare_through_tool()
+        after = snapshot(self.base)
+        removed = (before[0] - after[0]) or (before[1].keys() - after[1].keys())
+        if not removed:
+            # A first prepare that removed anything is not recorded, so a later one runs through the tool as well.
+            files = {name: content for name, content in after[1].items() if before[1].get(name) != content}
+            PREPARED[key] = (self.base, tuple(sorted(after[0] - before[0])), files, dict(result))
+            unittest.addModuleCleanup(PREPARED.pop, key, None)
+        return result
+
+    def prepare_through_tool(self) -> dict:
+        active =self.run_tool(self.working(), "create", "--work", "a.md", payload={"title": "a", "fields": FIELDS})
         deferred = self.run_tool(self.working(), "create", "--work", "b.md", expected=2,
                                  payload={"title": "b", "fields": DONE, "defer_history": True})
         self.assertEqual(deferred["code"], "deferred", deferred)

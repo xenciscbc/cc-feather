@@ -1,10 +1,12 @@
 """Park a merged worktree when its Checkout lease is returned (checkout leases ticket 05).
 
-The lease tool runs as a subprocess against temporary real Git repositories with real linked worktrees, and only its
-JSON result and exit status are asserted, with the fixture of tests/test_leases_tool.py: a base made with mkdtemp
-under FEATHER_LINK_TEST_DIR when set, holding main/ with one commit and linked worktrees wt1 and wt2 (on branches wt1
-and wt2) beside it, synthetic data only, removed on cleanup. Merges are made with `git merge --no-ff` in the fixture's
-own checkouts. A remote default branch is a synthetic `refs/remotes/origin/*` ref with a symbolic
+The lease tool runs against temporary real Git repositories with real linked worktrees, with the fixture of
+tests/test_leases_tool.py. For single calls it runs in the test process through its entry point,
+`feather_leases.cli.main()`, with only its JSON result and exit code asserted and no internal state; it runs as a
+subprocess for races, concurrent readers, the environment it sees and the launcher. The fixture is a base made with
+mkdtemp under FEATHER_LINK_TEST_DIR when set, holding main/ with one commit and linked worktrees wt1 and wt2 (on
+branches wt1 and wt2) beside it, synthetic data only, removed on cleanup. Merges are made with `git merge --no-ff` in
+the fixture's own checkouts. A remote default branch is a synthetic `refs/remotes/origin/*` ref with a symbolic
 `refs/remotes/origin/HEAD`; no remote is contacted. A held critical section is a synthetic lock file."""
 from datetime import timedelta
 from pathlib import Path

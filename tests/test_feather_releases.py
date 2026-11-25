@@ -3764,9 +3764,14 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
         # the template sentence is quoted as it now stands, with the catalogue's path.
         self.assertNotIn("git archive b9733cb", entry)
         self.assertNotIn("has a tracked Test suite catalogue", entry)
-        # The entry was appended rather than rewriting an earlier one, and only the 0.47.0 entry follows it.
-        after = text.split(self.ENTRY_HEADING, 1)[1][len(entry):]
-        self.assertTrue(after.startswith(TestDesignReleaseTests.ENTRY_HEADING))
+        # The entry was appended rather than rewriting an earlier one; after it come only sections for work landed on
+        # main without a release, such as "## Test speed-ups, second batch", and then the 0.47.0 entry.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIn(TestDesignReleaseTests.ENTRY_HEADING, after)
+        between = after.split(TestDesignReleaseTests.ENTRY_HEADING, 1)[0]
+        self.assertIsNone(re.search(r"^## \d", between, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.46.0)")
+                            for heading in re.findall(r"^## .*$", between, re.MULTILINE)))
 
 
 class TestDesignReleaseTests(unittest.TestCase):

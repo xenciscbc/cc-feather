@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from tests import handoff_in_process
 from tests import test_handoff_tool as handoff_tests
 from tests.test_handoff_storage import skewed_fstat
 RECORD = handoff_tests.RECORD
@@ -22,7 +23,7 @@ from feather_handoff.storage import HandoffError, Store, reset_roots
 
 class HandoffSnapshotsTest(unittest.TestCase):
     setUp = handoff_tests.HandoffToolTest.setUp
-    run_tool = handoff_tests.HandoffToolTest.run_tool
+    run_tool = handoff_in_process.run_tool
     write_work = handoff_tests.HandoffToolTest.write_work
     tree = handoff_tests.HandoffToolTest.snapshot
 
