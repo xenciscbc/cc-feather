@@ -29,7 +29,7 @@ It may also give a resource budget, its known conflicts with other runs, and how
 
 cc-feather uses the catalogue in three places:
 
-1. **Acceptance writing.** While Related-test acceptance is on, a Claim whose related tests belong to a Declared test suite names the affected part of that suite, with one sentence on why that part covers the change. A Plan's overall acceptance that main adds names the suites whose gates include `full`.
+1. **Acceptance writing.** While Related-test acceptance is on, a Claim whose related tests belong to a Declared test suite names the affected part of that suite, with one sentence on why that part covers the change. A Plan's overall acceptance that main adds names the suites whose gates include `full`, or the full suite as without a catalogue when no suite has that gate.
 2. **The final check.** At Final check scope `full` and `related` alike, the final check runs every **Landing-required suite** (gate `landing`). One that does not pass there means that the final check has not run at the scope landing needs.
 3. **Release.** Before a release or tag, main runs every **Release-required suite** (gate `release`) that has not already passed at that commit. It does not run them only when the user, asked in the conversation as part of the release question, chooses to leave them out.
 
@@ -45,7 +45,7 @@ The catalogue is data the project writes; cc-feather never creates, edits or pro
 6. As a user, I want a suite to pass only when its output shows its own pass condition, such as a marker line or no SKIP of a required test, so that "exit status 0 with nothing run" is not a pass.
 7. As a user, I want a failure, a missing prerequisite and a run stopped from outside recorded as three different results, so that I know whether to fix code, provide an environment or change a budget.
 8. As a user, I want suites that must run before every landing to run at Final check scope `related` too, so that choosing `related` cannot drop a check the project requires before merging.
-9. As a user, I want the suites that make up the project's full run named in the Plan's overall acceptance, so that there is no question what "full" contains.
+9. As a user, I want the suites that make up the project's full run named in the Plan's overall acceptance, so that there is no question what "full" contains, and the full suite when none is declared, so that declaring only special suites never drops the project's full run.
 10. As a user, I want suites needed only before a release to stay out of every landing's final check, so that daily work does not wait for them.
 11. As a user, I want main to ask me in the conversation, at release time, whether to run the release-only suites not yet run at that commit, so that I decide each time and the question survives a resumed session.
 12. As a user, I want an unanswered release question to run those suites, so that silence never leaves a release unchecked.
