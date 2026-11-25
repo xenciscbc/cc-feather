@@ -3763,8 +3763,12 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
         # the template sentence is quoted as it now stands, with the catalogue's path.
         self.assertNotIn("git archive b9733cb", entry)
         self.assertNotIn("has a tracked Test suite catalogue", entry)
-        # The entry is the file's last, so it is appended rather than rewriting an earlier one.
-        self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
+        # The entry is the file's last release entry, so it is appended rather than rewriting an earlier one; only
+        # sections for work landed on main without a release, such as "## Test speed-ups, second batch", may follow.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIsNone(re.search(r"^## \d", after, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.46.0)")
+                            for heading in re.findall(r"^## .*$", after, re.MULTILINE)))
 
 
 class InstallDocumentTests(unittest.TestCase):
