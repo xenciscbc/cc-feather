@@ -214,6 +214,10 @@ _Avoid_: heavy config, worker explosion
 Code, rules or design kept for cases that neither normal use nor the applicable threat model meets: defending against states only the project's own code could produce, compatibility with formats or tokens that were never released or no longer exist anywhere, configuration or extension points with a single user, and several defences guarding the same case. A check at a trust boundary is not Over-design even when it looks like guarding against internal mistakes. Whether an old format still exists outside the repository is a fact only the user can confirm.
 _Avoid_: overengineering, gold-plating, defensive bloat
 
+**Test design**:
+A report of the tests one target needs, the target being a spec, its tickets or an existing feature: each proposed test with the defect it would catch that no other test catches, its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work, together with the checks that need manual verification, the existing tests that already verify part of the target and the existing tests the proposed ones would make redundant. It is information, not a Plan, and its items are not Claims; what the user picks enters a Plan's acceptance only through an edit the user asks for.
+_Avoid_: test plan, test strategy
+
 ## Checkout leases
 
 **Checkout lease**:
