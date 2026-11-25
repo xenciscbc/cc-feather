@@ -147,7 +147,12 @@ The user chose (a); the rest of this spec is written for it.
   - the overall acceptance main adds.
 
   A Claim whose related tests are in a Declared test suite names that suite narrowed to the affected part, or the whole suite, as D7 states. Release-required suites are never put into a Claim's acceptance only because of the release. They run through the release question, so the user can still leave them out.
-- **Upgrade.** A scope that saved Related-test acceptance `on` renders the new sentence only after setup update. The release notes and the setup document say so, and the compatibility data for older templates is extended so the configuration tool still recognises 0.45.0's rendered text. A scope without a saved setting is byte-identical to 0.45.0.
+- **Upgrade.** A scope that saved Related-test acceptance `on` renders the new sentence only after setup update. The configuration tool is not changed. It already handles guidance rendered by an older template, and 0.45.0's guidance behaves as follows:
+  - `check` reports the warning that the delegation guidance is from an older template and to run setup update;
+  - setup update replaces the managed block with the new rendering;
+  - `review` that changes a saved setting refuses and asks for setup update first, as the setup document already states.
+
+  The release notes in both READMEs and the setup document say this, together with how to downgrade. A scope without a saved setting is byte-identical to 0.45.0.
 - **Budget.** In the resource-risk runs reference's budget order, a `Budget:` line of a Declared test suite counts as the project's resource guidance for that suite.
   - It never overrides the user's statement in the session, the Plan's execution conditions or an Execution method already approved.
   - When other project guidance states a different budget for the same suite, main asks the user.
