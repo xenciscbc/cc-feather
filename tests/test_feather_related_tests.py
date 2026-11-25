@@ -25,8 +25,8 @@ PROJECT_OFF = "Related-test acceptance is off in this project; this overrides br
 STOP_LINE = {"user": "The Stop threshold for automatic review is {k}.",
              "project": "The Stop threshold in this project is {k}; this overrides broader Feather guidance."}
 # declared-test-suites ticket 03: the one sentence the template gains, pointing to the test-suites reference.
-CATALOGUE_SENTENCE = ("When the Working checkout has a tracked Test suite catalogue, main reads the delegation skill's "
-                      "test-suites reference before writing acceptance and follows it.")
+CATALOGUE_SENTENCE = ("When the Working checkout has a Test suite catalogue at `.feather/test-suites.md` tracked in Git, "
+                      "main reads the delegation skill's test-suites reference before writing acceptance and follows it.")
 # Test data: the rule 0.45.0's template rendered (templates/related-tests.md at the 0.45.0 release, commit aad2f67).
 # The configuration tool and every other guidance template are unchanged since then, so the tool rendering this text
 # in place of the template writes exactly what 0.45.0 wrote.

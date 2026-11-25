@@ -366,11 +366,13 @@ class AcceptanceWritingTests(Pinned, unittest.TestCase):
         return OWNER.read_text(encoding="utf-8").split("\n## Acceptance\n", 1)[1]
 
     def test_the_template_gains_one_self_contained_pointer(self):
-        sentence = ("When the Working checkout has a tracked Test suite catalogue, main reads the delegation skill's "
-                    "test-suites reference before writing acceptance and follows it.")
+        sentence = ("When the Working checkout has a Test suite catalogue at `.feather/test-suites.md` tracked in Git, "
+                    "main reads the delegation skill's test-suites reference before writing acceptance and follows it.")
         text = TEMPLATE.read_text(encoding="utf-8")
         self.assert_whole_sentence(sentence, text)
-        self.assertEqual(text.count("test-suites"), 1)
+        # The catalogue's path and the reference's name, both in that one sentence.
+        self.assertEqual(text.count("test-suites"), 2)
+        self.assertEqual(text.count("`.feather/test-suites.md`"), 1)
         for phrase in ("in the message that ends its turn", "Asking in the conversation", "Gates:", "`full`"):
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, text)
@@ -397,6 +399,8 @@ class AcceptanceWritingTests(Pinned, unittest.TestCase):
             "That holds for a Claim that changes shared test support or build configuration, a Claim whose related "
             "tests cannot be determined, the release Claim unless the Plan's overall acceptance names those suites, "
             "the only Claim of a Plan without overall acceptance, and the overall acceptance main adds.",
+            "When the catalogue has no suite whose gates include `full`, each of these cases names the full suite "
+            "as it would without a catalogue.",
             "For Release-required suites and a Claim's acceptance, Release above applies.")
 
     def test_full_membership_is_resolved_when_the_overall_acceptance_is_written(self):
