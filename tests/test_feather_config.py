@@ -22,9 +22,21 @@ from unittest import mock
 from tests import feather_support
 from tests.feather_support import SCRIPT, config, make_directory_link, remove_directory_link, remove_link_base
 
+# The tests of _replace itself keep the real fsync; every other test of the apply-heavy classes skips the flush,
+# which none of them verifies.
+REAL_FSYNC = frozenset({"test_replace_copies_mode_before_publish_and_preserves_original_on_failure",
+                        "test_guidance_mode_survives_lifecycle_and_rollback"})
+
+
+def skip_fsync(test: unittest.TestCase) -> None:
+    """Replace os.fsync with a no-op for this test, undone after it, unless the test is one of REAL_FSYNC."""
+    if test._testMethodName not in REAL_FSYNC:
+        test.enterContext(mock.patch.object(config.os, "fsync"))
+
 
 class FeatherConfigTests(unittest.TestCase):
     def setUp(self):
+        skip_fsync(self)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         # Setup reports and writes resolved paths, so expected paths start from the canonical temp root
@@ -5784,6 +5796,7 @@ class LeasesComponentTests(unittest.TestCase):
     END = "<!-- cc-feather:leases:end -->"
 
     def setUp(self):
+        skip_fsync(self)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(os.path.realpath(self.temp.name))
