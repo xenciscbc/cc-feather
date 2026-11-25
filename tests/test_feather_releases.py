@@ -3636,9 +3636,12 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
     in both languages, opens the section, says what the Test suite catalogue changes and that a project without one is
     unchanged, that no role definition or configuration tool changed so existing installations need the plugin update
     and a fresh session, that a scope which saved Related-test acceptance `on` also needs setup update, what `check`
-    and `review` report until then, and how to go back to 0.45.0; the validation entry records the spec and the
-    tickets, the setup update observed in a scratch installation of 0.45.0 with what `check` and `review` reported
-    before and after, the unchanged scope without a saved setting, the way back, the test runs, what the tests cannot
+    and `review` report until then, and how to go back to 0.45.0; the validation entry records the spec with its
+    revisions, including 3d05a9d and 1eac59e, and the tickets' commits, including claim 03's fix 560ff13 and claim 04's
+    a65ea64, the template sentence as it stands with the catalogue's path, the fallback to the full suite when no suite
+    has gate `full`, the setup update observed in a scratch installation of 0.45.0 with this release's tools from
+    `git archive HEAD` and what `check` and `review` reported before and after, the unchanged scope without a saved
+    setting, the way back, the test runs, what the tests cannot
     show and the tag, and is the file's last. The rules' own sentences are tests/test_feather_declared_suites.py's and
     tests/test_feather_related_tests.py's."""
 
@@ -3668,8 +3671,10 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
     # scope without a saved setting, the way back, the test runs, what the tests cannot show and the tag.
     ENTRY_HEADING = "\n## 0.46.0 declared test suites\n"
     ENTRY = (
-        "Implements [the declared-test-suites spec](specs/declared-test-suites.md), written on 2026-11-25, added in e69dabc and revised in ff7ceef and 7b78015;",
-        "ticket 01, Landing-required suites at every final check, in 70bff8f, ticket 02, Release-required suites in the release question, in 43e4d69, ticket 03, acceptance from the catalogue under Related-test acceptance, in b9733cb, and ticket 04, this release, in the commit carrying this entry.",
+        "Implements [the declared-test-suites spec](specs/declared-test-suites.md), written on 2026-11-25, added in e69dabc and revised in ff7ceef, 7b78015, 3d05a9d and 1eac59e;",
+        "ticket 01, Landing-required suites at every final check, in 70bff8f, ticket 02, Release-required suites in the release question, in 43e4d69, ticket 03, acceptance from the catalogue under Related-test acceptance, in b9733cb and its fix 560ff13, and ticket 04, this release, in a65ea64 and the commit carrying this entry.",
+        "the Related-test acceptance template gains one sentence: \"When the Working checkout has a Test suite catalogue at `.feather/test-suites.md` tracked in Git, main reads the delegation skill's test-suites reference before writing acceptance and follows it.\"",
+        "when the catalogue has no suite whose gates include `full`, name the full suite as it would without a catalogue.",
         "A project without a catalogue keeps every rule as in 0.45.0.",
         "The 0.45.0 release tests now follow the 0.46.0 note and entry.",
         "**Setup update is required only in a scope that saved Related-test acceptance `on`.**",
@@ -3678,10 +3683,11 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
         "Existing installations need only the plugin update and a fresh session, except a scope that saved Related-test acceptance `on`, which needs `/cc-feather:setup update` before that session,",
         "A scope without a saved setting renders the same bytes as 0.45.0.",
         "Both were exercised in a scratch installation under `J:\\gotmp\\cc-feather-0460-setup`,",
+        "using the setup tools of `git archive v0.45.0` and of `git archive HEAD` at 560ff13, whose `templates` and `scripts` are those of the commit carrying this entry, which changes no file under them.",
         "this release's `check` then reported `role_update_required: false` and the single warning `delegation guidance is from an older template; run setup update`;",
-        "this release's `review --related-tests off` refused with `installed guidance is from an older template; run setup update first` and left `CLAUDE.md` unchanged;",
-        "after it, `check` reported no warning.",
-        "this release's `check` reported no warning and its `update` preview listed no change.",
+        "this release's `review --related-tests off` refused with exit status 2 and `installed guidance is from an older template; run setup update first` and left `CLAUDE.md` unchanged;",
+        "the rendered rule then carried the catalogue sentence naming `.feather/test-suites.md`; after it, `check` reported no warning.",
+        "this release's `check` reported no warning and its `update` preview listed no change, and `CLAUDE.md` kept the bytes the 0.45.0 tool had written.",
         "To go back to 0.45.0, reinstall the 0.45.0 plugin and run `/cc-feather:setup update` in every scope that saved Related-test acceptance `on`, then start a fresh session; no remove is needed, since 0.46.0 changes no configuration tool or state, and a scope without a saved setting needs no setup update.",
         "`CLAUDE.md` was byte-identical to the one the 0.45.0 tool had written before the upgrade.",
         "the scratch directory was removed afterwards.",
@@ -3748,6 +3754,10 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
                 self.assertEqual(entry.count(sentence), 1)
         self.assertNotIn("No setup update is required", entry)
         self.assertNotIn(".scratch", entry)
+        # The scratch evidence used this release's templates and scripts, not claim 03's commit before its fix, and
+        # the template sentence is quoted as it now stands, with the catalogue's path.
+        self.assertNotIn("git archive b9733cb", entry)
+        self.assertNotIn("has a tracked Test suite catalogue", entry)
         # The entry is the file's last, so it is appended rather than rewriting an earlier one.
         self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
 
