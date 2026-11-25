@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from tests import handoff_in_process
 from tests.test_handoff_storage import skewed_fstat
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,7 +79,14 @@ class LocalFixesBase(unittest.TestCase):
                 for p in self.project.rglob("*") if p.is_file() and ".git" not in p.relative_to(self.project).parts}
 
 
-class CompletedBodyTest(LocalFixesBase):
+class InProcessBase(LocalFixesBase):
+    """Calls the tool, archive included, in the test process; CliContractTest and CliUsageTest, whose subject is
+    the process boundary, keep LocalFixesBase and start it."""
+
+    run_tool = handoff_in_process.run_local
+
+
+class CompletedBodyTest(InProcessBase):
     def test_create_completed_with_fake_history_heading_writes_nothing(self):
         payload = {"title": "Foo", "fields": {"updated": COMPLETED, "status": "完成", "goal": "g",
                                               "progress": "p", "next": "n"},
@@ -191,7 +199,7 @@ class CliContractTest(LocalFixesBase):
                 self.assertEqual((code, result["status"], result["code"]), (2, "error", expected))
 
 
-class LineEndingTest(LocalFixesBase):
+class LineEndingTest(InProcessBase):
     def test_update_details_follow_the_file_newline(self):
         data = record(status="進行中", eol="\r\n")
         path = self.put("a.md", data)
@@ -229,7 +237,7 @@ class LineEndingTest(LocalFixesBase):
         self.assertEqual(self.history.read_bytes(), saved)
 
 
-class SmallFixesTest(LocalFixesBase):
+class SmallFixesTest(InProcessBase):
     def test_clear_defers_with_pending_archive_for_identical_body(self):
         work = record()
         body = work.split(b"\n", 1)[1]
@@ -294,7 +302,7 @@ class SmallFixesTest(LocalFixesBase):
                 self.assertEqual(entry.body_bytes.decode("utf-8"), entry.body)
 
 
-class DetailsSectionsTest(LocalFixesBase):
+class DetailsSectionsTest(InProcessBase):
     """H1: a details update never hides or changes the sections that follow it."""
 
     def test_details_that_would_hide_a_sibling_are_refused_then_closed_fence_keeps_it(self):
@@ -368,7 +376,7 @@ class DetailsSectionsTest(LocalFixesBase):
         self.assertTrue((self.directory / "a.md").read_text(encoding="utf-8").endswith("## 詳細紀錄\nnew\n"))
 
 
-class CompletionArchiveFailureTest(LocalFixesBase):
+class CompletionArchiveFailureTest(InProcessBase):
     """H2: an archival failure after the completed work was saved is a partial result."""
 
     BROKEN = "# 交接歷史\n\nmanual preamble\n## old · 完成：2026-09-10T00:00:00+00:00\nold\n".encode("utf-8")
@@ -399,7 +407,7 @@ class CompletionArchiveFailureTest(LocalFixesBase):
         self.assertFalse((self.directory / "a.md").exists())
 
 
-class TrackingMarkerTest(LocalFixesBase):
+class TrackingMarkerTest(InProcessBase):
     """H3: an explicit track choice is recorded as a Git-inert comment and survives default saves."""
 
     def setUp(self):
@@ -519,7 +527,7 @@ class GitEnvironmentTest(LocalFixesBase):
         self.assertEqual((self.project / ".gitignore").read_bytes(), b"/.feather/handoffs/\n")
 
 
-class PendingUnknownTest(LocalFixesBase):
+class PendingUnknownTest(InProcessBase):
     """H4/HX6: a work that may be an unfinished archival blocks clear and seal as pending-unknown; a malformed
     work whose title is on the first line and whose only status line reads 進行中 or 受阻 is reported instead.
     HP1: a well-formed work with more than one status line or a merge-conflict marker line also blocks them."""
@@ -771,7 +779,7 @@ class CreateCleanupTest(LocalFixesBase):
         self.assertTrue(target.exists())
 
 
-class CompletedTrackingRecoveryTest(LocalFixesBase):
+class CompletedTrackingRecoveryTest(InProcessBase):
     """HX1: a completed save whose tracking failed is recovered with archive, which then applies tracking."""
 
     def setUp(self):
@@ -824,7 +832,7 @@ class CompletedTrackingRecoveryTest(LocalFixesBase):
         self.assertEqual(self.ignore.read_bytes(), b"\xff")
 
 
-class SwallowedDetailsTest(LocalFixesBase):
+class SwallowedDetailsTest(InProcessBase):
     """HX2: a details update never drops sections that an unbalanced fence in the old details already hides."""
 
     BASELINE = ('## 檔案基準\n```json\n{"schema_version": 1, "captured_at": "2026-09-11T10:00:00+08:00", '
@@ -877,7 +885,7 @@ class SwallowedDetailsTest(LocalFixesBase):
         self.assertIn("leave a code fence open over ## 手動備註", result["message"])
 
 
-class ReadOnlyTargetTest(LocalFixesBase):
+class ReadOnlyTargetTest(InProcessBase):
     """HX3: a read-only target is reported as such and no temporary file is left behind."""
 
     def test_read_only_work_is_preserved_without_temporary_files(self):
@@ -896,7 +904,7 @@ class ReadOnlyTargetTest(LocalFixesBase):
             self.assertEqual(path.read_bytes(), data)
 
 
-class InputValidationTest(LocalFixesBase):
+class InputValidationTest(InProcessBase):
     """HX4, HX5, HX8, HX10: input that later operations would refuse or lose is rejected or normalized."""
 
     def test_blank_optional_fields_are_refused_on_create_and_update(self):
@@ -939,7 +947,7 @@ class InputValidationTest(LocalFixesBase):
         self.assertTrue(saved.endswith("## 詳細紀錄\na\nb\nc\n".encode("utf-8")))
 
 
-class EmptyHistoryFramingTest(LocalFixesBase):
+class EmptyHistoryFramingTest(InProcessBase):
     """HX9: archival into an empty or whitespace-only history writes the history header."""
 
     def test_completed_save_into_blank_history_writes_the_header(self):

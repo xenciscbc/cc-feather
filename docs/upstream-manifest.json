@@ -18,9 +18,9 @@
     "tests/test_handoff_archive.py": "1d80fbc62eb437343b8d1696affafeb511d60cf796c9d866701b51e576040f38",
     "tests/test_handoff_baseline.py": "5a2704812a91efa1a7bcf1526568cd1c257a89d3521c8ca3152edbc47423bc1a",
     "tests/test_handoff_history.py": "547a0a45ab3b143a6a28b6264caa743196b703fc0faa1dc86bd9293f2864b2c0",
-    "tests/test_handoff_mutations.py": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
+    "tests/test_handoff_mutations.py": "142dec56ce1f531b4d93a225e5feb5f9e1a22251219a5a980dffb1f67fb67982",
     "tests/test_handoff_roots.py": "c7782251ca26fd57a6e35793904ee681c553fce2d7780f8de1659453bae5af79",
-    "tests/test_handoff_snapshots.py": "ddc69458e6c1c3eace598f683837b060a3f54532c5b7900a9d7af62c8a31ffb4",
+    "tests/test_handoff_snapshots.py": "78025a6c7ba03c8276e5146b4b4d7d7bac2b94b4fe661e824d3745ddc42aab94",
     "tests/test_handoff_storage.py": "9258d31ba84c0743d38e5ea1e7e1fa7a2d33ffc4ba9a7212f3d1f5263f0f8151",
     "tests/test_handoff_tool.py": "cf3655dca105764fcafa680cffaa5fd2a297a9f07cf67f5352a6d248125cbf4f"
   },
@@ -59,13 +59,17 @@
       "source_sha256": "1293aa24002c698a21921f70016c5deeb1b1b4828531fcb56919eec1405dbc35",
       "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Replaced the legacy-boundary-inside-modern-history expectation with the local boundary rule."
     },
+    "tests/test_handoff_mutations.py": {
+      "source_sha256": "c3fbd0636766df448eabd2c27892caf0c911d49e77d1983b178cf217c3d90e50",
+      "change": "Calls the tool in-process through tests/handoff_in_process.py, with the same arguments, input bytes, JSON output and exit code as the subprocess helper, except test_failed_clear_and_seal_retain_sources_then_retry_exact_selection, whose subject is a second handle on the history file and which keeps starting the tool for every call (test-speedup-batch-2, on main after 0.45.0)."
+    },
     "tests/test_handoff_roots.py": {
       "source_sha256": "a8df63d727f74b9ed0c94c80a73c92b831945ca5d72a3a26997651a484b04d4f",
       "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Imports test_handoff_tool through the tests package; in-process invocations and the direct Store test reset the root registry via addCleanup. Every Git command these tests run through subprocess.run has a 30 s timeout (test-subprocess-timeouts, on main after 0.45.0)."
     },
     "tests/test_handoff_snapshots.py": {
       "source_sha256": "fe01504c901c07b74773d5bc9d7237ef97120ea781a1cdea85e3d26dc93b7be5",
-      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added the st_ctime stat/fstat skew test. Imports its fixtures through the tests package; tests that build a Store in-process reset the root registry via addCleanup. ObservationUnitTest builds its temporary project from os.path.realpath."
+      "change": "Updated local skill path from skills/feather-handoff to skills/handoff; normalized text line endings. Added the st_ctime stat/fstat skew test. Imports its fixtures through the tests package; tests that build a Store in-process reset the root registry via addCleanup. ObservationUnitTest builds its temporary project from os.path.realpath. HandoffSnapshotsTest calls the tool in-process through tests/handoff_in_process.py, with the same arguments, input bytes, JSON output and exit code as the subprocess helper (test-speedup-batch-2, on main after 0.45.0)."
     },
     "tests/test_handoff_storage.py": {
       "source_sha256": "b16da7a53f6b47248a5df87c169b8cf1392543ec748eba6db896964ddf021c4b",

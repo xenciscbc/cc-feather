@@ -1,6 +1,7 @@
 """Selected history mutations through the public CLI."""
 import unittest
 import os
+from tests import handoff_in_process
 from tests import test_handoff_tool as fixtures
 
 RECORD = fixtures.RECORD
@@ -8,7 +9,7 @@ RECORD = fixtures.RECORD
 
 class HistoryMutationsTest(unittest.TestCase):
     setUp = fixtures.HandoffToolTest.setUp
-    run_tool = fixtures.HandoffToolTest.run_tool
+    run_tool = handoff_in_process.run_tool
     write_work = fixtures.HandoffToolTest.write_work
     snapshot = fixtures.HandoffToolTest.snapshot
     def prepare_history(self):
@@ -104,6 +105,8 @@ class HistoryMutationsTest(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "nt", "Windows sharing denial is platform-specific")
     def test_failed_clear_and_seal_retain_sources_then_retry_exact_selection(self):
+        # A second handle on the history file is this test's subject, so every call here starts the tool.
+        self.run_tool = fixtures.HandoffToolTest.run_tool.__get__(self)
         path, first, second, entries = self.prepare_history()
         selected = {"version": entries[0]["document_version"], "ids": [entries[0]["id"]]}
         original = path.read_bytes()
