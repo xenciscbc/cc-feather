@@ -3789,7 +3789,7 @@ class InstallDocumentTests(unittest.TestCase):
     def test_setup_document_counts_the_packaged_skills(self):
         skills = json.loads(self.text(".claude-plugin/plugin.json"))["skills"]
         words = dict(enumerate(("nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-                                "seventeen", "eighteen", "nineteen", "twenty", "twenty-one"), start=9))
+                                "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two"), start=9))
         setup = self.text("docs/setup.md")
         self.assertIn(f"The plugin packages {words[len(skills)]} skills.", setup)
         # Only the manifest's count is stated: an earlier count left behind would contradict it.

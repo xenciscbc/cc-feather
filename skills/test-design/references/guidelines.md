@@ -1,0 +1,71 @@
+# Test design guidelines
+
+These guidelines say how to choose the level, cases, doubles and data of a proposed test. Each guideline states when it applies and when it does not, and applies only there.
+
+## Rules this relies on
+
+What makes a test slower or less robust than it needs to be, and how a removal is offered, are [the shared test criteria](../../test-speedup/references/test-criteria.md). Whether a test is unbounded is decided by the Unbounded probe entry in [cc-feather's glossary](../../../CONTEXT.md), and how a finding is weighed is [the delegation skill](../../delegation/SKILL.md)'s rule. These guidelines copy none of them.
+
+## Levels and sizes
+
+- **Lowest level that observes.** A behaviour is tested at the lowest level that can observe it: a unit test for logic, an integration test for wiring between components, a broad test for what only the assembled system shows. It applies to every proposed test. It does not apply where the lower level would need so many doubles that it no longer observes the real behaviour; the next level up is then the lowest that can.
+- **Scope and size stated.** Each proposed test states its scope, the code it exercises, and its size, the resources it uses, such as one process, local services or networked systems, and the smallest size that catches the defect is preferred. It applies to every proposed test. It does not forbid a larger size where the smaller one cannot reach the defect, which the test then states.
+- **No repeated evidence.** A test that adds no evidence beyond a test at another level is not proposed. It applies where two levels would fail on the same defect for the same reason. It does not apply where each level catches a different failure, such as wiring, serialization or configuration loading.
+- **One integration test per point.** Each integration point, such as a database adapter, a message queue or an HTTP client, gets one focused integration test that checks both sides agree. It applies to every boundary the code crosses to another component or service. It does not apply to the logic behind the boundary, which lower-level tests cover.
+- **Few broad tests.** Broad tests cover a few critical journeys and the risks only an assembled system shows, such as deployment configuration or timing across services. They apply where a journey's failure is costly or a risk is invisible below the whole system. They do not apply to edge cases and error paths a lower level can observe.
+- **Ratios only diagnose.** Ratios between the numbers of tests at each level only show a bad shape, such as most tests at the slowest level, and are never a target. They apply when looking at a whole target's tests. They do not decide a single test's level, which the lowest level that observes decides.
+
+## Case choice
+
+- **Requirement and failure modes first.** Cases start from the requirement and the ways it can fail: invalid input, authorization failure, cancellation, timeouts, recovery after a partial failure and concurrent access. It applies to every target. A failure mode the target cannot meet, such as concurrency in code that never runs concurrently, gets no case.
+- **Equivalence partitions.** Inputs are split into classes the code treats alike, invalid classes included, and each class gets one case. It applies where an input has ranges or categories handled the same way. It does not apply where every value behaves differently; a small input space is enumerated instead.
+- **Boundary values.** Each boundary between partitions gets cases at the edge. cc-feather's default is two values, the boundary and its nearest neighbour across it, and three values, the boundary and one on each side, where a wrong comparison or an off-by-one is a real risk. It applies to ordered inputs with an edge, such as lengths, counts, dates and limits. It does not apply to unordered categories, which partitions cover.
+- **Decision tables.** Conditions that together pick an outcome get a decision table, with one case per combination that leads to a distinct outcome and impossible combinations left out. It applies where two or more conditions interact. It does not apply to independent conditions, which partitions cover one at a time.
+- **State transitions.** Each valid transition gets a case first; invalid transitions get one case each where the risk is high, such as a payment, access or lifecycle state. It applies to code with explicit states and rules for moving between them. It does not apply to stateless code, and invalid transitions of low risk are not each proposed.
+- **Error guessing.** Past trouble near the target, as the skill's error guessing allows, suggests further cases. It applies where the repository's history shows fixes near the target. It never overrides the current requirement.
+- **Coverage as a diagnostic.** Code coverage only finds code no test runs and is never a threshold, while partition, boundary or transition coverage may be acceptance. It applies when looking for gaps, above all in an existing feature. It does not apply as a target number, which invites tests that can never fail.
+
+## Doubles
+
+- **Order of preference.** A real implementation is used when it is fast, deterministic and has no effect outside the test; otherwise a fake, otherwise a stub; an interaction check only when the interaction is the requirement, such as a message being sent exactly once. It applies to every dependency a test uses. An interaction check does not replace a state check where the effect can be observed.
+- **Doubles at awkward boundaries.** Doubles stand at boundaries that are slow, nondeterministic or have outside effects, such as the clock, randomness, the network or a payment service, and the clock is wrapped so the test controls it. It applies at those boundaries. It does not apply inside the project's own logic, where the real code runs.
+- **No mocks of types the project does not own.** A type the project does not own is not mocked where an adapter the project owns can stand between; the adapter is doubled, and it gets its own integration test against the real dependency. It applies to third-party clients and libraries. It does not apply to plain value types or where the library ships its own test double.
+- **Fakes checked against the real thing.** A fake the project maintains is checked against the real implementation, such as by one contract test both run. It applies to every fake the project maintains. It does not apply to a stub that returns fixed values for one test.
+
+## Test quality
+
+- **Public interface.** A test observes behaviour through the public interface, not private state or call order. It applies to every test. It does not apply where an internal effect is itself the requirement, such as a cache hit a performance requirement names.
+- **One behaviour per test.** Each test verifies one behaviour, and its name says which. It applies to every test. In a table-driven or parametrized test, each case is one behaviour and carries its own name.
+- **Straight-line bodies.** A test body is straight-line and self-contained, with no conditionals that decide what is asserted, while shared test support, such as builders, fixtures and helpers, follows ordinary reuse. It applies to test bodies. It does not apply to shared test support or to a loop that only walks a table of cases.
+- **Independent, repeatable, self-checking.** Each test runs alone and in any order, gives the same result on every run and decides its own pass or fail without a person reading its output. It applies to every automated test. It does not apply to checks that need manual verification, which the report lists apart.
+- **Hermetic.** Hermetic means isolated and self-contained: a test depends only on what it controls, and a controlled local dependency, such as a database or a subprocess started for the run, counts as hermetic. It applies to every test. It does not forbid every real dependency.
+- **Nondeterminism designed out.** Known causes of nondeterminism, such as time, randomness, iteration order, concurrent scheduling, shared state and the network, are designed out with a fixed seed, a fake clock, a controllable schedule or sorted output. It applies wherever such a cause reaches a test. It does not apply where the nondeterminism is itself the property tested, such as a race detector run.
+
+## Property-based testing and fuzzing
+
+- **When to use them.** A property-based test or a fuzz target is used only with a large input space and a property that holds for every input, model-based properties and postconditions preferred over restating the implementation. It applies where examples alone would leave much of the input space untried. It does not apply to a small input space, which is enumerated, or where no property holds beyond the examples.
+- **Generators.** Generators and the distribution of what they produce are checked, such as by labelling generated cases, and valid inputs are generated directly rather than filtered from random ones. It applies to every generator. A filter stays only where it rejects few cases and a direct generator would be much more complex.
+- **Fixed seeds in always-run suites.** A suite that runs on every change uses a fixed seed or a stored corpus, and open-ended exploration runs only in explicit, time-boxed runs. It applies to every property or fuzz test in such a suite. It does not apply to an exploratory run the user starts on purpose.
+- **Failures become regression cases.** An input a property or fuzz run found to fail becomes a fixed regression case. It applies to every such failure. Where the input exposed a defect in the generator rather than the code, the generator is fixed instead.
+
+## Acceptance
+
+- **Traced to a criterion.** Each acceptance test traces to one acceptance criterion, its positive cases first and its negative ones after. It applies to the acceptance tests of a spec or ticket. It does not apply to lower-level tests chosen by technique, which trace to the behaviour they test.
+- **Key examples.** A few key examples per rule illustrate it, and the cases the techniques derive are also proposed, for the user to place in acceptance or in a regression set. It applies to every rule an acceptance criterion states. The key examples are not an exhaustive list.
+
+## External dependencies
+
+- **Same engine.** SQL and data access are verified on the same database engine the code runs against, so that dialect, constraint and NULL errors are seen. It applies to every query, schema and migration. It does not apply to the logic after the data arrives, which fake-data tests may cover.
+- **Controlled data.** A test against a real dependency inserts controlled data that allows exact assertions, and a comparison with live data runs only against a consistent snapshot. It applies to every test that reads a real data store. It does not apply to a read-only smoke test, which asserts no values that change.
+- **Decision order.** A test that needs a real dependency uses a disposable instance of the same engine first, such as a container or a local process created for the run; otherwise a read-only, gated smoke test that asserts no changing volumes or values. It applies where a fake cannot verify what the test verifies. It does not apply where a fake suffices.
+- **Each layer its own fact.** Fake-data tests never replace real-dependency tests, as each layer verifies a different fact. It applies wherever code both talks to a dependency and processes what it returns. It does not ask for a real-dependency test where the code has no such access.
+- **Gating by environment variable.** A real-dependency test is gated by an environment variable rather than a build tag, since a build tag hides compile errors in the gated file. It applies in every ecosystem where a build tag or a similar build-time switch could exclude the file. It does not apply where the gate still compiles or imports the file, such as a test marker.
+- **Hard prohibitions.** Three things are never proposed: a fall-back to a hard-coded connection string when the environment variable is unset, a connection to production by default, and credentials in test files. They apply to every proposed test and every piece of test support, and there is no case where they do not.
+
+## Ecosystem hints
+
+These hints apply to projects in each ecosystem and do not override a project's own established conventions.
+
+- **Go.** Table-driven tests with a named `t.Run` subtest per case; `t.Parallel()` only for tests that share no writable state; `t.Cleanup` for teardown; `httptest` servers for HTTP; `testing.Short()` or an environment variable for gating; native fuzzing with a seed corpus under `testdata` that runs as ordinary cases, `-fuzz` only in explicit time-boxed runs.
+- **Python.** pytest fixtures at the narrowest scope that keeps writable data per test, module or session scope only for immutable shared fixtures; `pytest.mark.parametrize` with readable ids; `tmp_path` and `monkeypatch` for files and the environment; `subTest` under unittest; Hypothesis with its default settings and a fixed seed or derandomized runs in always-run suites.
+- **JavaScript or TypeScript run with pnpm, Vue included.** Vitest or Jest with `test.each` for tables; fake timers for time; the node environment unless a test needs a DOM, set per file; module state reset between tests where isolation is off; Vue Test Utils `mount`, with `shallowMount` only where child components are not under test; fast-check for properties; test scripts that run once rather than in watch mode.

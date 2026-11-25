@@ -15,6 +15,13 @@ the removal rule with replacements included, live in the shared test criteria re
 the command points to and restates none of; their pins move with them. The reference adds further criteria, each with
 its condition, and the sleep rule, which the static pass checks for; it points to the glossary's resource-risk and suite
 entries and to the delegation skill and copies none of them, and the reference section states the new checks.
+Ticket 02 of that spec: the user-invoked /cc-feather:test-design command, listed after overdesign-check, which reports a
+Test design for one target and changes and runs nothing; its judging rule stated first, its runs-and-sizes, gated-test,
+resource-risk, report-section, removal, error-guessing and lookup decisions; its guideline reference with one pin per
+guideline group, the three hard prohibitions and no source labels; pointers to the shared test criteria, the delegation
+skill, the Unbounded probe entry and test-speedup's lookups that restate none of them; the CONTEXT.md Test design entry;
+README listings and a reference section after Over-design check's in both languages, whose introduction now counts three
+commands; the setup document's skill count of twenty-two; and no policy template or role definition naming it.
 """
 
 from __future__ import annotations
@@ -319,8 +326,9 @@ class TestSpeedupCommandTests(unittest.TestCase):
         "reference.zh-TW.md": ("\n## 設計與測試檢查\n", "\n### 測試加速\n"),
     }
     REFERENCE_PAIRS = (
-        ("Two commands only you can run report weight that has built up in a project.",
-         "兩個只能由你執行的指令，會回報專案裡累積下來的負擔。"),
+        # docs/specs/test-design.md, ticket 02: the section's third command.
+        ("Three commands only you can run help with a project's design and tests: two report weight that has built up in a project, and the third proposes the tests a target needs.",
+         "三個只能由你執行的指令協助處理專案的設計與測試：兩個回報專案裡累積下來的負擔，第三個提出一個對象需要的測試。"),
         ("Each only reports and changes no file, and what you pick from its report becomes a plan through the normal flow.",
          "它們只出報告、不改任何檔案；你從報告中挑選的項目，再照一般流程成為計畫。"),
         ("`/cc-feather:test-speedup` checks the tests you name, or the project's tests, with their test configuration but not CI pipeline configuration.",
@@ -539,15 +547,357 @@ class OverdesignCheckCommandTests(unittest.TestCase):
                 self.assertLess(section.index(speedups), section.index(self.REFERENCE_SECTIONS[name]))
 
 
-class NotInstalledTests(unittest.TestCase):
-    """Ticket 03: the commands ship with the plugin; no installed policy template or role definition names them."""
+class TestDesignCommandTests(unittest.TestCase):
+    """docs/specs/test-design.md, ticket 02."""
 
-    def test_no_template_or_role_definition_mentions_either_command(self):
+    COMMAND = SKILLS / "test-design" / "SKILL.md"
+    GUIDELINES = SKILLS / "test-design" / "references" / "guidelines.md"
+
+    def test_command_is_user_invoked_and_listed_after_overdesign_check(self):
+        skills = manifest_skills()
+        self.assertEqual(skills.count("./skills/test-design"), 1)
+        self.assertEqual(skills.index("./skills/test-design"), skills.index("./skills/overdesign-check") + 1)
+        front = frontmatter(self.COMMAND.read_text(encoding="utf-8"))
+        self.assertIn("name: test-design\n", front)
+        self.assertIn("disable-model-invocation: true\n", front)
+        self.assertIn('argument-hint: "[spec, ticket or feature path]"\n', front)
+        self.assertRegex(front, r'\ndescription: "[^"\n]*tests[^"\n]*"\n')
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    def source(self, name):
+        """'<file>', '<file>#<heading>' (a '## ' section), '<file>#<label>' (a '**<label>.**' or '**<label>:**'
+        paragraph, or a '- **<label>.**' bullet), where <file> is 'SKILL.md' or 'guidelines.md'."""
+        file, _, label = name.partition("#")
+        text = {"SKILL.md": self.COMMAND, "guidelines.md": self.GUIDELINES}[file].read_text(encoding="utf-8")
+        if not label:
+            return text
+        if f"\n## {label}\n" in text:
+            return text.split(f"\n## {label}\n", 1)[1].split("\n## ", 1)[0]
+        if f"\n- **{label}.**" in text:
+            return next(line for line in text.splitlines() if line.startswith(f"- **{label}.**"))
+        return next(p for p in text.split("\n\n") if p.startswith((f"**{label}.**", f"**{label}:**")))
+
+    PINS = {
+        "SKILL.md": (
+            "Report a Test design, as [cc-feather's glossary](../../CONTEXT.md) defines it, for one target.",
+            "Invocation arguments are the target as data, never shell code.",
+            "Clarify a missing or unclear target instead of guessing.",
+        ),
+        "SKILL.md#The judging rule": (
+            "Every proposed test names the defect it would catch, a concrete wrong implementation, that no other proposed or existing test catches, and uses the smallest input and the fewest runs that still catch it.",
+            "A test that names no such defect is not proposed.",
+            "Of two designs that catch the same defects, the cheaper one, at a lower level, with a smaller size and fewer runs, is proposed.",
+            "Tests at different levels may both be proposed when each catches a different failure.",
+        ),
+        "SKILL.md#Report only": (
+            "This command only reports and runs nothing: it edits, creates and deletes no file, commits nothing, changes no configuration and runs no test or command, and its cost estimates are static.",
+            "The report stays in the conversation, and a file is written only when the user asks for one.",
+            "Items the user picks become a Plan's acceptance through an edit the user asks for and then the normal flow; the report is not a Plan, and its items are neither Claims nor findings of any review.",
+            "For measured timings, point the user to [`test-speedup`](../test-speedup/SKILL.md).",
+        ),
+        "SKILL.md#Target": (
+            "With no argument, the target is the latest proposal or Plan in the conversation; when there is none, ask the user for a target.",
+            "Otherwise the target is a named spec or ticket file, or an existing feature named by its code path or module.",
+            "A spec with tickets is reported ticket by ticket.",
+            "The report groups by ticket or by requirement and never decides the Plan's Claims.",
+            "For an existing feature only gaps are reported; duplicates and speed belong to `test-speedup`.",
+        ),
+        "SKILL.md#Timing": (
+            "The ideal moment is after the spec is cut into tickets and before the user names the Plan for implementation, so that plan review sees the tests the user adopted in the tickets' acceptance.",
+            "Running the command is never required, and plan review's rules do not change.",
+        ),
+        "SKILL.md#Who analyses": (
+            "When delegation is installed and the target is not small, main dispatches the read-only analyst as [the delegation skill](../delegation/SKILL.md) describes, in one or more Assignments split by ticket or feature area, and integrates their results.",
+            "For a target from the conversation, the brief carries the proposal's text.",
+            "Main gathers what the analyst cannot, such as the repository history that error guessing reads.",
+            "A small target, such as one ticket, or a target where delegation is not installed, main does itself.",
+        ),
+        "SKILL.md#1. Design the tests": (
+            "Choose levels, cases, doubles and data as [the guideline reference](references/guidelines.md) states, each guideline where it applies.",
+            "A proposed test already avoids what [the shared test criteria](../test-speedup/references/test-criteria.md)'s Speed criteria and Further criteria list, a further criterion only where its condition holds.",
+        ),
+        "SKILL.md#Runs and sizes": (
+            "A deterministic behaviour gets one case per partition and boundary.",
+            "A count that is itself the requirement, such as a retry limit or a quota, is tested at N-1, N and N+1.",
+            "Nondeterminism is removed first with a fixed seed, a fake clock or a controllable schedule; repetition that remains states its count and why that count suffices.",
+            "The input is the smallest that reaches the behaviour; a large limit is reached through an injectable setting or a lazily generated, memory-bounded input, and a change to production code for testability is marked as one for the user to decide.",
+            "Real scale is used only when scale itself is the requirement, and such tests go under Resource risk.",
+            "Property-based tests keep the framework's default case count unless the report states what more cases would catch; a small input space is enumerated instead.",
+        ),
+        "SKILL.md#Each proposed test states": (
+            "**Each proposed test states:** the defect it catches; its expected result and where that result comes from, a spec or acceptance passage, or characterization of current behaviour with any behaviour that may be a bug listed for the user to confirm; its level; how its cases are chosen; its size and run count with why they suffice, as its estimated cost; the bound of its work; the role of any test double it uses.",
+            "A guideline is cited only where the choice is not obvious.",
+        ),
+        "SKILL.md#Gated new tests": (
+            "**Gated new tests.** A new test may be gated by an environment variable, a marker or a short mode only when the report names who runs it, a Claim's acceptance or a gate's Declared test suite with its prerequisites, and states that the run needs positive evidence that the gated tests ran; a command that succeeds is not that evidence.",
+            "A gate nothing runs is never proposed.",
+            "An environment-gated test's skip message names the variable.",
+            "[The shared test criteria](../test-speedup/references/test-criteria.md)'s Correctness bar governs changes to existing tests, so it does not bind a gated new test, and its rule against adding a skip stays as it is for existing tests.",
+        ),
+        "SKILL.md#Resource risk": (
+            "**Resource risk.** Every proposed test is judged against the whole [Unbounded probe entry](../../CONTEXT.md) as it stands, each part it names applied to the test, generator rejection, shrinking, the code under test, the oracle, retained output, descendant processes and work handed outside the run included.",
+            "A test that would be one gets a bounded redesign, or is listed as likely needing a Resource-risk claim mark, as information for plan review.",
+            "Weigh each listed test as [the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings describes.",
+            "A worker count that follows the machine's core count is never proposed, and any cap's number comes from the project's or the user's resource guidance or a measured peak.",
+            "The Unbounded probe and Unbounded run configuration entries and the delegation rules for them do not change.",
+        ),
+        "SKILL.md#Error guessing": (
+            "**Error guessing.** The analysis may read the repository's own history, its log, fix commits and tickets, for past trouble areas near the target.",
+            "It reads no external issue tracker, and history never overrides the current requirement.",
+        ),
+        "SKILL.md#Lookups": (
+            "**Lookups.** Framework defaults and known problems are looked up only as [`test-speedup`'s Lookups paragraph](../test-speedup/SKILL.md) allows, with the same order and the same limit on what a query carries; the command adds no other web access at runtime.",
+        ),
+        "SKILL.md#2. Report": (
+            "**Proposed tests**, grouped by ticket or requirement, each with what it states, and a subsection for checks that need manual verification, such as a UI's look or behaviour seen only in a real environment, each with the reason a person must check it.",
+            "**Existing related tests**, each as rerun, extend or update, found by searching the tests for the target's paths and directory names as Related-test acceptance does, whether or not Related-test acceptance is on, and reported as found or not found, never as proof that none exist.",
+            "**Removals**, each existing test the proposed ones would make redundant.",
+            "**Not proposed**, each test considered and left out, with its reason.",
+            "**Resource risk**, each proposed test that uses real scale or likely needs a Resource-risk claim mark, with its reason and weighing.",
+            "**Ticket-shape notes**, each place where a test need may change how the tickets are cut.",
+        ),
+        "SKILL.md#3. Removals": (
+            "Removals follow [the shared test criteria](../test-speedup/references/test-criteria.md)'s removal rule in its Correctness bar, replacements included, where the test that covers exactly the same behaviour may be a proposed one.",
+            "A picked removal's acceptance requires the new test to be written and passing before the old one is removed.",
+            "No measurement is needed.",
+        ),
+        "guidelines.md": (
+            "Each guideline states when it applies and when it does not, and applies only there.",
+        ),
+        "guidelines.md#Rules this relies on": (
+            "What makes a test slower or less robust than it needs to be, and how a removal is offered, are [the shared test criteria](../../test-speedup/references/test-criteria.md).",
+            "Whether a test is unbounded is decided by the Unbounded probe entry in [cc-feather's glossary](../../../CONTEXT.md), and how a finding is weighed is [the delegation skill](../../delegation/SKILL.md)'s rule.",
+            "These guidelines copy none of them.",
+        ),
+        # One sentence per guideline group.
+        "guidelines.md#Lowest level that observes": (
+            "A behaviour is tested at the lowest level that can observe it: a unit test for logic, an integration test for wiring between components, a broad test for what only the assembled system shows.",
+        ),
+        "guidelines.md#Boundary values": (
+            "cc-feather's default is two values, the boundary and its nearest neighbour across it, and three values, the boundary and one on each side, where a wrong comparison or an off-by-one is a real risk.",
+        ),
+        "guidelines.md#Order of preference": (
+            "A real implementation is used when it is fast, deterministic and has no effect outside the test; otherwise a fake, otherwise a stub; an interaction check only when the interaction is the requirement, such as a message being sent exactly once.",
+        ),
+        "guidelines.md#Hermetic": (
+            "Hermetic means isolated and self-contained: a test depends only on what it controls, and a controlled local dependency, such as a database or a subprocess started for the run, counts as hermetic.",
+        ),
+        "guidelines.md#Fixed seeds in always-run suites": (
+            "A suite that runs on every change uses a fixed seed or a stored corpus, and open-ended exploration runs only in explicit, time-boxed runs.",
+        ),
+        "guidelines.md#Traced to a criterion": (
+            "Each acceptance test traces to one acceptance criterion, its positive cases first and its negative ones after.",
+        ),
+        "guidelines.md#Decision order": (
+            "A test that needs a real dependency uses a disposable instance of the same engine first, such as a container or a local process created for the run; otherwise a read-only, gated smoke test that asserts no changing volumes or values.",
+        ),
+        "guidelines.md#Ecosystem hints": (
+            "These hints apply to projects in each ecosystem and do not override a project's own established conventions.",
+        ),
+        # The three hard prohibitions.
+        "guidelines.md#Hard prohibitions": (
+            "Three things are never proposed: a fall-back to a hard-coded connection string when the environment variable is unset, a connection to production by default, and credentials in test files.",
+            "They apply to every proposed test and every piece of test support, and there is no case where they do not.",
+        ),
+    }
+
+    def test_command_states_its_decisions(self):
+        for place, sentences in self.PINS.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place, sentence=sentence[:60]):
+                    self.assert_whole_sentence(sentence, text)
+
+    def test_the_judging_rule_comes_first(self):
+        headings = [line for line in self.source("SKILL.md").splitlines() if line.startswith("## ")]
+        self.assertEqual(headings[0], "## The judging rule")
+
+    def test_the_report_has_six_sections(self):
+        report = self.source("SKILL.md#2. Report")
+        self.assertIn("The report has six sections:\n", report)
+        sections = [line.split("**")[1] for line in report.splitlines() if line.startswith("- **")]
+        self.assertEqual(sections, ["Proposed tests", "Existing related tests", "Removals", "Not proposed",
+                                    "Resource risk", "Ticket-shape notes"])
+
+    GROUPS = ("Levels and sizes", "Case choice", "Doubles", "Test quality", "Property-based testing and fuzzing",
+              "Acceptance", "External dependencies", "Ecosystem hints")
+
+    def test_the_guideline_groups_are_the_specs_each_guideline_with_where_it_applies(self):
+        headings = [line[3:] for line in self.source("guidelines.md").splitlines() if line.startswith("## ")]
+        self.assertEqual(headings, ["Rules this relies on", *self.GROUPS])
+        for group in self.GROUPS[:-1]:
+            bullets = [line for line in self.source(f"guidelines.md#{group}").splitlines() if line.startswith("- **")]
+            self.assertGreaterEqual(len(bullets), 2, group)
+            for bullet in bullets:
+                with self.subTest(group=group, guideline=bullet[:40]):
+                    self.assertRegex(bullet, r" (It applies|They apply) ")
+        hints = self.source("guidelines.md#Ecosystem hints")
+        labels = [line.split("**")[1] for line in hints.splitlines() if line.startswith("- **")]
+        self.assertEqual(labels, ["Go.", "Python.", "JavaScript or TypeScript run with pnpm, Vue included."])
+        for idiom in ("t.Run", "parametrize", "fake timers"):
+            with self.subTest(idiom=idiom):
+                self.assertIn(idiom, hints)
+        self.assertIn("- **Hard prohibitions.**", self.source("guidelines.md#External dependencies"))
+
+    def test_the_guidelines_carry_no_source_labels_citations_or_statistics(self):
+        text = self.source("guidelines.md")
+        for marker in ("http://", "https://", "www.", "et al", "according to", "Source", "source:", "%", "per cent", "percent"):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, text)
+        # No numbered citation, footnote or figure of any kind; the only links are the relative pointers.
+        self.assertNotRegex(text, r"\d")
+        self.assertNotRegex(text, r"\[\^")
+        for target in re.findall(r"\]\(([^)]+)\)", text):
+            with self.subTest(link=target):
+                self.assertTrue(target.startswith("../"))
+
+    POINTERS = {
+        "SKILL.md": (("../../CONTEXT.md", config.ROOT / "CONTEXT.md"),
+                     ("../delegation/SKILL.md", SKILLS / "delegation" / "SKILL.md"),
+                     ("../test-speedup/SKILL.md", SKILLS / "test-speedup" / "SKILL.md"),
+                     ("../test-speedup/references/test-criteria.md", TestSpeedupCommandTests.CRITERIA),
+                     ("references/guidelines.md", SKILLS / "test-design" / "references" / "guidelines.md")),
+        "guidelines.md": (("../../../CONTEXT.md", config.ROOT / "CONTEXT.md"),
+                          ("../../delegation/SKILL.md", SKILLS / "delegation" / "SKILL.md"),
+                          ("../../test-speedup/references/test-criteria.md", TestSpeedupCommandTests.CRITERIA)),
+    }
+
+    def test_pointers_resolve(self):
+        for name, links in self.POINTERS.items():
+            path = {"SKILL.md": self.COMMAND, "guidelines.md": self.GUIDELINES}[name]
+            text = path.read_text(encoding="utf-8")
+            for link, target in links:
+                with self.subTest(file=name, link=link):
+                    self.assertIn(f"]({link})", text)
+                    self.assertTrue(target.is_file())
+                    self.assertEqual((path.parent / link).resolve(), target.resolve())
+            for link in re.findall(r"\]\(([^)#]+)", text):
+                with self.subTest(file=name, every_link=link):
+                    self.assertTrue((path.parent / link).is_file())
+
+    def test_linked_rules_are_not_restated(self):
+        entries = feather_support.glossary_entries((config.ROOT / "CONTEXT.md").read_text(encoding="utf-8"))
+        delegation = (SKILLS / "delegation" / "SKILL.md").read_text(encoding="utf-8")
+        weighing = next(p for p in delegation.split("\n\n") if p.startswith("Before proposing or adopting a requirement"))
+        speedup = TestSpeedupCommandTests()
+        owned = {"weighing": feather_support.sentences(weighing),
+                 "shared criteria": [s for _, s in speedup.shared_statements()],
+                 "test-speedup lookups": feather_support.sentences(speedup.source("SKILL.md#Lookups"))}
+        for term in ("Unbounded probe", "Unbounded run configuration", "Declared test suite", "Related-test acceptance"):
+            owned[term] = feather_support.sentences(entries[term].split("\n_Avoid_")[0])
+        self.assertGreaterEqual(len(owned["shared criteria"]), 30)
+        for name in ("SKILL.md", "guidelines.md"):
+            flat = " ".join(self.source(name).split())
+            for owner, sentences in owned.items():
+                for sentence in sentences:
+                    with self.subTest(file=name, owner=owner, sentence=sentence[:60]):
+                        self.assertNotIn(sentence, flat)
+            with self.subTest(file=name, rule="Runner"):
+                self.assertNotIn("--memory-mib", flat)
+                self.assertNotIn("a timeout alone is not a bound", flat)
+                self.assertNotIn("An unknown bound counts as none", flat)
+            for part in TestSpeedupCommandTests.SHARED_PARTS:
+                with self.subTest(file=name, heading=part):
+                    self.assertNotIn(f"\n## {part}\n", self.source(name))
+
+    TEST_DESIGN = (
+        "A report of the tests one target needs, the target being a spec, its tickets or an existing feature: each "
+        "proposed test with the defect it would catch that no other test catches, its expected result and where that "
+        "result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and "
+        "the bound of its work, together with the checks that need manual verification, the existing tests that already "
+        "verify part of the target and the existing tests the proposed ones would make redundant. It is information, not "
+        "a Plan, and its items are not Claims; what the user picks enters a Plan's acceptance only through an edit the "
+        "user asks for.\n_Avoid_: test plan, test strategy"
+    )
+
+    def test_glossary_defines_test_design_in_the_design_checks_section(self):
+        text = (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8")
+        entries = feather_support.glossary_entries(text)
+        self.assertEqual(entries["Test design"].strip(), self.TEST_DESIGN)
+        section = text.split("\n## Design checks\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("\n**Test design**:\n", section)
+        self.assertEqual(entries["Unbounded probe"].strip(), OverdesignCheckCommandTests.UNBOUNDED_PROBE)
+
+    README_LISTINGS = {
+        "README.md": "- `/cc-feather:test-design [spec, ticket or feature path]`: report the tests the proposal just discussed, or the spec, ticket or existing feature you name, needs: each proposed test names the defect it would catch that no other test catches and uses the smallest input and fewest runs that still catch it. Only you can run it; it changes and runs nothing, and what you pick enters a ticket's acceptance only when you ask for that edit; see the [reference](docs/reference.md#design-and-test-checks).",
+        "README.zh-TW.md": "| `/cc-feather:test-design [spec、ticket 或功能路徑]` | 為剛才討論的提案，或你指定的 spec、ticket 或既有功能，提出需要的測試：每個建議的測試都指出它能抓到、而其他測試抓不到的缺陷，並使用仍能抓到它的最小輸入與最少執行次數。只能由你執行，不改也不執行任何東西；你挑選的項目只有在你要求修改時才寫進 ticket 的驗收；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
+    }
+    REFERENCE_SECTIONS = {"reference.md": "\n### Test design\n", "reference.zh-TW.md": "\n### 測試設計\n"}
+    REFERENCE_PAIRS = (
+        ("`/cc-feather:test-design` proposes the tests a target needs: the proposal or plan just discussed, a spec or ticket you name, or an existing feature named by its code path or module.",
+         "`/cc-feather:test-design` 提出一個對象需要的測試：對象是剛才討論的提案或計畫、你指定的 spec 或 ticket，或以程式碼路徑或模組指定的既有功能。"),
+        ("Every proposed test names the defect it would catch, a concrete wrong implementation, that no other proposed or existing test catches, and uses the smallest input and the fewest runs that still catch it; of two designs that catch the same defects, the cheaper one is proposed.",
+         "每個建議的測試都指出它能抓到的缺陷，也就是一個具體的錯誤實作，而且是其他建議或既有測試都抓不到的，並使用仍能抓到它的最小輸入與最少執行次數；兩種設計抓到相同缺陷時，提出較便宜的那一種。"),
+        ("Each proposed test states its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work.",
+         "每個建議的測試都說明預期結果與其來源、層級、案例如何挑選、大小與執行次數以及為何足夠，還有它工作量的上限。"),
+        ("A deterministic behaviour gets one case per partition and boundary, a count that is the requirement is tested at its boundary rather than with a loop, and nondeterminism is removed with a fixed seed, a fake clock or a controllable schedule before any repetition is proposed.",
+         "確定性的行為每個分割與邊界各一個案例；本身就是需求的次數只在邊界測試，不用迴圈；提出任何重複執行之前，先用固定 seed、fake clock 或可控制的排程消除不確定性。"),
+        ("A gated new test is proposed only with who runs it, a claim's acceptance or a Declared test suite, and its run needs positive evidence that the gated tests ran.",
+         "有開關控制的新測試只有在指出由誰執行時才會提出，也就是某個 claim 的驗收或某個 Declared test suite，而且它的執行必須有正面證據顯示這些測試真的跑了。"),
+        ("Every proposed test is judged against the Unbounded probe entry; one that would be unbounded gets a bounded redesign or is listed as likely needing a Resource-risk claim mark, as information for plan review.",
+         "每個建議的測試都以 Unbounded probe 的定義判斷；會沒有上限的測試改成有上限的設計，或列為可能需要 Resource-risk claim 標記，作為計畫審查的參考。"),
+        ("The report has six sections: proposed tests grouped by ticket or requirement, with checks that need manual verification; existing related tests to rerun, extend or update; removals; tests not proposed, with reasons; resource risk; and notes on how the tickets are cut.",
+         "報告分六節：依 ticket 或需求分組的建議測試，連同需要人工驗證的檢查；要重跑、擴充或更新的既有相關測試；刪除；未提出的測試與理由；資源風險；以及關於 ticket 切分方式的備註。"),
+        ("A removal follows the same evidence rule as `/cc-feather:test-speedup`'s, for you to decide one by one, and a picked removal needs the new test written and passing before the old one is removed.",
+         "刪除採用與 `/cc-feather:test-speedup` 相同的證據規則，由你逐條決定；被選中的刪除必須先寫好新測試並通過，才移除舊測試。"),
+        ("It changes and runs nothing, and what you pick enters a ticket's acceptance only through an edit you ask for.",
+         "它不改也不執行任何東西；你挑選的項目只有透過你要求的修改才會寫進 ticket 的驗收。"),
+        ("The best moment to run it is after a spec is cut into tickets and before you name the plan for implementation, so that plan review sees the tests you adopted; it is never required.",
+         "最適合執行的時機是 spec 切成 ticket 之後、你指定要實作的計畫之前，這樣計畫審查會看到你採用的測試；它從不是必要步驟。"),
+        ("It reads the repository's own history for past trouble areas but no external issue tracker, and looks up framework defaults only as `/cc-feather:test-speedup` does.",
+         "它會讀 repository 自己的歷史找出過去出問題的地方，但不讀外部 issue tracker；查詢框架預設值的方式與 `/cc-feather:test-speedup` 相同。"),
+        ("Its guideline reference covers levels and sizes, case choice, test doubles, test quality, property-based testing and fuzzing, acceptance, external dependencies and hints for Go, Python and JavaScript or TypeScript.",
+         "它的指引參考涵蓋層級與大小、案例挑選、test double、測試品質、property-based testing 與 fuzzing、驗收、外部相依，以及 Go、Python 與 JavaScript 或 TypeScript 的提示。"),
+        ("With delegation installed and a target that is not small, analyst does the reading.",
+         "裝有分派元件且對象不小時，由 analyst 負責閱讀分析。"),
+        ("See [the command](../skills/test-design/SKILL.md).",
+         "見[指令](../skills/test-design/SKILL.md)。"),
+    )
+
+    def test_readmes_and_references_describe_the_command_in_both_languages(self):
+        for name, listing in self.README_LISTINGS.items():
+            with self.subTest(listing=name):
+                self.assertIn(listing + "\n", (config.ROOT / name).read_text(encoding="utf-8"))
+        for english, chinese in self.REFERENCE_PAIRS:
+            for name, sentence in (("reference.md", english), ("reference.zh-TW.md", chinese)):
+                text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
+                section = text.split(self.REFERENCE_SECTIONS[name], 1)[1].split("\n## ", 1)[0]
+                with self.subTest(place=name, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, section)
+
+    def test_readme_listing_follows_overdesign_check(self):
+        for name, listing in self.README_LISTINGS.items():
+            text = (config.ROOT / name).read_text(encoding="utf-8")
+            overdesign = OverdesignCheckCommandTests.README_LISTINGS[name]
+            with self.subTest(readme=name):
+                self.assertIn(overdesign + "\n" + listing + "\n", text)
+
+    def test_section_follows_over_design_checks_in_the_design_checks_section(self):
+        for name in ("reference.md", "reference.zh-TW.md"):
+            text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
+            start, _ = TestSpeedupCommandTests.REFERENCE_SECTIONS[name]
+            section = text.split(start, 1)[1].split("\n## ", 1)[0]
+            with self.subTest(reference=name):
+                over_design = section.index(OverdesignCheckCommandTests.REFERENCE_SECTIONS[name])
+                self.assertLess(over_design, section.index(self.REFERENCE_SECTIONS[name]))
+                # Nothing sits between Over-design check's section and this one.
+                between = section[over_design + 1:section.index(self.REFERENCE_SECTIONS[name])]
+                self.assertNotIn("\n### ", between)
+
+
+class NotInstalledTests(unittest.TestCase):
+    """Ticket 03: the commands ship with the plugin; no installed policy template or role definition names them.
+    docs/specs/test-design.md, ticket 02, adds test-design."""
+
+    def test_no_template_or_role_definition_mentions_any_of_the_commands(self):
+        # templates/ holds the policy templates and, under templates/agents/, the role definitions.
+        self.assertTrue((config.ROOT / "templates" / "agents" / "analyst.md").is_file())
         for path in sorted((config.ROOT / "templates").rglob("*")):
             if not path.is_file():
                 continue
             text = path.read_text(encoding="utf-8")
-            for command in ("test-speedup", "overdesign-check"):
+            for command in ("test-speedup", "overdesign-check", "test-design"):
                 with self.subTest(template=path.relative_to(config.ROOT).as_posix(), command=command):
                     self.assertNotIn(command, text)
 
