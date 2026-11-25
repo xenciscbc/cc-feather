@@ -63,7 +63,7 @@ These record the user's answers; all were confirmed on 2026-11-25.
 
 - **D1 – Shape.** An opt-in, project-owned catalogue whose entries have four required attributes: command, prerequisites, pass condition and gates. A budget is optional. No registry, discovery mechanism, setup command, configuration key or scheduler. Rules change in three places only: acceptance writing, the final check and the release question.
 - **D2 – Verifier.** The verifier still reruns a Claim's primary acceptance itself. The saving comes from a smaller primary acceptance, not from fewer runs of it.
-- **D3 – Overall acceptance (revised by the user to option (a) below).** In a project with a catalogue, the overall acceptance main writes names the suites whose gates include `full`, not "the full suite". Existing acceptance that says "the full suite" keeps its meaning.
+- **D3 – Overall acceptance (revised by the user to option (a) below).** In a project with a catalogue, the overall acceptance main writes names the suites whose gates include `full`, not "the full suite". When the catalogue has no suite whose gates include `full`, main names the full suite as it would without a catalogue (user decision, 2026-11-25, after claim 03's code review). Existing acceptance that says "the full suite" keeps its meaning.
 - **D4 – `related` and Landing-required suites.** Final check scope `related` does not waive a Landing-required suite.
 - **D5 – Results.** A failure, a missing prerequisite (or a pass condition the output does not show) and a run stopped from outside are recorded apart, and none is retried automatically.
   - Failure takes precedence. A run whose assertions failed is a failure even when its output also lacks the pass condition. A failure in one suite is not hidden by another suite that did not run. A commit that has failed stays failed, as review state already says.
@@ -138,7 +138,7 @@ The user chose (a); the rest of this spec is written for it.
   - Leaving a suite out removes only its `release` gate at that commit. A suite that is also Landing-required, or that an acceptance names, still has to pass.
   - The suites the answer keeps run at that commit before the release or tag. A failure there keeps the commit failed; a missing prerequisite or stopped run blocks the release until the user decides, as above.
   - The release report names each Release-required suite it left out. In off, main asks the same question in the conversation before a release or tag, and nothing is recorded.
-- **Related-test acceptance template.** One sentence is added. When the Working checkout has a tracked Test suite catalogue, main reads the delegation skill's test-suites reference before writing acceptance and follows it. The template stays the rule's single rendered text.
+- **Related-test acceptance template.** One sentence is added. When the Working checkout has a Test suite catalogue at `.feather/test-suites.md` tracked in Git, main reads the delegation skill's test-suites reference before writing acceptance and follows it. The sentence names the path so that main can recognise the catalogue without the delegation skill loaded. The template stays the rule's single rendered text.
 - **What the reference states for each existing full-suite case.** These apply only to acceptance main writes while Related-test acceptance is on, in a project with a catalogue. In each case where the template names "the full suite", that means the suites with gate `full`, named with their commands and pass conditions:
   - a Claim that changes shared test support or build configuration;
   - a Claim whose related tests cannot be determined;
@@ -146,7 +146,7 @@ The user chose (a); the rest of this spec is written for it.
   - the only Claim of a Plan without overall acceptance;
   - the overall acceptance main adds.
 
-  A Claim whose related tests are in a Declared test suite names that suite narrowed to the affected part, or the whole suite, as D7 states. Release-required suites are never put into a Claim's acceptance only because of the release. They run through the release question, so the user can still leave them out.
+  When the catalogue has no suite whose gates include `full`, each of these cases names the full suite as it would without a catalogue. A Claim whose related tests are in a Declared test suite names that suite narrowed to the affected part, or the whole suite, as D7 states. Release-required suites are never put into a Claim's acceptance only because of the release. They run through the release question, so the user can still leave them out.
 - **Upgrade.** A scope that saved Related-test acceptance `on` renders the new sentence only after setup update. The configuration tool is not changed. It already handles guidance rendered by an older template, and 0.45.0's guidance behaves as follows:
   - `check` reports the warning that the delegation guidance is from an older template and to run setup update;
   - setup update replaces the managed block with the new rendering;
