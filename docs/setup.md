@@ -131,6 +131,28 @@ In a session, the setting in effect is the user's session choice, then the proje
 
 The setting changes how main writes acceptance, not how any review or the final check runs. Each review and the rerun of a Claim's primary acceptance use the acceptance as written, and the final check runs as before. A Claim that breaks a test its acceptance does not name passes its own reviews; the break is found only at the final check. In auto, a failure attributed with evidence to that Claim is then fixed by that Claim with its code review and outcome verification again, and an unattributed one becomes a fix Claim; in off, the failure reopens the Claims it affects. The final check runs before landing and release, so work that main never lands or releases does not get the full suite from this setting. Finding related tests by searching for paths and directory names can miss a test that reaches a file only through a path built at run time from parts that are not searched for. The rule binds how main writes acceptance in sessions where the guidance or a session choice turns it on; acceptance written elsewhere, or by the user, is taken as written.
 
+## Test suite catalogue
+
+A project may declare its test suites, with what each one needs to run and to pass, in a Test suite catalogue, `.feather/test-suites.md` in its checkout, tracked in Git with the code it tests. It has no setup command or configuration key: writing the file and committing it is the whole setup, and a project without it behaves as before. Each suite is one `## <suite name>` section with the labelled lines `Command:`, `Prerequisites:`, `Passes when:` and `Gates:`, and optionally `Budget:`, `Conflicts:` and `Affected part:`. For example:
+
+```markdown
+## e2e smoke
+
+Command: `pnpm exec playwright test --grep @smoke`, run in `web/` with `CI=1`
+Prerequisites: the development server on port 5173 and a seeded test database
+Passes when: the summary line reports more than 0 passed tests, and no test tagged `@smoke` is skipped
+Gates: landing, release
+```
+
+The gates are `landing`, `full`, `release` or `none`. Landing-required suites, those whose gates include `landing`, run at every final check at Final check scope `full` and `related` alike, in auto and in off, so `related` never leaves them out. Main uses the file only when Git tracks it at the commit it works on, and reports a file that is untracked or ignored instead of using it. A project that ignores all of `.feather/` can track the catalogue alone with:
+
+```gitignore
+/.feather/*
+!/.feather/test-suites.md
+```
+
+The rules for the catalogue, such as what counts as a pass and when main reads the file, are in the delegation skill's test-suites reference (`skills/delegation/references/test-suites.md`); this section describes them without restating them.
+
 ## Auto land
 
 Auto land is a delegation setting that is the user's standing authority, given in advance, for main to land a Plan in the Automatic flow without asking when nothing in the decision at the end of the Plan needs Accept and land. It is off by default. `review --auto-land <on|off|default>` saves it in project or user scope, alone or together with `--review-mode`, `--stop-threshold` and `--related-tests`, through the usual preview and `--apply --expected-plan` steps; it needs the delegation component installed in that scope, and `default` removes the saved setting. A project can save `off` to override a user `on`; in user scope `off` is the default and saves nothing. The configuration tool refuses any other value, `--auto-land` on another command, and a scope without delegation before it writes anything.

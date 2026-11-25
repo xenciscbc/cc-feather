@@ -1477,6 +1477,7 @@ class ReleaseScopeTests(unittest.TestCase):
 
     # S2.6 and S1.1: a valid `full` pass is used without asking; otherwise main asks the release question for that
     # commit, stating what `related` leaves out.
+    # declared-test-suites ticket 01 extends the question with the Landing-required suites `related` still runs.
     VALID_FULL_PASS = (
         "In auto, at the commit to be released or tagged, a `full` pass that is valid there, main's own in this session "
         "at that commit or a recorded pass that meets the conditions Recorded final check runs states, is used without "
@@ -1485,7 +1486,8 @@ class ReleaseScopeTests(unittest.TestCase):
     THE_QUESTION = (
         "Otherwise main asks the user the release question, a scope question for that commit: whether to run `full` or "
         "to tag on a `related` run at that commit, stating that `related` leaves out the plan's overall acceptance "
-        "checks and reruns only this plan's claims' primary acceptance."
+        "checks and reruns only this plan's claims' primary acceptance and, when Git tracks a Test suite catalogue at "
+        "that commit, every Landing-required suite."
     )
     ASK = {
         SCOPE: (VALID_FULL_PASS, THE_QUESTION),
