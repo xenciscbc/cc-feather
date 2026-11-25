@@ -239,9 +239,24 @@ def source(name: str) -> str:
     return place_text((config.ROOT / PATHS[path]).read_text(encoding="utf-8"), path, label)
 
 
+# What Git returned (command, exit code, output, error output) for one `git show` of a fixed tag, by (revision, path).
+# A Git that cannot be run or times out raises as before and leaves no entry, so the next call runs Git again.
+GIT_SHOWS: dict[tuple[str, str], tuple[list, int, bytes, bytes]] = {}
+
+
+def git_show(revision: str, path: str) -> subprocess.CompletedProcess:
+    """`git show revision:path`, run once per process; each call gets its own CompletedProcess."""
+    key = (revision, path)
+    if key not in GIT_SHOWS:
+        result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{revision}:{path}"], capture_output=True,
+                                check=False, timeout=60)
+        GIT_SHOWS[key] = (list(result.args), result.returncode, result.stdout, result.stderr)
+    command, returncode, stdout, stderr = GIT_SHOWS[key]
+    return subprocess.CompletedProcess(list(command), returncode, stdout, stderr)
+
+
 def tagged(path: str) -> str:
-    result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{TAG}:{PATHS[path]}"], capture_output=True,
-                            check=False, timeout=60)
+    result = git_show(TAG, PATHS[path])
     if result.returncode != 0:
         raise unittest.SkipTest(f"{TAG} is not available: {result.stderr.decode('utf-8', 'replace').strip()}")
     return result.stdout.decode("utf-8")
@@ -1212,8 +1227,7 @@ class PendingScopeQuestionTests(unittest.TestCase):
         for pins in self.new_pins():
             for place, sentences in pins.items():
                 path, _, label = place.partition("#")
-                result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{self.V0_37_0}:{PATHS[path]}"],
-                                        capture_output=True, check=False, timeout=60)
+                result = git_show(self.V0_37_0, PATHS[path])
                 if result.returncode != 0:
                     self.skipTest(f"{self.V0_37_0} is not available")
                 try:
@@ -1449,8 +1463,7 @@ class CoveredPrimaryAcceptanceTests(unittest.TestCase):
         for pins in self.new_pins():
             for place, sentences in pins.items():
                 path, _, label = place.partition("#")
-                result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{self.V0_37_0}:{PATHS[path]}"],
-                                        capture_output=True, check=False, timeout=60)
+                result = git_show(self.V0_37_0, PATHS[path])
                 if result.returncode != 0:
                     self.skipTest(f"{self.V0_37_0} is not available")
                 try:
@@ -1672,8 +1685,7 @@ class ReleaseScopeTests(unittest.TestCase):
         for pins in self.new_pins():
             for place, sentences in pins.items():
                 path, _, label = place.partition("#")
-                result = subprocess.run(["git", "-C", str(config.ROOT), "show", f"{self.V0_37_0}:{PATHS[path]}"],
-                                        capture_output=True, check=False, timeout=60)
+                result = git_show(self.V0_37_0, PATHS[path])
                 if result.returncode != 0:
                     self.skipTest(f"{self.V0_37_0} is not available")
                 try:

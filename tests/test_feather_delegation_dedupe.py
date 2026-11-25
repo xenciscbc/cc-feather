@@ -60,6 +60,22 @@ TAG = "v0.29.0"
 GIT_READ = ("git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=", "-c", "core.quotePath=true",
             "-c", "log.showSignature=false", "-c", "mailmap.file=", "-c", "mailmap.blob=",
             "-c", "blame.ignoreRevsFile=", "-c", "diff.orderFile=/dev/null", "-c", "submodule.recurse=false")
+# What Git returned (exit code, output) for one read of a fixed revision, by (revision, path); path None for the
+# revision's own check. A Git that cannot be run or times out raises and leaves no entry, so the next call tries again.
+GIT_READS: dict[tuple[str, str | None], tuple[int, bytes]] = {}
+
+
+def git_read(revision: str, path: str | None) -> tuple[int, bytes]:
+    """The exit code and output of the blob read of revision:path (or, with path None, the revision's commit check),
+        run once per process."""
+    key = (revision, path)
+    if key not in GIT_READS:
+        args = (["cat-file", "blob", f"{revision}:{path}"] if path is not None
+                else ["rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"])
+        done = subprocess.run([*GIT_READ, *args], cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True,
+                              timeout=60)
+        GIT_READS[key] = (done.returncode, done.stdout)
+    return GIT_READS[key]
 
 
 def place_text(name: str, text: str) -> str:
@@ -603,16 +619,14 @@ class DelegationDedupeExpandTests(unittest.TestCase):
     def tagged(self, name):
         """A file's whole text at the tag; skips when Git cannot be run or the tag is not in this checkout."""
         try:
-            shown = subprocess.run([*GIT_READ, "cat-file", "blob", f"{TAG}:{PATHS[name]}"], cwd=config.ROOT,
-                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
-            known = subprocess.run([*GIT_READ, "rev-parse", "--verify", "--quiet", f"{TAG}^{{commit}}"],
-                                   cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            shown_code, shown = git_read(TAG, PATHS[name])
+            known_code, _ = git_read(TAG, None)
         except (OSError, subprocess.TimeoutExpired) as error:
             self.skipTest(f"Git cannot be run, so the {TAG} text cannot be read: {error}")
-        if known.returncode != 0:
+        if known_code != 0:
             self.skipTest(f"no {TAG} in this checkout")
-        self.assertEqual(shown.returncode, 0, f"{PATHS[name]} at {TAG}")
-        return shown.stdout.decode("utf-8")
+        self.assertEqual(shown_code, 0, f"{PATHS[name]} at {TAG}")
+        return shown.decode("utf-8")
 
     def new_pins(self):
         pins = [(place.partition("#")[0], sentence) for place, sentences in MOVED.items() for sentence in sentences]

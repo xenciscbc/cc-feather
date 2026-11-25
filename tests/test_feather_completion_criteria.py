@@ -22,6 +22,24 @@ import unittest
 from tests import feather_support
 from tests.feather_support import config
 
+# What Git returned (exit code, output) for one read of a fixed revision (a tag or a fixed commit named here), by
+# (revision, path); path None for the revision's own check. A Git that cannot be run or times out raises and leaves no
+# entry, so the next call tries again.
+GIT_READS: dict[tuple[str, str | None], tuple[int, bytes]] = {}
+
+
+def git_read(git_read_prefix, revision: str, path: str | None) -> tuple[int, bytes]:
+    """The exit code and output of the blob read of revision:path (or, with path None, the revision's commit check),
+        run once per process with the given read-only Git prefix."""
+    key = (revision, path)
+    if key not in GIT_READS:
+        args = (["cat-file", "blob", f"{revision}:{path}"] if path is not None
+                else ["rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"])
+        done = subprocess.run([*git_read_prefix, *args], cwd=config.ROOT, stdin=subprocess.DEVNULL,
+                              capture_output=True, timeout=60)
+        GIT_READS[key] = (done.returncode, done.stdout)
+    return GIT_READS[key]
+
 
 class CompletionCriteriaTests(unittest.TestCase):
     """Whole-sentence pins of the new statements, absence pins of the old blocking criteria, and a check that every new
@@ -1125,13 +1143,12 @@ class CompletionCriteriaTests(unittest.TestCase):
     def tagged_path(self, path, revision):
         """A file's text at a revision; skips when Git cannot be run or the revision or the file cannot be read."""
         try:
-            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{revision}:{path}"], cwd=config.ROOT,
-                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            shown_code, shown = git_read(self.GIT_READ, revision, path)
         except (OSError, subprocess.TimeoutExpired) as error:
             self.skipTest(f"Git cannot be run, so the {revision} text cannot be read: {error}")
-        if shown.returncode != 0:
+        if shown_code != 0:
             self.skipTest(f"{path} cannot be read at {revision} in this checkout")
-        return shown.stdout.decode("utf-8")
+        return shown.decode("utf-8")
 
     def tagged(self, place, revision=None):
         """The whole file behind a place at the revision (the tag by default), '' when it did not exist there; skips
@@ -1140,15 +1157,13 @@ class CompletionCriteriaTests(unittest.TestCase):
         name = place.partition("#")[0]
         path = self.PATHS[self.SPLIT_FROM.get(name, name)]
         try:
-            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{revision}:{path}"], cwd=config.ROOT,
-                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
-            known = subprocess.run([*self.GIT_READ, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"],
-                                   cwd=config.ROOT, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            shown_code, shown = git_read(self.GIT_READ, revision, path)
+            known_code, _ = git_read(self.GIT_READ, revision, None)
         except (OSError, subprocess.TimeoutExpired) as error:
             self.skipTest(f"Git cannot be run, so the {revision} text cannot be read: {error}")
-        if known.returncode != 0:
+        if known_code != 0:
             self.skipTest(f"no {revision} in this checkout")
-        return shown.stdout.decode("utf-8") if shown.returncode == 0 else ""
+        return shown.decode("utf-8") if shown_code == 0 else ""
 
     def test_every_interim_absence_pin_matches_the_interim_text(self):
         for place, phrases in self.INTERIM_WORDING.items():
@@ -1240,13 +1255,12 @@ class WeighFindingsBeforeRulesTests(unittest.TestCase):
 
     def previous(self, path):
         try:
-            shown = subprocess.run([*self.GIT_READ, "cat-file", "blob", f"{self.PREVIOUS}:{path}"], cwd=config.ROOT,
-                                   stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+            shown_code, shown = git_read(self.GIT_READ, self.PREVIOUS, path)
         except (OSError, subprocess.TimeoutExpired) as error:
             self.skipTest(f"Git cannot be run, so the {self.PREVIOUS} text cannot be read: {error}")
-        if shown.returncode != 0:
+        if shown_code != 0:
             self.skipTest(f"no {self.PREVIOUS} in this checkout")
-        return shown.stdout.decode("utf-8")
+        return shown.decode("utf-8")
 
     def test_every_new_pin_fails_on_the_v0_27_1_text(self):
         pins = [(self.SKILL, sentence) for sentence in self.PARAGRAPH]

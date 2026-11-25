@@ -157,22 +157,46 @@ def git_at(test, *args) -> subprocess.CompletedProcess:
         test.skipTest(f"Git cannot be run, so the {TAG} text cannot be read: {error}")
 
 
+# What Git returned (command, exit code, output, error output) for one read of a fixed revision, by (revision, path):
+# path is a file path for a blob read, None for the revision's commit check and the tuple of pathspecs for a tree
+# listing. A Git that cannot be run or times out skips in git_at and leaves no entry, so the next call tries again.
+GIT_READS: dict[tuple[str, object], tuple[list, int, bytes, bytes]] = {}
+
+
+def git_once(test, revision: str, path, *args) -> subprocess.CompletedProcess:
+    """git_at for a read of a fixed revision, run once per process; each call gets its own CompletedProcess."""
+    key = (revision, path)
+    if key not in GIT_READS:
+        done = git_at(test, *args)
+        GIT_READS[key] = (list(done.args), done.returncode, done.stdout, done.stderr)
+    command, returncode, stdout, stderr = GIT_READS[key]
+    return subprocess.CompletedProcess(list(command), returncode, stdout, stderr)
+
+
+def revision_known(test, revision: str) -> subprocess.CompletedProcess:
+    return git_once(test, revision, None, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}")
+
+
+def blob_at(test, revision: str, path: str) -> subprocess.CompletedProcess:
+    return git_once(test, revision, path, "cat-file", "blob", f"{revision}:{path}")
+
+
 def tagged_blob(test, path: str) -> str | None:
-    known = git_at(test, "rev-parse", "--verify", "--quiet", f"{TAG}^{{commit}}")
+    known = revision_known(test, TAG)
     if known.returncode != 0:
         test.skipTest(f"no {TAG} in this checkout")
-    shown = git_at(test, "cat-file", "blob", f"{TAG}:{path}")
+    shown = blob_at(test, TAG, path)
     return normalised(shown.stdout.decode("utf-8")) if shown.returncode == 0 else None
 
 
 def tagged_tree(test, *pathspecs: str) -> dict[str, str]:
     """Every text file under the pathspecs at the tag, by path."""
-    listed = git_at(test, "ls-tree", "-r", "-z", "--name-only", TAG, "--", *pathspecs)
+    listed = git_once(test, TAG, pathspecs, "ls-tree", "-r", "-z", "--name-only", TAG, "--", *pathspecs)
     if listed.returncode != 0:
         test.skipTest(f"no {TAG} in this checkout: {listed.stderr.decode('utf-8', 'replace').strip()}")
     files = {}
     for name in filter(None, listed.stdout.decode("utf-8").split("\0")):
-        shown = git_at(test, "cat-file", "blob", f"{TAG}:{name}")
+        shown = blob_at(test, TAG, name)
         test.assertEqual(shown.returncode, 0, shown.stderr)
         try:
             files[name] = normalised(shown.stdout.decode("utf-8"))
@@ -896,13 +920,13 @@ class UsersAnswerRestrictionTests(unittest.TestCase):
         self.assertNotIn("isolated environment the user's own message names", current("adversarial-review.md#3"))
 
     def test_every_new_pin_fails_on_the_v0_38_0_text(self):
-        known = git_at(self, "rev-parse", "--verify", "--quiet", f"{self.TAG}^{{commit}}")
+        known = revision_known(self, self.TAG)
         if known.returncode != 0:
             self.skipTest(f"no {self.TAG} in this checkout")
         for place, sentences in ((self.EXECUTION, (*USERS_ANSWER.values(), *EXPRESS_LIFTS.values(),
                                                    *self.OTHER_PLACES)),
                                  ("adversarial-review.md#3", (self.PROBING,))):
-            shown = git_at(self, "cat-file", "blob", f"{self.TAG}:{PATHS[place.partition('#')[0]]}")
+            shown = blob_at(self, self.TAG, PATHS[place.partition('#')[0]])
             self.assertEqual(shown.returncode, 0, shown.stderr)
             tagged = select(place, normalised(shown.stdout.decode("utf-8")))
             self.assertTrue(tagged)
