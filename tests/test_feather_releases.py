@@ -3512,8 +3512,8 @@ class RunConfigurationsReleaseTests(unittest.TestCase):
     update observed in a scratch installation of 0.44.0 with what `check` reported before and after, the way back, the
     test runs, what the tests cannot show and the tag, and is the file's last. The rules' own sentences are
     tests/test_feather_design_checks.py's and tests/test_feather_resource_floor.py's. Since 0.46.0 the manifest version
-    is DeclaredTestSuitesReleaseTests', the note follows the 0.46.0 note and the entry is followed only by the 0.46.0
-    entry."""
+    is DeclaredTestSuitesReleaseTests', the note follows the 0.46.0 note and the entry is followed only by sections for
+    work landed on main without a release, such as the first test speed-up batch, and then the 0.46.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.45.0 note in order.
     UPDATES = (
