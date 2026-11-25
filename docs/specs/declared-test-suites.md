@@ -181,7 +181,7 @@ The user chose (a); the rest of this spec is written for it.
 
 - **Limits.** The pass condition is shown by output the repository's own code writes, so code can still fake it, as review state already says of any check. A suite left out at release is checked only by later runs. A suite with no gate is run only when some acceptance names it, so a suite nobody names can go unrun indefinitely, as cbc-go's integration-tag tests do today. Declaring it with a gate is how a project prevents that.
 - **Side findings outside this repository, not changed.** cbc-go's `-tags integration` tests are not in `build/test-all.sh`; cbc-go's MinIO tests skip silently when MinIO is unreachable; a tt-sys smoke test falls back to a hard-coded development Oracle DSN. These are the user's to decide on in those projects.
-- **Tickets.** After plan review the spec is cut into tickets with to-tickets, quizzing the breakdown first. Automatic plan review is on.
+- **Tickets.** The spec is cut into tickets under `.scratch/declared-test-suites/issues/` with to-tickets, quizzing the breakdown first. Automatic plan review is on, so the tickets get plan review before implementation.
 
 ## Overall acceptance
 
