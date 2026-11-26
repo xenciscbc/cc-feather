@@ -3783,8 +3783,9 @@ class TestDesignReleaseTests(unittest.TestCase):
     entry records the spec and the tickets, the determination with its evidence, that the setup document changes only
     its count of packaged skills, that `test-speedup` gains checks, the way back, the full suite, the live run of the
     command in a copy of the working tree with what it showed and that it wrote nothing, the reviewing version, what
-    the tests cannot show and the tag, and is the file's last. The command's and the shared test criteria's own
-    sentences are tests/test_feather_design_checks.py's; the packaged skill count is InstallDocumentTests'."""
+    the tests cannot show and the tag, and is the file's last release entry. The command's and the shared test
+    criteria's own sentences are tests/test_feather_design_checks.py's; the packaged skill count is
+    InstallDocumentTests'."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.47.0 note in order.
     UPDATES = (
@@ -3898,8 +3899,12 @@ class TestDesignReleaseTests(unittest.TestCase):
         self.assertNotIn(".scratch", entry)
         # The live run's result is recorded, not left as a placeholder.
         self.assertNotIn("@@", entry)
-        # The entry is the file's last, so it is appended rather than rewriting an earlier one.
-        self.assertTrue(text.rstrip("\n").endswith(entry.rstrip("\n")))
+        # The entry is the file's last release entry, so it is appended rather than rewriting an earlier one; only
+        # sections for work landed on main without a release, such as "## Test speed-ups, third batch", may follow.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIsNone(re.search(r"^## \d", after, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.47.0)")
+                            for heading in re.findall(r"^## .*$", after, re.MULTILINE)))
 
 
 class InstallDocumentTests(unittest.TestCase):
