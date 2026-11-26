@@ -3,7 +3,8 @@
 It keeps the Speed-up record of /cc-feather:test-speedup. It never runs a test, never reads a file beyond hashing it
 or reading a version from it, and never parses a report, a spec or a handoff record. It imports the handoff skill's
 helpers, which the plugin ships beside this skill as skills/handoff/scripts/feather_handoff, for Git top-level and
-main-worktree discovery and for the file operations they offer; the handoff tool itself is never changed.
+main-worktree discovery, for the file operations they offer and for command-line parsing and input; the handoff
+tool itself is never changed.
 
 PROTOCOL
 
