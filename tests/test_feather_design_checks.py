@@ -109,6 +109,7 @@ class TestSpeedupCommandTests(unittest.TestCase):
         ),
         "SKILL.md#Speed-up record": (
             "Every writing command takes the store version main last read with `--version`; on `changed`, main reads the record again, merges its own update and writes again.",
+            "Main passes these version sources to both `changes`, whose result shows which versions changed since the last run, and `record-run`.",
         ),
         "SKILL.md#State rules": (
             "**State rules.** New items are undecided.",

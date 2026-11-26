@@ -29,7 +29,7 @@ Resolve the bundled launcher relative to this loaded skill: `scripts/speedup.py`
 
 Each command prints one JSON object. A handled result exits 0, whether its `status` is `ok` or `changed`; status `error` exits 2. The record lives under the main worktree's `.feather/test-speedup/`, whichever checkout runs the command, or under the project directory of a non-Git project; the script writes it nowhere else, and main never writes the record by other means. Every writing command takes the store version main last read with `--version`; on `changed`, main reads the record again, merges its own update and writes again.
 
-**Versions.** The test runner and its plugins are those whose settings the static pass judges, such as vitest, jest, pytest, pytest-xdist or the Go toolchain; a library the tests import is not one. Main names, for each, the file its version is read from, and the script reads it without running anything or reports it unknown.
+**Versions.** The test runner and its plugins are those whose settings the static pass judges, such as vitest, jest, pytest, pytest-xdist or the Go toolchain; a library the tests import is not one. Main names, for each, the file its version is read from, and the script reads it without running anything or reports it unknown. Main passes these version sources to both `changes`, whose result shows which versions changed since the last run, and `record-run`.
 
 **Recording the run.** After the static pass, main records the run with `record-run`: the files analysed, each with its shared files, the items found, the deleted files `changes` reported, the run's scope, commit and `--full` flag, and the versions. Then main classifies the recorded items not found again with `classify`, as the state rules below say.
 
