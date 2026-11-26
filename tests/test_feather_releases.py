@@ -3650,7 +3650,7 @@ class DeclaredTestSuitesReleaseTests(unittest.TestCase):
     show and the tag, and was appended after the earlier entries. The rules' own sentences are tests/test_feather_declared_suites.py's and
     tests/test_feather_related_tests.py's. Since 0.47.0 the manifest version is TestDesignReleaseTests', the note
     follows the 0.47.0 note, and the entry is followed only by sections for work landed on main without a release,
-    such as the second test speed-up batch's, and then the 0.47.0 entry, which is the file's last."""
+    such as the second test speed-up batch's, and then the 0.47.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.46.0 note in order.
     UPDATES = (
@@ -3783,9 +3783,11 @@ class TestDesignReleaseTests(unittest.TestCase):
     entry records the spec and the tickets, the determination with its evidence, that the setup document changes only
     its count of packaged skills, that `test-speedup` gains checks, the way back, the full suite, the live run of the
     command in a copy of the working tree with what it showed and that it wrote nothing, the reviewing version, what
-    the tests cannot show and the tag, and is the file's last release entry. The command's and the shared test
+    the tests cannot show and the tag, and was appended after the earlier entries. The command's and the shared test
     criteria's own sentences are tests/test_feather_design_checks.py's; the packaged skill count is
-    InstallDocumentTests'."""
+    InstallDocumentTests'. Since 0.48.0 the manifest version is SpeedupRecordReleaseTests', the note follows the 0.48.0
+    note, and the entry is followed only by sections for work landed on main without a release, such as the third test
+    speed-up batch's, and then the 0.48.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.47.0 note in order.
     UPDATES = (
@@ -3847,16 +3849,16 @@ class TestDesignReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_47_0(self):
-        self.assertEqual("0.47.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_test_design_note_in_both_languages(self):
         previous = DeclaredTestSuitesReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = SpeedupRecordReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.47.0 note starts right after the section's opening sentence, its sentences in order, before 0.46.0's.
+            # The 0.47.0 note starts right after the 0.48.0 note, its sentences in order, before 0.46.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_in_both_languages(self):
@@ -3899,11 +3901,164 @@ class TestDesignReleaseTests(unittest.TestCase):
         self.assertNotIn(".scratch", entry)
         # The live run's result is recorded, not left as a placeholder.
         self.assertNotIn("@@", entry)
+        # The entry was appended rather than rewriting an earlier one; after it come only sections for work landed on
+        # main without a release, such as "## Test speed-ups, third batch", and then the 0.48.0 entry.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIn(SpeedupRecordReleaseTests.ENTRY_HEADING, after)
+        between = after.split(SpeedupRecordReleaseTests.ENTRY_HEADING, 1)[0]
+        self.assertIsNone(re.search(r"^## \d", between, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.47.0)")
+                            for heading in re.findall(r"^## .*$", between, re.MULTILINE)))
+
+
+class SpeedupRecordReleaseTests(unittest.TestCase):
+    """0.48.0 (docs/specs/test-speedup-record.md; tickets 01 to 03): the manifest version is 0.48.0; the Updates note,
+    in both languages, opens the section, says that `test-speedup` keeps a Speed-up record under `.feather/test-speedup/`
+    and what it adds, that existing installations need the plugin update and a fresh session but no setup update,
+    determined from the diff against v0.47.0 over `templates skills/setup scripts`, and that going back to 0.47.0 means
+    reinstalling the 0.47.0 plugin, after which `.feather/test-speedup/` can be deleted; the validation entry records
+    the spec and the tickets with their fixes, the determination with its evidence, the unchanged setup document, the
+    way back, the test runs, the live run in a copy of the working tree with its two earlier attempts, its permission
+    mode, what each session showed and changed and the places checked and not checked, the reviewing version, what the
+    tests cannot show and the tag, and is the file's last release entry. The command's and the record's own sentences
+    are tests/test_feather_design_checks.py's and the record script's behaviour is tests/test_speedup_record.py's; the
+    packaged skill count is InstallDocumentTests'."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.48.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.48.0 gives `/cc-feather:test-speedup` a Speed-up record for the repository, under the main worktree's `.feather/test-speedup/`, which Git ignores and which the command writes after every run: a later run analyses only the test files that are new or whose content changed, or whose shared fixtures, setup files, test runner configuration or test scripts changed, keeps every item's state, starts its report with a Since the last run section, and the command gains `show`, `prune` and `--full`, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "`git diff v0.47.0 HEAD -- templates skills/setup scripts` shows no change, so 0.48.0 changes no installed guidance, policy template, role definition or configuration tool, only skills the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.47.0, reinstall the 0.47.0 plugin; no setup update or remove is needed, and the `.feather/test-speedup/` directory can then be deleted."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.48.0 讓 `/cc-feather:test-speedup` 為儲存庫保存一份 Speed-up record，放在 main worktree 的 `.feather/test-speedup/` 下，Git 會忽略這份紀錄，指令在每次執行後寫入它：之後的執行只分析新的或內容改變的測試檔，以及共用 fixture、setup 檔、test runner 設定或測試 script 改變的測試檔，保留每個項目的狀態，報告以「自上次執行以來」一節開頭，指令也新增 `show`、`prune` 與 `--full`，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "`git diff v0.47.0 HEAD -- templates skills/setup scripts` 沒有任何差異，所以 0.48.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.47.0，重新安裝 0.47.0 的 plugin；不需要 setup update，也不需要先移除，之後可以刪除 `.feather/test-speedup/` 目錄。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    FRESH_SESSION = SmallerChecksReleaseTests.FRESH_SESSION
+    # Going back: reinstalling the 0.47.0 plugin, then deleting the record's directory.
+    WAY_BACK = (("reinstall the 0.47.0 plugin", "the `.feather/test-speedup/` directory can then be deleted."),
+                ("重新安裝 0.47.0 的 plugin", "之後可以刪除 `.feather/test-speedup/` 目錄。"))
+    # The release changes no role definition (`git diff-tree -r --name-only v0.47.0 HEAD -- templates skills/setup
+    # scripts` lists no path), so the note names none.
+    ROLES = TestDesignReleaseTests.ROLES
+    # The note's link to the reference's Design and test checks section, and the heading it resolves to.
+    LINKS = SmallerChecksReleaseTests.LINKS
+
+    # The validation entry: the spec and its tickets, the setup determination with its evidence, the unchanged setup
+    # document, the way back, the test runs, the live run, the reviewing version, what the tests cannot show and the
+    # tag.
+    ENTRY_HEADING = "\n## 0.48.0 Speed-up record\n"
+    ENTRY = (
+        "Implements [the Speed-up record spec](specs/test-speedup-record.md), written on 2026-11-26, added in fa5386b and with its Script item revised in 52ef217 with the user's authorisation;",
+        "ticket 01, the record script and its glossary entries, in 7137e41, with the fixes 52ef217 (the spec's revision) and 020ab04 (the launcher's docstring), ticket 02, the skill text and documents, in c4c3f41, with the fix 65a4f14, and ticket 03, the 0.48.0 release, in the commit carrying this entry.",
+        "The plugin still packages twenty-two skills, and the 0.47.0 release tests now follow the 0.48.0 note and entry.",
+        "**No setup update is required.**",
+        "`git diff v0.47.0 HEAD -- templates skills/setup scripts` prints nothing, and `git diff-tree -r --name-only v0.47.0 HEAD -- templates skills/setup scripts` lists no path:",
+        "so existing installations need only the plugin update and a fresh session.",
+        "The setup document does not change, and its count of packaged skills stays twenty-two.",
+        "To go back to 0.47.0, reinstall the 0.47.0 plugin; no setup update or remove is needed, and the `.feather/test-speedup/` directory can then be deleted.",
+        "`python -B -m unittest discover -s tests -t .`, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "with `--plugin-dir` naming the copy, `--max-turns 40` and a 20-minute wall-clock timeout,",
+        "so the copy was its own main worktree and did not resolve to this repository.",
+        "The user-level settings, `~/.claude/settings.json`, were loaded,",
+        "Two earlier attempts of the first run used the default permission mode",
+        "so the remaining sessions ran with `--permission-mode bypassPermissions`.",
+        "Under that mode nothing enforced where a session wrote:",
+        "Only `.feather/test-speedup/.gitignore` and `.feather/test-speedup/record.json` were added in the copy,",
+        "between the sessions main appended a comment line to `tests/test_leases_rules.py` and committed it in the copy (13451af).",
+        "analysed again only `tests/test_leases_rules.py`, because its content changed, and kept the recorded result of `tests/test_feather_resource_method.py`,",
+        "Only `.feather/test-speedup/record.json` changed in the copy.",
+        "`show` (22.8 s, peak 987 MiB):",
+        "`prune --obsolete` (25.9 s, peak 975 MiB): the dry run selected nothing, nothing was removed,",
+        "none ran unittest or pytest, so no session ran a test, and the only write outside the copy was the first run's temporary input file.",
+        "the main worktree had no `.feather/test-speedup/` after the run,",
+        "Other places, such as other directories under `J:\\gotmp\\`, Claude Code's own transcripts and its plugin cache, were not checked.",
+        "The copy was removed afterwards.",
+        "This release's plan review, implementation and review round ran with the installed cc-feather 0.45.0's roles and procedures, not this release's candidate.",
+        "the tests show the record script's behaviour and the text, not that a model always follows it.",
+        "The live run shows one model on one small scope.",
+        "In interactive use every write of the record asks for permission, since its payload goes on stdin;",
+        "`v0.48.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 to 03 are accepted and only after the user's go-ahead.",
+        "`v0.47.0`, at 897d0a0, is not moved.",
+        "The review round, with the tickets' passes, the final check, the user's decision at the end of the plan and the tag, follows the commit carrying this entry and is recorded after it.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_48_0(self):
+        self.assertEqual("0.48.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_speedup_record_note_in_both_languages(self):
+        previous = TestDesignReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.48.0 note starts right after the section's opening sentence, its sentences in order, before 0.47.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_and_name_the_way_back_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update, fresh, way_back in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE, self.FRESH_SESSION, self.WAY_BACK):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count(no_update), 1)
+                self.assertEqual(note.count(fresh), 1)
+                self.assertEqual(note.count("`/cc-feather:setup update`"), 1)
+                self.assertEqual(note.count("`git diff v0.47.0 HEAD -- templates skills/setup scripts`"), 1)
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+            # Reinstalling 0.47.0 comes before deleting the record's directory.
+            reinstall, delete = way_back
+            with self.subTest(readme=name, way_back=True):
+                self.assertEqual(note.count(reinstall), 1)
+                self.assertEqual(note.count(delete), 1)
+                self.assertLess(note.index(reinstall), note.index(delete))
+
+    def test_the_note_names_the_command_and_the_record(self):
+        for name, (heading, _, *sentences) in zip(("README.md", "README.zh-TW.md"), self.UPDATES):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertEqual(note.count("`/cc-feather:test-speedup`"), 1)
+                self.assertEqual(note.count("Speed-up record"), 1)
+                self.assertEqual(note.count("`.feather/test-speedup/`"), 2)
+                for form in ("`show`", "`prune`", "`--full`"):
+                    self.assertEqual(note.count(form), 1)
+            for role in self.ROLES:
+                with self.subTest(readme=name, role=role):
+                    self.assertNotIn(role, note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target_file, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertEqual(note.count(link), 1)
+                self.assertEqual(self.text(target_file).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_live_run_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertEqual(entry.count(sentence), 1)
+        self.assertNotIn("Setup update is required", entry)
+        self.assertNotIn(".scratch/test-speedup-record", entry)
+        # The test runs' and the live run's results are recorded, not left as placeholders.
+        self.assertNotIn("@@", entry)
         # The entry is the file's last release entry, so it is appended rather than rewriting an earlier one; only
-        # sections for work landed on main without a release, such as "## Test speed-ups, third batch", may follow.
+        # sections for work landed on main without a release may follow.
         after = text.split(self.ENTRY_HEADING, 1)[1]
         self.assertIsNone(re.search(r"^## \d", after, re.MULTILINE))
-        self.assertTrue(all(heading.endswith("(on main after 0.47.0)")
+        self.assertTrue(all(heading.endswith("(on main after 0.48.0)")
                             for heading in re.findall(r"^## .*$", after, re.MULTILINE)))
 
 
