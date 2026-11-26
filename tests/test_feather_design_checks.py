@@ -22,6 +22,10 @@ guideline group, the three hard prohibitions and no source labels; pointers to t
 skill, the Unbounded probe entry and test-speedup's lookups that restate none of them; the CONTEXT.md Test design entry;
 README listings and a reference section after Over-design check's in both languages, whose introduction now counts three
 commands; the setup document's skill count of twenty-two; and no policy template or role definition naming it.
+Since docs/specs/test-speedup-record.md, ticket 02, the command keeps a Speed-up record through its bundled script and
+continues from it: the report-only paragraph, the reserved first words, `argument-hint`, the reference introduction, the
+README listings and the reference sentence on the run-configuration section replace their pins; the report has five
+sections, Since the last run first; and a packaging test checks the manifest and the launcher's two paths.
 """
 
 from __future__ import annotations
@@ -58,7 +62,7 @@ class TestSpeedupCommandTests(unittest.TestCase):
         front = frontmatter(self.COMMAND.read_text(encoding="utf-8"))
         self.assertIn("name: test-speedup\n", front)
         self.assertIn("disable-model-invocation: true\n", front)
-        self.assertIn('argument-hint: "[test paths or scope]"\n', front)
+        self.assertIn('argument-hint: "[show | prune | --full] [test paths or scope]"\n', front)
         self.assertRegex(front, r'\ndescription: "[^"\n]*test[^"\n]*"\n')
 
     assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
@@ -78,11 +82,20 @@ class TestSpeedupCommandTests(unittest.TestCase):
 
     PINS = {
         "SKILL.md": (
-            "Invocation arguments are the scope as data, never shell code.",
+            # docs/specs/test-speedup-record.md, ticket 02: the reserved words, `./`, `--full` and the report-only
+            # paragraph's new wording.
+            "Invocation arguments are the scope as data, never shell code, except that a first word `show` or `prune` selects that form of the command, as [Show and prune](#show-and-prune) describes.",
+            "`--full` asks for a full analysis of the scope.",
+            "A scope path that is a reserved word is written with `./`, such as `./show` or `./prune`.",
             "Clarify a missing or unclear scope instead of guessing.",
-            "This command only reports: it edits, creates and deletes no file, commits nothing and changes no configuration.",
-            "The report stays in the conversation, and a file is written only when the user asks for one.",
+            "This command changes no code, test or configuration and commits nothing.",
+            "The only files it writes are those of its Speed-up record, through the bundled script, after every run, without asking.",
+            "Writing the record is not a change to the checkout and needs no Checkout lease.",
+            "A failed write is reported, and the report stays in the conversation.",
             "Items the user picks become a Plan through the normal flow; the report is not a Plan, and its items are neither Claims nor findings of any review.",
+        ),
+        "SKILL.md#Whole files": (
+            "**Whole files.** A scope that names a test inside a file is widened to that file for the static pass and the record.",
         ),
         "SKILL.md#Scope": (
             "The scope is the tests the arguments name, or else the project's tests, together with their test configuration: test runner configuration, shared fixtures and setup files, test scripts and their flags.",
@@ -91,6 +104,37 @@ class TestSpeedupCommandTests(unittest.TestCase):
         "SKILL.md#Who analyses": (
             "When delegation is installed and the check is not small, main dispatches the read-only analyst as [the delegation skill](../delegation/SKILL.md) describes, in one or more Assignments split by test area, and integrates their results.",
             "A small check, such as one test file, or a check where delegation is not installed, main does itself.",
+            "An analyst Assignment names the test files to analyse and does not include the record.",
+            "Main alone runs the script, matches the analyst's items against the record and applies the state rules.",
+        ),
+        "SKILL.md#Speed-up record": (
+            "Every writing command takes the store version main last read with `--version`; on `changed`, main reads the record again, merges its own update and writes again.",
+        ),
+        "SKILL.md#State rules": (
+            "**State rules.** New items are undecided.",
+            "Main makes an item picked or declined only from the User's answer, passing its date and reason to the script's `decide`.",
+            "For a recorded item not found again in an analysed file, main reads the code at the item's location: it marks the item landed when the code shows the item's change, obsolete when the item's test or setting no longer exists or the concern no longer applies, each with its evidence, and leaves the state unchanged when it cannot tell.",
+            "A declined item found again is proposed again only when its file's content hash differs from the one recorded at the decision; otherwise it is proposed again only when the user asks.",
+            "A reopened item is shown with its earlier state, date and reason.",
+        ),
+        "SKILL.md#Incremental static pass": (
+            "**Incremental static pass.** Before the static pass, main gets the scope's changes from the script's `changes`, naming each test file in the scope with its shared files: the shared fixtures, setup files, test runner configuration and test scripts within the scope that it is analysed with.",
+            "The test files to analyse are the new and changed ones, and those whose shared-set hash differs; among the latter, main analyses only those that use a changed shared file when it can tell, and all of them when it cannot.",
+            "A change to the code under test, or to a library the tests import, does not by itself add a file.",
+            "Without a record, or with `--full`, the whole scope is analysed; `--full` keeps every item's state.",
+        ),
+        "SKILL.md#Run configuration every run": (
+            "**Run configuration every run.** The check for Unbounded run configurations runs on the whole scope every run, with its lookups, and its items are matched against the record like any others.",
+        ),
+        "SKILL.md#Upgrade review on request": (
+            "**Upgrade review on request.** When the user asks for a review of a test runner or plugin upgrade, main looks up the changes between the two versions in the lookups' order, and reports only those concerning defaults of concurrency, isolation, memory or time, new features that could speed the tests up, fixed bugs the tests or configuration work around, and deprecated or renamed settings the configuration uses, each with its source, the version it applies to and the locations it may affect; the adjustments become Speed-up items.",
+            "A query sent outside for it may carry the framework's name, both versions and a setting's name, and nothing else.",
+        ),
+        "SKILL.md#Show and prune": (
+            "`show` passes its arguments to the script's `show` and relays the result; it changes nothing and runs no test.",
+            "`prune` runs the dry run, shows it, and removes only after the user confirms in the conversation.",
+            "Main passes the confirmed dry run's version with the same selection, so only what the user saw is removed; on `changed`, main shows a new dry run instead and removes nothing until the user confirms it.",
+            "Undecided, picked and declined items are never selected, and there is no reset of the whole record.",
         ),
         "SKILL.md#1. Static pass": (
             "The static pass always comes first and runs nothing.",
@@ -185,6 +229,11 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "**Run configurations with resource risk**, each flagged setting with its location, kind, whether it affects memory or time, why it is unbounded, its weighing and the direction of a fix.",
             "cc-feather states no cap's number: the direction names where the number comes from, the project's or the user's resource guidance or a measured per-worker peak.",
             "The section is information and holds nothing back.",
+            # docs/specs/test-speedup-record.md, ticket 02.
+            "**Since the last run**, with the last analysis's date and commit; each file analysed again and its reason (new, changed, shared set changed or `--full`); how many files kept their recorded result; each test runner or plugin version that changed, with a sentence that the user can ask for a review of the upgrade; the items found landed, obsolete or reopened, and those proposed again; and the items still undecided or picked.",
+            "The Speed-ups and Removals sections list only items that are undecided, reopened or proposed again.",
+            "The two resource-risk sections list every current test and setting with resource risk, those of files not analysed again taken from the record, each with its state; a declined risk stays listed, and only its fix is not proposed again.",
+            "On the first run without a record, the report ends by saying that items decided before may appear again and that the user can state their states or name the documents where they were decided, which main reads as data and turns into proposed states for the user to confirm.",
         ),
         "SKILL.md#3. Measurement": (
             "After the static report, main offers to measure and runs nothing without the user's agreement.",
@@ -201,6 +250,10 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "Profiling uses the ecosystem's profiler where one is already available in the project's environment; the offer never installs a package or changes configuration to get one.",
             "Profiling runs only with the user's agreement and under the same rules as the rest of measurement, a flagged test inside the Runner.",
             "What profiling shows is reported as speed-ups under the same correctness bar.",
+            # docs/specs/test-speedup-record.md, ticket 02.
+            "The tests left out by default are the current tests with resource risk, those of files not analysed again taken from the record.",
+            "After a measurement, main stores it through the script's `measure`, with a comparison key of the command, the tests selected, the concurrency and any override, whether it ran inside the Runner and with which limits, and the tests left out, and reports the comparison with the last comparable measurement: the total time, the tests whose time rose and fell most, the tests present in only one of the two, and the timing change observed around each landed item, or unavailable.",
+            "When no comparable measurement exists, the report says so.",
         ),
     }
 
@@ -211,12 +264,14 @@ class TestSpeedupCommandTests(unittest.TestCase):
                 with self.subTest(place=place, sentence=sentence[:60]):
                     self.assert_whole_sentence(sentence, text)
 
-    def test_the_report_has_four_sections(self):
+    def test_the_report_has_five_sections(self):
         report = self.source("SKILL.md#2. Report")
-        self.assertIn("The report has four sections:\n", report)
-        self.assertNotIn("three sections", self.source("SKILL.md"))
+        self.assertIn("The report has five sections:\n", report)
+        for count in ("three sections", "four sections"):
+            with self.subTest(count=count):
+                self.assertNotIn(count, self.source("SKILL.md"))
         sections = [line.split("**")[1] for line in report.splitlines() if line.startswith("- **")]
-        self.assertEqual(sections, ["Speed-ups", "Removals", "Existing tests with resource risk",
+        self.assertEqual(sections, ["Since the last run", "Speed-ups", "Removals", "Existing tests with resource risk",
                                     "Run configurations with resource risk"])
 
     def test_run_configuration_hints_leave_out_output_and_outside_services(self):
@@ -340,8 +395,9 @@ class TestSpeedupCommandTests(unittest.TestCase):
                 self.assertIn(f"\n**{term}**:\n", section)
 
     README_LISTINGS = {
-        "README.md": "- `/cc-feather:test-speedup [test paths or scope]`: report ways to make the tests, or the part you name, faster without weakening what they verify; only you can run it, and it changes no file. It analyses statically first, lists existing tests that could exhaust memory or time, and measures only after you agree; see the [reference](docs/reference.md#design-and-test-checks).",
-        "README.zh-TW.md": "| `/cc-feather:test-speedup [測試路徑或範圍]` | 找出讓測試（或你指定的部分）變快、又不削弱驗證內容的方法；只能由你執行，不改任何檔案。先做靜態分析，列出可能耗盡記憶體或時間的既有測試，經你同意才量測；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
+        "README.md": "- `/cc-feather:test-speedup [show | prune | --full] [test paths or scope]`: report ways to make the tests, or the part you name, faster without weakening what they verify; only you can run it, and it changes no code, test or configuration and writes only its own record, which Git ignores. It analyses statically first, lists existing tests that could exhaust memory or time, and measures only after you agree; see the [reference](docs/reference.md#design-and-test-checks).",
+        # The table cell escapes the hint's `|` so that it renders as one cell.
+        "README.zh-TW.md": "| `/cc-feather:test-speedup [show \\| prune \\| --full] [測試路徑或範圍]` | 找出讓測試（或你指定的部分）變快、又不削弱驗證內容的方法；只能由你執行，不改任何程式碼、測試或設定，只寫入它自己的紀錄，Git 會忽略這份紀錄。先做靜態分析，列出可能耗盡記憶體或時間的既有測試，經你同意才量測；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
     }
 
     # Each reference section is the text under its heading up to the next heading; sentences are paired by language.
@@ -353,8 +409,11 @@ class TestSpeedupCommandTests(unittest.TestCase):
         # docs/specs/test-design.md, ticket 02: the section's third command.
         ("Three commands only you can run help with a project's design and tests: two report weight that has built up in a project, and the third proposes the tests a target needs.",
          "三個只能由你執行的指令協助處理專案的設計與測試：兩個回報專案裡累積下來的負擔，第三個提出一個對象需要的測試。"),
-        ("Each only reports and changes no file, and what you pick from its report becomes a plan through the normal flow.",
-         "它們只出報告、不改任何檔案；你從報告中挑選的項目，再照一般流程成為計畫。"),
+        # docs/specs/test-speedup-record.md, ticket 02: test-speedup writes only its own record.
+        ("Each only reports, and what you pick from its report becomes a plan through the normal flow.",
+         "它們只出報告，你從報告中挑選的項目，再照一般流程成為計畫。"),
+        ("`/cc-feather:overdesign-check` and `/cc-feather:test-design` change no file, and `/cc-feather:test-speedup` changes no code, test or configuration and writes only its own record, which Git ignores.",
+         "`/cc-feather:overdesign-check` 與 `/cc-feather:test-design` 不改任何檔案，`/cc-feather:test-speedup` 不改任何程式碼、測試或設定，只寫入它自己的紀錄，Git 會忽略這份紀錄。"),
         ("`/cc-feather:test-speedup` checks the tests you name, or the project's tests, with their test configuration but not CI pipeline configuration.",
          "`/cc-feather:test-speedup` 檢查你指定的測試，或整個專案的測試，連同測試設定，但不含 CI pipeline 設定。"),
         ("It analyses statically first and runs nothing: each speed-up names the test or assertion that keeps verifying what it touches, speed-ups are ordered by expected gain, and weakening an assertion, adding a skip or loosening a timeout is never offered.",
@@ -378,8 +437,9 @@ class TestSpeedupCommandTests(unittest.TestCase):
          "它依序查詢預設值與已知問題：先看已安裝版本自帶的檔案，只讀不執行，再看官方文件與 changelog，最後看官方 issue tracker；送到外部的查詢只帶框架名稱、版本與設定名稱，每個結論都註明來源與版本，查不到的就回報為未知。"),
         ("A speed-up that raises concurrency states the worker count it leads to and its memory effect, and a worker count that follows the machine's core count is never offered.",
          "提高並行度的加速建議會說明它造成的 worker 數量與對記憶體的影響，從不建議依機器核心數決定 worker 數量。"),
-        ("A fourth section lists each flagged setting with its location, kind, whether it affects memory or time, why it is unbounded, its weighing and the direction of a fix, as information that holds nothing back; cc-feather states no cap's number.",
-         "第四節列出每個被標出的設定，附上位置、種類、影響記憶體還是時間、為何沒有上限、權衡結果與修正方向，只供參考，不擋任何事；cc-feather 不提供任何上限的數字。"),
+        # docs/specs/test-speedup-record.md, ticket 02: the section is named by its title, not its position.
+        ("The section Run configurations with resource risk lists each flagged setting with its location, kind, whether it affects memory or time, why it is unbounded, its weighing and the direction of a fix, as information that holds nothing back; cc-feather states no cap's number.",
+         "「有資源風險的執行設定」一節列出每個被標出的設定，附上位置、種類、影響記憶體還是時間、為何沒有上限、權衡結果與修正方向，只供參考，不擋任何事；cc-feather 不提供任何上限的數字。"),
         ("Then main offers to measure, stating the command, the scope and the tests it leaves out, and runs nothing until you agree; tests with resource risk are left out unless you include them, and then run inside the Runner.",
          "之後主 Agent 才提議量測，說明指令、範圍與排除的測試，經你同意才執行；有資源風險的測試預設排除，你決定納入時改在 Runner 內執行。"),
         ("When a run's configuration is flagged, the measurement bounds it with a command-line override that changes no file, its number taken as the budget rules take one or asked of you when no source states it, or runs it inside the Runner, and says that timings taken at a different concurrency are not comparable with your ordinary run.",
@@ -388,6 +448,25 @@ class TestSpeedupCommandTests(unittest.TestCase):
          "量測也可以對提議中列出的最慢測試做 profiling，使用專案環境中已有的 profiler，找出時間花在哪裡；它同樣經你同意才執行，結果以加速建議回報，同樣不削弱測試驗證的內容。"),
         ("With delegation installed, analyst does the reading.",
          "裝有分派元件時，由 analyst 負責閱讀分析。"),
+        # docs/specs/test-speedup-record.md, ticket 02: the record, the incremental pass and whole files, the run
+        # configuration every run, the item states, Since the last run, versions and the upgrade review, the
+        # measurement comparison, `show`, `prune` and `--full`.
+        ("It keeps a Speed-up record for the repository under the main worktree's `.feather/test-speedup/`, or under the project directory outside Git, which Git ignores and which it writes after every run without asking; writing it needs no Checkout lease.",
+         "它為儲存庫保存一份 Speed-up record，放在 main worktree 的 `.feather/test-speedup/` 下，不在 Git 中的專案則放在專案目錄下；Git 會忽略這份紀錄，它在每次執行後自動寫入，不必詢問；寫入它不需要 Checkout lease。"),
+        ("A run analyses only the test files that are new, whose content changed, or whose shared fixtures, setup files, test runner configuration or test scripts changed since the record last analysed them, and the rest keep their recorded result; a change to the code under test or to a library does not by itself start a new analysis, and a test file is always analysed whole.",
+         "每次執行只分析新的測試檔、內容改變的測試檔，以及自紀錄上次分析以來共用 fixture、setup 檔、test runner 設定或測試 script 改變的測試檔，其餘沿用紀錄中的結果；受測程式碼或函式庫的變更本身不會觸發重新分析，而且測試檔一律整個分析。"),
+        ("The check for an Unbounded run configuration still runs on the whole scope every run.",
+         "Unbounded run configuration 的檢查仍在每次執行時涵蓋整個範圍。"),
+        ("Each item in the record is undecided, picked, declined, landed or obsolete: only your answer picks or declines one, a declined item comes back only when its file's content changed since you decided or when you ask, main marks one landed or obsolete only after checking the code, and one that shows up again after that is reopened as undecided with its earlier state shown.",
+         "紀錄中的每個項目都處於 undecided、picked、declined、landed 或 obsolete 其中一種狀態：只有你的回答能 pick 或 decline 一個項目；declined 的項目只有在你決定之後它的檔案內容改變，或你要求時才會再提出；主 Agent 確認過程式碼後才把項目標為 landed 或 obsolete，之後若又出現，就重新開啟為 undecided，並顯示它先前的狀態。"),
+        ("The report starts with a section, Since the last run, that says which files were analysed again and why, which items were found landed, obsolete or reopened or are proposed again, and which are still undecided or picked; the two resource-risk sections list every current test and setting with resource risk, whatever its state.",
+         "報告以「自上次執行以來」一節開頭，說明哪些檔案重新分析及原因、哪些項目被判定為 landed、obsolete 或重新開啟，或再次提出，以及哪些仍是 undecided 或 picked；有資源風險的兩節列出目前每個有資源風險的測試與設定，不論它的狀態。"),
+        ("The record keeps the versions of the test runner and its plugins, and when one changed, the report says so; when you ask, main reviews what the upgrade changed for the tests, a query sent outside carrying only the framework's name, both versions and a setting's name.",
+         "紀錄保存 test runner 與其 plugin 的版本，版本改變時報告會指出；你要求時，主 Agent 會檢視這次升級對測試造成的改變，送到外部的查詢只帶框架名稱、兩個版本與設定名稱。"),
+        ("Each measurement is kept with a comparison key of its command, selected tests, concurrency and overrides, Runner limits and the tests left out, and compared only with the last one under the same key: the total time, the tests that became slowest and fastest, and the timing change observed around each landed item.",
+         "每次量測都連同比較鍵保存，比較鍵包括指令、選定的測試、並行度與覆寫、Runner 限制以及排除的測試；只和同一比較鍵的上一次量測相比：總時間、變得最慢與最快的測試，以及每個 landed 項目前後觀察到的時間變化。"),
+        ("`/cc-feather:test-speedup show` summarises the record and lists the other forms of the command, `prune` removes old measurements and finished items after a dry run you confirm and never removes an undecided, picked or declined item, and `--full` analyses the whole scope again while keeping every item's state.",
+         "`/cc-feather:test-speedup show` 摘要這份紀錄並列出指令的其他形式；`prune` 在你確認試跑結果後移除舊的量測與已完成的項目，從不移除 undecided、picked 或 declined 的項目；`--full` 重新分析整個範圍，並保留每個項目的狀態。"),
         ("See [the command](../skills/test-speedup/SKILL.md).",
          "見[指令](../skills/test-speedup/SKILL.md)。"),
     )
@@ -407,6 +486,25 @@ class TestSpeedupCommandTests(unittest.TestCase):
             for name, sentence in (("reference.md", english), ("reference.zh-TW.md", chinese)):
                 with self.subTest(place=name, sentence=sentence[:40]):
                     self.assert_whole_sentence(sentence, self.reference_text(name))
+
+    def test_the_old_wording_is_gone(self):
+        """docs/specs/test-speedup-record.md, ticket 02: the replaced sentences are not left beside their successors."""
+        self.assertNotIn("This command only reports:", self.source("SKILL.md"))
+        self.assertNotIn("a file is written only when the user asks for one", self.source("SKILL.md"))
+        for name, old in (("reference.md", "A fourth section lists"), ("reference.zh-TW.md", "第四節列出"),
+                          ("reference.md", "Each only reports and changes no file"),
+                          ("reference.zh-TW.md", "它們只出報告、不改任何檔案")):
+            with self.subTest(place=name, old=old):
+                self.assertNotIn(old, self.reference_text(name))
+
+    def test_the_skill_is_packaged_and_names_its_launcher(self):
+        """docs/specs/test-speedup-record.md, ticket 02: as PackagingTest does for the lease tool."""
+        self.assertIn("./skills/test-speedup", manifest_skills())
+        text = self.COMMAND.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\nname: test-speedup\n"), text[:40])
+        self.assertIn("`scripts/speedup.py`", text)
+        self.assertIn("${CLAUDE_PLUGIN_ROOT}/skills/test-speedup/scripts/speedup.py", text)
+        self.assertTrue((self.COMMAND.parent / "scripts" / "speedup.py").is_file())
 
     def test_reference_section_sits_before_the_version_history(self):
         for name, heading in (("reference.md", "## Version history"), ("reference.zh-TW.md", "## 版本紀錄")):
