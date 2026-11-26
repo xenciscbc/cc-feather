@@ -315,6 +315,30 @@ class TestSpeedupCommandTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotIn(command, text)
 
+    SPEEDUP_ENTRIES = {
+        "Speed-up record": (
+            "A repository's record of `/cc-feather:test-speedup`: for each test file it analysed, the content and the "
+            "set of shared files it was last analysed with; its Speed-up items; its analysis runs with the test runner "
+            "versions they read; and its measurements. It is kept under the main worktree's `.feather/test-speedup/`, "
+            "or under the project directory of a non-Git project, ignored by Git, and is one of cc-feather's own "
+            "records, not a change to the checkout.\n_Avoid_: baseline, speedup log, cache"),
+        "Speed-up item": (
+            "One speed-up, removal, test with resource risk or run configuration with resource risk from a "
+            "`/cc-feather:test-speedup` report, recognised across runs by its file, its kind and the test ids or "
+            "setting it concerns, with its state: undecided, picked, declined, landed or obsolete. Only the User's "
+            "answer makes it picked or declined.\n_Avoid_: finding, suggestion, ticket"),
+    }
+
+    def test_glossary_defines_the_speedup_record_and_item_in_the_design_checks_section(self):
+        """docs/specs/test-speedup-record.md, ticket 01."""
+        text = (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8")
+        entries = feather_support.glossary_entries(text)
+        section = text.split("\n## Design checks\n", 1)[1].split("\n## ", 1)[0]
+        for term, body in self.SPEEDUP_ENTRIES.items():
+            with self.subTest(term=term):
+                self.assertEqual(entries[term].strip(), body)
+                self.assertIn(f"\n**{term}**:\n", section)
+
     README_LISTINGS = {
         "README.md": "- `/cc-feather:test-speedup [test paths or scope]`: report ways to make the tests, or the part you name, faster without weakening what they verify; only you can run it, and it changes no file. It analyses statically first, lists existing tests that could exhaust memory or time, and measures only after you agree; see the [reference](docs/reference.md#design-and-test-checks).",
         "README.zh-TW.md": "| `/cc-feather:test-speedup [測試路徑或範圍]` | 找出讓測試（或你指定的部分）變快、又不削弱驗證內容的方法；只能由你執行，不改任何檔案。先做靜態分析，列出可能耗盡記憶體或時間的既有測試，經你同意才量測；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",

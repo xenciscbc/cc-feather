@@ -218,6 +218,14 @@ _Avoid_: overengineering, gold-plating, defensive bloat
 A report of the tests one target needs, the target being a spec, its tickets or an existing feature: each proposed test with the defect it would catch that no other test catches, its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work, together with the checks that need manual verification, the existing tests that already verify part of the target and the existing tests the proposed ones would make redundant. It is information, not a Plan, and its items are not Claims; what the user picks enters a Plan's acceptance only through an edit the user asks for.
 _Avoid_: test plan, test strategy
 
+**Speed-up record**:
+A repository's record of `/cc-feather:test-speedup`: for each test file it analysed, the content and the set of shared files it was last analysed with; its Speed-up items; its analysis runs with the test runner versions they read; and its measurements. It is kept under the main worktree's `.feather/test-speedup/`, or under the project directory of a non-Git project, ignored by Git, and is one of cc-feather's own records, not a change to the checkout.
+_Avoid_: baseline, speedup log, cache
+
+**Speed-up item**:
+One speed-up, removal, test with resource risk or run configuration with resource risk from a `/cc-feather:test-speedup` report, recognised across runs by its file, its kind and the test ids or setting it concerns, with its state: undecided, picked, declined, landed or obsolete. Only the User's answer makes it picked or declined.
+_Avoid_: finding, suggestion, ticket
+
 ## Checkout leases
 
 **Checkout lease**:
