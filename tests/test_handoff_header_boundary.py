@@ -1,6 +1,7 @@
 """C6: the work header ends at the managed sections' fence-aware ATX heading rule, in reads and updates alike."""
 import unittest
 
+from tests import handoff_in_process
 from tests.test_handoff_local_fixes import COMPLETED, InProcessBase, sha
 
 TITLE = "交接 Foo ✓"
@@ -32,7 +33,15 @@ SAMPLE = (1, 7, 13, 19, 20, 26)
 VARIANTS = {"lf": {}, "crlf": {"eol": "\r\n"}, "bom": {"bom": True}, "bom-crlf": {"eol": "\r\n", "bom": True}}
 
 
-class HeaderBoundaryTest(InProcessBase):
+class ExplicitRootBase(InProcessBase):
+    """Every tool call confirms the temporary directory as the root with --exact-root: where a work header ends does
+    not depend on root discovery, which tests/test_handoff_roots.py verifies for a non-Git directory."""
+
+    def run_tool(self, *args, **kwargs) -> dict:
+        return handoff_in_process.run_local(self, "--exact-root", *args, **kwargs)
+
+
+class HeaderBoundaryTest(ExplicitRootBase):
     def each(self):
         """Every heading with LF; with CRLF and BOM, one heading per level covering each indent and separator."""
         return [(f"{variant}-{index}.md", heading, options)
@@ -109,7 +118,7 @@ class HeaderBoundaryTest(InProcessBase):
                          data.replace("證據 ✓".encode(), "新證據".encode()))
 
 
-class HeaderBoundaryControlTest(InProcessBase):
+class HeaderBoundaryControlTest(ExplicitRootBase):
     def test_non_headings_keep_field_like_lines_in_the_header(self):
         for label, line in CONTROLS.items():
             with self.subTest(label):
@@ -149,7 +158,7 @@ class HeaderBoundaryControlTest(InProcessBase):
                 self.assertEqual((self.directory / "a.md").read_bytes(), data)
 
 
-class HeaderLineEndingTest(InProcessBase):
+class HeaderLineEndingTest(ExplicitRootBase):
     """Header lines end only at LF (or CRLF): characters str.splitlines breaks on stay inside a field value."""
 
     VALUES = ("see # 1", "see\x0b# 1", "see\x0c# 1", "see\x1c# 1", "see\x1d# 1", "see\x1e# 1", "see\x85# 1",
@@ -181,7 +190,7 @@ class HeaderLineEndingTest(InProcessBase):
                                  before.replace("下一步：n\n".encode(), "下一步：n\n注意：z\n".encode(), 1))
 
 
-class HeaderFenceTest(InProcessBase):
+class HeaderFenceTest(ExplicitRootBase):
     """A fence in the header hides headings: closed, the header ends at the next real heading; open, at the end."""
 
     def data(self, closed: bool) -> bytes:
