@@ -8,8 +8,12 @@ tests/test_handoff_shared_store.py: a base made with mkdtemp under FEATHER_LINK_
 one commit and linked worktrees wt1 and wt2 beside it (outside .claude/worktrees/), synthetic data only, removed on
 cleanup. Pre-created leases and critical-section locks are synthetic files written by the tests. The concurrency case
 starts two tool processes a fixed number of times, each with its own timeout. The concurrent-reader case, on Windows
-only, holds a lease and its critical section's lock open from the test process for a fraction of a second."""
+only, holds a lease and its critical section's lock open from the test process for a fraction of a second.
+
+A test that only checks what a lease file holds reads the file through `LeaseBase.lease_state`; the tests whose
+subject is the listing call it."""
 from datetime import datetime, timedelta, timezone
+import hashlib
 import io
 import json
 import locale
@@ -106,6 +110,17 @@ class LeaseBase(SharedBase):
 
     def release(self, project: Path, checkout: Path, lease_id: str, *, expected=0) -> dict:
         return self.lease(project, "release", "--checkout", str(checkout), "--lease-id", lease_id, expected=expected)
+
+    def lease_state(self, checkout: Path) -> dict:
+        """The lease of a fixture checkout read straight from its lease file: absent, or held with the lease and the
+        SHA-256 of the file's bytes as its version. It writes nothing and computes no ages."""
+        key = {self.main: MAIN_KEY, self.wt1: "wt1", self.wt2: "wt2"}.get(checkout)
+        self.assertIsNotNone(key, f"not a checkout of the fixture: {checkout}")
+        path = self.leases / f"{key}.json"
+        if not path.exists():
+            return {"state": "absent"}
+        data = path.read_bytes()
+        return {"state": "held", "lease": json.loads(data.decode("utf-8")), "version": hashlib.sha256(data).hexdigest()}
 
     def listing(self, project: Path, *, exact=False) -> dict:
         return self.lease(project, "list", exact=exact)
@@ -213,7 +228,7 @@ class ReleaseTest(LeaseBase):
         released = self.release(self.wt2, self.wt1, acquired["lease"]["lease_id"])
         self.assertEqual((released["status"], released["released"]), ("ok", True), released)
         self.assertEqual(released["lease"], acquired["lease"])
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "absent")
 
     def test_release_with_another_lease_id_reports_changed_hands_and_changes_nothing(self):
         acquired = self.acquire(self.wt1, self.wt1)
@@ -255,7 +270,7 @@ class CriticalSectionTest(LeaseBase):
         self.assertLess((datetime.now() - started).total_seconds(), TIMEOUT / 2)
         self.assert_busy(busy, 3 * 3600 - 5)
         self.assertFalse(busy["acquired"])
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "absent")
         self.assertEqual((self.leases / "wt1.lock").read_bytes(), data)
         self.assertEqual(self.acquire(self.main, self.wt2)["status"], "ok")
 
@@ -265,7 +280,7 @@ class CriticalSectionTest(LeaseBase):
         busy = self.release(self.main, self.wt1, acquired["lease"]["lease_id"])
         self.assert_busy(busy, 25)
         self.assertFalse(busy["released"])
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["lease"], acquired["lease"])
+        self.assertEqual(self.lease_state(self.wt1)["lease"], acquired["lease"])
 
     @unittest.skipUnless(os.name == "nt", "only Windows refuses to delete a file another process holds open")
     def test_a_concurrent_reader_delays_a_release_but_leaves_nothing_behind(self):
@@ -303,7 +318,7 @@ class CriticalSectionTest(LeaseBase):
         self.assertEqual((released["status"], released["released"]), ("ok", True), released)
         self.assertNotIn("critical_section_left", released)
         self.assertFalse(lock.exists())
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "absent")
         self.assertEqual(self.acquire(self.main, self.wt1)["status"], "ok")
 
 

@@ -99,7 +99,7 @@ class AcquireLockTest(LockBase):
         self.assertIsNone(self.locked(self.wt1))
         self.assertFalse((self.leases / "wt1.json").exists())
         self.assertFalse((self.leases / "wt1.lock").exists())
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "absent")
 
     def test_a_worktree_whose_directory_is_missing_is_not_acquired(self):
         self.remove_tree(self.wt1)
@@ -167,7 +167,7 @@ class SessionLockTest(LockBase):
         self.assertIn("lock", blocked["message"])
         self.assertEqual(self.locked(checkout), reason)
         self.assertFalse((self.leases / f"{checkout.name}.json").exists())
-        self.assertEqual(self.entry(self.listing(self.main), checkout)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(checkout)["state"], "absent")
 
 
 class ReleaseLockTest(LockBase):
@@ -177,7 +177,7 @@ class ReleaseLockTest(LockBase):
         self.assertEqual((released["status"], released["released"]), ("ok", True), released)
         self.assertEqual(released["lock"], {"removed": True, "reason": self.own(acquired["lease"]["lease_id"])})
         self.assertIsNone(self.locked(self.wt1))
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "absent")
 
     def test_release_leaves_an_accepted_session_lock(self):
         self.lock(self.wt1, SESSION)

@@ -8,7 +8,10 @@ launcher. Locks are set and read with `git worktree lock --reason` and `git work
 --porcelain -z`, using Claude Code's observed reason formats; Claude Code itself is not driven. Old activity times and
 critical-section locks left by a crashed operation are synthetic edits and files written by the tests. The
 concurrent-reader case, on Windows only, holds a lease open from the test process for a fraction of a second.
-Synthetic data only, removed on cleanup."""
+Synthetic data only, removed on cleanup.
+
+A test that only checks what a lease file holds reads the file (`held`, `lease_state`); the tests whose subject
+is the listing call it through `shown`."""
 from datetime import datetime, timedelta
 import json
 import os
@@ -50,6 +53,12 @@ class TakeOverBase(LockBase):
         self.assertEqual(state["state"], "held", state)
         return state
 
+    def held(self, checkout: Path) -> dict:
+        """The lease checkout's lease file holds, read straight from the file, which must hold one."""
+        state = self.lease_state(checkout)
+        self.assertEqual(state["state"], "held", state)
+        return state
+
 
 class RenewTest(TakeOverBase):
     def test_renew_with_the_holders_lease_id_updates_the_last_reported_activity(self):
@@ -73,7 +82,7 @@ class RenewTest(TakeOverBase):
         acquired = self.acquire(self.main, self.wt1, purpose="ticket 01")
         renewed = self.renew(self.wt1, acquired["lease"]["lease_id"], "--purpose", "ticket 02")
         self.assertEqual((renewed["status"], renewed["lease"]["purpose"]), ("ok", "ticket 02"), renewed)
-        self.assertEqual(self.shown(self.wt1)["lease"]["purpose"], "ticket 02")
+        self.assertEqual(self.held(self.wt1)["lease"]["purpose"], "ticket 02")
         main = self.acquire(self.wt1, self.main)
         renewed = self.renew(self.main, main["lease"]["lease_id"], "--purpose", "merge")
         self.assertEqual((renewed["status"], renewed["lease"]["purpose"]), ("ok", "merge"), renewed)
@@ -98,7 +107,7 @@ class RenewTest(TakeOverBase):
         self.assertEqual((again["status"], again["lease"]), ("changed-hands", None), again)
         self.assertFalse(self.lease_file(self.wt1).exists())
         self.assertIsNone(self.locked(self.wt1))
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "absent")
 
     def test_renew_meets_a_held_critical_section_and_changes_nothing(self):
         acquired = self.acquire(self.main, self.wt1)
@@ -146,7 +155,7 @@ class RenewTest(TakeOverBase):
         renewed = json.loads(out)
         self.assertEqual((renewed["status"], renewed["lease"]["purpose"]), ("ok", "while read"), renewed)
         self.assertFalse(lock.exists())
-        self.assertEqual(self.shown(self.wt1)["lease"]["purpose"], "while read")
+        self.assertEqual(self.held(self.wt1)["lease"]["purpose"], "while read")
         self.assertEqual([path.name for path in self.leases.iterdir() if path.suffix == ".tmp"], [])
 
 
@@ -183,7 +192,7 @@ class TakeOverTest(TakeOverBase):
 
     def test_a_takeover_with_a_stale_version_refuses_and_returns_the_current_lease(self):
         acquired = self.acquire(self.main, self.wt1)
-        stale = self.shown(self.wt1)["version"]
+        stale = self.held(self.wt1)["version"]
         renewed = self.renew(self.wt1, acquired["lease"]["lease_id"], "--purpose", "still here")
         data = self.lease_file(self.wt1).read_bytes()
         refused = self.take_over(self.wt1, stale)
@@ -195,7 +204,7 @@ class TakeOverTest(TakeOverBase):
 
     def test_a_takeover_of_an_absent_lease_refuses_and_acquires_nothing(self):
         acquired = self.acquire(self.main, self.wt1)
-        version = self.shown(self.wt1)["version"]
+        version = self.held(self.wt1)["version"]
         self.release(self.main, self.wt1, acquired["lease"]["lease_id"])
         refused = self.take_over(self.wt1, version)
         self.assertEqual((refused["status"], refused["taken_over"], refused["lease"]), ("changed", False, None),
@@ -282,7 +291,7 @@ class TakeOverTest(TakeOverBase):
             with self.subTest(version=version, session=session, purpose=purpose):
                 refused = self.take_over(self.wt1, version, session=session, purpose=purpose, expected=2)
                 self.assertEqual((refused["status"], refused["code"]), ("error", "input"), refused)
-        self.assertEqual(self.shown(self.wt1)["lease"], acquired["lease"])
+        self.assertEqual(self.held(self.wt1)["lease"], acquired["lease"])
 
 
 class OldHolderTest(TakeOverBase):
@@ -320,7 +329,7 @@ class NoReclaimTest(TakeOverBase):
         self.assertEqual(listed["lease"], old)
         renewed = self.renew(self.wt1, "0" * 32)
         self.assertEqual(renewed["status"], "changed-hands", renewed)
-        self.assertEqual(self.shown(self.wt1)["lease"], old)
+        self.assertEqual(self.held(self.wt1)["lease"], old)
         self.assertEqual(self.locked(self.wt1), self.own(acquired["lease"]["lease_id"]))
 
 

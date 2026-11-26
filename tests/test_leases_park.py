@@ -42,7 +42,7 @@ class ParkBase(LockBase):
 
     def assert_released(self, result: dict, checkout: Path):
         self.assertEqual((result["status"], result["released"]), ("ok", True), result)
-        self.assertEqual(self.entry(self.listing(self.main), checkout)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(checkout)["state"], "absent")
         self.assertIsNone(self.locked(checkout))
 
     def assert_not_parked(self, result: dict, condition: str, before: tuple[str, str], checkout: Path) -> str:
@@ -136,7 +136,7 @@ class ParkTest(ParkBase):
         result = self.park(self.main, lease_id, continue_in=self.wt1)
         self.assert_not_parked(result, "main-worktree", before, self.main)
         self.assertEqual((result["status"], result["released"]), ("ok", True), result)
-        self.assertEqual(self.entry(self.listing(self.main), self.main)["lease"]["state"], "absent")
+        self.assertEqual(self.lease_state(self.main)["state"], "absent")
 
     def test_a_detached_worktree_has_no_branch_to_park(self):
         self.git(self.wt1, "checkout", "--quiet", "--detach")
@@ -237,7 +237,7 @@ class ParkLeaseTest(ParkBase):
         self.assertEqual((result["park"]["parked"], result["park"]["condition"]), (False, "not-released"), result)
         self.assertEqual(self.head(self.wt1), before)
         self.assertEqual(self.locked(self.wt1), self.own(acquired["lease"]["lease_id"]))
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["lease"], acquired["lease"])
+        self.assertEqual(self.lease_state(self.wt1)["lease"], acquired["lease"])
 
     def test_a_held_critical_section_is_reported_at_once_and_nothing_is_parked(self):
         self.work(self.wt1, "one.txt")
@@ -259,7 +259,7 @@ class ParkLeaseTest(ParkBase):
         self.assertEqual(refused["status"], "error", refused)
         refused = self.park(self.wt1, lease_id, continue_in=self.outside, expected=2)
         self.assertEqual(refused["code"], "not-a-checkout", refused)
-        self.assertEqual(self.entry(self.listing(self.main), self.wt1)["lease"]["state"], "held")
+        self.assertEqual(self.lease_state(self.wt1)["state"], "held")
 
     def test_release_without_park_never_parks(self):
         self.work(self.wt1, "one.txt")
