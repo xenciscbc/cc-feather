@@ -3975,7 +3975,7 @@ class SpeedupRecordReleaseTests(unittest.TestCase):
         "Only `.feather/test-speedup/record.json` changed in the copy.",
         "`show` (22.8 s, peak 987 MiB):",
         "`prune --obsolete` (25.9 s, peak 975 MiB): the dry run selected nothing, nothing was removed,",
-        "none ran unittest or pytest, so no session ran a test, and the only write outside the copy was the first run's temporary input file.",
+        "none ran unittest or pytest, so no session ran a test; the one Write call, in attempt 2, was denied; and the only write outside the copy was the first run's temporary input file, written and removed by Bash.",
         "the main worktree had no `.feather/test-speedup/` after the run,",
         "Other places, such as other directories under `J:\\gotmp\\`, Claude Code's own transcripts and its plugin cache, were not checked.",
         "The copy was removed afterwards.",
