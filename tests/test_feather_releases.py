@@ -3920,9 +3920,11 @@ class SpeedupRecordReleaseTests(unittest.TestCase):
     the spec and the tickets with their fixes, the determination with its evidence, the unchanged setup document, the
     way back, the test runs, the live run in a copy of the working tree with its two earlier attempts, its permission
     mode, what each session showed and changed and the places checked and not checked, the reviewing version, what the
-    tests cannot show and the tag, and is the file's last release entry. The command's and the record's own sentences
-    are tests/test_feather_design_checks.py's and the record script's behaviour is tests/test_speedup_record.py's; the
-    packaged skill count is InstallDocumentTests'."""
+    tests cannot show and the tag, and was appended after the earlier entries. The command's and the record's own
+    sentences are tests/test_feather_design_checks.py's and the record script's behaviour is
+    tests/test_speedup_record.py's; the packaged skill count is InstallDocumentTests'. Since 0.49.0 the manifest
+    version is TestDesignTriageReleaseTests', the note follows the 0.49.0 note, and the entry is followed only by
+    sections for work landed on main without a release and then the 0.49.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.48.0 note in order.
     UPDATES = (
@@ -3999,16 +4001,16 @@ class SpeedupRecordReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_48_0(self):
-        self.assertEqual("0.48.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_speedup_record_note_in_both_languages(self):
         previous = TestDesignReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = TestDesignTriageReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.48.0 note starts right after the section's opening sentence, its sentences in order, before 0.47.0's.
+            # The 0.48.0 note starts right after the 0.49.0 note, its sentences in order, before 0.47.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_and_name_the_way_back_in_both_languages(self):
@@ -4059,11 +4061,157 @@ class SpeedupRecordReleaseTests(unittest.TestCase):
         self.assertNotIn(".scratch/test-speedup-record", entry)
         # The test runs' and the live run's results are recorded, not left as placeholders.
         self.assertNotIn("@@", entry)
+        # The entry was appended rather than rewriting an earlier one; after it come only sections for work landed on
+        # main without a release, and then the 0.49.0 entry.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIn(TestDesignTriageReleaseTests.ENTRY_HEADING, after)
+        between = after.split(TestDesignTriageReleaseTests.ENTRY_HEADING, 1)[0]
+        self.assertIsNone(re.search(r"^## \d", between, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.48.0)")
+                            for heading in re.findall(r"^## .*$", between, re.MULTILINE)))
+
+
+class TestDesignTriageReleaseTests(unittest.TestCase):
+    """0.49.0 (docs/specs/test-design-proposal-triage.md; tickets 01 and 02): the manifest version is 0.49.0; the Updates
+    note, in both languages, opens the section, says that `/cc-feather:test-design` grades each candidate test
+    Recommended or Optional and leads its report with Acceptance problems, Decisions for the user and a Lean set, what
+    main and the guideline reference change, that existing installations need the plugin update and a fresh session
+    but no setup update, determined from the diff against v0.48.0 over `templates skills/setup scripts`, and that going
+    back to 0.48.0 means reinstalling the 0.48.0 plugin; the validation entry records the spec and the tickets, the
+    determination with its evidence, the unchanged setup document, the way back, the full suite, the live run in a copy
+    of the candidate with its settings, Runner result, token use, what the report showed, the tool calls and the
+    places checked and not checked, what the tests cannot show and the tag, and is the file's last release entry. The
+    command's own sentences are tests/test_feather_design_checks.py's; the packaged skill count is
+    InstallDocumentTests'. Statements are asserted present rather than counted, since their repetition is not the
+    contract; the heading's uniqueness is, because the entry is found by it."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.49.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.49.0 has `/cc-feather:test-design` list each candidate test in one line and grade it Recommended or Optional, weighed as the delegation skill weighs findings: a defect that no plausible wrong implementation could produce, or whose effect nothing could observe, is not proposed, and one reached only by a rare downstream configuration and confirmable at a glance in code review is Optional at most, unless it is a security problem or data loss.",
+         "Only a Recommended test gets the full statement, the command maps each ticket's behaviour to code before it searches for related tests, and the report leads with Acceptance problems, Decisions for the user and a Lean set, eight sections in all, with the ticket-shape notes folded into Decisions for the user.",
+         "Before reporting, main re-grades every item, merges duplicates, checks each acceptance problem and recommends only the Lean set; a target that is not small gets one analyst by default; and the guideline reference changes Key examples and adds Fails on the wrong implementation, Exact counts only where the count is the contract and Code-text checks last, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "`git diff v0.48.0 HEAD -- templates skills/setup scripts` shows no change, so 0.49.0 changes no installed guidance, policy template, role definition or configuration tool, only skills the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.48.0, reinstall the 0.48.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.49.0 讓 `/cc-feather:test-design` 把每個候選測試列成一行，並以分派 skill 權衡 finding 的方式評為 Recommended 或 Optional：沒有任何合理的錯誤實作會造成、或沒有任何方式能觀察到其影響的缺陷不會提出，只有罕見的下游設定才會遇到、在 code review 中一眼就能確認的缺陷最多評為 Optional，除非它是安全問題或資料遺失。",
+         "只有 Recommended 測試會完整寫出，指令在搜尋相關測試之前先把每個 ticket 的行為對應到程式碼，報告以驗收問題、需你決定的事項與 Lean set 開頭，共八節，關於 ticket 切分方式的備註併入需你決定的事項。",
+         "提出報告之前，主 Agent 會重新評定每一項、合併重複的項目、檢查每個驗收問題，並只建議採用 Lean set；不小的對象預設交給一個 analyst；指引參考修改了 Key examples，並新增 Fails on the wrong implementation、Exact counts only where the count is the contract 與 Code-text checks last，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "`git diff v0.48.0 HEAD -- templates skills/setup scripts` 沒有任何差異，所以 0.49.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.48.0，重新安裝 0.48.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    FRESH_SESSION = SmallerChecksReleaseTests.FRESH_SESSION
+    WAY_BACK = ("reinstall the 0.48.0 plugin", "重新安裝 0.48.0 的 plugin")
+    # The note's link to the reference's Design and test checks section, and the heading it resolves to.
+    LINKS = SmallerChecksReleaseTests.LINKS
+
+    # The validation entry: the spec and its tickets, the setup determination with its evidence, the unchanged setup
+    # document, the way back, the full suite, the live run and what it showed, what the tests cannot show and the tag.
+    ENTRY_HEADING = "\n## 0.49.0 Test design triage\n"
+    ENTRY = (
+        "Implements [the test-design proposal triage spec](specs/test-design-proposal-triage.md), written on 2026-11-27 and added in 404bf71;",
+        "ticket 01, The triaged Test design report, in ae0ae25, and ticket 02, Documents and the 0.49.0 release, in the commit carrying this entry.",
+        "The plugin still packages twenty-two skills, and the 0.48.0 release tests now follow the 0.49.0 note and entry.",
+        "**No setup update is required.**",
+        "`git diff v0.48.0 HEAD -- templates skills/setup scripts` prints nothing, and `git diff-tree -r --name-only v0.48.0 HEAD -- templates skills/setup scripts` lists no path:",
+        "so existing installations need only the plugin update and a fresh session.",
+        "The setup document does not change, and its count of packaged skills stays twenty-two.",
+        "To go back to 0.48.0, reinstall the 0.48.0 plugin; no setup update or remove is needed.",
+        "the full suite, `python -B -m unittest discover` from the repository root, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        # The live run's settings and copy.
+        "`claude -p \"/cc-feather:test-design docs/specs/test-design-proposal-triage.md\"`, with `--plugin-dir` naming the copy, `--max-turns 40`, `--output-format json` and a 20-minute wall-clock timeout, `timeout 1200`, and no permission flag, so the session ran in the default permission mode,",
+        "inside cc-feather's Runner (memory 3072 MiB, time 1500 s, output 1 MiB), the budget the user chose for this Resource-risk claim.",
+        "where a new Git repository committed every file of it with the spec's two tickets under `.scratch/` force-added, so that `git status --porcelain` in the copy printed nothing before the run.",
+        "This spec was chosen because it has tickets and is the change itself; no earlier report of it exists to compare.",
+        "The roles available to the session were those installed under the user's agents directory.",
+        # The Runner's result and the session's end.
+        "The Runner reported the outcome passed with no limit event and exit status 0 after 279 s,",
+        "The session took 24 turns and ended by itself (end_turn), neither at the turn limit nor at the timeout;",
+        # Where token use was read, and why there is no per-analyst figure.
+        "Token use was read from the session's JSON output: input 29, cache creation 106,794, cache read 1,269,860 and output 26,800 tokens, 18,513 of them thinking.",
+        "No subagent was dispatched, a subagent count of 0: main analysed the target itself,",
+        # What the report showed.
+        "with the eight sections in order, leading with Acceptance problems, Decisions for the user and the Lean set.",
+        "It considered about 18 candidates and proposed as Recommended 3 tests with 4 cases and 1 manual check, and as Optional 1 test with 2 cases and 1 manual check; the Lean set held 3 tests with 4 cases, 1 update of an existing test class and 1 manual check.",
+        "Ticket 01 got no new Recommended test, because existing pins cover it.",
+        "was graded Optional, because the defect needs two files changed on purpose and a reviewer sees the file list;",
+        "was graded Optional, because the error is obvious and its outcome harmless;",
+        "were not proposed, as incidental counts, citing the new guideline Exact counts only where the count is the contract.",
+        "One duplicate was merged: a check that overlapped the README note test was reduced to what that test does not cover and downgraded to Optional.",
+        "Its Acceptance problem A1 was that the ticket's \"showing it wrote nothing\" claims more than the copy's hashes and status show,",
+        "this entry therefore records the tool calls and the memory directory and states that other places were not checked.",
+        "Under Decisions for the user, D1 was that the Optional one-line form conflicts with two guidelines stated for every proposed test, Scope and size stated and Fails on the wrong implementation; it is left for the user and is not changed in this release.",
+        # What was written, and where it was checked.
+        "From the session's transcript, every tool call was listed once by its id: 23 calls, 7 Read, 3 Glob, 11 Grep and 2 Bash, and no Write, Edit or NotebookEdit call.",
+        "The first Bash call, running `git log`, `git tag` and `ls`, was denied by the default permission mode; the second, `git log --oneline -5`, ran.",
+        "The hashes of the copy's 242 working-tree files, `.git` excluded, were equal before and after the run, `git status --porcelain` in the copy printed nothing afterwards, and the session's own project memory directory under the user's Claude configuration was empty afterwards.",
+        "Other places were not checked.",
+        "so this shows that nothing was written in the places checked, not that the command chose not to write.",
+        "The copy was removed afterwards.",
+        # What the tests cannot show, and the tag.
+        "the pins show the text, not that a model always follows it.",
+        "`v0.49.0` does not exist when this entry is written.",
+        "it is created only after tickets 01 and 02 are accepted and only after the user's go-ahead.",
+        "`v0.48.0`, at 515515a, is not moved.",
+        "The review round, with the tickets' passes, the final check, the user's decision at the end of the plan and the tag, follows the commit carrying this entry and is recorded after it.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_49_0(self):
+        self.assertEqual("0.49.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_triage_note_in_both_languages(self):
+        previous = SpeedupRecordReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.49.0 note starts right after the section's opening sentence, its sentences in order, before 0.48.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_and_name_the_way_back_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update, fresh, way_back in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE, self.FRESH_SESSION, self.WAY_BACK):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertIn(no_update, note)
+                self.assertIn(fresh, note)
+                self.assertIn("`git diff v0.48.0 HEAD -- templates skills/setup scripts`", note)
+                self.assertIn(way_back, note)
+                # Absence is the contract: the note asks for no setup removal.
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target_file, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertIn(link, note)
+                self.assertEqual(self.text(target_file).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_live_run_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("Setup update is required", entry)
+        # The full suite's and the live run's results are recorded, not left as placeholders.
+        self.assertNotIn("@@", entry)
+        self.assertIsNone(re.search(r"ran 0+ tests", entry))
         # The entry is the file's last release entry, so it is appended rather than rewriting an earlier one; only
         # sections for work landed on main without a release may follow.
         after = text.split(self.ENTRY_HEADING, 1)[1]
         self.assertIsNone(re.search(r"^## \d", after, re.MULTILINE))
-        self.assertTrue(all(heading.endswith("(on main after 0.48.0)")
+        self.assertTrue(all(heading.endswith("(on main after 0.49.0)")
                             for heading in re.findall(r"^## .*$", after, re.MULTILINE)))
 
 
