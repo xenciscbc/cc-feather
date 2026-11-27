@@ -215,7 +215,7 @@ Code, rules or design kept for cases that neither normal use nor the applicable 
 _Avoid_: overengineering, gold-plating, defensive bloat
 
 **Test design**:
-A report of the tests one target needs, the target being a spec, its tickets or an existing feature: each proposed test with the defect it would catch that no other test catches, its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work, together with the checks that need manual verification, the existing tests that already verify part of the target and the existing tests the proposed ones would make redundant. It is information, not a Plan, and its items are not Claims; what the user picks enters a Plan's acceptance only through an edit the user asks for.
+A report of the tests one target needs, the target being a spec, its tickets or an existing feature: each proposed test graded Recommended or Optional, with the defect it would catch that no other test catches, and only a Recommended test with the full statement of its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work, together with the checks that need manual verification, the existing tests that already verify part of the target and the existing tests the proposed ones would make redundant. The report leads with acceptance problems, decisions for the user and a Lean set of the Recommended tests. It is information, not a Plan, and its items are not Claims; what the user picks enters a Plan's acceptance only through an edit the user asks for.
 _Avoid_: test plan, test strategy
 
 **Speed-up record**:

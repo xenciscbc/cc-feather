@@ -40,6 +40,9 @@ What makes a test slower or less robust than it needs to be, and how a removal i
 - **Independent, repeatable, self-checking.** Each test runs alone and in any order, gives the same result on every run and decides its own pass or fail without a person reading its output. It applies to every automated test. It does not apply to checks that need manual verification, which the report lists apart.
 - **Hermetic.** Hermetic means isolated and self-contained: a test depends only on what it controls, and a controlled local dependency, such as a database or a subprocess started for the run, counts as hermetic. It applies to every test. It does not forbid every real dependency.
 - **Nondeterminism designed out.** Known causes of nondeterminism, such as time, randomness, iteration order, concurrent scheduling, shared state and the network, are designed out with a fixed seed, a fake clock, a controllable schedule or sorted output. It applies wherever such a cause reaches a test. It does not apply where the nondeterminism is itself the property tested, such as a race detector run.
+- **Fails on the wrong implementation.** Each test states why it fails on the old code or on a wrong implementation and what guarantees the order its oracle relies on, such as a registration barrier or an event wait rather than a sleep. A newly considered test that cannot state it is redesigned or not proposed; an existing acceptance verification that cannot is listed under Acceptance problems. It applies to every proposed test and to every verification an existing acceptance states. It does not ask for an ordering guarantee where the oracle relies on no order.
+- **Exact counts only where the count is the contract.** An exact count is asserted where cardinality, completeness, absence or repetition is part of the required result, such as the records a query must return, no forbidden record, audit events or a message sent exactly once. It applies to every assertion on a count. It does not apply to an incidental count, such as log lines, which is asserted as at least one occurrence with the right content.
+- **Code-text checks last.** A check of code text or syntax trees is used only where no behaviour, required artifact or manual check can observe the effect, and is marked brittle. It applies to every proposed check that reads code rather than running it. It does not apply where the text read is itself a required artifact, such as a document or a generated file the requirement names.
 
 ## Property-based testing and fuzzing
 
@@ -51,7 +54,7 @@ What makes a test slower or less robust than it needs to be, and how a removal i
 ## Acceptance
 
 - **Traced to a criterion.** Each acceptance test traces to one acceptance criterion, its positive cases first and its negative ones after. It applies to the acceptance tests of a spec or ticket. It does not apply to lower-level tests chosen by technique, which trace to the behaviour they test.
-- **Key examples.** A few key examples per rule illustrate it, and the cases the techniques derive are also proposed, for the user to place in acceptance or in a regression set. It applies to every rule an acceptance criterion states. The key examples are not an exhaustive list.
+- **Key examples.** A few key examples per rule illustrate it, and a case a technique derives is a candidate, proposed only when it catches a defect the other cases do not, at the grade it earns. Derived cases kept inside one parametrized test count as that test's cases; candidates left out are grouped under Not proposed. It applies to every rule an acceptance criterion states. The key examples are not an exhaustive list.
 
 ## External dependencies
 

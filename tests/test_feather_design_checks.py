@@ -26,6 +26,13 @@ Since docs/specs/test-speedup-record.md, ticket 02, the command keeps a Speed-up
 continues from it: the report-only paragraph, the reserved first words, `argument-hint`, the reference introduction, the
 README listings and the reference sentence on the run-configuration section replace their pins; the report has five
 sections, Since the last run first; and a packaging test checks the manifest and the launcher's two paths.
+Since docs/specs/test-design-proposal-triage.md, ticket 01, the test-design command grades every proposed test
+Recommended or Optional by pointing to the delegation skill's weighing paragraph, lists candidates in one line before it
+writes full statements for the Recommended ones, maps behaviour to code, and integrates analyst results into a Lean set;
+the judging rule gains its plausibility and observability sentences, the report has eight sections, Acceptance problems
+first, the Who analyses rules and the Key examples guideline change, and the guideline reference gains three Test quality
+guidelines. The changed pins move to the new wording, the glossary entry, README listings and reference sentences follow,
+and a single-owner check shows the weighing paragraph pointed to, restated by neither file and unchanged.
 """
 
 from __future__ import annotations
@@ -35,6 +42,7 @@ import re
 import unittest
 
 from tests import feather_support
+from tests import test_feather_completion_criteria as completion_criteria
 from tests.feather_support import config
 
 SKILLS = config.ROOT / "skills"
@@ -712,6 +720,9 @@ class TestDesignCommandTests(unittest.TestCase):
             "A test that names no such defect is not proposed.",
             "Of two designs that catch the same defects, the cheaper one, at a lower level, with a smaller size and fewer runs, is proposed.",
             "Tests at different levels may both be proposed when each catches a different failure.",
+            "A defect that no plausible wrong implementation could produce in the configurations the target supports once the change is made, those the applicable threat model reaches included, or whose effect nothing could observe there, names no defect for this rule, and the test is not proposed.",
+            "An effect counts as observable through behaviour, a required artifact or a manual check.",
+            "The guideline Requirement and failure modes first in [the guideline reference](references/guidelines.md) stays the case-choice form of this rule.",
         ),
         "SKILL.md#Report only": (
             "This command only reports and runs nothing: it edits, creates and deletes no file, commits nothing, changes no configuration and runs no test or command, and its cost estimates are static.",
@@ -731,14 +742,33 @@ class TestDesignCommandTests(unittest.TestCase):
             "Running the command is never required, and plan review's rules do not change.",
         ),
         "SKILL.md#Who analyses": (
-            "When delegation is installed and the target is not small, main dispatches the read-only analyst as [the delegation skill](../delegation/SKILL.md) describes, in one or more Assignments split by ticket or feature area, and integrates their results.",
+            "Whether a target is small is judged by its source scope, coupling and reasoning difficulty, not by its ticket count.",
+            "When delegation is installed and the target is not small, main dispatches the read-only analyst as [the delegation skill](../delegation/SKILL.md) describes, in one Assignment by default, a spec with its tickets included, and integrates the results.",
+            "The target is split only when it exceeds what one analyst can handle well, along distinct behaviours or invariants, and the brief then gives each shared fixture design or overlapping test obligation to one Assignment, which the others reference rather than propose again.",
             "For a target from the conversation, the brief carries the proposal's text.",
             "Main gathers what the analyst cannot, such as the repository history that error guessing reads.",
-            "A small target, such as one ticket, or a target where delegation is not installed, main does itself.",
+            "A small target, or a target where delegation is not installed, main does itself.",
         ),
         "SKILL.md#1. Design the tests": (
             "Choose levels, cases, doubles and data as [the guideline reference](references/guidelines.md) states, each guideline where it applies.",
             "A proposed test already avoids what [the shared test criteria](../test-speedup/references/test-criteria.md)'s Speed criteria and Further criteria list, a further criterion only where its condition holds.",
+        ),
+        "SKILL.md#Behaviour to code": (
+            "**Behaviour to code.** Tickets name no file paths, so before the Existing related tests search the analysis, or main when it analyses the target itself, locates the source paths and test support behind each ticket's behaviour; main may give a starting scope in the brief.",
+            "A behaviour it cannot map is reported as uncertainty in Existing related tests.",
+        ),
+        "SKILL.md#Candidates before statements": (
+            "**Candidates before statements.** The cases the Runs and sizes rules and the guideline techniques give, partitions, boundaries, transitions, integration points and each case of a parametrized test included, are candidates, graded like any other, not cases every report must propose.",
+            "The analysis first lists each candidate test in one line: the requirement, the concrete defect, whether it can occur and be observed as the judging rule says, the existing coverage and any overlap with another ticket's candidates.",
+            "It grades each candidate as Recommended, Optional or Not proposed, and only then writes the full statement for the Recommended ones.",
+            "An Optional test is one line: its defect, its level and why it is Optional, plus a mark for any obligation that still applies to it, such as a gate who runs it must be named for or a bound that is unknown, which also lists it under Resource risk.",
+            "Its full statement is written when the user asks or before it enters any acceptance.",
+            "This happens within one analysis, with no round-trip to the user.",
+        ),
+        "SKILL.md#Grades": (
+            "**Grades.** Every proposed test is graded Recommended or Optional, weighed as [the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings describes: when the defect can occur in normal use or under the applicable threat model, its worst credible outcome, and whether an existing test or rule covers it.",
+            "That paragraph's rule that normal-use rarity alone never discounts a security problem applies.",
+            "A defect reached only by a rare downstream configuration and confirmable at a glance in code review is Optional at most, unless its outcome is a security problem or data loss, which the paragraph alone grades.",
         ),
         "SKILL.md#Runs and sizes": (
             "A deterministic behaviour gets one case per partition and boundary.",
@@ -748,8 +778,8 @@ class TestDesignCommandTests(unittest.TestCase):
             "Real scale is used only when scale itself is the requirement, and such tests go under Resource risk.",
             "Property-based tests keep the framework's default case count unless the report states what more cases would catch; a small input space is enumerated instead.",
         ),
-        "SKILL.md#Each proposed test states": (
-            "**Each proposed test states:** the defect it catches; its expected result and where that result comes from, a spec or acceptance passage, or characterization of current behaviour with any behaviour that may be a bug listed for the user to confirm; its level; how its cases are chosen; its size and run count with why they suffice, as its estimated cost; the bound of its work; the role of any test double it uses.",
+        "SKILL.md#Each Recommended test states": (
+            "**Each Recommended test states:** the defect it catches; its expected result and where that result comes from, a spec or acceptance passage, or characterization of current behaviour with any behaviour that may be a bug listed for the user to confirm; its level; how its cases are chosen; its size and run count with why they suffice, as its estimated cost; the bound of its work; the role of any test double it uses.",
             "A guideline is cited only where the choice is not obvious.",
         ),
         "SKILL.md#Gated new tests": (
@@ -773,12 +803,27 @@ class TestDesignCommandTests(unittest.TestCase):
             "**Lookups.** Framework defaults and known problems are looked up only as [`test-speedup`'s Lookups paragraph](../test-speedup/SKILL.md) allows, with the same order and the same limit on what a query carries; the command adds no other web access at runtime.",
         ),
         "SKILL.md#2. Report": (
-            "**Proposed tests**, grouped by ticket or requirement, each with what it states, and a subsection for checks that need manual verification, such as a UI's look or behaviour seen only in a real environment, each with the reason a person must check it.",
+            "**Acceptance problems**, each place where a verification the target's existing acceptance states is invalid for the intended change: it cannot be carried out, it would pass on the old code or on a wrong implementation, such as an oracle with no ordering guarantee, or it asserts a result that differs from behaviour the target does not change, such as a status code the framework never returns.",
+            "Each comes with the evidence main checked.",
+            "A difference from code the target is meant to change is the change still to be implemented, not an acceptance problem, and a newly considered test that could not fail goes under Not proposed.",
+            "A problem whose fix changes only how a criterion is verified goes here or under Proposed tests.",
+            "**Decisions for the user**, each of: a production-code change for testability; a meaning the spec leaves unclear; a change to required behaviour, such as widening, removing or rewording a requirement or an invariant; a characterised behaviour that may be a bug; and each place where a test need may change how the tickets are cut or their blocking edges.",
+            "These are never recommended as test proposals.",
+            "A test that depends on an open decision names it.",
+            "**Lean set**, one line for each Recommended test, its ticket, level and case count with a pointer to its statement, each Recommended manual check, and each extension or update of an existing related test that a Recommended test relies on; then the number of tests and cases at each level.",
+            "It states no time figure, holds no removal, and leaves out every test that depends on an open decision.",
+            "Rerunning an existing test is not listed in it.",
+            "**Proposed tests**, grouped by ticket or requirement, Recommended tests with their full statement and Optional tests in one line each, and a subsection for checks that need manual verification, such as a UI's look or behaviour seen only in a real environment, each with the reason a person must check it.",
             "**Existing related tests**, each as rerun, extend or update, found by searching the tests for the target's paths and directory names as Related-test acceptance does, whether or not Related-test acceptance is on, and reported as found or not found, never as proof that none exist.",
+            "Each behaviour that could not be mapped to code is listed here too.",
             "**Removals**, each existing test the proposed ones would make redundant.",
-            "**Not proposed**, each test considered and left out, with its reason.",
-            "**Resource risk**, each proposed test that uses real scale or likely needs a Resource-risk claim mark, with its reason and weighing.",
-            "**Ticket-shape notes**, each place where a test need may change how the tickets are cut.",
+            "**Not proposed**, each test considered and left out, grouped by reason, each group naming the tests it covers.",
+            "**Resource risk**, each proposed test that uses real scale or likely needs a Resource-risk claim mark, with its reason and weighing, Optional tests with an unknown bound included.",
+        ),
+        "SKILL.md#Main's integration": (
+            "**Main's integration.** Before reporting, main re-grades every analyst item by the same weighing, merges duplicates across tickets and checks each Acceptance problem against the code; analyst grades are input.",
+            "Main recommends the Lean set and never recommends adopting every proposal.",
+            "When main analyses a small target itself, the same applies to its own candidates.",
         ),
         "SKILL.md#3. Removals": (
             "Removals follow [the shared test criteria](../test-speedup/references/test-criteria.md)'s removal rule in its Correctness bar, replacements included, where the test that covers exactly the same behaviour may be a proposed one.",
@@ -812,6 +857,28 @@ class TestDesignCommandTests(unittest.TestCase):
         "guidelines.md#Traced to a criterion": (
             "Each acceptance test traces to one acceptance criterion, its positive cases first and its negative ones after.",
         ),
+        "guidelines.md#Key examples": (
+            "A few key examples per rule illustrate it, and a case a technique derives is a candidate, proposed only when it catches a defect the other cases do not, at the grade it earns.",
+            "Derived cases kept inside one parametrized test count as that test's cases; candidates left out are grouped under Not proposed.",
+            "It applies to every rule an acceptance criterion states.",
+            "The key examples are not an exhaustive list.",
+        ),
+        "guidelines.md#Fails on the wrong implementation": (
+            "Each test states why it fails on the old code or on a wrong implementation and what guarantees the order its oracle relies on, such as a registration barrier or an event wait rather than a sleep.",
+            "A newly considered test that cannot state it is redesigned or not proposed; an existing acceptance verification that cannot is listed under Acceptance problems.",
+            "It applies to every proposed test and to every verification an existing acceptance states.",
+            "It does not ask for an ordering guarantee where the oracle relies on no order.",
+        ),
+        "guidelines.md#Exact counts only where the count is the contract": (
+            "An exact count is asserted where cardinality, completeness, absence or repetition is part of the required result, such as the records a query must return, no forbidden record, audit events or a message sent exactly once.",
+            "It applies to every assertion on a count.",
+            "It does not apply to an incidental count, such as log lines, which is asserted as at least one occurrence with the right content.",
+        ),
+        "guidelines.md#Code-text checks last": (
+            "A check of code text or syntax trees is used only where no behaviour, required artifact or manual check can observe the effect, and is marked brittle.",
+            "It applies to every proposed check that reads code rather than running it.",
+            "It does not apply where the text read is itself a required artifact, such as a document or a generated file the requirement names.",
+        ),
         "guidelines.md#Decision order": (
             "A test that needs a real dependency uses a disposable instance of the same engine first, such as a container or a local process created for the run; otherwise a read-only, gated smoke test that asserts no changing volumes or values.",
         ),
@@ -836,12 +903,39 @@ class TestDesignCommandTests(unittest.TestCase):
         headings = [line for line in self.source("SKILL.md").splitlines() if line.startswith("## ")]
         self.assertEqual(headings[0], "## The judging rule")
 
-    def test_the_report_has_six_sections(self):
+    def test_the_report_has_eight_sections_in_order(self):
         report = self.source("SKILL.md#2. Report")
-        self.assertIn("The report has six sections:\n", report)
+        self.assertIn("The report has eight sections, in this order:\n", report)
         sections = [line.split("**")[1] for line in report.splitlines() if line.startswith("- **")]
-        self.assertEqual(sections, ["Proposed tests", "Existing related tests", "Removals", "Not proposed",
-                                    "Resource risk", "Ticket-shape notes"])
+        self.assertEqual(sections, ["Acceptance problems", "Decisions for the user", "Lean set", "Proposed tests",
+                                    "Existing related tests", "Removals", "Not proposed", "Resource risk"])
+        # The Ticket-shape notes section is replaced by an item under Decisions for the user.
+        for name in ("SKILL.md", "guidelines.md"):
+            with self.subTest(file=name):
+                self.assertNotIn("Ticket-shape notes", self.source(name))
+
+    def test_the_new_test_quality_guidelines_follow_the_existing_ones(self):
+        labels = [line.split("**")[1] for line in self.source("guidelines.md#Test quality").splitlines()
+                  if line.startswith("- **")]
+        self.assertEqual(labels[-3:], ["Fails on the wrong implementation.",
+                                       "Exact counts only where the count is the contract.", "Code-text checks last."])
+
+    def test_the_weighing_paragraph_is_pointed_to_unrestated_and_unchanged(self):
+        """Single-owner check: the grades point to the delegation skill's weighing paragraph, neither the skill nor its
+        guideline reference repeats any of its sentences verbatim, and the paragraph is the one the completion-criteria
+        tests pin."""
+        owner = completion_criteria.WeighFindingsBeforeRulesTests
+        delegation = (SKILLS / "delegation" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(" ".join(owner.PARAGRAPH), owner.paragraphs(delegation))
+        self.assertIn("[the delegation skill](../delegation/SKILL.md)'s paragraph on weighing findings",
+                      self.source("SKILL.md#Grades"))
+        self.assertIn("[the delegation skill](../../delegation/SKILL.md)'s rule",
+                      " ".join(self.source("guidelines.md#Rules this relies on").split()))
+        for name in ("SKILL.md", "guidelines.md"):
+            flat = " ".join(self.source(name).split())
+            for sentence in owner.PARAGRAPH:
+                with self.subTest(file=name, sentence=sentence[:60]):
+                    self.assertNotIn(sentence, flat)
 
     GROUPS = ("Levels and sizes", "Case choice", "Doubles", "Test quality", "Property-based testing and fuzzing",
               "Acceptance", "External dependencies", "Ecosystem hints")
@@ -926,10 +1020,12 @@ class TestDesignCommandTests(unittest.TestCase):
 
     TEST_DESIGN = (
         "A report of the tests one target needs, the target being a spec, its tickets or an existing feature: each "
-        "proposed test with the defect it would catch that no other test catches, its expected result and where that "
-        "result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and "
-        "the bound of its work, together with the checks that need manual verification, the existing tests that already "
-        "verify part of the target and the existing tests the proposed ones would make redundant. It is information, not "
+        "proposed test graded Recommended or Optional, with the defect it would catch that no other test catches, and "
+        "only a Recommended test with the full statement of its expected result and where that result comes from, its "
+        "level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work, "
+        "together with the checks that need manual verification, the existing tests that already verify part of the "
+        "target and the existing tests the proposed ones would make redundant. The report leads with acceptance "
+        "problems, decisions for the user and a Lean set of the Recommended tests. It is information, not "
         "a Plan, and its items are not Claims; what the user picks enters a Plan's acceptance only through an edit the "
         "user asks for.\n_Avoid_: test plan, test strategy"
     )
@@ -943,8 +1039,8 @@ class TestDesignCommandTests(unittest.TestCase):
         self.assertEqual(entries["Unbounded probe"].strip(), OverdesignCheckCommandTests.UNBOUNDED_PROBE)
 
     README_LISTINGS = {
-        "README.md": "- `/cc-feather:test-design [spec, ticket or feature path]`: report the tests the proposal just discussed, or the spec, ticket or existing feature you name, needs: each proposed test names the defect it would catch that no other test catches and uses the smallest input and fewest runs that still catch it. Only you can run it; it changes and runs nothing, and what you pick enters a ticket's acceptance only when you ask for that edit; see the [reference](docs/reference.md#design-and-test-checks).",
-        "README.zh-TW.md": "| `/cc-feather:test-design [spec、ticket 或功能路徑]` | 為剛才討論的提案，或你指定的 spec、ticket 或既有功能，提出需要的測試：每個建議的測試都指出它能抓到、而其他測試抓不到的缺陷，並使用仍能抓到它的最小輸入與最少執行次數。只能由你執行，不改也不執行任何東西；你挑選的項目只有在你要求修改時才寫進 ticket 的驗收；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
+        "README.md": "- `/cc-feather:test-design [spec, ticket or feature path]`: report the tests the proposal just discussed, or the spec, ticket or existing feature you name, needs: each proposed test names the defect it would catch that no other test catches, uses the smallest input and fewest runs that still catch it and is graded Recommended or Optional, and the report leads with acceptance problems, decisions for you and a Lean set of the Recommended tests. Only you can run it; it changes and runs nothing, and what you pick enters a ticket's acceptance only when you ask for that edit; see the [reference](docs/reference.md#design-and-test-checks).",
+        "README.zh-TW.md": "| `/cc-feather:test-design [spec、ticket 或功能路徑]` | 為剛才討論的提案，或你指定的 spec、ticket 或既有功能，提出需要的測試：每個建議的測試都指出它能抓到、而其他測試抓不到的缺陷，使用仍能抓到它的最小輸入與最少執行次數，並評為 Recommended 或 Optional；報告以驗收問題、需你決定的事項與由 Recommended 測試組成的 Lean set 開頭。只能由你執行，不改也不執行任何東西；你挑選的項目只有在你要求修改時才寫進 ticket 的驗收；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
     }
     REFERENCE_SECTIONS = {"reference.md": "\n### Test design\n", "reference.zh-TW.md": "\n### 測試設計\n"}
     REFERENCE_PAIRS = (
@@ -952,16 +1048,22 @@ class TestDesignCommandTests(unittest.TestCase):
          "`/cc-feather:test-design` 提出一個對象需要的測試：對象是剛才討論的提案或計畫、你指定的 spec 或 ticket，或以程式碼路徑或模組指定的既有功能。"),
         ("Every proposed test names the defect it would catch, a concrete wrong implementation, that no other proposed or existing test catches, and uses the smallest input and the fewest runs that still catch it; of two designs that catch the same defects, the cheaper one is proposed.",
          "每個建議的測試都指出它能抓到的缺陷，也就是一個具體的錯誤實作，而且是其他建議或既有測試都抓不到的，並使用仍能抓到它的最小輸入與最少執行次數；兩種設計抓到相同缺陷時，提出較便宜的那一種。"),
-        ("Each proposed test states its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work.",
-         "每個建議的測試都說明預期結果與其來源、層級、案例如何挑選、大小與執行次數以及為何足夠，還有它工作量的上限。"),
+        ("A defect that no plausible wrong implementation could produce in the configurations the target supports, or whose effect nothing could observe, is not tested.",
+         "在對象支援的設定中，沒有任何合理的錯誤實作會造成的缺陷，或沒有任何方式能觀察到其影響的缺陷，不會為它設計測試。"),
+        ("The cases the techniques give, such as partitions and boundaries, are candidates: each is listed in one line and graded Recommended, Optional or not proposed, weighed as the delegation skill's rule on weighing findings states, and a defect reached only by a rare downstream configuration and easy to confirm in code review is Optional at most, unless its outcome is a security problem or data loss.",
+         "技巧給出的案例，例如分割與邊界，都只是候選：每個候選列成一行，評為 Recommended、Optional 或不提出，權衡方式就是分派 skill 對 finding 的權衡規則；只有罕見的下游設定才會遇到、在 code review 中一眼就能確認的缺陷，最多評為 Optional，除非它的後果是安全問題或資料遺失。"),
+        ("Only a Recommended test states its expected result and where that result comes from, its level, how its cases are chosen, its size and number of runs with why they suffice, and the bound of its work; an Optional test is one line, written out in full when you ask or before it enters any acceptance.",
+         "只有 Recommended 測試會說明預期結果與其來源、層級、案例如何挑選、大小與執行次數以及為何足夠，還有它工作量的上限；Optional 測試只寫一行，在你要求時或寫進任何驗收之前才完整寫出。"),
         ("A deterministic behaviour gets one case per partition and boundary, a count that is the requirement is tested at its boundary rather than with a loop, and nondeterminism is removed with a fixed seed, a fake clock or a controllable schedule before any repetition is proposed.",
          "確定性的行為每個分割與邊界各一個案例；本身就是需求的次數只在邊界測試，不用迴圈；提出任何重複執行之前，先用固定 seed、fake clock 或可控制的排程消除不確定性。"),
         ("A gated new test is proposed only with who runs it, a claim's acceptance or a Declared test suite, and its run needs positive evidence that the gated tests ran.",
          "有開關控制的新測試只有在指出由誰執行時才會提出，也就是某個 claim 的驗收或某個 Declared test suite，而且它的執行必須有正面證據顯示這些測試真的跑了。"),
         ("Every proposed test is judged against the Unbounded probe entry; one that would be unbounded gets a bounded redesign or is listed as likely needing a Resource-risk claim mark, as information for plan review.",
          "每個建議的測試都以 Unbounded probe 的定義判斷；會沒有上限的測試改成有上限的設計，或列為可能需要 Resource-risk claim 標記，作為計畫審查的參考。"),
-        ("The report has six sections: proposed tests grouped by ticket or requirement, with checks that need manual verification; existing related tests to rerun, extend or update; removals; tests not proposed, with reasons; resource risk; and notes on how the tickets are cut.",
-         "報告分六節：依 ticket 或需求分組的建議測試，連同需要人工驗證的檢查；要重跑、擴充或更新的既有相關測試；刪除；未提出的測試與理由；資源風險；以及關於 ticket 切分方式的備註。"),
+        ("The report has eight sections, in this order: acceptance problems, each verification in the existing acceptance that cannot be carried out, would pass on the old code or on a wrong implementation, or asserts a result that unchanged behaviour does not give; decisions for you, such as a production-code change for testability, a meaning the spec leaves unclear, a change to required behaviour and a test need that may change how the tickets are cut; the Lean set, one line for each Recommended test and check with the number of tests and cases at each level; proposed tests grouped by ticket or requirement, with checks that need manual verification; existing related tests to rerun, extend or update, with any behaviour that could not be mapped to code; removals; tests not proposed, grouped by reason; and resource risk.",
+         "報告依序分八節：驗收問題，也就是既有驗收中無法執行、在舊程式碼或錯誤實作上也會通過，或斷言了未變更行為不會產生的結果的驗證；需你決定的事項，例如為了可測試性而改動正式程式碼、spec 沒說清楚的意義、對必要行為的變更，以及可能改變 ticket 切分方式的測試需求；Lean set，每個 Recommended 測試與檢查各一行，並附上每個層級的測試數與案例數；依 ticket 或需求分組的建議測試，連同需要人工驗證的檢查；要重跑、擴充或更新的既有相關測試，連同無法對應到程式碼的行為；刪除；依理由分組的未提出測試；以及資源風險。"),
+        ("Before reporting, main re-grades every item, merges duplicates across tickets and checks each acceptance problem against the code, and it recommends the Lean set, never every proposal.",
+         "提出報告之前，主 Agent 會重新評定每一項、合併各 ticket 間重複的項目，並對照程式碼檢查每個驗收問題；它建議採用 Lean set，絕不建議採用所有提議。"),
         ("A removal follows the same evidence rule as `/cc-feather:test-speedup`'s, for you to decide one by one, and a picked removal needs the new test written and passing before the old one is removed.",
          "刪除採用與 `/cc-feather:test-speedup` 相同的證據規則，由你逐條決定；被選中的刪除必須先寫好新測試並通過，才移除舊測試。"),
         ("It changes and runs nothing, and what you pick enters a ticket's acceptance only through an edit you ask for.",
@@ -972,8 +1074,8 @@ class TestDesignCommandTests(unittest.TestCase):
          "它會讀 repository 自己的歷史找出過去出問題的地方，但不讀外部 issue tracker；查詢框架預設值的方式與 `/cc-feather:test-speedup` 相同。"),
         ("Its guideline reference covers levels and sizes, case choice, test doubles, test quality, property-based testing and fuzzing, acceptance, external dependencies and hints for Go, Python and JavaScript or TypeScript.",
          "它的指引參考涵蓋層級與大小、案例挑選、test double、測試品質、property-based testing 與 fuzzing、驗收、外部相依，以及 Go、Python 與 JavaScript 或 TypeScript 的提示。"),
-        ("With delegation installed and a target that is not small, analyst does the reading.",
-         "裝有分派元件且對象不小時，由 analyst 負責閱讀分析。"),
+        ("With delegation installed and a target that is not small, judged by its source scope, coupling and reasoning difficulty rather than its ticket count, one analyst does the reading by default, and the work is split only along distinct behaviours or invariants when it is too much for one.",
+         "裝有分派元件且對象不小時，對象大小依原始碼範圍、耦合程度與推理難度判斷，而不是依 ticket 數量，預設由一個 analyst 負責閱讀分析；只有在一個 analyst 處理不了時，才依不同的行為或不變條件拆分。"),
         ("See [the command](../skills/test-design/SKILL.md).",
          "見[指令](../skills/test-design/SKILL.md)。"),
     )
