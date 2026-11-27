@@ -20,7 +20,12 @@ point to it. The configuration tool's handling of 0.45.0's guidance is tested in
 
 The existing pins this ticket replaces, updated where they are: in test_feather_final_check, ReleaseScopeTests'
 release question in review state's Final check scope; in test_feather_resource_floor, the count of links to the
-resource-risk runs reference."""
+resource-risk runs reference.
+
+Since docs/specs/test-suites-skill.md, ticket 02, the reference's new-test rules apply whether or not Related-test
+acceptance is on, the installed delegation guidance points to the reference before any acceptance, test-design names
+the suite expected to select each Recommended test, and ADR 0025 records the reversal; the Occasions, When it applies,
+Wording kept and setup-document pins move to the new wording and the pointer count to six."""
 
 from __future__ import annotations
 
@@ -144,8 +149,10 @@ class CatalogueReferenceTests(Pinned, unittest.TestCase):
     def test_when_main_reads_it_and_which_version_counts(self):
         self.assert_bullet(
             OWNER, "Occasions",
-            "Main reads the catalogue at the commit it works on before writing acceptance while Related-test "
-            "acceptance is on, before every final check and before the release question.")
+            # docs/specs/test-suites-skill.md, ticket 02: before any acceptance, whether or not Related-test
+            # acceptance is on.
+            "Main reads the catalogue at the commit it works on before writing any acceptance, whether or not "
+            "Related-test acceptance is on, before every final check and before the release question.")
         self.assert_bullet(
             OWNER, "Which version counts",
             "Which suites are Landing-required suites and Release-required suites is resolved from the catalogue at the "
@@ -183,9 +190,9 @@ class CatalogueReferenceTests(Pinned, unittest.TestCase):
                     self.assertEqual((path.parent / link).resolve(), OWNER.resolve())
                 found += 1
         # Review state's Final check and Final check scope, and the resource-risk runs reference's The budget; ticket 03
-        # adds the Related-test acceptance procedure's pointer, and docs/specs/test-suites-skill.md ticket 01 the
-        # test-suites command's.
-        self.assertEqual(found, 5)
+        # adds the Related-test acceptance procedure's pointer, docs/specs/test-suites-skill.md ticket 01 the
+        # test-suites command's and its ticket 02 test-design's Expected suite.
+        self.assertEqual(found, 6)
 
 
 class FinalCheckTests(Pinned, unittest.TestCase):
@@ -381,8 +388,13 @@ class AcceptanceWritingTests(Pinned, unittest.TestCase):
     def test_the_section_says_when_it_applies(self):
         self.assert_bullet(
             OWNER, "When it applies",
-            "This section applies only to acceptance main writes while Related-test acceptance is on, in a project "
-            "with a tracked Test suite catalogue.")
+            # docs/specs/test-suites-skill.md, ticket 02: only the narrowing rules stay tied to the setting.
+            "This section applies to acceptance main writes in a project with a tracked Test suite catalogue.",
+            "The affected part, The full suite and `full` membership apply only while Related-test acceptance is on; "
+            "the other rules of this section apply whether or not it is on.",
+            "The installed delegation guidance has main read this reference before writing any acceptance in such a "
+            "project, and the Related-test acceptance rule, written once in its template, points here too; this "
+            "section states what that rule's terms mean with a catalogue and does not change the rule otherwise.")
 
     def test_the_affected_part_with_its_reason_and_the_whole_suite_fallback(self):
         self.assert_bullet(
@@ -423,7 +435,40 @@ class AcceptanceWritingTests(Pinned, unittest.TestCase):
             OWNER, "Wording kept",
             "Acceptance the user wrote, existing specs and tickets, a fix Claim's acceptance, and acceptance that says "
             "\"the full suite\" keep their wording and meaning.",
-            "This section never changes what acceptance that says \"the full suite\" runs.")
+            "This section never changes what acceptance that says \"the full suite\" runs.",
+            "New tests in a suite applies only to acceptance main writes after it.")
+
+    def test_new_tests_show_they_ran_and_gaps_are_reported(self):
+        """docs/specs/test-suites-skill.md, ticket 02."""
+        self.assert_bullet(
+            OWNER, "New tests in a suite",
+            "A Claim that adds tests a Declared test suite is expected to select gets, in its primary acceptance, that "
+            "suite's command, narrowed to the affected part where The affected part allows it, with the condition that "
+            "its output shows the new tests executed and passed, such as per-test result lines or a report file, and "
+            "which skips, if any, are allowed.",
+            "A test name in a listing, a skip line or cached output is not that evidence.")
+        self.assert_bullet(
+            OWNER, "Evidence the command cannot show",
+            "When the suite's command cannot show that evidence without changing it, such as a quiet runner without "
+            "per-test output, main reports the gap and proposes either a confirmed change to the catalogue entry or a "
+            "separately stated acceptance check that does show it.",
+            "Main keeps a catalogue command as the entry states it unless the user confirms a change, and an exit code "
+            "alone is never that evidence.")
+        self.assert_bullet(
+            OWNER, "Gaps reported",
+            "When the tests a Claim adds are expected to be Uncatalogued tests, or need a prerequisite no entry names, "
+            "main lists them in its report, pointing to `/cc-feather:test-suites`, and the user decides whether to "
+            "change the catalogue.")
+        self.assert_bullet(
+            OWNER, "Residual risk",
+            "Unplanned edits and acceptance the user wrote get no check under this section.",
+            "Running `/cc-feather:test-suites` shows whether the catalogue and the tests agree, not that any test ran.")
+        # The bullets sit in the Acceptance section, before Wording kept's successor and after the entry rule.
+        labels = [line.split("**")[1] for line in self.acceptance().splitlines() if line.startswith("- **")]
+        self.assertEqual(labels, ["When it applies.", "The affected part.", "The full suite.", "`full` membership.",
+                                  "The entry in the acceptance.", "New tests in a suite.",
+                                  "Evidence the command cannot show.", "Gaps reported.", "Wording kept.",
+                                  "Residual risk."])
 
     def test_the_section_restates_neither_the_release_rule_nor_rules_owned_elsewhere(self):
         section = self.acceptance()
@@ -436,15 +481,21 @@ class AcceptanceWritingTests(Pinned, unittest.TestCase):
         setup = " ".join(SETUP.read_text(encoding="utf-8").split("\n## Related-test acceptance\n", 1)[1]
                          .split("\n## ", 1)[0].split())
         for sentence in (
-                "In a project whose Working checkout tracks a Test suite catalogue, the rule has main read the "
-                "delegation skill's test-suites reference (`skills/delegation/references/test-suites.md`) before "
-                "writing acceptance, and that reference states what the rule's terms mean with the catalogue; this "
-                "document does not restate it.",
+                # docs/specs/test-suites-skill.md, ticket 02.
+                "In a project whose Working checkout tracks a Test suite catalogue, the installed delegation guidance "
+                "has main read the delegation skill's test-suites reference "
+                "(`skills/delegation/references/test-suites.md`) before writing any acceptance, whether or not this "
+                "setting is on, and the rule points to it too; that reference states what the rule's terms mean with "
+                "the catalogue and how new tests are verified, and this document does not restate it.",
                 "A scope saved `on` renders the sentence that points to the reference only after setup update: until "
                 "then `check` reports that the delegation guidance is from an older template, and `review` that "
                 "changes a saved setting asks for setup update first.",
                 "To downgrade, reinstall the older plugin and run its setup update in each scope saved `on`, which "
-                "renders that version's rule without the sentence; a scope without a saved setting needs nothing."):
+                "renders that version's rule without the sentence; a scope without a saved setting needs nothing for "
+                "this rule.",
+                "Going back from 0.51.0 or later to an earlier plugin needs that version's setup update in every scope "
+                "where delegation is installed, because the delegation guidance carries the sentence that points to the "
+                "reference."):
             with self.subTest(sentence=sentence[:60]):
                 self.assert_whole_sentence(sentence, setup)
         procedure = PROCEDURE.read_text(encoding="utf-8")
@@ -459,6 +510,63 @@ class AcceptanceWritingTests(Pinned, unittest.TestCase):
                            "resolved when main writes the overall acceptance", "keep their wording and meaning"):
                 with self.subTest(place=place, phrase=phrase):
                     self.assertNotIn(phrase, text)
+
+class GuidanceAndDecisionRecordTests(unittest.TestCase):
+    """docs/specs/test-suites-skill.md, ticket 02: the delegation guidance template's one sentence, test-design's
+    Expected suite and ADR 0025. The configuration tool's rendering and `check` of the sentence are tested in
+    test_feather_related_tests."""
+
+    GUIDANCE_SENTENCE = ("When main writes a Claim's acceptance and the Working checkout tracks `.feather/test-suites.md`, "
+                         "it reads cc-feather:delegation's test-suites reference first and follows it.")
+
+    def test_the_delegation_guidance_template_carries_the_sentence_once(self):
+        template = (config.ROOT / "templates" / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertEqual(template.count(self.GUIDANCE_SENTENCE), 1)
+        # It follows the paragraph on reading cc-feather:delegation and restates no catalogue rule.
+        before = template.split(self.GUIDANCE_SENTENCE, 1)[0]
+        self.assertTrue(before.rstrip().endswith("report the limitation and stop the affected delegation or required "
+                                                 "review."))
+        for phrase in ("executed and passed", "Uncatalogued", "Landing-required"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, template)
+
+    def test_test_design_names_the_expected_suite_only_with_a_catalogue(self):
+        design = (config.ROOT / "skills" / "test-design" / "SKILL.md").read_text(encoding="utf-8")
+        paragraph = next(p for p in design.split("\n\n") if p.startswith("**Expected suite.**"))
+        for sentence in (
+                "**Expected suite.** Only when the target's Working checkout tracks a Test suite catalogue, each "
+                "Recommended test's statement also names the Declared test suite or suites expected to select it, or "
+                "that this cannot be established, reading the catalogue as [the delegation skill's test-suites "
+                "reference](../delegation/references/test-suites.md) describes.",
+                "A Recommended test expected to be an Uncatalogued test, or to need a prerequisite no entry names, is "
+                "also listed under Decisions for the user.",
+                "Without a catalogue this paragraph does not apply, and the report does not suggest creating one."):
+            with self.subTest(sentence=sentence[:60]):
+                self.assertIn(sentence, paragraph)
+        # It sits with the other per-test rules of Design the tests, before Gated new tests.
+        self.assertLess(design.index("**Expected suite.**"), design.index("**Gated new tests.**"))
+        self.assertLess(design.index("**Each Recommended test states:**"), design.index("**Expected suite.**"))
+
+    ADR = config.ROOT / "docs" / "adr" / "0025-a-user-invoked-command-drafts-and-checks-the-test-suite-catalogue.md"
+
+    def test_adr_0025_records_the_decisions(self):
+        adr = " ".join(self.ADR.read_text(encoding="utf-8").split())
+        for statement in (
+                "**A command the user invokes**, `/cc-feather:test-suites`, drafts a catalogue when the project has none "
+                "and checks it when it has one.",
+                "**\"Never creates, edits or proposes edits on its own\" becomes \"never creates or edits on its "
+                "own\".**",
+                "**New tests show they ran.**",
+                "**The catalogue rules are read before any acceptance.**",
+                "This supersedes the declared test suites spec's exclusion of a generating tool and its \"proposes "
+                "edits\" clause; that spec as shipped is not rewritten.",
+                "The command is not an automatic editor, a parser or a configuration setting:"):
+            with self.subTest(statement=statement[:60]):
+                self.assertIn(statement, adr)
+        # The earlier spec stays as shipped.
+        spec = (config.ROOT / "docs" / "specs" / "declared-test-suites.md").read_text(encoding="utf-8")
+        self.assertIn("cc-feather never creates, edits or proposes edits to it on its own", spec)
+
 
 class BudgetTests(Pinned, unittest.TestCase):
     """Acceptance item 6: a suite's `Budget:` line in the resource-risk runs reference's budget order."""

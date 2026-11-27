@@ -422,7 +422,9 @@ class RelatedTestsSettingTests(unittest.TestCase):
                     self.apply("remove", scope)
                     self.apply("install", scope, "--review-mode", mode)
                     self.assertEqual((self.guidance(scope).read_bytes(), self.state_path(scope).read_bytes()), written)
-                    self.assertNotIn("test-suites", self.block(scope))
+                    # The Related-test acceptance rule is not rendered without a saved setting; the delegation
+                    # guidance's own catalogue sentence (docs/specs/test-suites-skill.md, ticket 02) is.
+                    self.assertNotIn(CATALOGUE_SENTENCE, self.block(scope))
                     self.apply("remove", scope)
 
     # Session export, preservation and rollback.
@@ -502,6 +504,68 @@ class RelatedTestsSettingTests(unittest.TestCase):
                 self.assertIn("injected state failure", result["error"])
                 self.assertEqual((guidance.read_bytes(), state_path.read_bytes()), original)
                 self.assertEqual(self.call("show")[1]["related_tests"], "on")
+
+
+class GuidanceCatalogueSentenceTests(unittest.TestCase):
+    """docs/specs/test-suites-skill.md, ticket 02: every rendered delegation guidance carries the sentence that has main
+    read the test-suites reference before writing acceptance, whether or not Related-test acceptance is on; guidance
+    rendered from the template before it is from an older template, and `review` refuses to change a saved setting
+    there until setup update."""
+
+    SENTENCE = ("When main writes a Claim's acceptance and the Working checkout tracks `.feather/test-suites.md`, "
+                "it reads cc-feather:delegation's test-suites reference first and follows it.")
+
+    # The setting tests' helpers, borrowed so that their tests do not run twice.
+    setUp = RelatedTestsSettingTests.setUp
+    call = RelatedTestsSettingTests.call
+    apply = RelatedTestsSettingTests.apply
+    files = RelatedTestsSettingTests.files
+    guidance = RelatedTestsSettingTests.guidance
+    block = RelatedTestsSettingTests.block
+    older_template_warnings = RelatedTestsSettingTests.older_template_warnings
+
+    def render_before_the_sentence(self):
+        original = config._block_template
+
+        def without(path):
+            text = original(path)
+            if Path(path).name == "CLAUDE.md":
+                return text.replace(self.SENTENCE + "\n\n", "", 1)
+            return text
+        return mock.patch.object(config, "_block_template", without)
+
+    def test_every_rendering_carries_the_sentence_once(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                for related in (None, "on", "off"):
+                    with self.subTest(scope=scope, mode=mode, related=related):
+                        self.apply("install", scope, "--review-mode", mode)
+                        if related:
+                            self.apply("review", scope, "--related-tests", related)
+                        self.assertEqual(self.block(scope).count(self.SENTENCE), 1)
+                        self.assertEqual(self.older_template_warnings(scope), [])
+                        self.apply("remove", scope)
+
+    def test_guidance_before_the_sentence_needs_setup_update(self):
+        for scope in ("project", "user"):
+            for mode in ("auto", "off"):
+                with self.subTest(scope=scope, mode=mode):
+                    with self.render_before_the_sentence():
+                        self.apply("install", scope, "--review-mode", mode)
+                    self.assertNotIn(self.SENTENCE, self.block(scope))
+                    self.assertEqual(self.older_template_warnings(scope),
+                                     ["delegation guidance is from an older template; run setup update"])
+                    # review that changes a saved setting refuses and changes nothing.
+                    before = self.files()
+                    code, result = self.call("review", scope, "--stop-threshold", "4")
+                    self.assertNotEqual(code, 0, result)
+                    self.assertIn("older template; run setup update first", json.dumps(result))
+                    self.assertEqual(self.files(), before)
+                    # setup update renders the sentence and clears the warning.
+                    self.apply("update", scope)
+                    self.assertEqual(self.block(scope).count(self.SENTENCE), 1)
+                    self.assertEqual(self.older_template_warnings(scope), [])
+                    self.apply("remove", scope)
 
 
 class RelatedTestsSetupDocumentTests(unittest.TestCase):

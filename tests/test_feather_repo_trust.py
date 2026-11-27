@@ -1000,8 +1000,9 @@ class SetupUpdateReplacesTheTwentyEightInstallationTests(unittest.TestCase):
                     # resource-risk-runs ticket 03 also changes the executor and security-executor templates since
                     # v0.28.0, so a 0.28.0 installation shows them stale too.
                     self.assertEqual(stale, sorted((*self.CHANGED, *RESOURCE_FLOOR_IMPLEMENTERS)))
-                    self.assertEqual("delegation guidance is from an older template; run setup update"
-                                     in shown["warnings"], mode == "auto")
+                    # docs/specs/test-suites-skill.md ticket 02 changes the delegation template in both modes, so a
+                    # 0.28.0 installation's guidance is from an older template in off too.
+                    self.assertIn("delegation guidance is from an older template; run setup update", shown["warnings"])
                     self.apply("update", scope)
                     code, shown = self.call("check", scope)
                     self.assertEqual(code, 0, shown)

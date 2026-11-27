@@ -5,4 +5,6 @@ Keep small or tightly coupled work with main; delegate independent work. Only ma
 
 Before dispatching, accepting or recovering delegated work, read and follow cc-feather:delegation. Also use it for requested security analysis, explicitly requested plan review, code review or outcome verification, requests to turn automatic review on or off, before proposing or adopting a requirement or fix derived from a finding, and before implementing a Security-critical change. If the skill or required managed role is unavailable, report the limitation and stop the affected delegation or required review.
 
+When main writes a Claim's acceptance and the Working checkout tracks `.feather/test-suites.md`, it reads cc-feather:delegation's test-suites reference first and follows it.
+
 {{auto_review}}{{role_names}}<!-- cc-feather:end -->
