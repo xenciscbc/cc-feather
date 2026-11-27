@@ -41,7 +41,7 @@ Report each finding with its location and evidence:
 - **Selected but inactive**: a test a suite selects but whose activation the suite never provides, such as an environment switch, a service or a build tag its command and prerequisites leave out, so that it skips while the suite passes.
 - **Stale command**: a suite command naming a path, package, tag or script that no longer exists.
 - **Prerequisite mismatch**: a prerequisite tests read that `Prerequisites:` omits, or one listed that nothing uses.
-- **Weak pass condition**: a `Passes when:` that relies only on the exit code. An exact test count is reported as a maintenance note, not a finding: it stays strict until the user changes it.
+- **Weak pass condition**: a `Passes when:` that relies only on the exit code. An exact test count is reported as a maintenance note, not an error: it stays strict until the user changes it.
 - **Invalid entry**: a missing required line, an unknown or conflicting gate, a duplicate suite name, or conditions that contradict each other.
 
 Whatever static reading cannot settle, such as a wrapper script, dynamic registration, platform or build constraints, nested modules or generated tests, is reported as not established, with what would settle it. A check is clean only where every part of it was established. Test quality and speed are outside the check; they belong to [`test-design`](../test-design/SKILL.md) and [`test-speedup`](../test-speedup/SKILL.md).
@@ -52,8 +52,8 @@ The report states the scope it inspected, what it could not establish, and then 
 
 ## Writing
 
-1. Ask the user to confirm suite by suite, with each suite's gates and any ignore-rule change step 4 needs. A suite without the user's confirmation is not written; in a check, an existing entry without an answer stays as it is. A confirmation counts only when the user gave it in this conversation after the proposal it answers.
+1. Ask the user to confirm suite by suite, with each suite's gates and, when `git check-ignore -q .feather/test-suites.md` shows that Git would not track the file, the ignore-rule change step 4 makes. A suite without the user's confirmation is not written; in a check, an existing entry without an answer stays as it is. A confirmation counts only when the user gave it in this conversation after the proposal it answers.
 2. Before writing, read the catalogue and the ignore rules again. When either changed since the proposal, propose again from the new content and write nothing until the user confirms the new proposal.
 3. Take a Checkout lease on the checkout, as [the lease rules](../leases/SKILL.md#main-agent-rules) describe, and write only the confirmed entries.
-4. When `git check-ignore -q .feather/test-suites.md` shows that Git would not track the file, make the narrowest change to the actual ignore rules that lets it, such as replacing a `.feather/` rule with `/.feather/*` and `!/.feather/test-suites.md`, and keep every other rule, as the user confirmed in step 1. Otherwise leave the ignore rules as they are.
+4. When Git would not track the file, make the narrowest change to the actual ignore rules that lets it, such as replacing a `.feather/` rule with `/.feather/*` and `!/.feather/test-suites.md`, and keep every other rule, as the user confirmed in step 1. Otherwise leave the ignore rules as they are.
 5. Report what was written, that nothing was committed, and that the catalogue takes effect once it is committed.
