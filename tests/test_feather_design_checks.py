@@ -33,6 +33,10 @@ the judging rule gains its plausibility and observability sentences, the report 
 first, the Who analyses rules and the Key examples guideline change, and the guideline reference gains three Test quality
 guidelines. The changed pins move to the new wording, the glossary entry, README listings and reference sentences follow,
 and a single-owner check shows the weighing paragraph pointed to, restated by neither file and unchanged.
+Since docs/specs/test-design-review-fixes.md, ticket 01, test-design numbers its decisions for the user and checks
+the Lean set against them, the integration-point and decision-table guidelines choose cases by the defects they
+catch, and test-speedup's measurement bypasses result caches and calls a single-run difference an observation; the
+replaced pins move to the new wording and a check shows the old wording gone.
 """
 
 from __future__ import annotations
@@ -243,6 +247,8 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "The Speed-ups and Removals sections list only items that are undecided, reopened or proposed again.",
             "The two resource-risk sections list every current test and setting with resource risk, those of files not analysed again taken from the record, each with its state; a declined risk stays listed, and only its fix is not proposed again.",
             "On the first run without a record, the report ends by saying that items decided before may appear again and that the user can state their states or name the documents where they were decided, which main reads as data and turns into proposed states for the user to confirm.",
+            # docs/specs/test-design-review-fixes.md, ticket 01.
+            "It also says that the results kept for files not analysed again do not follow changes to the code under test or to the libraries the tests import, and that `--full` with a scope analyses that scope again.",
         ),
         "SKILL.md#3. Measurement": (
             "After the static report, main offers to measure and runs nothing without the user's agreement.",
@@ -252,6 +258,10 @@ class TestSpeedupCommandTests(unittest.TestCase):
             "A flagged test the user includes runs inside the Runner, with the memory, time and output limits the offer states.",
             "For the Runner's path and invocation, read [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s The Runner, where the path is relative to the delegation skill, and for how a contained, refused or evidence-missing result or a run stopped from outside is judged, its Main's floor.",
             "After measurement, the report gives each speed-up's gain in seconds.",
+            # docs/specs/test-design-review-fixes.md, ticket 01: result caches and observations.
+            "The command bypasses any cache of earlier test results, such as Go's with `-count=1`, so that every selected test runs.",
+            "A difference between one run on each side, a speed-up's gain or a change in the comparison with the last measurement, is reported as an observation, not a confirmed gain.",
+            "When the user asks to confirm one, a new offer states how many runs to repeat, the runs take place only after the user agrees and under the same rules as the rest of measurement, and the report gives their median and range.",
             "When a run in the offer's scope has a flagged setting, the offer states how that run is bounded: by default a command-line override of the setting, such as `--maxWorkers=N` or `-p N`, which changes no file, with N taken in the budget order [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s The budget states, and asked of the user when no source states it; or the run inside the Runner.",
             "When the run's configuration is flagged, the ordinary command that unflagged tests run with itself runs bounded, with the override or inside the Runner.",
             "The offer and the report say that timings taken at a different concurrency are not comparable with the ordinary run.",
@@ -474,6 +484,9 @@ class TestSpeedupCommandTests(unittest.TestCase):
          "紀錄保存 test runner 與其 plugin 的版本，版本改變時報告會指出；你要求時，主 Agent 會檢視這次升級對測試造成的改變，送到外部的查詢只帶框架名稱、兩個版本與設定名稱。"),
         ("Each measurement is kept with a comparison key of its command, selected tests, concurrency and overrides, Runner limits and the tests left out, and compared only with the last one under the same key: the total time, the tests that became slowest and fastest, and the timing change observed around each landed item.",
          "每次量測都連同比較鍵保存，比較鍵包括指令、選定的測試、並行度與覆寫、Runner 限制以及排除的測試；只和同一比較鍵的上一次量測相比：總時間、變得最慢與最快的測試，以及每個 landed 項目前後觀察到的時間變化。"),
+        # docs/specs/test-design-review-fixes.md, ticket 01.
+        ("The measurement command bypasses any cache of earlier test results, such as Go's with `-count=1`, and a difference from one run on each side is reported as an observation, not a confirmed gain; repeated runs, reported with their median and range, take place only when you ask and agree to their number.",
+         "量測指令會繞過先前測試結果的快取，例如 Go 用 `-count=1`；兩邊各只跑一次的差異只當作觀察值回報，不算已確認的改善；重複量測只在你要求並同意次數時才執行，並回報中位數與波動範圍。"),
         ("`/cc-feather:test-speedup show` summarises the record and lists the other forms of the command, `prune` removes old measurements and finished items after a dry run you confirm and never removes an undecided, picked or declined item, and `--full` analyses the whole scope again while keeping every item's state.",
          "`/cc-feather:test-speedup show` 摘要這份紀錄並列出指令的其他形式；`prune` 在你確認試跑結果後移除舊的量測與已完成的項目，從不移除 undecided、picked 或 declined 的項目；`--full` 重新分析整個範圍，並保留每個項目的狀態。"),
         ("See [the command](../skills/test-speedup/SKILL.md).",
@@ -809,7 +822,9 @@ class TestDesignCommandTests(unittest.TestCase):
             "A problem whose fix changes only how a criterion is verified goes here or under Proposed tests.",
             "**Decisions for the user**, each of: a production-code change for testability; a meaning the spec leaves unclear; a change to required behaviour, such as widening, removing or rewording a requirement or an invariant; a characterised behaviour that may be a bug; and each place where a test need may change how the tickets are cut or their blocking edges.",
             "These are never recommended as test proposals.",
-            "A test that depends on an open decision names it.",
+            # docs/specs/test-design-review-fixes.md, ticket 01: numbered decisions.
+            "Each decision is numbered, and a test that depends on an open decision names its number.",
+            "A test whose expected result a spec or acceptance passage states depends on no decision, even where the current implementation has not been checked against that result.",
             "**Lean set**, one line for each Recommended test, its ticket, level and case count with a pointer to its statement, each Recommended manual check, and each extension or update of an existing related test that a Recommended test relies on; then the number of tests and cases at each level.",
             "It states no time figure, holds no removal, and leaves out every test that depends on an open decision.",
             "Rerunning an existing test is not listed in it.",
@@ -822,6 +837,7 @@ class TestDesignCommandTests(unittest.TestCase):
         ),
         "SKILL.md#Main's integration": (
             "**Main's integration.** Before reporting, main re-grades every analyst item by the same weighing, merges duplicates across tickets and checks each Acceptance problem against the code; analyst grades are input.",
+            "Main checks each Lean set entry against the numbered Decisions for the user and leaves out of the Lean set any test that depends on one.",
             "Main recommends the Lean set and never recommends adopting every proposal.",
             "When main analyses a small target itself, the same applies to its own candidates.",
         ),
@@ -841,6 +857,14 @@ class TestDesignCommandTests(unittest.TestCase):
         # One sentence per guideline group.
         "guidelines.md#Lowest level that observes": (
             "A behaviour is tested at the lowest level that can observe it: a unit test for logic, an integration test for wiring between components, a broad test for what only the assembled system shows.",
+        ),
+        # docs/specs/test-design-review-fixes.md, ticket 01: cases chosen by the defects they catch.
+        "guidelines.md#Focused cases per integration point": (
+            "Each integration point, such as a database adapter, a message queue or an HTTP client, gets the fewest focused integration cases that check both sides agree while catching each failure that can cross that boundary on its own, such as error mapping, transaction rollback or serialization.",
+        ),
+        "guidelines.md#Decision tables": (
+            "Conditions that together pick an outcome get a decision table, with its combinations chosen so that each condition is shown to change the outcome on its own and impossible combinations left out.",
+            "Two combinations with the same outcome are not alike when each would catch a different wrong or missing condition.",
         ),
         "guidelines.md#Boundary values": (
             "cc-feather's default is two values, the boundary and its nearest neighbour across it, and three values, the boundary and one on each side, where a wrong comparison or an off-by-one is a real risk.",
@@ -913,6 +937,14 @@ class TestDesignCommandTests(unittest.TestCase):
         for name in ("SKILL.md", "guidelines.md"):
             with self.subTest(file=name):
                 self.assertNotIn("Ticket-shape notes", self.source(name))
+
+    def test_the_replaced_case_and_decision_wording_is_gone(self):
+        """docs/specs/test-design-review-fixes.md, ticket 01: the replaced sentences are not left beside their successors."""
+        for name, old in (("guidelines.md", "One integration test per point"),
+                          ("guidelines.md", "one case per combination that leads to a distinct outcome"),
+                          ("SKILL.md", "A test that depends on an open decision names it.")):
+            with self.subTest(file=name, old=old):
+                self.assertNotIn(old, " ".join(self.source(name).split()))
 
     def test_the_new_test_quality_guidelines_follow_the_existing_ones(self):
         labels = [line.split("**")[1] for line in self.source("guidelines.md#Test quality").splitlines()
@@ -1064,6 +1096,9 @@ class TestDesignCommandTests(unittest.TestCase):
          "報告依序分八節：驗收問題，也就是既有驗收中無法執行、在舊程式碼或錯誤實作上也會通過，或斷言了未變更行為不會產生的結果的驗證；需你決定的事項，例如為了可測試性而改動正式程式碼、spec 沒說清楚的意義、對必要行為的變更，以及可能改變 ticket 切分方式的測試需求；Lean set，每個 Recommended 測試與檢查各一行，並附上每個層級的測試數與案例數；依 ticket 或需求分組的建議測試，連同需要人工驗證的檢查；要重跑、擴充或更新的既有相關測試，連同無法對應到程式碼的行為；刪除；依理由分組的未提出測試；以及資源風險。"),
         ("Before reporting, main re-grades every item, merges duplicates across tickets and checks each acceptance problem against the code, and it recommends the Lean set, never every proposal.",
          "提出報告之前，主 Agent 會重新評定每一項、合併各 ticket 間重複的項目，並對照程式碼檢查每個驗收問題；它建議採用 Lean set，絕不建議採用所有提議。"),
+        # docs/specs/test-design-review-fixes.md, ticket 01.
+        ("Decisions for you are numbered, a test that depends on one names it and stays out of the Lean set, and a test whose expected result the spec states depends on no decision, even before the current code is checked against it.",
+         "需你決定的事項會編號，依賴其中某項的測試會標出編號，並排除在 Lean set 之外；預期結果已由 spec 寫明的測試不依賴任何待決事項，即使還沒對照現有程式碼查證也一樣。"),
         ("A removal follows the same evidence rule as `/cc-feather:test-speedup`'s, for you to decide one by one, and a picked removal needs the new test written and passing before the old one is removed.",
          "刪除採用與 `/cc-feather:test-speedup` 相同的證據規則，由你逐條決定；被選中的刪除必須先寫好新測試並通過，才移除舊測試。"),
         ("It changes and runs nothing, and what you pick enters a ticket's acceptance only through an edit you ask for.",
