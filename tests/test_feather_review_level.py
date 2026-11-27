@@ -10,6 +10,10 @@ refers to review state. The glossary, both READMEs and both reference documents 
 reference documents paired sentence for sentence. Tests check which sentences the shipped documents state, not how
 main applies them.
 
+Since docs/specs/review-level-content-condition.md, ticket 01, main recommends `light` by the content of a
+Plan's Claims rather than for one Claim: the recommendation pins move to the new wording, the glossary carries it, ADR
+0023 records its amendment by ADR 0024 and the one-Claim wording is gone.
+
 The existing pins this ticket replaces, updated where they are: in test_feather_security_review, plan review's full
 review flow sentence, the toggle's Meaning sentence on what `auto` gives plan-driven work, the glossary's Automatic
 flow entry and the `/cc-feather:auto-on` lines of both READMEs; in test_feather_review_rules, both READMEs' switch
@@ -110,10 +114,13 @@ class ReviewLevelTests(unittest.TestCase):
             "Main lands a Plan at `light` only on the user's instruction.",
         ),
         "review-state.md#Recommending light": (
-            "Main recommends `light` only for a Plan of one Claim with a known cause and a small scope, whose acceptance "
-            "shows its outcome directly, that is not a Security-critical claim, migrates no data, performs no "
-            "irreversible operation, has no foreseeable resource risk and changes no shared test support or build "
-            "configuration.",
+            # docs/specs/review-level-content-condition.md, ticket 01: by content, not by the number of Claims.
+            "Main recommends `light` only for a Plan whose Claims each have a known cause, a small scope and "
+            "acceptance that shows its outcome directly, none of which builds on another's design, as a Claim that "
+            "lists another under `Blocked by` does, and none of which is a Security-critical claim, and that migrates "
+            "no data, performs no irreversible operation, has no foreseeable resource risk and changes no shared test "
+            "support or build configuration.",
+            "The number of Claims does not decide it.",
         ),
         "review-state.md#Leaving light": (
             "When a Plan at `light` turns out to need a Security-critical change, or has a material Deviation, main "
@@ -262,11 +269,14 @@ class ReviewLevelTests(unittest.TestCase):
          "工作，包括合併。"),
         ("`off` turns automatic review off for that plan.",
          "`off` 對這份計畫關閉自動審查。"),
-        ("Main recommends `light` only for a plan of one claim with a known cause and a small scope, whose acceptance "
-         "shows its outcome directly, that is not Security-critical, migrates no data, performs no irreversible "
+        # docs/specs/review-level-content-condition.md, ticket 01.
+        ("Main recommends `light` only for a plan whose claims each have a known cause, a small scope and acceptance "
+         "that shows its outcome directly, none of which builds on another's design, as a claim blocked by another "
+         "does, and none of which is Security-critical, and that migrates no data, performs no irreversible "
          "operation, has no foreseeable resource risk and changes no shared test support or build configuration.",
-         "主 Agent 只在計畫只有一個 claim、原因已知且範圍小、驗收能直接顯示結果、不是安全關鍵、不遷移資料、沒有不可逆操作、沒有可預見的"
-         "資源風險，也不改共用的測試支援或建置設定時，才建議 `light`。"),
+         "主 Agent 只在計畫的每個 claim 都原因已知、範圍小、驗收能直接顯示結果，沒有任何 claim 建立在另一個 claim 的設計上（例如被另一個 "
+         "claim 阻擋的 claim），也沒有任何 claim 是安全關鍵，而且整份計畫不遷移資料、沒有不可逆操作、沒有可預見的資源風險，也不改共用的"
+         "測試支援或建置設定時，才建議 `light`。"),
         ("A plan at `light` carries across sessions only through an active handoff, its ticket stays unfinished until "
          "you accept it or say it is done, and it lands only on your instruction.",
          "`light` 的計畫只透過進行中的交接跨 session 延續，它的 ticket 在你接受或說它完成之前都維持未完成，而且只在你下令時才合併。"),
@@ -345,12 +355,16 @@ class ReviewLevelTests(unittest.TestCase):
         ("It stops without a question tool because a pending question you dismiss still makes the model run again, "
          "while a turn that ends in the conversation lets you leave with `/clear` or a new session.",
          "它不用提問工具停下，是因為你略過的待回答問題仍會讓模型再跑一次，而在對話中結束的回合讓你可以用 `/clear` 或新的 session 離開。"),
-        ("Main recommends `light` only for a plan of one claim with a known cause and a small scope, whose acceptance "
-         "shows its outcome directly, that is not Security-critical, migrates no data, performs no irreversible "
+        # docs/specs/review-level-content-condition.md, ticket 01.
+        ("Main recommends `light` only for a plan whose claims each have a known cause, a small scope and acceptance "
+         "that shows its outcome directly, none of which builds on another's design, as a claim blocked by another "
+         "does, and none of which is Security-critical, and that migrates no data, performs no irreversible "
          "operation, has no foreseeable resource risk and changes no shared test support or build configuration, "
          "since those are the fixes whose failure is cheap.",
-         "主 Agent 只在計畫只有一個 claim、原因已知且範圍小、驗收能直接顯示結果、不是安全關鍵、不遷移資料、沒有不可逆操作、沒有可預見的"
-         "資源風險，也不改共用的測試支援或建置設定時，才建議 `light`，因為這些是失敗代價小的修正。"),
+         "主 Agent 只在計畫的每個 claim 都原因已知、範圍小、驗收能直接顯示結果，沒有任何 claim 建立在另一個 claim 的設計上（例如被另一個 "
+         "claim 阻擋的 claim），也沒有任何 claim 是安全關鍵，而且整份計畫不遷移資料、沒有不可逆操作、沒有可預見的資源風險，也不改共用的"
+         "測試支援或建置設定時，才建議 `light`，因為這些是失敗代價小的修正。"),
+        ("The number of claims does not decide it.", "計畫有幾個 claim 不是判斷依據。"),
         ("`light` gives up plan review, outcome verification, the final check as a recorded gate, the dispatch record, "
          "Auto land and the acceptance gate beyond a claim an active handoff records, exactly as `off` does, and keeps "
          "every rule `off` keeps, including the security analysis of Security-critical work and its routing to "
@@ -389,6 +403,27 @@ class ReviewLevelTests(unittest.TestCase):
                 body = text(name)
                 self.assertEqual(body.count(heading), 1)
                 self.assertLess(body.index(heading), body.index(after))
+
+    def test_light_is_recommended_by_content_not_by_the_number_of_claims(self):
+        """docs/specs/review-level-content-condition.md, ticket 01: the glossary carries the owner's condition, ADR
+        0023 records its amendment by ADR 0024, and the one-Claim wording is gone."""
+        glossary = source("CONTEXT.md#Review level")
+        for sentence in self.OWNER["review-state.md#Recommending light"]:
+            with self.subTest(sentence=sentence[:60]):
+                self.assert_whole_sentence(sentence, glossary)
+        self.assertIn("(Amended by ADR 0024: main recommends `light` by the content of a Plan's Claims, each with a "
+                      "known cause, a small scope and acceptance that shows its outcome directly, none building on "
+                      "another's design and none Security-critical, under the same Plan-wide conditions; the number of "
+                      "Claims does not decide it.)",
+                      text("docs/adr/0023-a-plans-review-level-is-the-users-choice.md"))
+        self.assertTrue((config.ROOT / "docs" / "adr" / "0024-light-is-recommended-by-content-not-by-claim-count.md")
+                        .is_file())
+        for path, old in (("skills/delegation/references/review-state.md", "a Plan of one Claim"),
+                          ("CONTEXT.md", "a Plan of one Claim"), ("README.md", "a plan of one claim"),
+                          ("docs/reference.md", "a plan of one claim"), ("README.zh-TW.md", "只有一個 claim"),
+                          ("docs/reference.zh-TW.md", "只有一個 claim")):
+            with self.subTest(path=path):
+                self.assertNotIn(old, text(path))
 
     def test_every_link_from_the_level_sections_resolves(self):
         targets = {

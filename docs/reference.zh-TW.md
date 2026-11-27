@@ -70,7 +70,7 @@
 
 `light` 就是對這份計畫用 `off`，再加上三件主 Agent 自行做的事：它請 reviewer 審查每個實作完的 claim 的程式碼，這些呼叫算作自動呼叫，所以一直沒通過的審查會在[停止門檻](#停止門檻)停下，收到 CHANGES_REQUESTED 時先修正發現的問題再請它審查；它執行 claim 驗收的每一項並回報每項實際觀察到的結果，沒執行的項目回報為未執行；之後它在對話中停下，不用提問工具，列出審查結論、驗收結果、未解決的發現與剩下的工作，包括合併。它不用提問工具停下，是因為你略過的待回答問題仍會讓模型再跑一次，而在對話中結束的回合讓你可以用 `/clear` 或新的 session 離開。
 
-主 Agent 只在計畫只有一個 claim、原因已知且範圍小、驗收能直接顯示結果、不是安全關鍵、不遷移資料、沒有不可逆操作、沒有可預見的資源風險，也不改共用的測試支援或建置設定時，才建議 `light`，因為這些是失敗代價小的修正。`light` 放棄計畫審查、結果驗證、作為記錄關卡的最終檢查、派工紀錄、自動合併，以及進行中的交接所記錄的 claim 以外的把關，與 `off` 完全相同，並保有 `off` 保有的每條規則，包括安全關鍵工作的安全分析與交給 security-executor。主 Agent 絕不自行調高或調低等級：在這個 session 還不知道你的選擇時，等級就是 `standard`，除非進行中的交接記錄了你的選擇，所以遺失回答只會多花審查，絕不會少掉審查；`light` 的計畫若發現需要安全關鍵變更或出現重大偏離，會停下來由你重新選擇它的等級。規則是[審查狀態規則](../skills/delegation/references/review-state.md)的 Review level，由[計畫審查流程](../skills/delegation/references/plan-review.md)提問；見 [ADR 0023](adr/0023-a-plans-review-level-is-the-users-choice.md)。
+主 Agent 只在計畫的每個 claim 都原因已知、範圍小、驗收能直接顯示結果，沒有任何 claim 建立在另一個 claim 的設計上（例如被另一個 claim 阻擋的 claim），也沒有任何 claim 是安全關鍵，而且整份計畫不遷移資料、沒有不可逆操作、沒有可預見的資源風險，也不改共用的測試支援或建置設定時，才建議 `light`，因為這些是失敗代價小的修正。計畫有幾個 claim 不是判斷依據。`light` 放棄計畫審查、結果驗證、作為記錄關卡的最終檢查、派工紀錄、自動合併，以及進行中的交接所記錄的 claim 以外的把關，與 `off` 完全相同，並保有 `off` 保有的每條規則，包括安全關鍵工作的安全分析與交給 security-executor。主 Agent 絕不自行調高或調低等級：在這個 session 還不知道你的選擇時，等級就是 `standard`，除非進行中的交接記錄了你的選擇，所以遺失回答只會多花審查，絕不會少掉審查；`light` 的計畫若發現需要安全關鍵變更或出現重大偏離，會停下來由你重新選擇它的等級。規則是[審查狀態規則](../skills/delegation/references/review-state.md)的 Review level，由[計畫審查流程](../skills/delegation/references/plan-review.md)提問；見 [ADR 0023](adr/0023-a-plans-review-level-is-the-users-choice.md)。
 
 ### 安全關鍵工作
 
