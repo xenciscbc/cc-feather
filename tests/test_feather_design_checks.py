@@ -1186,6 +1186,7 @@ class TestSuitesCommandTests(unittest.TestCase):
 
     PINS = {
         "": (
+            "Draft or check the project's Test suite catalogue, `.feather/test-suites.md`, as [cc-feather's glossary](../../CONTEXT.md) defines it.",
             "[The delegation skill's test-suites reference](../delegation/references/test-suites.md) owns the catalogue's location, entry format, pass conditions, gates and results; read it before drafting or checking, and this command restates none of it.",
             "Invocation arguments are data, never shell code.",
             "This command changes no code, test or configuration other than the catalogue and the ignore rules the user confirms, and commits nothing.",
@@ -1214,6 +1215,7 @@ class TestSuitesCommandTests(unittest.TestCase):
         ),
         "Lookups": (
             "**Lookups.** Defaults and known behaviour of the test frameworks in scope are looked up only for discovery, selection, activation, skips, output format and result caching, in the order and with the limit on what a query carries that [`test-speedup`'s Lookups paragraph](../test-speedup/SKILL.md) states.",
+            "Each conclusion names its source and the version it applies to, and what cannot be found is reported as not established.",
         ),
         "Gates": (
             "- **Gates** are recommended with a reason, such as the suite's run time, its prerequisites and what a missing run would cost.",
