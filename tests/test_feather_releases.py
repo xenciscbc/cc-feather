@@ -4378,7 +4378,7 @@ class TestSuitesReleaseTests(unittest.TestCase):
         "ticket 01, The test-suites command, in 4c7844d, 0e7bc65 and e632858; ticket 02, Catalogue rules for new tests, the guidance sentence and test-design, in 6495aff, with [ADR 0025](adr/0025-a-user-invoked-command-drafts-and-checks-the-test-suite-catalogue.md);",
         "The plugin now packages twenty-three skills, and the 0.50.0 release tests now follow the 0.51.0 note and entry.",
         "**Setup update is required in every scope where delegation is installed.**",
-        "`git diff-tree -r --name-only v0.50.0 HEAD -- templates skills/setup scripts` lists only `templates/CLAUDE.md`:",
+        "`git diff v0.50.0 HEAD -- templates skills/setup scripts` shows only one added sentence and one blank line in `templates/CLAUDE.md`, and `git diff-tree -r --name-only v0.50.0 HEAD -- templates skills/setup scripts` lists only `templates/CLAUDE.md`:",
         "Until setup update, `check` reports the delegation guidance as from an older template, `review` refuses to change any saved setting in that scope, such as the review mode, the Stop threshold, Related-test acceptance or Auto land, and asks for setup update first, and the installed guidance does not have main read the catalogue rules before acceptance while Related-test acceptance is off; nothing else changes.",
         "The setup document's count of packaged skills is now twenty-three.",
         "To go back to 0.50.0, reinstall the 0.50.0 plugin and run its setup update in each scope where delegation is installed.",
@@ -4391,16 +4391,21 @@ class TestSuitesReleaseTests(unittest.TestCase):
         # Run 1 with its attempts.
         "the Runner resolved `timeout` to Windows' own `TIMEOUT.EXE`, so Git's `timeout` was then named by its full path.",
         "the default permission mode denied reading the candidate's test-suites reference outside the session's directories, and the command stopped without a draft,",
-        "and stopped without writing. Its 47 tool calls held no Write or Edit;",
+        "It reported as not established whether `-tags integration` compiles and passes now,",
+        "Its main session made 47 tool calls and its analysts 80, 69 and 79, with no Write or Edit; five calls were denied:",
         # Run 2 with its attempts and the departure.
         "with `--permission-mode acceptEdits` and an allow rule for the lease tool only, a stated departure from the default mode that the user approved so that the write path could run.",
-        "did not match the allow rule written for `python -B`, as the lease rules require;",
+        "did not match the allow rule written for `python -B`, so it could not take a lease, and the command writes only under one;",
         "it reread both files, acquired the lease, wrote `.feather/test-suites.md` with the nine confirmed suites and gates in one Write, left the ignore rules unchanged, returned the lease and committed nothing;",
         "that wording was not part of the user's confirmation.",
+        "The user accepted run 2 as meeting its expectation, since the suites and gates written were those confirmed and the change was disclosed, and the deviation is recorded as a follow-up rather than as a defect of the command.",
         # Run 3.
         "It reported the `pilotonly` test under Uncatalogued test and the `PILOT_QUEUE_ADDR` test under selected but inactive,",
+        "reported as not established the race toolchain's needs on windows/amd64,",
+        "Its main session made 32 tool calls and its analysts 99, 41 and 62, with no Write or Edit; one call was denied, a Bash command that changed directory before a Git command.",
         # Token use and the places checked.
         "Token use was read from each session's JSON output for the main session and from the subagent transcripts, counted once per message, for the analysts.",
+        "The JSON figures may not cover a whole resumed or multi-turn session:",
         "Other places were not checked.",
         "The Runner limits resources and does not isolate the file system or the network.",
         "The copy was removed afterwards.",
