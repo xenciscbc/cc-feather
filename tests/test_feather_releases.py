@@ -4080,10 +4080,12 @@ class TestDesignTriageReleaseTests(unittest.TestCase):
     back to 0.48.0 means reinstalling the 0.48.0 plugin; the validation entry records the spec and the tickets, the
     determination with its evidence, the unchanged setup document, the way back, the full suite, the live run in a copy
     of the candidate with its settings, Runner result, token use, what the report showed, the tool calls and the
-    places checked and not checked, what the tests cannot show and the tag, and is the file's last release entry. The
-    command's own sentences are tests/test_feather_design_checks.py's; the packaged skill count is
+    places checked and not checked, what the tests cannot show and the tag, and was appended after the earlier
+    entries. The command's own sentences are tests/test_feather_design_checks.py's; the packaged skill count is
     InstallDocumentTests'. Statements are asserted present rather than counted, since their repetition is not the
-    contract; the heading's uniqueness is, because the entry is found by it."""
+    contract; the heading's uniqueness is, because the entry is found by it. Since 0.50.0 the manifest version is
+    ReviewFixesReleaseTests', the note follows the 0.50.0 note, and the entry is followed only by sections for work
+    landed on main without a release and then the 0.50.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.49.0 note in order.
     UPDATES = (
@@ -4165,16 +4167,16 @@ class TestDesignTriageReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_49_0(self):
-        self.assertEqual("0.49.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_triage_note_in_both_languages(self):
         previous = SpeedupRecordReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = ReviewFixesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.49.0 note starts right after the section's opening sentence, its sentences in order, before 0.48.0's.
+            # The 0.49.0 note starts right after the 0.50.0 note, its sentences in order, before 0.48.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_and_name_the_way_back_in_both_languages(self):
@@ -4207,11 +4209,131 @@ class TestDesignTriageReleaseTests(unittest.TestCase):
         # The full suite's and the live run's results are recorded, not left as placeholders.
         self.assertNotIn("@@", entry)
         self.assertIsNone(re.search(r"ran 0+ tests", entry))
+        # The entry was appended rather than rewriting an earlier one; after it come only sections for work landed on
+        # main without a release, and then the 0.50.0 entry.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIn(ReviewFixesReleaseTests.ENTRY_HEADING, after)
+        between = after.split(ReviewFixesReleaseTests.ENTRY_HEADING, 1)[0]
+        self.assertIsNone(re.search(r"^## \d", between, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.49.0)")
+                            for heading in re.findall(r"^## .*$", between, re.MULTILINE)))
+
+
+class ReviewFixesReleaseTests(unittest.TestCase):
+    """0.50.0 (docs/specs/release-0-50-0.md, ticket 01, releasing docs/specs/test-design-review-fixes.md and
+    docs/specs/review-level-content-condition.md): the manifest version is 0.50.0; the Updates note, in both languages,
+    opens the section, says that `/cc-feather:test-design` numbers its decisions for the user and chooses cases by the
+    defects they catch, that `/cc-feather:test-speedup` measures past result caches, calls a single-run difference an
+    observation and says kept results do not follow the code under test, that the first Go measurement normally has no
+    comparable earlier one, and that `light` is recommended by the content of a plan's claims; that existing
+    installations need the plugin update and a fresh session but no setup update, determined from the diff against
+    v0.49.0 over `templates skills/setup scripts`, and that going back to 0.49.0 means reinstalling the 0.49.0 plugin;
+    the validation entry records the specs and tickets, the review levels, the determination with its evidence, the
+    unchanged setup document, the way back, the full suite, that no live run was made, the Go measurement, what the
+    tests cannot show and the tag, and is the file's last release entry. The changed rules' own sentences are
+    tests/test_feather_design_checks.py's and tests/test_feather_review_level.py's."""
+
+    # The Updates sections, paired in both languages: the section's opening sentence, then the 0.50.0 note in order.
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.50.0 has `/cc-feather:test-design` number its decisions for the user: a test that depends on one names it and stays out of the Lean set, and a test whose expected result the spec states depends on none; its guidelines for integration points and decision tables now choose cases by the defects they catch, not one per point or per outcome.",
+         "`/cc-feather:test-speedup` measures past test result caches, such as Go's with `-count=1`, reports a difference from one run on each side as an observation and repeats runs only when you ask, and its Since the last run section says that kept results do not follow changes to the code under test; because the measurement command changes, the first Go measurement after the update normally has no comparable earlier one, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "Main now recommends Review level `light` by the content of a plan's claims rather than for one claim only: each claim small with a known cause, none building on another's design and none Security-critical.",
+         "`git diff v0.49.0 HEAD -- templates skills/setup scripts` shows no change, so 0.50.0 changes no installed guidance, policy template, role definition or configuration tool, only skills the plugin loads from its package; existing installations need the plugin update and a fresh session, and no `/cc-feather:setup update` is needed.",
+         "To go back to 0.49.0, reinstall the 0.49.0 plugin; no setup update or remove is needed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.50.0 讓 `/cc-feather:test-design` 為需你決定的事項編號：依賴其中某項的測試會標出編號並排除在 Lean set 之外，預期結果已由 spec 寫明的測試不依賴任何待決事項；整合點與決策表的指引改為依案例能抓到的缺陷挑選，不再是每個整合點或每種輸出只有一個案例。",
+         "`/cc-feather:test-speedup` 量測時會繞過測試結果的快取，例如 Go 用 `-count=1`，兩邊各只跑一次的差異只當作觀察值，只在你要求時才重複量測，「自上次執行以來」一節也會說明沿用的結果不反映受測程式的變動；因為量測指令改變，更新後 Go 專案的第一次量測通常沒有可比較的舊量測，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "主 Agent 現在依計畫中各 claim 的內容建議審查等級 `light`，不再只限一個 claim：每個 claim 原因已知且範圍小，沒有 claim 建立在另一個 claim 的設計上，也沒有安全關鍵的 claim。",
+         "`git diff v0.49.0 HEAD -- templates skills/setup scripts` 沒有任何差異，所以 0.50.0 沒有改任何已安裝的指引、政策範本、角色定義或設定工具，只改了 plugin 從套件載入的 skill；既有安裝需要更新 plugin 再開新 session，不需要做 `/cc-feather:setup update`。",
+         "要回到 0.49.0，重新安裝 0.49.0 的 plugin；不需要 setup update，也不需要先移除。"),
+    )
+    NO_SETUP_UPDATE = RetainedPassesReleaseTests.NO_SETUP_UPDATE
+    FRESH_SESSION = SmallerChecksReleaseTests.FRESH_SESSION
+    WAY_BACK = ("reinstall the 0.49.0 plugin", "重新安裝 0.49.0 的 plugin")
+    # The note's link to the reference's Design and test checks section, and the heading it resolves to.
+    LINKS = SmallerChecksReleaseTests.LINKS
+
+    # The validation entry: the specs and tickets, the review levels, the setup determination with its evidence, the
+    # unchanged setup document, the way back, the full suite, no live run, the Go measurement, what the tests cannot
+    # show and the tag.
+    ENTRY_HEADING = "\n## 0.50.0 Review fixes\n"
+    ENTRY = (
+        "[the test design and speed-up review fixes](specs/test-design-review-fixes.md), one ticket, in 81ffd40;",
+        "[recommending light by content](specs/review-level-content-condition.md), one ticket, in 32b868e, with [ADR 0024](adr/0024-light-is-recommended-by-content-not-by-claim-count.md);",
+        "[the 0.50.0 release](specs/release-0-50-0.md), added in af5eab3 and revised in 7a69508, one ticket, in the commit carrying this entry.",
+        "The first two tickets ran at Review level `light`, with code review and no outcome verification:",
+        "The plugin still packages twenty-two skills, and the 0.49.0 release tests now follow the 0.50.0 note and entry.",
+        "**No setup update is required.**",
+        "`git diff v0.49.0 HEAD -- templates skills/setup scripts` prints nothing, and `git diff-tree -r --name-only v0.49.0 HEAD -- templates skills/setup scripts` lists no path:",
+        "so existing installations need only the plugin update and a fresh session.",
+        "The setup document does not change, and its count of packaged skills stays twenty-two.",
+        "To go back to 0.49.0, reinstall the 0.49.0 plugin; no setup update or remove is needed.",
+        "the full suite, `python -B -m unittest discover` from the repository root, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        "the pins show the text, not that a model always follows it.",
+        "Neither `/cc-feather:test-design` nor `/cc-feather:test-speedup` was run live for this release:",
+        "Because the measurement command changes, the first Go measurement after the update normally has no comparable earlier measurement, and its report says so.",
+        "`v0.50.0` does not exist when this entry is written.",
+        "it is created only after the release ticket is accepted and only after the user's go-ahead.",
+        "`v0.49.0`, at 7baaaf6, is not moved.",
+        "The review round, with the release ticket's passes, the final check, the user's decision at the end of the plan and the tag, follows the commit carrying this entry and is recorded after it.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_50_0(self):
+        self.assertEqual("0.50.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_review_fixes_note_in_both_languages(self):
+        previous = TestDesignTriageReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.50.0 note starts right after the section's opening sentence, its sentences in order, before 0.49.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_need_no_setup_update_and_name_the_way_back_in_both_languages(self):
+        for name, (heading, _, *sentences), no_update, fresh, way_back in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES, self.NO_SETUP_UPDATE, self.FRESH_SESSION, self.WAY_BACK):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertIn(no_update, note)
+                self.assertIn(fresh, note)
+                self.assertIn("`git diff v0.49.0 HEAD -- templates skills/setup scripts`", note)
+                self.assertIn(way_back, note)
+                # Absence is the contract: the note asks for no setup removal.
+                self.assertNotIn("`/cc-feather:setup remove`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target_file, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertIn(link, note)
+                self.assertEqual(self.text(target_file).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("Setup update is required", entry)
+        # The full suite's result is recorded, not left as a placeholder.
+        self.assertNotIn("@@", entry)
+        self.assertIsNone(re.search(r"ran 0+ tests", entry))
         # The entry is the file's last release entry, so it is appended rather than rewriting an earlier one; only
         # sections for work landed on main without a release may follow.
         after = text.split(self.ENTRY_HEADING, 1)[1]
         self.assertIsNone(re.search(r"^## \d", after, re.MULTILINE))
-        self.assertTrue(all(heading.endswith("(on main after 0.49.0)")
+        self.assertTrue(all(heading.endswith("(on main after 0.50.0)")
                             for heading in re.findall(r"^## .*$", after, re.MULTILINE)))
 
 
