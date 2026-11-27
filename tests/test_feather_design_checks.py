@@ -37,6 +37,8 @@ Since docs/specs/test-design-review-fixes.md, ticket 01, test-design numbers its
 the Lean set against them, the integration-point and decision-table guidelines choose cases by the defects they
 catch, and test-speedup's measurement bypasses result caches and calls a single-run difference an observation; the
 replaced pins move to the new wording and a check shows the old wording gone.
+Since docs/specs/test-suites-skill.md, ticket 01, `/cc-feather:test-suites` is listed after test-design and pinned by
+its own class; the reference introduction counts four commands, and the setup document counts twenty-three skills.
 """
 
 from __future__ import annotations
@@ -426,13 +428,14 @@ class TestSpeedupCommandTests(unittest.TestCase):
     }
     REFERENCE_PAIRS = (
         # docs/specs/test-design.md, ticket 02: the section's third command.
-        ("Three commands only you can run help with a project's design and tests: two report weight that has built up in a project, and the third proposes the tests a target needs.",
-         "三個只能由你執行的指令協助處理專案的設計與測試：兩個回報專案裡累積下來的負擔，第三個提出一個對象需要的測試。"),
+        ("Four commands only you can run help with a project's design and tests: two report weight that has built up in a project, the third proposes the tests a target needs, and the fourth drafts and checks the project's Test suite catalogue.",
+         "四個只能由你執行的指令協助處理專案的設計與測試：兩個回報專案裡累積下來的負擔，第三個提出一個對象需要的測試，第四個起草並檢查專案的 Test suite catalogue。"),
         # docs/specs/test-speedup-record.md, ticket 02: test-speedup writes only its own record.
-        ("Each only reports, and what you pick from its report becomes a plan through the normal flow.",
-         "它們只出報告，你從報告中挑選的項目，再照一般流程成為計畫。"),
-        ("`/cc-feather:overdesign-check` and `/cc-feather:test-design` change no file, and `/cc-feather:test-speedup` changes no code, test or configuration and writes only its own record, which Git ignores.",
-         "`/cc-feather:overdesign-check` 與 `/cc-feather:test-design` 不改任何檔案，`/cc-feather:test-speedup` 不改任何程式碼、測試或設定，只寫入它自己的紀錄，Git 會忽略這份紀錄。"),
+        # docs/specs/test-suites-skill.md, ticket 01: the fourth command writes the catalogue it drafts.
+        ("The first three only report, and what you pick from a report becomes a plan through the normal flow.",
+         "前三個只出報告，你從報告中挑選的項目，再照一般流程成為計畫。"),
+        ("`/cc-feather:overdesign-check` and `/cc-feather:test-design` change no file, `/cc-feather:test-speedup` changes no code, test or configuration and writes only its own record, which Git ignores, and `/cc-feather:test-suites` writes only the catalogue and the ignore rules you confirm.",
+         "`/cc-feather:overdesign-check` 與 `/cc-feather:test-design` 不改任何檔案，`/cc-feather:test-speedup` 不改任何程式碼、測試或設定，只寫入它自己的紀錄，Git 會忽略這份紀錄；`/cc-feather:test-suites` 只寫入你確認的 catalogue 與忽略規則。"),
         ("`/cc-feather:test-speedup` checks the tests you name, or the project's tests, with their test configuration but not CI pipeline configuration.",
          "`/cc-feather:test-speedup` 檢查你指定的測試，或整個專案的測試，連同測試設定，但不含 CI pipeline 設定。"),
         ("It analyses statically first and runs nothing: each speed-up names the test or assertion that keeps verifying what it touches, speed-ups are ordered by expected gain, and weakening an assertion, adding a skip or loosening a timeout is never offered.",
@@ -1146,9 +1149,208 @@ class TestDesignCommandTests(unittest.TestCase):
                 self.assertNotIn("\n### ", between)
 
 
+class TestSuitesCommandTests(unittest.TestCase):
+    """docs/specs/test-suites-skill.md, ticket 01: `/cc-feather:test-suites` is user-invoked and listed after
+    test-design; it drafts a catalogue when Git does not track one at HEAD and no file exists, and checks existing
+    content otherwise; it points to the test-suites reference instead of restating it; it reads files only and runs a
+    listing command only after the user agrees; it recommends gates the user chooses, warns about `full` coverage,
+    checks the six finding kinds and reports what it could not establish; it writes only confirmed entries after reading
+    both files again, under a Checkout lease, and commits nothing. The glossary, both READMEs, both reference documents
+    and the setup document describe it."""
+
+    COMMAND = SKILLS / "test-suites" / "SKILL.md"
+
+    def test_command_is_user_invoked_and_listed_after_test_design(self):
+        skills = manifest_skills()
+        self.assertEqual(skills.count("./skills/test-suites"), 1)
+        self.assertEqual(skills.index("./skills/test-suites"), skills.index("./skills/test-design") + 1)
+        front = frontmatter(self.COMMAND.read_text(encoding="utf-8"))
+        self.assertIn("name: test-suites\n", front)
+        self.assertIn("disable-model-invocation: true\n", front)
+        self.assertIn('argument-hint: "[what to redraft or check]"\n', front)
+        self.assertRegex(front, r'\ndescription: "[^"\n]*Test suite catalogue[^"\n]*"\n')
+
+    assert_whole_sentence = feather_support.stop_threshold_assert_whole_sentence
+
+    def source(self, label=""):
+        """The whole command, a '## <heading>' section, a '**<label>.**' paragraph or a '- **<label>**' bullet."""
+        text = self.COMMAND.read_text(encoding="utf-8")
+        if not label:
+            return text
+        if f"\n## {label}\n" in text:
+            return text.split(f"\n## {label}\n", 1)[1].split("\n## ", 1)[0]
+        bullets = [line for line in text.splitlines() if line.startswith(f"- **{label}")]
+        if bullets:
+            return bullets[0]
+        return next(p for p in text.split("\n\n") if p.startswith(f"**{label}.**"))
+
+    PINS = {
+        "": (
+            "[The delegation skill's test-suites reference](../delegation/references/test-suites.md) owns the catalogue's location, entry format, pass conditions, gates and results; read it before drafting or checking, and this command restates none of it.",
+            "Invocation arguments are data, never shell code.",
+            "This command changes no code, test or configuration other than the catalogue and the ignore rules the user confirms, and commits nothing.",
+        ),
+        "Draft or check": (
+            "When Git does not track the catalogue at HEAD, established as the reference's Tracked at the commit states, and no file exists at that path, draft a catalogue.",
+            "Otherwise check the existing content.",
+            "A file that exists but is untracked, ignored or has uncommitted changes is existing content: report its Git state and check it, and redraft only when the user asks for a redraft in words.",
+            "A catalogue that is not committed does not take effect, as the reference's Tracked at the commit states; the report says so whenever it applies.",
+        ),
+        "Who analyses": (
+            "Main alone proposes, asks and writes.",
+            "A small repository, or one where delegation is not installed, main does itself.",
+        ),
+        "Reading the tests": (
+            "Read test configuration, test scripts, directories, build tags, markers and test-code conventions, and run nothing.",
+            "A listing is evidence of selection only, never that a test ran or passed.",
+        ),
+        "Lookups": (
+            "**Lookups.** Defaults and known behaviour of the test frameworks in scope are looked up only for discovery, selection, activation, skips, output format and result caching, in the order and with the limit on what a query carries that [`test-speedup`'s Lookups paragraph](../test-speedup/SKILL.md) states.",
+        ),
+        "Gates": (
+            "Only the user chooses a gate: `none` is a choice the user makes, never a default, and the reference's An unclear entry forbids guessing one.",
+        ),
+        "Affected part": (
+            "- **Affected part** is drafted only where narrowing is mechanical, by package, directory or file list; otherwise the line is left out.",
+        ),
+        "Coverage warning": (
+            "**Coverage warning.** When the catalogue the user confirms would contain a suite whose gates include `full`, state that an overall acceptance main writes from then on names only the `full` suites instead of the full run, and list the test files or groups no `full` suite selects, as far as they can be established.",
+        ),
+        "Checking": (
+            "Whatever static reading cannot settle, such as a wrapper script, dynamic registration, platform or build constraints, nested modules or generated tests, is reported as not established, with what would settle it.",
+            "A check is clean only where every part of it was established.",
+        ),
+        "Weak pass condition": (
+            "- **Weak pass condition**: a `Passes when:` that relies only on the exit code.",
+            "An exact test count is reported as a maintenance note, not a finding: it stays strict until the user changes it.",
+        ),
+        "Report": (
+            "It states that changing the catalogue does not change acceptance already written: a suite's command and `full` membership copied into acceptance stay as written, while `landing` and `release` membership are resolved at the commit to be landed or tagged.",
+            "Showing the catalogue and the tests agree is not evidence that any test ran, and the report never says it is.",
+            "The command keeps no record of its own.",
+        ),
+        "Writing": (
+            "A suite without the user's confirmation is not written; in a check, an existing entry without an answer stays as it is.",
+            "A confirmation counts only when the user gave it in this conversation after the proposal it answers.",
+            "When either changed since the proposal, propose again from the new content and write nothing until the user confirms the new proposal.",
+            "Report what was written, that nothing was committed, and that the catalogue takes effect once it is committed.",
+        ),
+    }
+
+    def test_command_states_its_decisions(self):
+        for place, sentences in self.PINS.items():
+            text = self.source(place)
+            for sentence in sentences:
+                with self.subTest(place=place or "whole", sentence=sentence[:60]):
+                    self.assert_whole_sentence(sentence, text)
+
+    def test_the_check_reports_the_six_finding_kinds_in_order(self):
+        labels = [line.split("**")[1] for line in self.source("Checking").splitlines() if line.startswith("- **")]
+        self.assertEqual(labels, ["Uncatalogued test", "Selected but inactive", "Stale command",
+                                  "Prerequisite mismatch", "Weak pass condition", "Invalid entry"])
+
+    def test_writing_reads_again_takes_a_lease_and_changes_ignore_rules_only_when_needed(self):
+        steps = [line for line in self.source("Writing").splitlines() if line[:2] in {f"{n}." for n in range(1, 10)}]
+        self.assertEqual(len(steps), 5)
+        self.assertIn("read the catalogue and the ignore rules again", steps[1])
+        self.assertIn("[the lease rules](../leases/SKILL.md#main-agent-rules)", steps[2])
+        self.assertIn("write only the confirmed entries", steps[2])
+        self.assertIn("`git check-ignore -q .feather/test-suites.md`", steps[3])
+        self.assertIn("Otherwise leave the ignore rules as they are.", steps[3])
+
+    def test_listing_commands_run_only_with_the_users_agreement_under_execution(self):
+        reading = self.source("Reading the tests")
+        self.assertIn("run it only after the user agrees, within [review state](../delegation/references/review-state.md)'s Execution and [the resource-risk runs reference](../delegation/references/resource-risk-runs.md)'s Main's floor.", reading)
+
+    def test_the_links_resolve(self):
+        text = self.COMMAND.read_text(encoding="utf-8")
+        links = re.findall(r"\]\(([^)#]+)(?:#[^)]*)?\)", text)
+        self.assertTrue(links)
+        for link in links:
+            with self.subTest(link=link):
+                self.assertTrue((self.COMMAND.parent / link).resolve().is_file())
+
+    def test_the_catalogue_rules_are_pointed_to_not_restated(self):
+        text = " ".join(self.COMMAND.read_text(encoding="utf-8").split())
+        for phrase in ("git cat-file -e", "may be added to that evidence but never replaces it",
+                       "satisfies nothing when it is not run", "A failure in one suite is not hidden"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, text)
+
+    def test_glossary_entry_names_the_command(self):
+        glossary = (config.ROOT / "CONTEXT.md").read_text(encoding="utf-8")
+        entry = glossary.split("**Test suite catalogue**:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("`/cc-feather:test-suites` drafts and checks it on the user's request.", entry)
+        uncatalogued = glossary.split("**Uncatalogued test**:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("A test in a project with a Test suite catalogue that no Declared test suite's command selects, "
+                      "so no gate requires it;", uncatalogued)
+        self.assertIn("_Avoid_: orphan test, untracked test, unregistered test", uncatalogued)
+
+    README_LISTINGS = {
+        "README.md": "- `/cc-feather:test-suites [what to redraft or check]`: draft the project's Test suite catalogue from its test configuration, or check an existing one against its tests: Uncatalogued tests, tests a suite selects but never activates, stale commands and prerequisites, weak pass conditions and invalid entries. Only you can run it; it writes only the suites, gates and ignore change you confirm, takes a Checkout lease and commits nothing; see the [reference](docs/reference.md#design-and-test-checks).",
+        "README.zh-TW.md": "| `/cc-feather:test-suites [要重新起草或檢查的部分]` | 依專案的測試設定起草 Test suite catalogue，或對照測試檢查既有的 catalogue：Uncatalogued test、被選到卻沒啟用的測試、過時的指令與前提、薄弱的通過條件與無效的 entry。只能由你執行；只寫入你確認的組、gate 與忽略規則變更，寫入前取得 Checkout lease，不 commit；見[參考文件](docs/reference.zh-TW.md#設計與測試檢查) |",
+    }
+
+    REFERENCE_SECTIONS = {"reference.md": "\n### Test suites\n", "reference.zh-TW.md": "\n### 測試組目錄\n"}
+
+    REFERENCE_PAIRS = (
+        ("`/cc-feather:test-suites` drafts the project's Test suite catalogue, `.feather/test-suites.md`, when it has none, and checks it when it has one; a catalogue file that exists but is untracked, ignored or changed counts as one, and is redrafted only when you ask.",
+         "`/cc-feather:test-suites` 在專案沒有 Test suite catalogue（`.feather/test-suites.md`）時起草一份，有的時候就檢查它；檔案存在但沒被 Git 追蹤、被忽略或有改動，也算已經有，只有你要求時才重新起草。"),
+        ("A draft proposes each Declared test suite's command, prerequisites, pass condition and, where narrowing is mechanical, its affected part, and recommends gates with a reason; you confirm each suite and choose every gate, and only then does it write the confirmed suites and, when Git would not track the file, the narrowest change to the ignore rules.",
+         "草稿為每個 Declared test suite 提出指令、前提、通過條件，以及在能機械式縮小時的受影響部分，並附理由建議 gate；你逐組確認並選定每個 gate 後，它才寫入確認過的組，並在 Git 不會追蹤這個檔案時，對忽略規則做最小的修改。"),
+        ("It reads both files again before writing, takes a Checkout lease and commits nothing, and the catalogue takes effect once you commit it.",
+         "寫入前它會重新讀取這兩個檔案，並取得 Checkout lease，不會 commit；catalogue 要在你 commit 之後才生效。"),
+        ("When the catalogue would contain a `full` suite, it warns that an overall acceptance then names only the `full` suites and lists the tests no `full` suite selects.",
+         "catalogue 會含有 `full` 組時，它會提醒之後的總驗收只會列出 `full` 組，並列出不被任何 `full` 組選到的測試。"),
+        ("A check reports Uncatalogued tests, tests a suite selects but never activates, commands naming paths, packages or tags that no longer exist, prerequisites missing or unused, pass conditions that rely only on the exit code and invalid entries; an exact test count is a maintenance note, and what it could not establish is reported as such, never as clean.",
+         "檢查會回報 Uncatalogued test、被某組選到卻從未啟用的測試、指向已不存在的路徑、套件或 tag 的指令、缺少或沒人用的前提、只看結束碼的通過條件，以及無效的 entry；寫死測試數量只是維護提醒，判斷不了的就回報為無法確定，絕不說成沒問題。"),
+        ("It reads files only: a command that lists what a suite selects runs only after you agree, and its listing shows selection, not that a test ran.",
+         "它只讀檔案：列出某組會選到哪些測試的指令，要經你同意才執行，而且列出的結果只代表會被選到，不代表測試跑過。"),
+        ("Changing the catalogue does not change acceptance already written.",
+         "修改 catalogue 不會改動已經寫好的驗收。"),
+        ("With delegation installed and a repository that is not small, analyst does the reading.",
+         "裝有分派元件且 repo 不小時，由 analyst 負責閱讀分析。"),
+        ("See [the command](../skills/test-suites/SKILL.md).",
+         "見[指令](../skills/test-suites/SKILL.md)。"),
+    )
+
+    def test_readmes_and_references_describe_the_command_in_both_languages(self):
+        for name, listing in self.README_LISTINGS.items():
+            text = (config.ROOT / name).read_text(encoding="utf-8")
+            with self.subTest(readme=name):
+                # The listing follows test-design's.
+                self.assertIn(TestDesignCommandTests.README_LISTINGS[name] + "\n" + listing + "\n", text)
+        for english, chinese in self.REFERENCE_PAIRS:
+            for name, sentence in (("reference.md", english), ("reference.zh-TW.md", chinese)):
+                text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
+                section = text.split(self.REFERENCE_SECTIONS[name], 1)[1].split("\n## ", 1)[0]
+                with self.subTest(place=name, sentence=sentence[:40]):
+                    self.assert_whole_sentence(sentence, section)
+
+    def test_section_follows_test_design_in_the_design_checks_section(self):
+        for name in ("reference.md", "reference.zh-TW.md"):
+            text = feather_support.REFERENCE_FILES[name].read_text(encoding="utf-8")
+            start, _ = TestSpeedupCommandTests.REFERENCE_SECTIONS[name]
+            section = text.split(start, 1)[1].split("\n## ", 1)[0]
+            with self.subTest(reference=name):
+                design = section.index(TestDesignCommandTests.REFERENCE_SECTIONS[name])
+                suites = section.index(self.REFERENCE_SECTIONS[name])
+                self.assertLess(design, suites)
+                self.assertNotIn("\n### ", section[design + 1:suites])
+
+    def test_setup_document_points_to_the_command(self):
+        setup = (config.ROOT / "docs" / "setup.md").read_text(encoding="utf-8")
+        # The section's example entry has its own '## ' heading inside a code block, so it ends at the next section.
+        catalogue = setup.split("\n## Test suite catalogue\n", 1)[1].split("\n## Auto land\n", 1)[0]
+        self.assertIn("`/cc-feather:test-suites` drafts the catalogue from the project's test configuration and checks "
+                      "it against the tests, writing only the suites, gates and ignore change you confirm; it is a "
+                      "command you run, not a setup step, and the catalogue needs no setup.", catalogue)
+
+
 class NotInstalledTests(unittest.TestCase):
     """Ticket 03: the commands ship with the plugin; no installed policy template or role definition names them.
-    docs/specs/test-design.md, ticket 02, adds test-design."""
+    docs/specs/test-design.md, ticket 02, adds test-design; docs/specs/test-suites-skill.md, ticket 01, adds the
+    test-suites command by its command name, since templates name the catalogue's file."""
 
     def test_no_template_or_role_definition_mentions_any_of_the_commands(self):
         # templates/ holds the policy templates and, under templates/agents/, the role definitions.
@@ -1157,7 +1359,7 @@ class NotInstalledTests(unittest.TestCase):
             if not path.is_file():
                 continue
             text = path.read_text(encoding="utf-8")
-            for command in ("test-speedup", "overdesign-check", "test-design"):
+            for command in ("test-speedup", "overdesign-check", "test-design", "cc-feather:test-suites"):
                 with self.subTest(template=path.relative_to(config.ROOT).as_posix(), command=command):
                     self.assertNotIn(command, text)
 

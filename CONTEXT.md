@@ -69,7 +69,7 @@ What the final check runs for a Plan in the Automatic flow: `full`, the Plan's o
 _Avoid_: test scope, quick check, partial final check
 
 **Test suite catalogue**:
-A project's optional list of its Declared test suites, kept in `.feather/test-suites.md` of the Working checkout and tracked in Git with the code it tests. A project without one keeps every rule as before; writing one is a change to the checkout, not one of cc-feather's own records.
+A project's optional list of its Declared test suites, kept in `.feather/test-suites.md` of the Working checkout and tracked in Git with the code it tests. `/cc-feather:test-suites` drafts and checks it on the user's request. A project without one keeps every rule as before; writing one is a change to the checkout, not one of cc-feather's own records.
 _Avoid_: test registry, test config, test tiers
 
 **Declared test suite**:

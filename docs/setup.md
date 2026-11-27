@@ -1,6 +1,6 @@
 # Claude Feather setup and model configuration
 
-The plugin packages twenty-two skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy, delegation policy plus agents, or both, and the opt-in Checkout lease rules. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
+The plugin packages twenty-three skills. Handoff commands work immediately after plugin installation. Setup independently manages handoff maintenance policy, delegation policy plus agents, or both, and the opt-in Checkout lease rules. A bare invocation first inspects installation status, then asks only for missing operation, component and scope. No runtime hooks or model session is started by setup. This supports Windows as well as ordinary Python installations on other hosts; only the tested hosts are reported in validation notes.
 
 ## Native deployment
 
@@ -152,6 +152,8 @@ The gates are `landing`, `full`, `release` or `none`. Landing-required suites, t
 /.feather/*
 !/.feather/test-suites.md
 ```
+
+`/cc-feather:test-suites` drafts the catalogue from the project's test configuration and checks it against the tests, writing only the suites, gates and ignore change you confirm; it is a command you run, not a setup step, and the catalogue needs no setup.
 
 The rules for the catalogue, such as what counts as a pass and when main reads the file, are in the delegation skill's test-suites reference (`skills/delegation/references/test-suites.md`); this section describes them without restating them.
 

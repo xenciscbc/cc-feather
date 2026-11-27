@@ -183,8 +183,9 @@ class CatalogueReferenceTests(Pinned, unittest.TestCase):
                     self.assertEqual((path.parent / link).resolve(), OWNER.resolve())
                 found += 1
         # Review state's Final check and Final check scope, and the resource-risk runs reference's The budget; ticket 03
-        # adds the Related-test acceptance procedure's pointer.
-        self.assertEqual(found, 4)
+        # adds the Related-test acceptance procedure's pointer, and docs/specs/test-suites-skill.md ticket 01 the
+        # test-suites command's.
+        self.assertEqual(found, 5)
 
 
 class FinalCheckTests(Pinned, unittest.TestCase):
