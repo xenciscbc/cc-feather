@@ -4230,8 +4230,10 @@ class ReviewFixesReleaseTests(unittest.TestCase):
     v0.49.0 over `templates skills/setup scripts`, and that going back to 0.49.0 means reinstalling the 0.49.0 plugin;
     the validation entry records the specs and tickets, the review levels, the determination with its evidence, the
     unchanged setup document, the way back, the full suite, that no live run was made, the Go measurement, what the
-    tests cannot show and the tag, and is the file's last release entry. The changed rules' own sentences are
-    tests/test_feather_design_checks.py's and tests/test_feather_review_level.py's."""
+    tests cannot show and the tag, and was appended after the earlier entries. The changed rules' own sentences are
+    tests/test_feather_design_checks.py's and tests/test_feather_review_level.py's. Since 0.51.0 the manifest
+    version is TestSuitesReleaseTests', the note follows the 0.51.0 note, and the entry is followed only by sections
+    for work landed on main without a release and then the 0.51.0 entry."""
 
     # The Updates sections, paired in both languages: the section's opening sentence, then the 0.50.0 note in order.
     UPDATES = (
@@ -4287,16 +4289,16 @@ class ReviewFixesReleaseTests(unittest.TestCase):
     note = HandoffHistoryReleaseTests.note
     assert_in_order = HandoffHistoryReleaseTests.assert_in_order
 
-    def test_manifest_is_0_50_0(self):
-        self.assertEqual("0.50.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
-
     def test_updates_sections_start_with_the_review_fixes_note_in_both_languages(self):
         previous = TestDesignTriageReleaseTests.UPDATES
-        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+        newer = TestSuitesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_), (_, _, *newer_sentences) \
+                in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous, newer):
             section = self.section(self.text(name), heading)
-            # The 0.50.0 note starts right after the section's opening sentence, its sentences in order, before 0.49.0's.
+            # The 0.50.0 note starts right after the 0.51.0 note, its sentences in order, before 0.49.0's.
             with self.subTest(readme=name, order=True):
-                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+                after_newer = section[section.index(newer_sentences[-1]) + len(newer_sentences[-1]):]
+                self.assertTrue(after_newer.lstrip(" ").startswith(sentences[0]))
             self.assert_in_order(section, sentences + [previous_first], name)
 
     def test_updates_sections_need_no_setup_update_and_name_the_way_back_in_both_languages(self):
@@ -4329,11 +4331,142 @@ class ReviewFixesReleaseTests(unittest.TestCase):
         # The full suite's result is recorded, not left as a placeholder.
         self.assertNotIn("@@", entry)
         self.assertIsNone(re.search(r"ran 0+ tests", entry))
-        # The entry is the file's last release entry, so it is appended rather than rewriting an earlier one; only
-        # sections for work landed on main without a release may follow.
+        # The entry was appended rather than rewriting an earlier one; after it come only sections for work landed on
+        # main without a release, and then the 0.51.0 entry.
+        after = text.split(self.ENTRY_HEADING, 1)[1]
+        self.assertIn(TestSuitesReleaseTests.ENTRY_HEADING, after)
+        between = after.split(TestSuitesReleaseTests.ENTRY_HEADING, 1)[0]
+        self.assertIsNone(re.search(r"^## \d", between, re.MULTILINE))
+        self.assertTrue(all(heading.endswith("(on main after 0.50.0)")
+                            for heading in re.findall(r"^## .*$", between, re.MULTILINE)))
+
+
+class TestSuitesReleaseTests(unittest.TestCase):
+    """0.51.0 (docs/specs/test-suites-skill.md, tickets 01-03): the manifest version is 0.51.0; the Updates note, in
+    both languages, opens the section, says what `/cc-feather:test-suites` does, that acceptance for new tests in a
+    suite needs output showing they ran and that `/cc-feather:test-design` names the expected suite, whether or not
+    Related-test acceptance is on, that existing installations need setup update in each scope with delegation and
+    what happens until then, and how to go back to 0.50.0; the validation entry records the spec and tickets, the
+    setup determination with its evidence and consequences, the way back, the full suite, the live pilot's three runs
+    with their attempts, permission modes, results, token use and the places checked, what the tests and the pilot
+    cannot show and the tag, and is the file's last release entry. The command's and the rules' own sentences are
+    tests/test_feather_design_checks.py's, tests/test_feather_declared_suites.py's and
+    tests/test_feather_related_tests.py's."""
+
+    UPDATES = (
+        ("## Updates and validation\n",
+         CheckoutLeasesReleaseTests.UPDATES[0][1],
+         "0.51.0 adds `/cc-feather:test-suites`, which drafts a project's Test suite catalogue from its test configuration, or checks an existing one for Uncatalogued tests, tests a suite selects but never activates, stale commands and prerequisites, weak pass conditions and invalid entries, and writes only the suites, gates and ignore change you confirm, as [Design and test checks](docs/reference.md#design-and-test-checks) describes.",
+         "In a project with a catalogue, acceptance main writes for new tests in a suite requires output showing that they executed and passed, new tests no suite selects are reported, and `/cc-feather:test-design` names the suite expected to run each Recommended test; this holds whether or not Related-test acceptance is on.",
+         "0.51.0 changes the delegation guidance template, so existing installations need `/cc-feather:setup update` in each scope where delegation is installed, then a fresh session; until then `check` reports the delegation guidance as from an older template, `review` refuses to change any saved setting in that scope and asks for setup update first, and the installed guidance does not have main read the catalogue rules before acceptance while Related-test acceptance is off.",
+         "To go back to 0.50.0, reinstall the 0.50.0 plugin and run its setup update in each scope where delegation is installed."),
+        ("## 更新、移除與驗證\n",
+         CheckoutLeasesReleaseTests.UPDATES[1][1],
+         "0.51.0 新增 `/cc-feather:test-suites`：依專案的測試設定起草 Test suite catalogue，或檢查既有的 catalogue 是否有 Uncatalogued test、被某組選到卻從未啟用的測試、過時的指令與前提、薄弱的通過條件與無效的 entry，並且只寫入你確認的組、gate 與忽略規則變更，詳見[設計與測試檢查](docs/reference.zh-TW.md#設計與測試檢查)。",
+         "在有 catalogue 的專案中，主 Agent 為某組裡的新測試撰寫驗收時，要求輸出證明這些測試確實執行並通過；沒有任何一組選到的新測試會被回報；`/cc-feather:test-design` 也會標明每個 Recommended 測試預期由哪一組執行；不論「相關測試驗收」是否開著都適用。",
+         "0.51.0 修改了 delegation guidance 的範本，所以既有安裝需要在每個裝有分派元件的 scope 執行 `/cc-feather:setup update`，再開新 session；在那之前，`check` 會回報 delegation guidance 來自較舊的範本，`review` 會拒絕修改該 scope 的任何已儲存設定並要求先做 setup update，而且「相關測試驗收」關著時，已安裝的 guidance 不會讓主 Agent 在寫驗收前讀取 catalogue 規則。",
+         "要回到 0.50.0，重新安裝 0.50.0 的 plugin，並在每個裝有分派元件的 scope 執行它的 setup update。"),
+    )
+    SETUP_UPDATE = ("`/cc-feather:setup update` in each scope where delegation is installed",
+                    "在每個裝有分派元件的 scope 執行 `/cc-feather:setup update`")
+    WAY_BACK = ("reinstall the 0.50.0 plugin and run its setup update", "重新安裝 0.50.0 的 plugin，並在每個裝有分派元件的 scope 執行它的 setup update")
+    LINKS = SmallerChecksReleaseTests.LINKS
+
+    ENTRY_HEADING = "\n## 0.51.0 Test suites command\n"
+    ENTRY = (
+        "Implements [the test-suites command spec](specs/test-suites-skill.md), written on 2026-11-27, added in e95ec0f and revised in eb91205 after plan review;",
+        "ticket 01, The test-suites command, in 4c7844d, 0e7bc65 and e632858; ticket 02, Catalogue rules for new tests, the guidance sentence and test-design, in 6495aff, with [ADR 0025](adr/0025-a-user-invoked-command-drafts-and-checks-the-test-suite-catalogue.md);",
+        "The plugin now packages twenty-three skills, and the 0.50.0 release tests now follow the 0.51.0 note and entry.",
+        "**Setup update is required in every scope where delegation is installed.**",
+        "`git diff-tree -r --name-only v0.50.0 HEAD -- templates skills/setup scripts` lists only `templates/CLAUDE.md`:",
+        "Until setup update, `check` reports the delegation guidance as from an older template, `review` refuses to change any saved setting in that scope, such as the review mode, the Stop threshold, Related-test acceptance or Auto land, and asks for setup update first, and the installed guidance does not have main read the catalogue rules before acceptance while Related-test acceptance is off; nothing else changes.",
+        "The setup document's count of packaged skills is now twenty-three.",
+        "To go back to 0.50.0, reinstall the 0.50.0 plugin and run its setup update in each scope where delegation is installed.",
+        "the full suite, `python -B -m unittest discover` from the repository root, with `FEATHER_LINK_TEST_DIR` under `J:\\gotmp\\`, ran",
+        "`.claude-plugin/marketplace.json` carries no version,",
+        # The pilot's copy, candidate and settings.
+        "its tracked files at 03390f0, exported with `git archive` into a new directory under `J:\\gotmp\\`, with `server.key` left out, force-added and committed in a new Git repository,",
+        "inside cc-feather's Runner with the budget the user adopted for this Resource-risk claim:",
+        "so the pilot does not exercise the new guidance sentence.",
+        # Run 1 with its attempts.
+        "the Runner resolved `timeout` to Windows' own `TIMEOUT.EXE`, so Git's `timeout` was then named by its full path.",
+        "the default permission mode denied reading the candidate's test-suites reference outside the session's directories, and the command stopped without a draft,",
+        "and stopped without writing. Its 47 tool calls held no Write or Edit;",
+        # Run 2 with its attempts and the departure.
+        "with `--permission-mode acceptEdits` and an allow rule for the lease tool only, a stated departure from the default mode that the user approved so that the write path could run.",
+        "did not match the allow rule written for `python -B`, as the lease rules require;",
+        "it reread both files, acquired the lease, wrote `.feather/test-suites.md` with the nine confirmed suites and gates in one Write, left the ignore rules unchanged, returned the lease and committed nothing;",
+        "that wording was not part of the user's confirmation.",
+        # Run 3.
+        "It reported the `pilotonly` test under Uncatalogued test and the `PILOT_QUEUE_ADDR` test under selected but inactive,",
+        # Token use and the places checked.
+        "Token use was read from each session's JSON output for the main session and from the subagent transcripts, counted once per message, for the analysts.",
+        "Other places were not checked.",
+        "The Runner limits resources and does not isolate the file system or the network.",
+        "The copy was removed afterwards.",
+        # What the tests and the pilot cannot show, and the tag.
+        "the pins show the text, not that a model always follows it.",
+        "The pilot shows one model on one project;",
+        "`v0.51.0` does not exist when this entry is written.",
+        "it is created only after tickets 01, 02 and 03 are accepted and only after the user's go-ahead.",
+        "`v0.50.0`, at 90a5705, is not moved.",
+        "The review round, with the tickets' passes, the final check, the user's decision at the end of the plan and the tag, follows the commit carrying this entry and is recorded after it.",
+    )
+
+    text = staticmethod(HandoffHistoryReleaseTests.text)
+    section = staticmethod(HandoffHistoryReleaseTests.section)
+    note = HandoffHistoryReleaseTests.note
+    assert_in_order = HandoffHistoryReleaseTests.assert_in_order
+
+    def test_manifest_is_0_51_0(self):
+        self.assertEqual("0.51.0", json.loads(self.text(".claude-plugin/plugin.json"))["version"])
+
+    def test_updates_sections_start_with_the_test_suites_note_in_both_languages(self):
+        previous = ReviewFixesReleaseTests.UPDATES
+        for name, (heading, opening, *sentences), (_, _, previous_first, *_) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, previous):
+            section = self.section(self.text(name), heading)
+            # The 0.51.0 note starts right after the section's opening sentence, its sentences in order, before 0.50.0's.
+            with self.subTest(readme=name, order=True):
+                self.assertTrue(section.lstrip("\n").startswith(opening + sentences[0]))
+            self.assert_in_order(section, sentences + [previous_first], name)
+
+    def test_updates_sections_require_setup_update_and_name_the_way_back_in_both_languages(self):
+        for name, (heading, _, *sentences), setup, way_back in zip(
+                ("README.md", "README.zh-TW.md"), self.UPDATES, self.SETUP_UPDATE, self.WAY_BACK):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name):
+                self.assertIn(setup, note)
+                self.assertIn(way_back, note)
+                # The release requires setup update, so the note never says it is not needed.
+                self.assertNotIn("no `/cc-feather:setup update` is needed", note)
+                self.assertNotIn("不需要做 `/cc-feather:setup update`", note)
+
+    def test_the_note_links_resolve(self):
+        for name, (heading, _, *sentences), (link, target_file, target) in zip(("README.md", "README.zh-TW.md"), self.UPDATES, self.LINKS):
+            note = self.note(name, heading, sentences)
+            with self.subTest(readme=name, link=link):
+                self.assertIn(link, note)
+                self.assertEqual(self.text(target_file).count(target), 1)
+
+    def test_validation_entry_records_the_release_check_pilot_and_tag(self):
+        text = self.text("docs/setup-validation.md")
+        self.assertEqual(text.count(self.ENTRY_HEADING), 1)
+        entry = self.section(text, self.ENTRY_HEADING)
+        for sentence in self.ENTRY:
+            with self.subTest(sentence=sentence[:40]):
+                self.assertIn(sentence, entry)
+        self.assertNotIn("No setup update is required", entry)
+        # The full suite's result is recorded, not left as a placeholder.
+        self.assertNotIn("@@", entry)
+        self.assertIsNone(re.search(r"ran 0+ tests", entry))
+        # The three runs are each recorded.
+        for run in ("- Run 1, the draft,", "- Run 2, the confirmed write,", "- Run 3, the check,"):
+            with self.subTest(run=run):
+                self.assertEqual(entry.count(run), 1)
+        # The entry is the file's last release entry; only sections for work landed on main without a release follow.
         after = text.split(self.ENTRY_HEADING, 1)[1]
         self.assertIsNone(re.search(r"^## \d", after, re.MULTILINE))
-        self.assertTrue(all(heading.endswith("(on main after 0.50.0)")
+        self.assertTrue(all(heading.endswith("(on main after 0.51.0)")
                             for heading in re.findall(r"^## .*$", after, re.MULTILINE)))
 
 
