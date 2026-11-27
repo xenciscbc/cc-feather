@@ -76,6 +76,10 @@ _Avoid_: test registry, test config, test tiers
 One named group of tests in the Test suite catalogue: the command that runs it, the prerequisites it needs, the condition its output must show for it to pass, and the gates that require it, `landing`, `full`, `release`, any combination of them, or none for a suite that runs only when a Claim's acceptance names it. It passes only when the command succeeds and its output shows positive evidence that the required tests ran. A run whose assertions failed is a failure. Otherwise, a run whose prerequisites are missing, or whose output does not show the condition, has not run, and a run stopped from outside has not completed; these results are kept apart from a failure.
 _Avoid_: test tier, heavy tests, light tests, quick tests, smoke layer
 
+**Uncatalogued test**:
+A test in a project with a Test suite catalogue that no Declared test suite's command selects, so no gate requires it; it runs only where some acceptance runs it, such as a Claim's own acceptance or a full run outside the catalogue.
+_Avoid_: orphan test, untracked test, unregistered test
+
 **Landing-required suite**:
 A Declared test suite whose gates include `landing`. Every final check runs it at the commit to be landed or tagged, at Final check scope `full` and `related` alike; when it has not passed there, the final check has not run at the scope the operation needs, so landing with it needs Accept and land that names it.
 _Avoid_: mandatory tests, smoke gate
