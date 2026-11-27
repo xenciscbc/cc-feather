@@ -4401,6 +4401,7 @@ class TestSuitesReleaseTests(unittest.TestCase):
         "The user accepted run 2 as meeting its expectation, since the suites and gates written were those confirmed and the change was disclosed, and the deviation is recorded as a follow-up rather than as a defect of the command.",
         # Run 3.
         "It reported the `pilotonly` test under Uncatalogued test and the `PILOT_QUEUE_ADDR` test under selected but inactive,",
+        "It proposed changes to five suites, `unit`, `real-pg`, `real-redis`, `e2e-csrf-browser` and `win-update-qa`, in their prerequisites, pass conditions, affected part or conflicts,",
         "reported as not established the race toolchain's needs on windows/amd64,",
         "Its main session made 32 tool calls and its analysts 99, 41 and 62, with no Write or Edit; one call was denied, a Bash command that changed directory before a Git command.",
         # Token use and the places checked.
