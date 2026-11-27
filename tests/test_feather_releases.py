@@ -4387,7 +4387,7 @@ class TestSuitesReleaseTests(unittest.TestCase):
         # The pilot's copy, candidate and settings.
         "its tracked files at 03390f0, exported with `git archive` into a new directory under `J:\\gotmp\\`, with `server.key` left out, force-added and committed in a new Git repository,",
         "inside cc-feather's Runner with the budget the user adopted for this Resource-risk claim:",
-        "so the pilot does not exercise the new guidance sentence.",
+        "and the sessions loaded the guidance installed in the user's scope, rendered from a template older than 0.46.0's, since it lacks the Related-test acceptance rule's catalogue sentence 0.46.0 added, not this release's, so the pilot does not exercise the new guidance sentence.",
         # Run 1 with its attempts.
         "the Runner resolved `timeout` to Windows' own `TIMEOUT.EXE`, so Git's `timeout` was then named by its full path.",
         "the default permission mode denied reading the candidate's test-suites reference outside the session's directories, and the command stopped without a draft,",
